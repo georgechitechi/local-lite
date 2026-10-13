@@ -13,6 +13,7 @@ import { getConflictResolver } from './conflict.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
 import { OutboxStore } from './outbox-store.js';
 import { TableManager } from './table-manager.js';
+import { SchemaManager } from './schema-manager.js';
 
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
@@ -21,6 +22,8 @@ export interface SyncWorkerOptions {
   conflictResolver?: ConflictStrategy | ConflictResolver;
   network?: NetworkStatusProvider;
   primaryKey?: string;
+  autoSchema?: boolean;
+  schemaManager?: SchemaManager;
 }
 
 export class SyncWorker {
@@ -30,6 +33,8 @@ export class SyncWorker {
   private network: NetworkStatusProvider;
   private conflictResolver: ConflictResolver;
   private primaryKey: string;
+  private autoSchema: boolean;
+  private schemaManager?: SchemaManager;
 
   private pushIntervalMs: number;
   private pullIntervalMs: number;
@@ -56,6 +61,8 @@ export class SyncWorker {
     this.network = options.network ?? new DefaultNetworkStatusProvider();
     this.conflictResolver = getConflictResolver(options.conflictResolver ?? 'last-write-wins');
     this.primaryKey = options.primaryKey ?? 'id';
+    this.autoSchema = options.autoSchema ?? false;
+    this.schemaManager = options.schemaManager;
     this.pushIntervalMs = options.pushIntervalMs ?? 5000;
     this.pullIntervalMs = options.pullIntervalMs ?? 10000;
     this.maxRetries = options.maxRetries ?? 5;
@@ -243,7 +250,8 @@ export class SyncWorker {
           tx,
           change.tableName,
           change.rowId,
-          this.primaryKey
+          this.primaryKey,
+          { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
         );
 
         // 3. Conflict resolution if there is a pending local change
@@ -280,7 +288,8 @@ export class SyncWorker {
           change.rowId,
           change.operation,
           change.payload,
-          this.primaryKey
+          this.primaryKey,
+          { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
         );
 
         // 5. Emit table change event to notify reactive listeners

@@ -4,6 +4,7 @@ import { EventEmitter } from '../reactive/event-emitter.js';
 import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
 import { OutboxStore } from './outbox-store.js';
+import { SchemaManager } from './schema-manager.js';
 import {
   ConflictResolver,
   ConflictStrategy,
@@ -22,6 +23,8 @@ export interface LocalFirstClientConfig {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
   maxRetries?: number;
+  autoSchema?: boolean;
+  tables?: string[];
 }
 
 export class LocalFirstClient {
@@ -29,6 +32,9 @@ export class LocalFirstClient {
   public remote: RemoteDBAdapter;
   public events: EventEmitter;
   public syncWorker: SyncWorker;
+  public schemaManager: SchemaManager;
+  public autoSchema: boolean;
+  public tables: string[];
   private primaryKey: string;
 
   constructor(config: LocalFirstClientConfig) {
@@ -36,6 +42,9 @@ export class LocalFirstClient {
     this.remote = config.remote;
     this.events = new EventEmitter();
     this.primaryKey = config.primaryKey ?? 'id';
+    this.autoSchema = config.autoSchema ?? false;
+    this.tables = config.tables ?? [];
+    this.schemaManager = new SchemaManager();
 
     const workerOptions: SyncWorkerOptions = {
       network: config.network,
@@ -44,16 +53,26 @@ export class LocalFirstClient {
       pushIntervalMs: config.pushIntervalMs,
       pullIntervalMs: config.pullIntervalMs,
       maxRetries: config.maxRetries,
+      autoSchema: this.autoSchema,
+      schemaManager: this.schemaManager,
     };
 
     this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
   }
 
   /**
-   * Initializes the client: creates sync_outbox schema and starts the background sync worker.
+   * Initializes the client: creates sync_outbox schema, ensures autoSchema tables if enabled,
+   * and starts the background sync worker.
    */
   async initialize(): Promise<void> {
     await OutboxStore.ensureSchema(this.db);
+
+    if (this.autoSchema && this.tables.length > 0) {
+      for (const table of this.tables) {
+        await this.schemaManager.ensureTable(this.db, table, this.primaryKey);
+      }
+    }
+
     this.syncWorker.start();
   }
 
@@ -74,7 +93,10 @@ export class LocalFirstClient {
 
     const executeInTransaction = async (tx: LocalTransaction) => {
       // 1. Mutate local table
-      await TableManager.applyMutation(tx, tableName, rowId, operation, payload, pk);
+      await TableManager.applyMutation(tx, tableName, rowId, operation, payload, pk, {
+        autoSchema: this.autoSchema,
+        schemaManager: this.schemaManager,
+      });
 
       // 2. Insert into sync_outbox (if not skipped)
       if (!options.skipOutbox) {

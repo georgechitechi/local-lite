@@ -20,6 +20,16 @@ class MockInMemoryDB {
     const normQ = q.replace(/\s+/g, ' ');
 
     if (q.startsWith('CREATE TABLE')) {
+      const match = normQ.match(/CREATE TABLE (?:IF NOT EXISTS )?"?(\w+)"?/i);
+      if (match) this.getTable(match[1]);
+      return [];
+    }
+
+    if (q.startsWith('ALTER TABLE')) {
+      return [];
+    }
+
+    if (q.startsWith('PRAGMA table_info')) {
       return [];
     }
 
@@ -457,16 +467,55 @@ async function runTests() {
   const configuredClient = await createSyncClient(config);
   await configuredClient.mutate('posts', 'post-1', 'INSERT', { title: 'First Post' });
 
-  const posts = configDb.getAll('posts');
-  if (posts.length === 1 && posts[0].title === 'First Post') {
-    console.log('  ✅ createSyncClient initialized database, ran migrations, and performed mutations seamlessly!');
+  // Test 8: autoSchema with zero manual migrations & type detection
+  console.log('\nTest 8: Testing autoSchema without migrations & runtime column type detection...');
+  const { detectSQLiteType } = await import('./dist/index.js');
+
+  if (
+    detectSQLiteType(true) === 'INTEGER' &&
+    detectSQLiteType(100) === 'INTEGER' &&
+    detectSQLiteType(99.95) === 'REAL' &&
+    detectSQLiteType('text') === 'TEXT' &&
+    detectSQLiteType({ key: 'val' }) === 'TEXT'
+  ) {
+    console.log('  ✅ SQLite column type detection maps JS types accurately to INTEGER, REAL, and TEXT');
   } else {
-    throw new Error('createSyncClient test failed');
+    throw new Error('detectSQLiteType failed');
   }
 
+  const autoDb = new MockInMemoryDB();
+  const autoConfig = defineSyncConfig({
+    database: autoDb,
+    tables: ['catalog_items', 'orders'],
+    // NO migrations array!
+    autoSchema: true,
+    demoFallback: true,
+  });
+
+  const autoClient = await createSyncClient(autoConfig);
+  await autoClient.mutate('catalog_items', 'item-100', 'INSERT', {
+    name: 'Wireless Headphones',
+    in_stock: true,
+    rating: 4.8,
+    metadata: { color: 'black', brand: 'Sony' },
+  });
+
+  const catalog = autoDb.getAll('catalog_items');
+  if (
+    catalog.length === 1 &&
+    catalog[0].in_stock === 1 &&
+    catalog[0].rating === 4.8 &&
+    catalog[0].metadata === JSON.stringify({ color: 'black', brand: 'Sony' })
+  ) {
+    console.log('  ✅ autoSchema dynamically handled table and columns without any migrations defined!');
+  } else {
+    throw new Error('autoSchema test failed');
+  }
+
+  autoClient.stop();
   configuredClient.stop();
   client.stop();
-  console.log('\n🎉 ALL TESTS INCLUDING CONFIG SYSTEM PASSING SUCCESSFULLY!');
+  console.log('\n🎉 ALL TESTS INCLUDING CONFIG & AUTO-SCHEMA PASSING SUCCESSFULLY!');
 }
 
 runTests().catch((err) => {

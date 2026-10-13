@@ -47,16 +47,10 @@ export const syncConfig = defineSyncConfig({
   database: () => SQLite.openDatabaseAsync('app.db'),
 
   // Tables to sync
-  tables: ['todos'],
+  tables: ['todos', 'notes', 'tags'],
 
-  // Run SQL migrations automatically on startup
-  migrations: [
-    `CREATE TABLE IF NOT EXISTS todos (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      completed INTEGER DEFAULT 0
-    );`
-  ],
+  // Automatic schema: creates tables & alters columns on the fly (no migrations needed!)
+  autoSchema: true,
 
   // Supabase backend configuration
   supabase: {

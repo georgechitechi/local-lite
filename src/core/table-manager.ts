@@ -1,6 +1,14 @@
 import { LocalTransaction } from '../adapters/local/index.js';
 import { SyncOp } from './types.js';
 import { escapeIdentifier } from '../utils/sql.js';
+import { SchemaManager } from './schema-manager.js';
+
+export interface TableMutationOptions {
+  autoSchema?: boolean;
+  schemaManager?: SchemaManager;
+}
+
+const defaultSchemaManager = new SchemaManager();
 
 export class TableManager {
   /**
@@ -14,17 +22,30 @@ export class TableManager {
     rowId: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    primaryKey: string = 'id'
+    primaryKey: string = 'id',
+    options?: TableMutationOptions
   ): Promise<void> {
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(primaryKey);
+    const sm = options?.schemaManager ?? defaultSchemaManager;
+
+    if (options?.autoSchema) {
+      await sm.ensureTable(tx, tableName, primaryKey);
+    }
 
     if (operation === 'DELETE') {
       await tx.execute(`DELETE FROM ${safeTable} WHERE ${safePk} = ?`, [rowId]);
       return;
     }
 
-    const rowData: Record<string, any> = { ...(payload || {}), [primaryKey]: rowId };
+    let rowData: Record<string, any>;
+    if (options?.autoSchema) {
+      const formatted = await sm.ensureColumns(tx, tableName, payload, primaryKey);
+      rowData = { ...formatted, [primaryKey]: rowId };
+    } else {
+      rowData = { ...(payload || {}), [primaryKey]: rowId };
+    }
+
     const keys = Object.keys(rowData);
     if (keys.length === 0) return;
 
@@ -58,10 +79,16 @@ export class TableManager {
     tx: LocalTransaction,
     tableName: string,
     rowId: string,
-    primaryKey: string = 'id'
+    primaryKey: string = 'id',
+    options?: TableMutationOptions
   ): Promise<Record<string, any> | null> {
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(primaryKey);
+    const sm = options?.schemaManager ?? defaultSchemaManager;
+
+    if (options?.autoSchema) {
+      await sm.ensureTable(tx, tableName, primaryKey);
+    }
 
     const rows = await tx.execute(
       `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,

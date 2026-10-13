@@ -2,8 +2,13 @@
   "name": "outbox-sync",
   "version": "1.0.0",
   "description": "Vendor-agnostic local-first sync engine with outbox pattern and Supabase support",
+  "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -33,7 +38,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node test-runner.mjs"
+    "test": "tsc && node test-runner.mjs",
+    "prepublishOnly": "npm run test"
   },
   "peerDependencies": {
     "@supabase/supabase-js": "^2.0.0",

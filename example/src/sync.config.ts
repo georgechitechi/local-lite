@@ -14,14 +14,8 @@ export const syncConfig = defineSyncConfig({
   // Tables to synchronize
   tables: ['todos'],
 
-  // Automatic SQL schema migrations executed on startup
-  migrations: [
-    `CREATE TABLE IF NOT EXISTS todos (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      completed INTEGER DEFAULT 0
-    );`,
-  ],
+  // Automatic schema management: tables and columns are created on the fly with zero migrations!
+  autoSchema: true,
 
   // Supabase backend configuration (reads from env vars or strings)
   supabase: {

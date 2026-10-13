@@ -4,6 +4,7 @@ export * from './core/sync-worker.js';
 export * from './core/conflict.js';
 export * from './core/outbox-store.js';
 export * from './core/table-manager.js';
+export * from './core/schema-manager.js';
 export * from './reactive/event-emitter.js';
 export * from './adapters/local/index.js';
 export * from './adapters/remote/index.js';

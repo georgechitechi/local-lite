@@ -48,6 +48,13 @@ export interface OutboxSyncConfig {
   migrations?: string[];
 
   /**
+   * Automatically create tables and columns dynamically on the fly without manual SQL migrations.
+   * When true (default if migrations is not provided), tables in `tables` are created automatically,
+   * and any missing columns are added dynamically on insert/update/pull.
+   */
+  autoSchema?: boolean;
+
+  /**
    * Primary key column. Default: 'id'
    */
   primaryKey?: string;
@@ -184,6 +191,11 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
   // 3. Resolve Network Provider
   const network = config.network ?? new DefaultNetworkStatusProvider(true);
 
+  const autoSchema =
+    config.autoSchema !== undefined
+      ? config.autoSchema
+      : !config.migrations || config.migrations.length === 0;
+
   // 4. Create Client
   const client = new LocalFirstClient({
     local: localAdapter,
@@ -194,6 +206,8 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
     pushIntervalMs: config.pushIntervalMs ?? 5000,
     pullIntervalMs: config.pullIntervalMs ?? 10000,
     maxRetries: config.maxRetries ?? 5,
+    autoSchema,
+    tables: config.tables ?? [],
   });
 
   // 5. Execute Migrations & Auto-initialize
