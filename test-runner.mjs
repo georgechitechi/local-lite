@@ -266,6 +266,7 @@ async function runTests() {
 
   // Test 4: Conflict Resolution (Issue 3)
   console.log('\nTest 4: Testing conflict resolution (Last-Write-Wins)...');
+  network.setOnline(false); // Simulate offline editing
   await client.mutate('todos', 'todo-2', 'UPDATE', { title: 'Local edited note' }, { customTimestamp: 2000 });
   
   // Remote change with older timestamp 1500 -> Local should win
