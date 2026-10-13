@@ -64,16 +64,17 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node test-runner.mjs",
-    "prepublishOnly": "npm run test & tsc"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run test && npm run build"
   },
   "peerDependencies": {
+    "@libsql/client": "^0.6.0",
+    "@op-engineering/op-sqlite": "^0.1.0",
     "@supabase/supabase-js": "^2.0.0",
+    "better-sqlite3": "^8.0.0",
     "expo-sqlite": "^57.0.0",
-    "@op-engineering/op-sqlite": ">=0.1.0",
-    "better-sqlite3": ">=8.0.0",
-    "@libsql/client": ">=0.6.0",
-    "sql.js": ">=1.8.0"
+    "sql.js": "^1.8.0"
   },
   "peerDependenciesMeta": {
     "@supabase/supabase-js": {
@@ -101,7 +102,8 @@
     "@types/uuid": "^11.0.0",
     "expo-sqlite": "^57.0.4",
     "react": "^19.3.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
   },
   "dependencies": {
     "uuid": "^14.0.3"
