@@ -1,0 +1,12 @@
+/target/
+*.sqlite*
+node_modules/
+/dist/
+/native/*.node
+packages/node/dist/
+packages/node/native/*.node
+*.tgz
+/native/android/
+/native/ios/
+/android/build/
+/android/.cxx/

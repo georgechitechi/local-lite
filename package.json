@@ -1,0 +1,15 @@
+{
+  "name": "my-local-first-engine",
+  "version": "1.0.0",
+  "description": "Custom vendor-agnostic local-first sync engine architecture",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "expo-sqlite": "^57.0.4"
+  }
+}
