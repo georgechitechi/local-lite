@@ -1,14 +1,19 @@
+import React from 'react';
 import { Stack } from 'expo-router';
+import { SyncProvider } from '../context/SyncContext';
 
 export default function RootLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: '#0F172A' },
-        headerTintColor: '#F8FAFC',
-        headerTitleStyle: { fontWeight: '700' },
-        title: '⚡ outbox-sync',
-      }}
-    />
+    <SyncProvider>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: '#090D16' },
+          headerTintColor: '#F8FAFC',
+          headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
+    </SyncProvider>
   );
 }

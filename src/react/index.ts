@@ -22,8 +22,14 @@ export function useLiveQuery<T>(
     try {
       const res = await queryFnRef.current(client);
       setData(res || []);
-    } catch (err) {
-      console.error(`Error in useLiveQuery("${tableName}"):`, err);
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('no such column') || msg.includes('no such table')) {
+        // Table or columns have not been populated yet on fresh database; default to empty list
+        setData([]);
+      } else {
+        console.error(`Error in useLiveQuery("${tableName}"):`, err);
+      }
     } finally {
       setLoading(false);
     }

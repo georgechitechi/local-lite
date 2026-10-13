@@ -11,8 +11,8 @@ export const syncConfig = defineSyncConfig({
   // Open or resolve the local SQLite database
   database: () => SQLite.openDatabaseAsync('local_first_example.db'),
 
-  // Tables to synchronize
-  tables: ['todos'],
+  // Tables to synchronize across devices
+  tables: ['properties', 'tenants', 'maintenance_requests', 'payments'],
 
   // Automatic schema management: tables and columns are created on the fly with zero migrations!
   autoSchema: true,
