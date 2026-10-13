@@ -331,8 +331,114 @@ async function runTests() {
     throw new Error('Did not push on reconnect');
   }
 
+  // Test 6: SupabaseRemoteAdapter (Supabase Support)
+  console.log('\nTest 6: Testing SupabaseRemoteAdapter...');
+  const { SupabaseRemoteAdapter } = await import('./dist/index.js');
+  
+  const mockTableCalls = { upserts: [], deletes: [], selects: [] };
+  let realtimeListener = null;
+
+  const mockSupabase = {
+    from: (table) => {
+      const queryBuilder = {
+        upsert: async (data) => {
+          mockTableCalls.upserts.push({ table, data });
+          return { error: null };
+        },
+        delete: () => ({
+          eq: async (col, val) => {
+            mockTableCalls.deletes.push({ table, col, val });
+            return { error: null };
+          }
+        }),
+        select: () => ({
+          gt: async (col, val) => {
+            mockTableCalls.selects.push({ table, col, val });
+            return {
+              data: [
+                { id: 'sb-1', title: 'Fetched from Supabase', updated_at: new Date().toISOString() }
+              ],
+              error: null
+            };
+          }
+        })
+      };
+      return queryBuilder;
+    },
+    channel: (chanName) => ({
+      on: (event, filter, callback) => {
+        realtimeListener = callback;
+        return {
+          subscribe: () => {}
+        };
+      },
+      subscribe: () => {}
+    }),
+    removeChannel: () => {}
+  };
+
+  const supabaseAdapter = new SupabaseRemoteAdapter(mockSupabase, {
+    tables: ['todos'],
+    updatedAtColumn: 'updated_at',
+    primaryKey: 'id'
+  });
+
+  // Test push
+  const pushOk = await supabaseAdapter.pushChanges([
+    {
+      id: 'op-1',
+      tableName: 'todos',
+      rowId: 'todo-sb-1',
+      operation: 'INSERT',
+      payload: { title: 'Supabase Todo' },
+      timestamp: 1000
+    },
+    {
+      id: 'op-2',
+      tableName: 'todos',
+      rowId: 'todo-sb-2',
+      operation: 'DELETE',
+      payload: null,
+      timestamp: 1001
+    }
+  ]);
+
+  if (pushOk && mockTableCalls.upserts.length === 1 && mockTableCalls.deletes.length === 1) {
+    console.log('  ✅ SupabaseRemoteAdapter pushChanges handled upsert and delete');
+  } else {
+    throw new Error('SupabaseRemoteAdapter pushChanges failed');
+  }
+
+  // Test fetch
+  const deltas = await supabaseAdapter.fetchChanges(500);
+  if (deltas.changes.length === 1 && deltas.changes[0].rowId === 'sb-1') {
+    console.log('  ✅ SupabaseRemoteAdapter fetchChanges successfully queried deltas');
+  } else {
+    throw new Error('SupabaseRemoteAdapter fetchChanges failed');
+  }
+
+  // Test realtime
+  let liveDelta = null;
+  supabaseAdapter.subscribeToLiveChanges((incoming) => {
+    liveDelta = incoming;
+  });
+
+  if (realtimeListener) {
+    realtimeListener({
+      eventType: 'INSERT',
+      new: { id: 'live-1', title: 'Live Supabase Item', updated_at: new Date().toISOString() },
+      old: null
+    });
+  }
+
+  if (liveDelta && liveDelta.changes[0].rowId === 'live-1') {
+    console.log('  ✅ SupabaseRemoteAdapter realtime subscription converted postgres_changes correctly');
+  } else {
+    throw new Error('SupabaseRemoteAdapter realtime subscription failed');
+  }
+
   client.stop();
-  console.log('\n🎉 ALL 4 ISSUES VERIFIED AND PASSING SUCCESSFULLY!');
+  console.log('\n🎉 ALL TESTS INCLUDING SUPABASE ADAPTER PASSING SUCCESSFULLY!');
 }
 
 runTests().catch((err) => {

@@ -1,16 +1,28 @@
 {
-  "name": "my-local-first-engine",
+  "name": "outbox-sync",
   "version": "1.0.0",
-  "description": "Custom vendor-agnostic local-first sync engine architecture",
+  "description": "Vendor-agnostic local-first sync engine with outbox pattern and Supabase support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "tsc && node test-runner.mjs"
   },
-  "dependencies": {},
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "expo-sqlite": "^57.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@supabase/supabase-js": {
+      "optional": true
+    },
+    "expo-sqlite": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "typescript": "^7.0.2",
-    "expo-sqlite": "^57.0.4"
+    "@supabase/supabase-js": "^2.117.3",
+    "expo-sqlite": "^57.0.4",
+    "typescript": "^7.0.2"
   }
 }
