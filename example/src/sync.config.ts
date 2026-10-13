@@ -21,6 +21,7 @@ export const syncConfig = defineSyncConfig({
   supabase: {
     url: process.env.EXPO_PUBLIC_SUPABASE_URL || '',
     anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+    deletedColumn: 'deleted', // Uses deleted: true soft deletes
   },
 
   // Fallback to in-memory demo mock if Supabase URL is empty

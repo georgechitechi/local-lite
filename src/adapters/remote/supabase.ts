@@ -22,8 +22,19 @@ export interface SupabaseAdapterOptions {
   primaryKey?: string;
 
   /**
-   * Column name if soft deletes are used.
-   * e.g. 'deleted_at' or 'is_deleted'.
+   * Soft-delete column name (e.g. 'deleted', 'is_deleted', or 'deleted_at').
+   * Default: 'deleted'
+   */
+  deletedColumn?: string;
+
+  /**
+   * Value to write when soft-deleting a row.
+   * Default: true
+   */
+  deletedValue?: any;
+
+  /**
+   * Legacy alias for deletedColumn.
    */
   deletedAtColumn?: string;
 
@@ -44,12 +55,6 @@ export interface SupabaseAdapterOptions {
    * Default: 'local_first_sync'
    */
   channelName?: string;
-
-  /**
-   * Optional table name for tracking hard deletes via tombstones.
-   * Default: 'sync_tombstones'
-   */
-  tombstoneTable?: string;
 }
 
 export class SupabaseRemoteAdapter implements RemoteDBAdapter {
@@ -57,11 +62,11 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private tables: string[];
   private updatedAtColumn: string;
   private primaryKey: string;
-  private deletedAtColumn?: string;
+  private deletedColumn: string;
+  private deletedValue: any;
   private pushRpcName?: string;
   private schema: string;
   private channelName: string;
-  private tombstoneTable?: string;
   private activeChannel?: RealtimeChannel;
 
   constructor(client: SupabaseClient, options: SupabaseAdapterOptions = {}) {
@@ -69,11 +74,11 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.tables = options.tables ?? [];
     this.updatedAtColumn = options.updatedAtColumn ?? 'updated_at';
     this.primaryKey = options.primaryKey ?? 'id';
-    this.deletedAtColumn = options.deletedAtColumn;
+    this.deletedColumn = options.deletedColumn ?? options.deletedAtColumn ?? 'deleted';
+    this.deletedValue = options.deletedValue !== undefined ? options.deletedValue : true;
     this.pushRpcName = options.pushRpcName;
     this.schema = options.schema ?? 'public';
     this.channelName = options.channelName ?? 'local_first_sync';
-    this.tombstoneTable = options.tombstoneTable ?? 'sync_tombstones';
   }
 
   /**
@@ -115,37 +120,32 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     for (const op of operations) {
       try {
         if (op.operation === 'DELETE') {
-          if (this.deletedAtColumn) {
-            // Soft delete
-            const { error } = await this.client
-              .from(op.tableName)
-              .update({ [this.deletedAtColumn]: new Date(op.timestamp).toISOString() })
-              .eq(this.primaryKey, op.rowId);
+          // Soft delete: sets deleted = true and stamps updated_at
+          const patch: Record<string, any> = {
+            [this.deletedColumn]: this.deletedValue,
+          };
 
-            if (error) {
-              console.error(`Supabase soft-delete error on ${op.tableName}:`, error);
-              return false;
-            }
-          } else {
-            // Hard delete
-            const { error } = await this.client
-              .from(op.tableName)
-              .delete()
-              .eq(this.primaryKey, op.rowId);
+          if (this.updatedAtColumn) {
+            patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
+          }
 
-            if (error) {
-              console.error(`Supabase delete error on ${op.tableName}:`, error);
-              return false;
-            }
+          const { error } = await this.client
+            .from(op.tableName)
+            .update(patch)
+            .eq(this.primaryKey, op.rowId);
+
+          if (error) {
+            console.error(`Supabase delete error on ${op.tableName}:`, error);
+            return false;
           }
         } else {
-          // INSERT or UPDATE -> upsert into table
+          // INSERT or UPDATE -> upsert into table with deleted: false
           const rowData = {
             ...(op.payload || {}),
             [this.primaryKey]: op.rowId,
+            [this.deletedColumn]: false,
           };
 
-          // If updatedAtColumn is present, stamp it if not already provided
           if (this.updatedAtColumn && !rowData[this.updatedAtColumn]) {
             rowData[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
           }
@@ -170,15 +170,13 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
   /**
    * Fetches delta changes from Supabase since a given timestamp.
-   * Tracks server timestamps to eliminate client clock skew, and queries
-   * tombstone table to reliably deliver hard deletes to offline clients.
+   * Reads updated records and checks `deleted: true` to propagate soft deletes.
    */
   async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
     const changes: DeltaChange[] = [];
     const sinceIso = sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : null;
     let maxServerTimestamp = sinceTimestamp;
 
-    // 1. Fetch updated / created rows from active tables
     for (const table of this.tables) {
       try {
         let query = this.client
@@ -201,9 +199,12 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
         if (data && Array.isArray(data)) {
           for (const row of data) {
-            const isSoftDeleted = this.deletedAtColumn
-              ? Boolean(row[this.deletedAtColumn])
-              : false;
+            const isSoftDeleted = Boolean(
+              row[this.deletedColumn] === true ||
+              row[this.deletedColumn] === 1 ||
+              (row[this.deletedColumn] &&
+                !['false', '0', 'null', 'undefined'].includes(String(row[this.deletedColumn]).toLowerCase()))
+            );
 
             const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
             const rowTime = row[this.updatedAtColumn]
@@ -225,50 +226,6 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         }
       } catch (err) {
         console.error(`Unexpected error fetching changes from ${table}:`, err);
-      }
-    }
-
-    // 2. Fetch tombstones for hard deletes (if tombstone table is configured)
-    if (this.tombstoneTable && this.tables.length > 0) {
-      try {
-        let tombQuery = this.client
-          .from(this.tombstoneTable)
-          .select('*');
-
-        if (typeof tombQuery.in === 'function') {
-          tombQuery = tombQuery.in('table_name', this.tables);
-        }
-
-        if (sinceIso && typeof tombQuery.gt === 'function') {
-          tombQuery = tombQuery.gt('deleted_at', sinceIso);
-        }
-
-        if (typeof tombQuery.order === 'function') {
-          tombQuery = tombQuery.order('deleted_at', { ascending: true });
-        }
-
-        const { data: tombstones, error: tombError } = await tombQuery;
-        if (!tombError && Array.isArray(tombstones)) {
-          for (const tomb of tombstones) {
-            const tombTime = tomb.deleted_at
-              ? new Date(tomb.deleted_at).getTime()
-              : Date.now();
-
-            if (tombTime > maxServerTimestamp) {
-              maxServerTimestamp = tombTime;
-            }
-
-            changes.push({
-              tableName: String(tomb.table_name),
-              operation: 'DELETE',
-              rowId: String(tomb.row_id),
-              payload: null,
-              timestamp: tombTime,
-            });
-          }
-        }
-      } catch (err) {
-        // Ignored if tombstone table does not exist
       }
     }
 
@@ -305,9 +262,14 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           const record = op === 'DELETE' ? payload.old : payload.new;
           if (!record) return;
 
-          const isSoftDeleted = this.deletedAtColumn && op !== 'DELETE'
-            ? Boolean(record[this.deletedAtColumn])
-            : false;
+          const isSoftDeleted =
+            op !== 'DELETE' &&
+            Boolean(
+              record[this.deletedColumn] === true ||
+              record[this.deletedColumn] === 1 ||
+              (record[this.deletedColumn] &&
+                !['false', '0', 'null', 'undefined'].includes(String(record[this.deletedColumn]).toLowerCase()))
+            );
 
           const finalOp: SyncOp = isSoftDeleted ? 'DELETE' : op;
           const rowId = String(record[this.primaryKey]);
@@ -333,7 +295,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
     channel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
-        // Connected to Supabase Realtime channel
+        // Successfully subscribed to Supabase realtime
       }
     });
 
@@ -341,9 +303,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   }
 
   /**
-   * Unsubscribe from Realtime channel.
+   * Clean up active realtime channels.
    */
-  unsubscribe(): void {
+  destroy(): void {
     if (this.activeChannel) {
       this.client.removeChannel(this.activeChannel);
       this.activeChannel = undefined;

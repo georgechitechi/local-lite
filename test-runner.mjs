@@ -345,7 +345,7 @@ async function runTests() {
   console.log('\nTest 6: Testing SupabaseRemoteAdapter...');
   const { SupabaseRemoteAdapter } = await import('./dist/index.js');
   
-  const mockTableCalls = { upserts: [], deletes: [], selects: [] };
+  const mockTableCalls = { upserts: [], deletes: [], updates: [], selects: [] };
   let realtimeListener = null;
 
   const mockSupabase = {
@@ -355,6 +355,12 @@ async function runTests() {
           mockTableCalls.upserts.push({ table, data });
           return { error: null };
         },
+        update: (data) => ({
+          eq: async (col, val) => {
+            mockTableCalls.updates.push({ table, data, col, val });
+            return { error: null };
+          }
+        }),
         delete: () => ({
           eq: async (col, val) => {
             mockTableCalls.deletes.push({ table, col, val });
@@ -364,12 +370,11 @@ async function runTests() {
         select: () => {
           const handler = {
             in: () => handler,
+            order: () => handler,
             gt: async (col, val) => {
               mockTableCalls.selects.push({ table, col, val });
               return {
-                data: table === 'sync_tombstones'
-                  ? []
-                  : [{ id: 'sb-1', title: 'Fetched from Supabase', updated_at: new Date().toISOString() }],
+                data: [{ id: 'sb-1', title: 'Fetched from Supabase', updated_at: new Date().toISOString() }],
                 error: null
               };
             }
@@ -394,6 +399,7 @@ async function runTests() {
   const supabaseAdapter = new SupabaseRemoteAdapter(mockSupabase, {
     tables: ['todos'],
     updatedAtColumn: 'updated_at',
+    deletedColumn: 'deleted',
     primaryKey: 'id'
   });
 
@@ -417,8 +423,13 @@ async function runTests() {
     }
   ]);
 
-  if (pushOk && mockTableCalls.upserts.length === 1 && mockTableCalls.deletes.length === 1) {
-    console.log('  ✅ SupabaseRemoteAdapter pushChanges handled upsert and delete');
+  if (pushOk && mockTableCalls.upserts.length === 1 && mockTableCalls.updates.length === 1) {
+    const delCall = mockTableCalls.updates[0];
+    if (delCall.data.deleted === true) {
+      console.log('  ✅ SupabaseRemoteAdapter pushChanges handled upsert and soft-delete (deleted: true)');
+    } else {
+      throw new Error('deleted: true was not set on soft-delete');
+    }
   } else {
     throw new Error('SupabaseRemoteAdapter pushChanges failed');
   }
