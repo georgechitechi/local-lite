@@ -9,7 +9,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LocalFirstClient, generateUUID } from 'outbox-sync';
+import { LocalFirstClient } from 'outbox-sync';
 import { useLiveQuery, useOutboxStatus } from 'outbox-sync/react';
 import { getSyncClient } from '../sync.config';
 
@@ -51,16 +51,16 @@ export default function Index() {
 
   const { pendingCount, pendingRecords } = useOutboxStatus(client);
 
-  // Add Todo (Atomic Dual-Write)
+  // Add Todo (Convenience client.insert)
   const handleAddTodo = async () => {
     if (!client || !inputText.trim()) return;
-    const id = generateUUID();
     const title = inputText.trim();
     setInputText('');
 
     setStatusMessage(`Mutating local SQLite for "${title}"...`);
 
-    await client.mutate('todos', id, 'INSERT', {
+    // Auto-generates UUID and executes atomic dual-write (SQLite + Outbox)
+    await client.insert('todos', {
       title,
       completed: 0,
     });
@@ -68,20 +68,19 @@ export default function Index() {
     setStatusMessage(`Added "${title}". Instant optimistic write complete!`);
   };
 
-  // Toggle Todo completion
+  // Toggle Todo completion (Convenience client.update)
   const handleToggleTodo = async (todo: Todo) => {
     if (!client) return;
     const newStatus = todo.completed ? 0 : 1;
-    await client.mutate('todos', todo.id, 'UPDATE', {
-      title: todo.title,
+    await client.update('todos', todo.id, {
       completed: newStatus,
     });
   };
 
-  // Delete Todo
+  // Delete Todo (Convenience client.delete)
   const handleDeleteTodo = async (id: string) => {
     if (!client) return;
-    await client.mutate('todos', id, 'DELETE', null);
+    await client.delete('todos', id);
   };
 
   // Toggle Network Online / Offline

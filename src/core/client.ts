@@ -133,6 +133,67 @@ export class LocalFirstClient {
   }
 
   /**
+   * Convenience helper to insert a record into a table.
+   * Auto-generates a UUID if rowId is omitted or passed inside payload.
+   * 
+   * Example:
+   * await client.insert('todos', { title: 'Buy milk' });
+   * await client.insert('todos', 'custom-id', { title: 'Buy milk' });
+   */
+  async insert(
+    tableName: string,
+    rowIdOrPayload: string | Record<string, any>,
+    payloadOrOptions?: Record<string, any> | MutateOptions,
+    options?: MutateOptions
+  ): Promise<string> {
+    let rowId: string;
+    let payload: Record<string, any>;
+    let opts: MutateOptions = {};
+
+    if (typeof rowIdOrPayload === 'string') {
+      rowId = rowIdOrPayload;
+      payload = (payloadOrOptions as Record<string, any>) || {};
+      opts = options || {};
+    } else {
+      payload = rowIdOrPayload || {};
+      rowId = payload[this.primaryKey] || generateUUID();
+      opts = (payloadOrOptions as MutateOptions) || {};
+    }
+
+    await this.mutate(tableName, rowId, 'INSERT', payload, opts);
+    return rowId;
+  }
+
+  /**
+   * Convenience helper to update an existing record by ID.
+   * 
+   * Example:
+   * await client.update('todos', 'todo-1', { completed: 1 });
+   */
+  async update(
+    tableName: string,
+    rowId: string,
+    payload: Record<string, any>,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    await this.mutate(tableName, rowId, 'UPDATE', payload, options);
+  }
+
+  /**
+   * Convenience helper to delete a record by ID.
+   * 
+   * Example:
+   * await client.delete('todos', 'todo-1');
+   */
+  async delete(
+    tableName: string,
+    rowId: string,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    await this.mutate(tableName, rowId, 'DELETE', null, options);
+  }
+
+  /**
    * Tracks an existing mutation into sync_outbox without modifying the table.
    * Can accept an external transaction `options.tx` for custom atomic SQL workflows.
    */
