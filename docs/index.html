@@ -54,13 +54,32 @@
     }
 
     .docsify-pagination-container {
-      margin-top: 3.5rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      margin-top: 2.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    .pagination-item {
+      max-width: 45%;
+    }
+
+    .pagination-item a {
+      text-decoration: none !important;
+    }
+
+    .pagination-item-label {
+      font-size: 0.72rem !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      opacity: 0.65;
     }
 
     .pagination-item-title {
-      font-weight: 600;
+      font-size: 0.95rem !important;
+      font-weight: 600 !important;
+      margin-top: 0.15rem;
+      line-height: 1.35 !important;
     }
   </style>
 </head>
@@ -117,8 +136,8 @@
         }
       },
       pagination: {
-        previousText: '← Previous',
-        nextText: 'Next →',
+        previousText: 'Previous',
+        nextText: 'Next',
         crossChapter: true,
         crossChapterText: true
       }
