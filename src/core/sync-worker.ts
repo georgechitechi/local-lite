@@ -12,6 +12,7 @@ import {
 import { getConflictResolver } from './conflict.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
 import { OutboxStore } from './outbox-store.js';
+import { MetaStore } from './meta-store.js';
 import { TableManager } from './table-manager.js';
 import { SchemaManager } from './schema-manager.js';
 
@@ -48,6 +49,7 @@ export class SyncWorker {
   private isPushing = false;
   private isPulling = false;
   private lastPulledTimestamp = 0;
+  private cursorLoaded = false;
 
   constructor(
     db: LocalDBAdapter,
@@ -214,6 +216,11 @@ export class SyncWorker {
 
     this.isPulling = true;
     try {
+      if (!this.cursorLoaded) {
+        this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db);
+        this.cursorLoaded = true;
+      }
+
       const deltas = await this.remote.fetchChanges(this.lastPulledTimestamp);
       if (deltas) {
         await this.applyDeltasLocally(deltas);
@@ -230,8 +237,9 @@ export class SyncWorker {
    */
   async applyDeltasLocally(deltas: DeltaChanges): Promise<void> {
     if (!deltas.changes || deltas.changes.length === 0) {
-      if (deltas.timestamp) {
-        this.lastPulledTimestamp = Math.max(this.lastPulledTimestamp, deltas.timestamp);
+      if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
+        this.lastPulledTimestamp = deltas.timestamp;
+        await MetaStore.setLastSyncedAt(this.db, this.lastPulledTimestamp);
       }
       return;
     }
@@ -300,6 +308,11 @@ export class SyncWorker {
           source: 'remote',
         });
       }
+
+      // Persist sync cursor atomically within the same transaction as delta writes
+      if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
+        await MetaStore.setLastSyncedAt(tx, deltas.timestamp);
+      }
     });
 
     if (deltas.timestamp) {
@@ -307,7 +320,17 @@ export class SyncWorker {
     }
   }
 
-  getLastPulledTimestamp(): number {
+  async getLastPulledTimestamp(): Promise<number> {
+    if (!this.cursorLoaded) {
+      this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db);
+      this.cursorLoaded = true;
+    }
     return this.lastPulledTimestamp;
+  }
+
+  async resetSyncCursor(): Promise<void> {
+    await MetaStore.clearLastSyncedAt(this.db);
+    this.lastPulledTimestamp = 0;
+    this.cursorLoaded = true;
   }
 }

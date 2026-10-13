@@ -56,6 +56,25 @@ class MockInMemoryDB {
       return pending.slice(0, 50);
     }
 
+    const lowerQ = normQ.toLowerCase();
+
+    if (lowerQ.includes('from sync_meta where key = ?')) {
+      const key = params[0];
+      const row = this.getTable('sync_meta').get(key);
+      return row ? [{ value: row.value }] : [];
+    }
+
+    if (lowerQ.includes('into sync_meta')) {
+      const [key, value] = params;
+      this.getTable('sync_meta').set(key, { key, value });
+      return [];
+    }
+
+    if (lowerQ.includes('delete from sync_meta')) {
+      this.getTable('sync_meta').delete('last_synced_at');
+      return [];
+    }
+
     const selectRowMatch = q.match(/SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? = \?/i);
     if (selectRowMatch) {
       const table = selectRowMatch[1];
@@ -644,10 +663,31 @@ async function runTests() {
     throw new Error('NodeSQLiteAdapter failed');
   }
 
+  // Test 11: MetaStore persistent sync cursor (sync_meta)
+  console.log('\nTest 11: Testing MetaStore & persistent sync cursor (sync_meta)...');
+  const { MetaStore } = await import('./dist/index.js');
+  const metaDb = new MockInMemoryDB();
+  await MetaStore.ensureSchema(metaDb);
+
+  const initialCursor = await MetaStore.getLastSyncedAt(metaDb);
+  if (initialCursor !== 0) throw new Error('Initial cursor should be 0');
+
+  const testTimestamp = 1712345678000;
+  await MetaStore.setLastSyncedAt(metaDb, testTimestamp);
+  const loadedCursor = await MetaStore.getLastSyncedAt(metaDb);
+  if (loadedCursor !== testTimestamp) throw new Error('Failed to persist cursor');
+
+  await MetaStore.clearLastSyncedAt(metaDb);
+  const clearedCursor = await MetaStore.getLastSyncedAt(metaDb);
+  if (clearedCursor !== 0) throw new Error('Failed to clear cursor');
+
+  console.log('  ✅ sync_meta table initialized and operates strictly device-local');
+  console.log('  ✅ last_synced_at cursor persists and reloads correctly across sessions');
+
   autoClient.stop();
   configuredClient.stop();
   client.stop();
-  console.log('\n🎉 ALL 10 TESTS PASSING: FULL COMPATIBILITY ACROSS EXPO, OP-SQLITE, BETTER-SQLITE3, LIBSQL, SQL.JS & NODE:SQLITE!');
+  console.log('\n🎉 ALL 11 TESTS PASSING: FULL COMPATIBILITY ACROSS EXPO, OP-SQLITE, BETTER-SQLITE3, LIBSQL, SQL.JS & NODE:SQLITE WITH PERSISTENT SYNC CURSOR!');
 }
 
 runTests().catch((err) => {

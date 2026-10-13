@@ -4,6 +4,7 @@ import { EventEmitter } from '../reactive/event-emitter.js';
 import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
 import { OutboxStore } from './outbox-store.js';
+import { MetaStore } from './meta-store.js';
 import { SchemaManager } from './schema-manager.js';
 import {
   ConflictResolver,
@@ -66,6 +67,7 @@ export class LocalFirstClient {
    */
   async initialize(): Promise<void> {
     await OutboxStore.ensureSchema(this.db);
+    await MetaStore.ensureSchema(this.db);
 
     if (this.autoSchema && this.tables.length > 0) {
       for (const table of this.tables) {
@@ -235,6 +237,21 @@ export class LocalFirstClient {
     this.syncWorker.schedulePush(20);
 
     return outboxId;
+  }
+
+  /**
+   * Retrieves the persisted last_synced_at timestamp cursor (in ms).
+   */
+  async getLastSyncedAt(): Promise<number> {
+    return await this.syncWorker.getLastPulledTimestamp();
+  }
+
+  /**
+   * Resets the persistent sync cursor back to 0, forcing the next pull
+   * to query all remote records.
+   */
+  async resetSyncCursor(): Promise<void> {
+    await this.syncWorker.resetSyncCursor();
   }
 
   /**
