@@ -23,6 +23,7 @@ export interface SupabaseConfigOptions {
   deletedAtColumn?: string;
   pushRpcName?: string;
   channelName?: string;
+  tombstoneTable?: string;
 }
 
 export interface OutboxSyncConfig {
@@ -185,6 +186,7 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
       deletedAtColumn: config.supabase.deletedAtColumn,
       pushRpcName: config.supabase.pushRpcName,
       channelName: config.supabase.channelName,
+      tombstoneTable: config.supabase.tombstoneTable,
     });
   } else if (config.supabase?.url && config.supabase?.anonKey) {
     const supabaseClient = createClient(config.supabase.url, config.supabase.anonKey);
@@ -196,6 +198,7 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
       deletedAtColumn: config.supabase.deletedAtColumn,
       pushRpcName: config.supabase.pushRpcName,
       channelName: config.supabase.channelName,
+      tombstoneTable: config.supabase.tombstoneTable,
     });
   } else if (config.demoFallback !== false) {
     remoteAdapter = new MemoryDemoRemoteAdapter(300);

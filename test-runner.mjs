@@ -361,17 +361,21 @@ async function runTests() {
             return { error: null };
           }
         }),
-        select: () => ({
-          gt: async (col, val) => {
-            mockTableCalls.selects.push({ table, col, val });
-            return {
-              data: [
-                { id: 'sb-1', title: 'Fetched from Supabase', updated_at: new Date().toISOString() }
-              ],
-              error: null
-            };
-          }
-        })
+        select: () => {
+          const handler = {
+            in: () => handler,
+            gt: async (col, val) => {
+              mockTableCalls.selects.push({ table, col, val });
+              return {
+                data: table === 'sync_tombstones'
+                  ? []
+                  : [{ id: 'sb-1', title: 'Fetched from Supabase', updated_at: new Date().toISOString() }],
+                error: null
+              };
+            }
+          };
+          return handler;
+        }
       };
       return queryBuilder;
     },

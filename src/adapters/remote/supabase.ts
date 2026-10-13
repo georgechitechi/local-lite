@@ -44,6 +44,12 @@ export interface SupabaseAdapterOptions {
    * Default: 'local_first_sync'
    */
   channelName?: string;
+
+  /**
+   * Optional table name for tracking hard deletes via tombstones.
+   * Default: 'sync_tombstones'
+   */
+  tombstoneTable?: string;
 }
 
 export class SupabaseRemoteAdapter implements RemoteDBAdapter {
@@ -55,6 +61,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private pushRpcName?: string;
   private schema: string;
   private channelName: string;
+  private tombstoneTable?: string;
   private activeChannel?: RealtimeChannel;
 
   constructor(client: SupabaseClient, options: SupabaseAdapterOptions = {}) {
@@ -66,6 +73,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.pushRpcName = options.pushRpcName;
     this.schema = options.schema ?? 'public';
     this.channelName = options.channelName ?? 'local_first_sync';
+    this.tombstoneTable = options.tombstoneTable ?? 'sync_tombstones';
   }
 
   /**
@@ -162,11 +170,15 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
   /**
    * Fetches delta changes from Supabase since a given timestamp.
+   * Tracks server timestamps to eliminate client clock skew, and queries
+   * tombstone table to reliably deliver hard deletes to offline clients.
    */
   async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
     const changes: DeltaChange[] = [];
     const sinceIso = sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : null;
+    let maxServerTimestamp = sinceTimestamp;
 
+    // 1. Fetch updated / created rows from active tables
     for (const table of this.tables) {
       try {
         let query = this.client
@@ -175,6 +187,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
         if (sinceIso) {
           query = query.gt(this.updatedAtColumn, sinceIso);
+        }
+
+        if (typeof query.order === 'function') {
+          query = query.order(this.updatedAtColumn, { ascending: true });
         }
 
         const { data, error } = await query;
@@ -194,6 +210,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               ? new Date(row[this.updatedAtColumn]).getTime()
               : Date.now();
 
+            if (rowTime > maxServerTimestamp) {
+              maxServerTimestamp = rowTime;
+            }
+
             changes.push({
               tableName: table,
               operation,
@@ -208,8 +228,52 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       }
     }
 
+    // 2. Fetch tombstones for hard deletes (if tombstone table is configured)
+    if (this.tombstoneTable && this.tables.length > 0) {
+      try {
+        let tombQuery = this.client
+          .from(this.tombstoneTable)
+          .select('*');
+
+        if (typeof tombQuery.in === 'function') {
+          tombQuery = tombQuery.in('table_name', this.tables);
+        }
+
+        if (sinceIso && typeof tombQuery.gt === 'function') {
+          tombQuery = tombQuery.gt('deleted_at', sinceIso);
+        }
+
+        if (typeof tombQuery.order === 'function') {
+          tombQuery = tombQuery.order('deleted_at', { ascending: true });
+        }
+
+        const { data: tombstones, error: tombError } = await tombQuery;
+        if (!tombError && Array.isArray(tombstones)) {
+          for (const tomb of tombstones) {
+            const tombTime = tomb.deleted_at
+              ? new Date(tomb.deleted_at).getTime()
+              : Date.now();
+
+            if (tombTime > maxServerTimestamp) {
+              maxServerTimestamp = tombTime;
+            }
+
+            changes.push({
+              tableName: String(tomb.table_name),
+              operation: 'DELETE',
+              rowId: String(tomb.row_id),
+              payload: null,
+              timestamp: tombTime,
+            });
+          }
+        }
+      } catch (err) {
+        // Ignored if tombstone table does not exist
+      }
+    }
+
     return {
-      timestamp: Date.now(),
+      timestamp: changes.length > 0 ? maxServerTimestamp : sinceTimestamp,
       changes,
     };
   }
