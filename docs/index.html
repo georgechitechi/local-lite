@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Offline-First SQLite Sync Engine</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="description"
+    content="Never let a lost connection break a promise. Local-first sync engine for Expo, React Native, and Node.js.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220%200%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Docsify Theme & Dark/Light Switcher -->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/dist/style.min.css">
+  <style>
+    :root {
+      --docsify-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --code-font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+    }
+
+    body {
+      font-family: var(--docsify-font-family);
+    }
+
+    code,
+    pre {
+      font-family: var(--code-font-family) !important;
+    }
+
+    .sidebar {
+      font-weight: 500;
+    }
+
+    .app-name-link img {
+      width: 24px;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    .markdown-section h1 {
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
+
+    .markdown-section h2 {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">Loading documentation...</div>
+  <script>
+    window.$docsify = {
+      name: 'local-lite',
+      repo: 'https://github.com/georgechitechi/local-lite',
+      loadSidebar: true,
+      subMaxLevel: 3,
+      auto2top: true,
+      homepage: 'README.md',
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: 'Search documentation...',
+        noData: 'No results found',
+        depth: 4
+      },
+      copyCode: {
+        buttonText: 'Copy',
+        successText: 'Copied!'
+      },
+      darklightTheme: {
+        siteFont: 'Inter',
+        defaultTheme: 'dark',
+        codeFontFamily: 'JetBrains Mono',
+        bodyFontSize: '15px',
+        dark: {
+          accent: '#38bdf8',
+          toogleBackground: '#ffffff',
+          background: '#090d16',
+          textColor: '#e2e8f0',
+          codeTextColor: '#f8fafc',
+          codeBackgroundColor: '#0f172a',
+          borderColor: '#1e293b',
+          blockQuoteColor: '#38bdf8',
+          highlightColor: '#f59e0b',
+          sidebarSublabel: '#94a3b8'
+        },
+        light: {
+          accent: '#0284c7',
+          toogleBackground: '#0f172a',
+          background: '#ffffff',
+          textColor: '#0f172a',
+          codeTextColor: '#0f172a',
+          codeBackgroundColor: '#f8fafc',
+          borderColor: '#e2e8f0',
+          blockQuoteColor: '#0284c7',
+          highlightColor: '#f59e0b',
+          sidebarSublabel: '#64748b'
+        }
+      }
+    }
+  </script>
+  <!-- Docsify Core -->
+  <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+
+  <!-- Plugins -->
+  <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/dist/index.min.js"></script>
+
+  <!-- Prism Syntax Highlighting -->
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-javascript.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-jsx.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-tsx.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-markdown.min.js"></script>
+</body>
+
+</html>
