@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { LocalFirstClient } from 'local-lite';
-import { useOutboxStatus } from 'local-lite/react';
+import { useSyncStatus } from 'local-lite/react';
 import { getSyncClient } from '../sync.config';
 import { clearRentalPortfolio } from '../data/seeder';
 
@@ -67,7 +67,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [client]);
 
-  const { pendingCount, pendingRecords, refresh: refreshOutbox } = useOutboxStatus(client);
+  const { pendingCount, pendingRecords, refresh: refreshOutbox } = useSyncStatus(client);
 
   const toggleOnline = () => {
     if (!client) return;

@@ -90,13 +90,13 @@ export function getSyncClient(): Promise<LocalFirstClient> {
 
 ## 3. Build a Reactive UI Component
 
-Use `useLiveQuery` and `useOutboxStatus` in your React or React Native components:
+Use `useLiveQuery` and `useSyncStatus` in your React or React Native components:
 
 ```tsx
 // src/app/index.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList } from 'react-native';
-import { useLiveQuery, useOutboxStatus } from 'local-lite/react';
+import { useLiveQuery, useSyncStatus } from 'local-lite/react';
 import { LocalFirstClient, generateUUID } from 'local-lite';
 import { getSyncClient } from '../sync.config';
 
@@ -115,8 +115,8 @@ export default function TodoApp() {
     order: 'desc',
   });
 
-  // 3. Monitor sync outbox queue
-  const { pendingCount, isSyncing } = useOutboxStatus(client);
+  // 3. Monitor sync engine & pending outbox queue
+  const { pendingCount, isSyncing, isOnline } = useSyncStatus(client);
 
   // 4. Instant local write
   const handleAddTodo = async () => {

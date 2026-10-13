@@ -13,7 +13,7 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 * **[Configuration Reference](docs/configuration.md)** - Options for `defineSyncConfig()`, retries, and loggers
 * **[Local SQLite Adapters](docs/adapters-local.md)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
 * **[Remote Cloud Adapters](docs/adapters-remote.md)** - Supabase, Convex, Cloud Firestore, and custom adapters
-* **[React & Expo Hooks](docs/react-hooks.md)** - `useLiveQuery()` and `useOutboxStatus()`
+* **[React & Expo Hooks](docs/react-hooks.md)** - `useLiveQuery()` and `useSyncStatus()`
 * **[Conflict Resolution](docs/conflict-resolution.md)** - LWW, Client-Wins, Server-Wins, and custom resolvers
 
 ---
@@ -147,7 +147,7 @@ export const client = await createSyncClient(syncConfig);
 ### 2. Use in React Native / Expo UI
 
 ```tsx
-import { useLiveQuery, useOutboxStatus } from 'local-lite/react';
+import { useLiveQuery, useSyncStatus } from 'local-lite/react';
 import { client } from './sync.config';
 
 export function TodoScreen() {
@@ -157,7 +157,7 @@ export function TodoScreen() {
     order: 'desc',
   });
 
-  const { pendingCount } = useOutboxStatus(client);
+  const { pendingCount, isOnline, isSyncing } = useSyncStatus(client);
 
   const addTodo = async (title: string) => {
     await client.insert('todos', {

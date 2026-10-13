@@ -3,7 +3,7 @@
 `local-lite` provides first-class reactive hooks for React, React Native, and Expo applications via `local-lite/react`.
 
 ```typescript
-import { useLiveQuery, useOutboxStatus } from 'local-lite/react';
+import { useLiveQuery, useSyncStatus } from 'local-lite/react';
 ```
 
 ---
@@ -86,17 +86,20 @@ const { data: stats } = useLiveQuery(client, 'todos', async (db) => {
 
 ---
 
-## 2. `useOutboxStatus`
+## 2. `useSyncStatus`
 
-`useOutboxStatus` provides real-time diagnostic visibility into the local sync outbox queue.
+`useSyncStatus` provides real-time visibility into the sync engine, connectivity status, active operations, and the local SQLite outbox queue.
 
 ### Signature:
 ```typescript
-function useOutboxStatus(client: LocalFirstClient | null): {
-  pendingCount: number;      // Number of mutations waiting in local SQLite
+function useSyncStatus(client: LocalFirstClient | null): {
+  isOnline: boolean;          // True when network connectivity is active
   isSyncing: boolean;         // True while actively pushing or pulling
+  isPushing: boolean;         // True while pushing local mutations to remote
+  isPulling: boolean;         // True while pulling remote deltas
+  pendingCount: number;       // Number of mutations waiting in local SQLite outbox
+  pendingRecords: any[];      // Array of pending outbox queue items
   lastSyncedAt: number | null;// Unix timestamp of last successful sync
-  records: OutboxItem[];      // Array of pending outbox queue items
   refresh: () => Promise<void>;
 };
 ```
@@ -106,10 +109,14 @@ function useOutboxStatus(client: LocalFirstClient | null): {
 ### Usage Example (Sync Status Badge):
 
 ```tsx
-import { useOutboxStatus } from 'local-lite/react';
+import { useSyncStatus } from 'local-lite/react';
 
 export function SyncBadge({ client }) {
-  const { pendingCount, isSyncing, lastSyncedAt } = useOutboxStatus(client);
+  const { isOnline, isSyncing, pendingCount, lastSyncedAt } = useSyncStatus(client);
+
+  if (!isOnline) {
+    return <Text style={{ color: '#ef4444' }}>📶 Offline (Changes saved locally)</Text>;
+  }
 
   if (isSyncing) {
     return <Text style={{ color: '#38bdf8' }}>🔄 Syncing with cloud...</Text>;

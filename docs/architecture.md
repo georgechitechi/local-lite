@@ -10,9 +10,9 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                       React / React Native UI               │
 │                                                             │
-│   useLiveQuery()                           useOutboxStatus()│
+│   useLiveQuery()                            useSyncStatus() │
 └────────▲──────────────────────────────────────────▲─────────┘
-         │ (Events: change:table)                   │ (Events: outbox:changed)
+         │ (Events: change:table)                   │ (Events: sync:status)
 ┌────────┴──────────────────────────────────────────┴─────────┐
 │                      EventEmitter                           │
 └────────▲──────────────────────────────────────────▲─────────┘

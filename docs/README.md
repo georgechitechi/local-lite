@@ -31,7 +31,7 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
    - Building custom backend adapters
 6. **[React & React Native Hooks](./react-hooks.md)**
    - `useLiveQuery()`: Zero-SQL live query hook
-   - `useOutboxStatus()`: Real-time sync queue inspector
+   - `useSyncStatus()`: Real-time sync engine & queue status inspector
 7. **[Conflict Resolution](./conflict-resolution.md)**
    - Last-Write-Wins (LWW)
    - Client-Wins & Server-Wins

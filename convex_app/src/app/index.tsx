@@ -11,7 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLiveQuery, useOutboxStatus } from 'local-lite/react';
+import { useLiveQuery, useSyncStatus } from 'local-lite/react';
 import { LocalFirstClient, generateUUID } from 'local-lite';
 import { getSyncClient, CONVEX_URL } from '../sync.config';
 
@@ -80,8 +80,8 @@ export default function Index() {
     order: 'desc',
   });
 
-  // 2. Outbox status & pending operations queue
-  const { pendingCount, pendingRecords, refresh: refreshOutbox } = useOutboxStatus(client);
+  // 2. Sync status & pending operations queue
+  const { pendingCount, pendingRecords, refresh: refreshOutbox } = useSyncStatus(client);
 
   // Add Task
   const handleAddTask = async () => {

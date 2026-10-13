@@ -77,25 +77,52 @@ export function useLiveQuery<T = any>(
   return { data, refetch, loading };
 }
 
-/**
- * Hook that tracks the status and pending items in sync_outbox in real time.
- */
-export function useOutboxStatus(client: LocalFirstClient | null | undefined): {
+export interface UseSyncStatusResult {
+  isOnline: boolean;
+  isPushing: boolean;
+  isPulling: boolean;
+  isSyncing: boolean;
   pendingCount: number;
   pendingRecords: any[];
+  lastSyncedAt: number | null;
   refresh: () => Promise<void>;
-} {
+}
+
+/**
+ * Consolidated hook that tracks real-time sync connectivity, sync worker activity
+ * (pushing/pulling/syncing), and pending items in the local SQLite outbox queue.
+ */
+export function useSyncStatus(client: LocalFirstClient | null | undefined): UseSyncStatusResult {
+  const [isOnline, setIsOnline] = useState(true);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingRecords, setPendingRecords] = useState<any[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     if (!client || !client.db) return;
     try {
-      const records = await client.getOutboxRecords();
-      setPendingRecords(records || []);
-      setPendingCount(records.filter((r) => r.status === 'PENDING').length);
+      const [metrics, records, lastSynced] = await Promise.all([
+        client.getMetrics().catch(() => null),
+        client.getOutboxRecords().catch(() => []),
+        client.getLastSyncedAt().catch(() => null),
+      ]);
+
+      if (metrics) {
+        setIsOnline(metrics.isOnline);
+        setIsPushing(metrics.isPushing);
+        setIsPulling(metrics.isPulling);
+      }
+      if (records) {
+        setPendingRecords(records);
+        setPendingCount(records.filter((r) => r.status === 'PENDING').length);
+      }
+      if (lastSynced !== null && lastSynced !== undefined) {
+        setLastSyncedAt(lastSynced > 0 ? lastSynced : null);
+      }
     } catch {
-      // Ignored if table doesn't exist yet
+      // Ignored if client is stopping or tables initializing
     }
   }, [client]);
 
@@ -104,57 +131,43 @@ export function useOutboxStatus(client: LocalFirstClient | null | undefined): {
 
     refresh();
 
-    const unsubscribe = client.events.on('sync_outbox', () => {
+    const unsubStatus = client.events.on('sync:status', (e: SyncStatusEvent) => {
+      setIsOnline(e.isOnline);
+      setIsPushing(e.isPushing);
+      setIsPulling(e.isPulling);
+      setPendingCount(e.pendingCount);
+    });
+
+    const unsubOutbox = client.events.on('sync_outbox', () => {
+      refresh();
+    });
+
+    const unsubPush = client.events.on('sync:push', () => {
+      refresh();
+    });
+
+    const unsubPull = client.events.on('sync:pull', () => {
       refresh();
     });
 
     return () => {
-      unsubscribe();
+      unsubStatus();
+      unsubOutbox();
+      unsubPush();
+      unsubPull();
     };
   }, [client, refresh]);
 
-  return { pendingCount, pendingRecords, refresh };
-}
-
-/**
- * Hook that tracks real-time sync connectivity and sync worker activity (pushing/pulling).
- */
-export function useSyncStatus(client: LocalFirstClient | null | undefined): {
-  isOnline: boolean;
-  isPushing: boolean;
-  isPulling: boolean;
-  pendingCount: number;
-} {
-  const [status, setStatus] = useState<SyncStatusEvent>({
-    isOnline: true,
-    isPushing: false,
-    isPulling: false,
-    pendingCount: 0,
-  });
-
-  useEffect(() => {
-    if (!client) return;
-
-    // Fetch initial metrics
-    client.getMetrics().then((m) => {
-      setStatus({
-        isOnline: m.isOnline,
-        isPushing: m.isPushing,
-        isPulling: m.isPulling,
-        pendingCount: m.outboxPendingCount,
-      });
-    }).catch(() => {});
-
-    const unsubscribe = client.events.on('sync:status', (e: SyncStatusEvent) => {
-      setStatus(e);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [client]);
-
-  return status;
+  return {
+    isOnline,
+    isPushing,
+    isPulling,
+    isSyncing: isPushing || isPulling,
+    pendingCount,
+    pendingRecords,
+    lastSyncedAt,
+    refresh,
+  };
 }
 
 /**
