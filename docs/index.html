@@ -59,7 +59,7 @@
   <div id="app">Loading documentation...</div>
   <script>
     window.$docsify = {
-      name: '',
+      name: 'Local Lite',
       repo: 'https://github.com/georgechitechi/local-lite',
       loadSidebar: true,
       subMaxLevel: 3,
@@ -105,6 +105,12 @@
           highlightColor: '#f59e0b',
           sidebarSublabel: '#64748b'
         }
+      },
+      pagination: {
+        previousText: '← Previous',
+        nextText: 'Next →',
+        crossChapter: true,
+        crossChapterText: true
       }
     }
   </script>
@@ -114,6 +120,7 @@
   <!-- Plugins -->
   <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-darklight-theme@latest/dist/index.min.js"></script>
 
   <!-- Prism Syntax Highlighting -->
