@@ -1,4 +1,4 @@
-import { defineSyncConfig, createSyncClient, LocalFirstClient } from 'outbox-sync';
+import { defineSyncConfig, createSyncClient, LocalFirstClient } from 'outbox-sync/config';
 import * as SQLite from 'expo-sqlite';
 
 /**

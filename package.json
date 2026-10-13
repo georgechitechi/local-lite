@@ -4,6 +4,33 @@
   "description": "Vendor-agnostic local-first sync engine with outbox pattern and Supabase support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "default": "./dist/react/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js",
+      "default": "./dist/config/index.js"
+    },
+    "./supabase": {
+      "types": "./dist/adapters/remote/supabase.d.ts",
+      "import": "./dist/adapters/remote/supabase.js",
+      "default": "./dist/adapters/remote/supabase.js"
+    },
+    "./expo": {
+      "types": "./dist/adapters/local/expo-sqlite.d.ts",
+      "import": "./dist/adapters/local/expo-sqlite.js",
+      "default": "./dist/adapters/local/expo-sqlite.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "test": "tsc && node test-runner.mjs"

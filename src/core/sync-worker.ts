@@ -1,10 +1,9 @@
-import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
+import { LocalDBAdapter } from '../adapters/local/index.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import {
   ConflictResolver,
   ConflictStrategy,
-  DeltaChange,
   DeltaChanges,
   NetworkStatusProvider,
   OutboxRecord,
@@ -12,6 +11,8 @@ import {
 } from './types.js';
 import { getConflictResolver } from './conflict.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
+import { OutboxStore } from './outbox-store.js';
+import { TableManager } from './table-manager.js';
 
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
@@ -60,10 +61,12 @@ export class SyncWorker {
     this.maxRetries = options.maxRetries ?? 5;
   }
 
+  /**
+   * Starts background interval push/pull loops and listens for network & realtime updates.
+   */
   start(): void {
     this.stop();
 
-    // Regular interval loops
     this.pushIntervalTimer = setInterval(() => this.pushLocalChanges(), this.pushIntervalMs);
     this.pullIntervalTimer = setInterval(() => this.pullRemoteChanges(), this.pullIntervalMs);
 
@@ -77,7 +80,6 @@ export class SyncWorker {
     // Subscribe to network connectivity changes
     this.networkUnsubscribe = this.network.subscribe((online) => {
       if (online) {
-        // Immediately push and pull when connectivity is restored
         this.schedulePush(0);
         this.pullRemoteChanges().catch((err) => {
           console.error('Error pulling changes on reconnect:', err);
@@ -91,6 +93,9 @@ export class SyncWorker {
     });
   }
 
+  /**
+   * Stops all active intervals, timers, and listeners.
+   */
   stop(): void {
     if (this.pushIntervalTimer) {
       clearInterval(this.pushIntervalTimer);
@@ -110,6 +115,9 @@ export class SyncWorker {
     }
   }
 
+  /**
+   * Schedules an immediate push with a short debounce.
+   */
   schedulePush(delayMs: number = 50): void {
     if (this.pushDebounceTimer) {
       clearTimeout(this.pushDebounceTimer);
@@ -130,60 +138,50 @@ export class SyncWorker {
     }
   }
 
+  /**
+   * Pushes pending outbox records to the remote database.
+   */
   async pushLocalChanges(): Promise<void> {
     if (this.isPushing) return;
     if (!(await this.isOnline())) return;
 
     this.isPushing = true;
-    let pendingRecords: any[] = [];
+    let pendingRecords: OutboxRecord[] = [];
 
     try {
-      pendingRecords = await this.db.execute(
-        `SELECT * FROM sync_outbox 
-         WHERE status = 'PENDING' OR (status = 'FAILED' AND retry_count < ?) 
-         ORDER BY timestamp ASC LIMIT 50`,
-        [this.maxRetries]
-      );
+      pendingRecords = await OutboxStore.getPending(this.db, this.maxRetries);
 
-      if (!pendingRecords || pendingRecords.length === 0) {
+      if (pendingRecords.length === 0) {
         return;
       }
 
-      const operations: SyncOperation[] = pendingRecords.map((r: any) => ({
+      const operations: SyncOperation[] = pendingRecords.map((r) => ({
         id: r.id,
-        tableName: r.table_name,
-        rowId: r.row_id,
+        tableName: r.tableName,
+        rowId: r.rowId,
         operation: r.operation,
-        payload: r.payload ? JSON.parse(r.payload) : null,
-        timestamp: Number(r.timestamp),
+        payload: r.payload,
+        timestamp: r.timestamp,
       }));
 
       const recordIds = operations.map((o) => o.id);
-      const inPlaceholders = recordIds.map(() => '?').join(',');
 
-      // Mark as PROCESSING
-      await this.db.execute(
-        `UPDATE sync_outbox SET status = 'PROCESSING' WHERE id IN (${inPlaceholders})`,
-        recordIds
-      );
+      // Mark records as PROCESSING
+      await OutboxStore.markProcessing(this.db, recordIds);
 
       const success = await this.remote.pushChanges(operations);
 
       if (success) {
         // Successful push: delete rows from outbox
-        await this.db.execute(
-          `DELETE FROM sync_outbox WHERE id IN (${inPlaceholders})`,
-          recordIds
-        );
+        await OutboxStore.deleteCompleted(this.db, recordIds);
         this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'batch' });
       } else {
-        // Failed: record retry
         await this.handlePushFailure(recordIds, 'Remote push returned false');
       }
     } catch (error: any) {
       console.error('Sync Engine Outbox Push Error:', error);
       if (pendingRecords.length > 0) {
-        const recordIds = pendingRecords.map((r: any) => r.id);
+        const recordIds = pendingRecords.map((r) => r.id);
         await this.handlePushFailure(recordIds, error?.message || String(error));
       }
     } finally {
@@ -193,21 +191,16 @@ export class SyncWorker {
 
   private async handlePushFailure(recordIds: string[], errorMessage: string): Promise<void> {
     try {
-      const inPlaceholders = recordIds.map(() => '?').join(',');
-      await this.db.execute(
-        `UPDATE sync_outbox 
-         SET status = 'FAILED', 
-             retry_count = retry_count + 1, 
-             last_error = ? 
-         WHERE id IN (${inPlaceholders})`,
-        [errorMessage, ...recordIds]
-      );
+      await OutboxStore.markFailed(this.db, recordIds, errorMessage);
       this.events.emit('sync_outbox', { operation: 'UPDATE', rowId: 'batch' });
     } catch (err) {
       console.error('Failed to update outbox failure status:', err);
     }
   }
 
+  /**
+   * Pulls delta changes from the remote backend since lastPulledTimestamp.
+   */
   async pullRemoteChanges(): Promise<void> {
     if (this.isPulling) return;
     if (!(await this.isOnline())) return;
@@ -225,6 +218,9 @@ export class SyncWorker {
     }
   }
 
+  /**
+   * Applies incoming server delta changes to local tables with conflict resolution.
+   */
   async applyDeltasLocally(deltas: DeltaChanges): Promise<void> {
     if (!deltas.changes || deltas.changes.length === 0) {
       if (deltas.timestamp) {
@@ -236,37 +232,19 @@ export class SyncWorker {
     await this.db.transaction(async (tx) => {
       for (const change of deltas.changes) {
         // 1. Check for pending local mutations for this (table_name, row_id)
-        const pendingRows = await tx.execute(
-          `SELECT * FROM sync_outbox 
-           WHERE table_name = ? AND row_id = ? AND status != 'FAILED' 
-           ORDER BY timestamp DESC LIMIT 1`,
-          [change.tableName, change.rowId]
+        const localPendingRecord = await OutboxStore.findPendingByRow(
+          tx,
+          change.tableName,
+          change.rowId
         );
-
-        let localPendingRecord: OutboxRecord | undefined;
-        if (pendingRows && pendingRows.length > 0) {
-          const row = pendingRows[0];
-          localPendingRecord = {
-            id: row.id,
-            tableName: row.table_name,
-            rowId: row.row_id,
-            operation: row.operation,
-            payload: row.payload ? JSON.parse(row.payload) : null,
-            timestamp: Number(row.timestamp),
-            status: row.status,
-            retryCount: Number(row.retry_count),
-            lastError: row.last_error,
-          };
-        }
 
         // 2. Query current local row if it exists
-        const safeTable = `"${change.tableName.replace(/"/g, '""')}"`;
-        const safePk = `"${this.primaryKey.replace(/"/g, '""')}"`;
-        const existingRows = await tx.execute(
-          `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-          [change.rowId]
+        const localRow = await TableManager.fetchRow(
+          tx,
+          change.tableName,
+          change.rowId,
+          this.primaryKey
         );
-        const localRow = existingRows && existingRows.length > 0 ? existingRows[0] : null;
 
         // 3. Conflict resolution if there is a pending local change
         if (localPendingRecord) {
@@ -281,25 +259,29 @@ export class SyncWorker {
           );
 
           if (resolution === 'keep-local') {
-            // Local change takes precedence; skip applying remote change
+            // Local offline change takes precedence
             continue;
           }
 
           if (resolution === 'apply-remote') {
-            // Remote change wins; discard the superseded local pending outbox mutation
-            await tx.execute(`DELETE FROM sync_outbox WHERE id = ?`, [localPendingRecord.id]);
+            // Remote change wins: remove the superseded local pending outbox mutation
+            await OutboxStore.deleteRecord(tx, localPendingRecord.id);
           } else if (typeof resolution === 'object' && resolution.mergePayload) {
-            // Merge scenario: update payload for remote change and local outbox
+            // Merge scenario
             change.payload = resolution.mergePayload;
-            await tx.execute(
-              `UPDATE sync_outbox SET payload = ? WHERE id = ?`,
-              [JSON.stringify(resolution.mergePayload), localPendingRecord.id]
-            );
+            await OutboxStore.updatePayload(tx, localPendingRecord.id, resolution.mergePayload);
           }
         }
 
         // 4. Apply remote change to local database
-        await this.applyChangeToTable(tx, change);
+        await TableManager.applyMutation(
+          tx,
+          change.tableName,
+          change.rowId,
+          change.operation,
+          change.payload,
+          this.primaryKey
+        );
 
         // 5. Emit table change event to notify reactive listeners
         this.events.emit(change.tableName, {
@@ -313,43 +295,6 @@ export class SyncWorker {
 
     if (deltas.timestamp) {
       this.lastPulledTimestamp = Math.max(this.lastPulledTimestamp, deltas.timestamp);
-    }
-  }
-
-  private async applyChangeToTable(tx: LocalTransaction, change: DeltaChange): Promise<void> {
-    const safeTable = `"${change.tableName.replace(/"/g, '""')}"`;
-    const safePk = `"${this.primaryKey.replace(/"/g, '""')}"`;
-
-    if (change.operation === 'DELETE') {
-      await tx.execute(`DELETE FROM ${safeTable} WHERE ${safePk} = ?`, [change.rowId]);
-      return;
-    }
-
-    const payload = change.payload || {};
-    const rowData: Record<string, any> = { ...payload, [this.primaryKey]: change.rowId };
-    const keys = Object.keys(rowData);
-    if (keys.length === 0) return;
-
-    const existing = await tx.execute(
-      `SELECT 1 FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-      [change.rowId]
-    );
-
-    if (existing && existing.length > 0) {
-      // Update existing record
-      const updateKeys = keys.filter((k) => k !== this.primaryKey);
-      if (updateKeys.length > 0) {
-        const setClause = updateKeys.map((k) => `"${k.replace(/"/g, '""')}" = ?`).join(', ');
-        const values = updateKeys.map((k) => rowData[k]);
-        values.push(change.rowId);
-        await tx.execute(`UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`, values);
-      }
-    } else {
-      // Insert new record
-      const cols = keys.map((k) => `"${k.replace(/"/g, '""')}"`).join(', ');
-      const placeholders = keys.map(() => '?').join(', ');
-      const values = keys.map((k) => rowData[k]);
-      await tx.execute(`INSERT INTO ${safeTable} (${cols}) VALUES (${placeholders})`, values);
     }
   }
 

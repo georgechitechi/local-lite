@@ -2,6 +2,8 @@ import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
+import { TableManager } from './table-manager.js';
+import { OutboxStore } from './outbox-store.js';
 import {
   ConflictResolver,
   ConflictStrategy,
@@ -47,30 +49,17 @@ export class LocalFirstClient {
     this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
   }
 
+  /**
+   * Initializes the client: creates sync_outbox schema and starts the background sync worker.
+   */
   async initialize(): Promise<void> {
-    await this.ensureSchema();
+    await OutboxStore.ensureSchema(this.db);
     this.syncWorker.start();
   }
 
-  private async ensureSchema(): Promise<void> {
-    await this.db.execute(
-      `CREATE TABLE IF NOT EXISTS sync_outbox (
-        id TEXT PRIMARY KEY,
-        table_name TEXT NOT NULL,
-        row_id TEXT NOT NULL,
-        operation TEXT NOT NULL,
-        payload TEXT,
-        timestamp INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'PENDING',
-        retry_count INTEGER NOT NULL DEFAULT 0,
-        last_error TEXT
-      );`
-    );
-  }
-
   /**
-   * Performs an atomic dual-write: updates the local table AND inserts
-   * into sync_outbox within the same database transaction.
+   * Performs an atomic dual-write: mutates the local data table AND writes
+   * to sync_outbox within the same database transaction.
    */
   async mutate(
     tableName: string,
@@ -85,15 +74,18 @@ export class LocalFirstClient {
 
     const executeInTransaction = async (tx: LocalTransaction) => {
       // 1. Mutate local table
-      await this.applyLocalTableMutation(tx, tableName, rowId, operation, payload, pk);
+      await TableManager.applyMutation(tx, tableName, rowId, operation, payload, pk);
 
       // 2. Insert into sync_outbox (if not skipped)
       if (!options.skipOutbox) {
-        await tx.execute(
-          `INSERT INTO sync_outbox (id, table_name, row_id, operation, payload, timestamp, status, retry_count)
-           VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0)`,
-          [outboxId, tableName, rowId, operation, payload ? JSON.stringify(payload) : null, timestamp]
-        );
+        await OutboxStore.insertRecord(tx, {
+          id: outboxId,
+          tableName,
+          rowId,
+          operation,
+          payload,
+          timestamp,
+        });
       }
     };
 
@@ -119,8 +111,8 @@ export class LocalFirstClient {
   }
 
   /**
-   * Tracks an existing mutation into sync_outbox.
-   * Can be passed an existing transaction to keep execution atomic with custom SQL.
+   * Tracks an existing mutation into sync_outbox without modifying the table.
+   * Can accept an external transaction `options.tx` for custom atomic SQL workflows.
    */
   async trackMutation(
     tableName: string,
@@ -133,11 +125,14 @@ export class LocalFirstClient {
     const timestamp = options.customTimestamp ?? Date.now();
 
     const executeInsert = async (tx: LocalTransaction) => {
-      await tx.execute(
-        `INSERT INTO sync_outbox (id, table_name, row_id, operation, payload, timestamp, status, retry_count)
-         VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0)`,
-        [outboxId, tableName, rowId, operation, payload ? JSON.stringify(payload) : null, timestamp]
-      );
+      await OutboxStore.insertRecord(tx, {
+        id: outboxId,
+        tableName,
+        rowId,
+        operation,
+        payload,
+        timestamp,
+      });
     };
 
     if (options.tx) {
@@ -154,53 +149,14 @@ export class LocalFirstClient {
     });
     this.events.emit('sync_outbox', { operation: 'INSERT', rowId: outboxId });
 
-    // Trigger immediate debounced push
     this.syncWorker.schedulePush(20);
 
     return outboxId;
   }
 
-  private async applyLocalTableMutation(
-    tx: LocalTransaction,
-    tableName: string,
-    rowId: string,
-    operation: SyncOp,
-    payload: Record<string, any> | null,
-    primaryKey: string
-  ): Promise<void> {
-    const safeTable = `"${tableName.replace(/"/g, '""')}"`;
-    const safePk = `"${primaryKey.replace(/"/g, '""')}"`;
-
-    if (operation === 'DELETE') {
-      await tx.execute(`DELETE FROM ${safeTable} WHERE ${safePk} = ?`, [rowId]);
-      return;
-    }
-
-    const rowData: Record<string, any> = { ...(payload || {}), [primaryKey]: rowId };
-    const keys = Object.keys(rowData);
-    if (keys.length === 0) return;
-
-    const existing = await tx.execute(
-      `SELECT 1 FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-      [rowId]
-    );
-
-    if (existing && existing.length > 0) {
-      const updateKeys = keys.filter((k) => k !== primaryKey);
-      if (updateKeys.length > 0) {
-        const setClause = updateKeys.map((k) => `"${k.replace(/"/g, '""')}" = ?`).join(', ');
-        const values = updateKeys.map((k) => rowData[k]);
-        values.push(rowId);
-        await tx.execute(`UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`, values);
-      }
-    } else {
-      const cols = keys.map((k) => `"${k.replace(/"/g, '""')}"`).join(', ');
-      const placeholders = keys.map(() => '?').join(', ');
-      const values = keys.map((k) => rowData[k]);
-      await tx.execute(`INSERT INTO ${safeTable} (${cols}) VALUES (${placeholders})`, values);
-    }
-  }
-
+  /**
+   * Stops all active intervals, background sync loops, and network listeners.
+   */
   stop(): void {
     this.syncWorker.stop();
   }

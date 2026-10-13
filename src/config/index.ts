@@ -1,4 +1,5 @@
 import { LocalFirstClient } from '../core/client.js';
+export { LocalFirstClient };
 import { LocalDBAdapter } from '../adapters/local/index.js';
 import { ExpoSQLiteAdapter } from '../adapters/local/expo-sqlite.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';

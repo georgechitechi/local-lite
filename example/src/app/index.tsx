@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LocalFirstClient, generateUUID } from 'outbox-sync';
-import { useLiveQuery, useOutboxStatus } from '../hooks/useSync';
+import { useLiveQuery, useOutboxStatus } from 'outbox-sync/react';
 import { getSyncClient } from '../sync.config';
 
 interface Todo {
