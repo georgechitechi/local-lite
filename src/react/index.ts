@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 
 /**
@@ -14,18 +14,20 @@ export function useLiveQuery<T>(
 ): { data: T[]; refetch: () => Promise<void>; loading: boolean } {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const queryFnRef = useRef(queryFn);
+  queryFnRef.current = queryFn;
 
   const refetch = useCallback(async () => {
     if (!client || !client.db) return;
     try {
-      const res = await queryFn(client);
+      const res = await queryFnRef.current(client);
       setData(res || []);
     } catch (err) {
       console.error(`Error in useLiveQuery("${tableName}"):`, err);
     } finally {
       setLoading(false);
     }
-  }, [client, tableName, queryFn]);
+  }, [client, tableName]);
 
   useEffect(() => {
     if (!client || !client.db) return;

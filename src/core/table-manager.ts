@@ -1,7 +1,7 @@
 import { LocalTransaction } from '../adapters/local/index.js';
 import { SyncOp } from './types.js';
 import { escapeIdentifier } from '../utils/sql.js';
-import { SchemaManager } from './schema-manager.js';
+import { SchemaManager, formatValueForStorage } from './schema-manager.js';
 
 export interface TableMutationOptions {
   autoSchema?: boolean;
@@ -43,7 +43,13 @@ export class TableManager {
       const formatted = await sm.ensureColumns(tx, tableName, payload, primaryKey);
       rowData = { ...formatted, [primaryKey]: rowId };
     } else {
-      rowData = { ...(payload || {}), [primaryKey]: rowId };
+      const formatted: Record<string, any> = {};
+      if (payload && typeof payload === 'object') {
+        for (const k of Object.keys(payload)) {
+          formatted[k] = formatValueForStorage(payload[k]);
+        }
+      }
+      rowData = { ...formatted, [primaryKey]: rowId };
     }
 
     const keys = Object.keys(rowData);

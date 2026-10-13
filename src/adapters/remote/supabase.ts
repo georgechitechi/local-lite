@@ -278,7 +278,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             : Date.now();
 
           callback({
-            timestamp: Date.now(),
+            timestamp,
             changes: [
               {
                 tableName: table,

@@ -65,7 +65,7 @@
   "scripts": {
     "build": "tsc",
     "test": "tsc && node test-runner.mjs",
-    "prepublishOnly": "npm run test"
+    "prepublishOnly": "npm run test & tsc"
   },
   "peerDependencies": {
     "@supabase/supabase-js": "^2.0.0",

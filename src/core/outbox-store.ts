@@ -113,6 +113,18 @@ export class OutboxStore {
   }
 
   /**
+   * Resets any orphaned 'PROCESSING' records back to 'PENDING' on startup.
+   * Protects against app kills or crashes that happened mid-push.
+   */
+  static async resetStaleProcessing(db: LocalDBAdapter): Promise<void> {
+    try {
+      await db.execute(`UPDATE sync_outbox SET status = 'PENDING' WHERE status = 'PROCESSING'`);
+    } catch {
+      // Table may not exist yet
+    }
+  }
+
+  /**
    * Deletes a batch of successfully pushed outbox entries.
    */
   static async deleteCompleted(db: LocalDBAdapter, ids: string[]): Promise<void> {

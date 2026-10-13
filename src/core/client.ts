@@ -68,6 +68,7 @@ export class LocalFirstClient {
   async initialize(): Promise<void> {
     await OutboxStore.ensureSchema(this.db);
     await MetaStore.ensureSchema(this.db);
+    await OutboxStore.resetStaleProcessing(this.db);
 
     if (this.autoSchema && this.tables.length > 0) {
       for (const table of this.tables) {
