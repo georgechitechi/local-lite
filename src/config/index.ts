@@ -2,6 +2,11 @@ import { LocalFirstClient } from '../core/client.js';
 export { LocalFirstClient };
 import { LocalDBAdapter } from '../adapters/local/index.js';
 import { ExpoSQLiteAdapter } from '../adapters/local/expo-sqlite.js';
+import { OpSQLiteAdapter } from '../adapters/local/op-sqlite.js';
+import { BetterSQLite3Adapter } from '../adapters/local/better-sqlite3.js';
+import { LibSQLAdapter } from '../adapters/local/libsql.js';
+import { SqlJsAdapter } from '../adapters/local/sql-js.js';
+import { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 import { MemoryDemoRemoteAdapter } from '../adapters/remote/demo.js';
@@ -126,12 +131,24 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
     rawDb = await rawDb();
   }
 
-  if (rawDb && typeof rawDb.execute === 'function' && typeof rawDb.transaction === 'function') {
+  if (rawDb && typeof rawDb.batch === 'function' && typeof rawDb.execute === 'function') {
+    // @libsql/client (Turso / LibSQL) instance
+    localAdapter = new LibSQLAdapter(rawDb);
+  } else if (rawDb && typeof rawDb.export === 'function' && typeof rawDb.exec === 'function') {
+    // sql.js Database instance
+    localAdapter = new SqlJsAdapter(rawDb);
+  } else if (rawDb && typeof rawDb.execute === 'function' && typeof rawDb.transaction === 'function') {
     // Already implements LocalDBAdapter
     localAdapter = rawDb;
   } else if (rawDb && typeof rawDb.getAllAsync === 'function') {
     // Expo SQLite database instance
     localAdapter = new ExpoSQLiteAdapter(rawDb);
+  } else if (rawDb && typeof rawDb.executeAsync === 'function') {
+    // @op-engineering/op-sqlite or react-native-quick-sqlite instance
+    localAdapter = new OpSQLiteAdapter(rawDb);
+  } else if (rawDb && typeof rawDb.prepare === 'function') {
+    // better-sqlite3 or node:sqlite database instance
+    localAdapter = new BetterSQLite3Adapter(rawDb);
   } else if (typeof rawDb === 'string' || config.databaseName) {
     const dbName = typeof rawDb === 'string' ? rawDb : (config.databaseName ?? 'outbox_sync.db');
     try {

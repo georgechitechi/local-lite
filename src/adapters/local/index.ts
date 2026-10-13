@@ -8,3 +8,8 @@ export interface LocalDBAdapter {
 }
 
 export * from './expo-sqlite.js';
+export * from './op-sqlite.js';
+export * from './better-sqlite3.js';
+export * from './libsql.js';
+export * from './sql-js.js';
+export * from './node-sqlite.js';

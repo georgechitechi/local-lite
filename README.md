@@ -102,6 +102,48 @@ export function TodoScreen() {
 
 ---
 
+## Supported SQLite Drivers
+
+`outbox-sync` is fully driver-agnostic and auto-detects your SQLite instance directly:
+
+| Platform | Recommended Driver | Auto-Detected or Subpath Import |
+| :--- | :--- | :--- |
+| **Expo (iOS/Android/Web)** | `expo-sqlite` | `database: () => SQLite.openDatabaseAsync('app.db')` |
+| **Bare React Native** | `@op-engineering/op-sqlite` | `outbox-sync/op-sqlite` |
+| **Node.js / Electron / Desktop** | `better-sqlite3` | `outbox-sync/better-sqlite3` |
+| **Edge / Server / Turso** | `@libsql/client` (LibSQL) | `outbox-sync/libsql` |
+| **Web Browser / PWAs** | `sql.js` (WebAssembly) | `outbox-sync/sql-js` |
+| **Node.js 22+ (Built-in)** | `node:sqlite` (DatabaseSync) | `outbox-sync/node-sqlite` |
+
+```ts
+// 1. Bare React Native (@op-engineering/op-sqlite)
+import { open } from '@op-engineering/op-sqlite';
+export const syncConfig = defineSyncConfig({
+  database: open({ name: 'app.db' }), // Auto-detected!
+  tables: ['todos'],
+  autoSchema: true,
+});
+
+// 2. Turso / Edge (@libsql/client)
+import { createClient } from '@libsql/client';
+export const syncConfig = defineSyncConfig({
+  database: createClient({ url: 'file:local.db' }), // Auto-detected!
+  tables: ['todos'],
+  autoSchema: true,
+});
+
+// 3. Web Browsers (sql.js WASM)
+import initSqlJs from 'sql.js';
+const SQL = await initSqlJs();
+export const syncConfig = defineSyncConfig({
+  database: new SQL.Database(), // Auto-detected!
+  tables: ['todos'],
+  autoSchema: true,
+});
+```
+
+---
+
 ## Architecture
 
 ```

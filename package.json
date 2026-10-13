@@ -31,10 +31,35 @@
       "import": "./dist/adapters/remote/supabase.js",
       "default": "./dist/adapters/remote/supabase.js"
     },
-    "./expo": {
+    "./expo-sqlite": {
       "types": "./dist/adapters/local/expo-sqlite.d.ts",
       "import": "./dist/adapters/local/expo-sqlite.js",
       "default": "./dist/adapters/local/expo-sqlite.js"
+    },
+    "./op-sqlite": {
+      "types": "./dist/adapters/local/op-sqlite.d.ts",
+      "import": "./dist/adapters/local/op-sqlite.js",
+      "default": "./dist/adapters/local/op-sqlite.js"
+    },
+    "./better-sqlite3": {
+      "types": "./dist/adapters/local/better-sqlite3.d.ts",
+      "import": "./dist/adapters/local/better-sqlite3.js",
+      "default": "./dist/adapters/local/better-sqlite3.js"
+    },
+    "./libsql": {
+      "types": "./dist/adapters/local/libsql.d.ts",
+      "import": "./dist/adapters/local/libsql.js",
+      "default": "./dist/adapters/local/libsql.js"
+    },
+    "./sql-js": {
+      "types": "./dist/adapters/local/sql-js.d.ts",
+      "import": "./dist/adapters/local/sql-js.js",
+      "default": "./dist/adapters/local/sql-js.js"
+    },
+    "./node-sqlite": {
+      "types": "./dist/adapters/local/node-sqlite.d.ts",
+      "import": "./dist/adapters/local/node-sqlite.js",
+      "default": "./dist/adapters/local/node-sqlite.js"
     }
   },
   "scripts": {
@@ -44,13 +69,29 @@
   },
   "peerDependencies": {
     "@supabase/supabase-js": "^2.0.0",
-    "expo-sqlite": "^57.0.0"
+    "expo-sqlite": "^57.0.0",
+    "@op-engineering/op-sqlite": ">=0.1.0",
+    "better-sqlite3": ">=8.0.0",
+    "@libsql/client": ">=0.6.0",
+    "sql.js": ">=1.8.0"
   },
   "peerDependenciesMeta": {
     "@supabase/supabase-js": {
       "optional": true
     },
     "expo-sqlite": {
+      "optional": true
+    },
+    "@op-engineering/op-sqlite": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "@libsql/client": {
+      "optional": true
+    },
+    "sql.js": {
       "optional": true
     }
   },

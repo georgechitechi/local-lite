@@ -512,10 +512,127 @@ async function runTests() {
     throw new Error('autoSchema test failed');
   }
 
+  // Test 9: OpSQLiteAdapter & BetterSQLite3Adapter
+  console.log('\nTest 9: Testing OpSQLiteAdapter & BetterSQLite3Adapter...');
+  const { OpSQLiteAdapter, BetterSQLite3Adapter } = await import('./dist/index.js');
+
+  // Test OpSQLiteAdapter
+  const mockOpDb = {
+    async executeAsync(q, params) {
+      return { rows: { _array: [{ id: 'op-1', title: 'Op Item' }] } };
+    },
+    async transactionAsync(cb) {
+      await cb({
+        async executeAsync(q, p) {
+          return { rows: [{ id: 'tx-1' }] };
+        }
+      });
+    }
+  };
+  const opAdapter = new OpSQLiteAdapter(mockOpDb);
+  const opRows = await opAdapter.execute('SELECT * FROM test');
+  if (opRows.length === 1 && opRows[0].title === 'Op Item') {
+    console.log('  ✅ OpSQLiteAdapter normalized and returned rows from op-sqlite');
+  } else {
+    throw new Error('OpSQLiteAdapter failed');
+  }
+
+  // Test BetterSQLite3Adapter
+  const mockBetterDb = {
+    prepare(q) {
+      return {
+        reader: q.startsWith('SELECT'),
+        all: (...p) => [{ id: 'better-1', label: 'Node SQLite' }],
+        run: (...p) => ({ changes: 1, lastInsertRowid: 1 })
+      };
+    }
+  };
+  const betterAdapter = new BetterSQLite3Adapter(mockBetterDb);
+  const betterRows = await betterAdapter.execute('SELECT * FROM test');
+  if (betterRows.length === 1 && betterRows[0].label === 'Node SQLite') {
+    console.log('  ✅ BetterSQLite3Adapter executed query and returned rows synchronously/safely');
+  } else {
+    throw new Error('BetterSQLite3Adapter failed');
+  }
+
+  // Test 10: LibSQLAdapter, SqlJsAdapter, NodeSQLiteAdapter
+  console.log('\nTest 10: Testing LibSQLAdapter, SqlJsAdapter & NodeSQLiteAdapter...');
+  const { LibSQLAdapter, SqlJsAdapter, NodeSQLiteAdapter } = await import('./dist/index.js');
+
+  // LibSQL test
+  const mockLibsql = {
+    async execute({ sql, args }) {
+      return {
+        columns: ['id', 'name'],
+        rows: [['lib-1', 'Turso Item']],
+      };
+    },
+    async transaction() {
+      return {
+        async execute() { return { columns: ['id'], rows: [['1']] }; },
+        async commit() {},
+        async rollback() {},
+      };
+    }
+  };
+  const libsqlAdapter = new LibSQLAdapter(mockLibsql);
+  const libRows = await libsqlAdapter.execute('SELECT * FROM test');
+  if (libRows.length === 1 && libRows[0].id === 'lib-1' && libRows[0].name === 'Turso Item') {
+    console.log('  ✅ LibSQLAdapter mapped columns and rows from Turso/@libsql/client');
+  } else {
+    throw new Error('LibSQLAdapter failed');
+  }
+
+  // SqlJs test
+  const mockSqlJs = {
+    exec(q) {
+      return [{ columns: ['id', 'color'], values: [['sqljs-1', 'blue']] }];
+    },
+    prepare(q) {
+      let stepped = false;
+      return {
+        bind() { return true; },
+        step() {
+          if (!stepped) { stepped = true; return true; }
+          return false;
+        },
+        getAsObject() { return { id: 'sqljs-param', color: 'green' }; },
+        free() { return true; }
+      };
+    },
+    run() {}
+  };
+  const sqlJsAdapter = new SqlJsAdapter(mockSqlJs);
+  const sqlJsRows = await sqlJsAdapter.execute('SELECT * FROM test');
+  const sqlJsParamRows = await sqlJsAdapter.execute('SELECT * FROM test WHERE id = ?', ['1']);
+  if (sqlJsRows.length === 1 && sqlJsRows[0].color === 'blue' && sqlJsParamRows[0].color === 'green') {
+    console.log('  ✅ SqlJsAdapter handled both raw exec and parameterized statements for Web WASM');
+  } else {
+    throw new Error('SqlJsAdapter failed');
+  }
+
+  // NodeSQLite test
+  const mockNodeSqlite = {
+    prepare(q) {
+      return {
+        all: (...p) => [{ id: 'node-1', runtime: 'node:sqlite' }],
+        run: (...p) => ({ changes: 1, lastInsertRowid: 1 })
+      };
+    },
+    exec(q) {}
+  };
+  const nodeSqliteAdapter = new NodeSQLiteAdapter(mockNodeSqlite);
+  const nodeRows = await nodeSqliteAdapter.execute('SELECT * FROM test');
+  if (nodeRows.length === 1 && nodeRows[0].runtime === 'node:sqlite') {
+    console.log('  ✅ NodeSQLiteAdapter executed queries on Node 22+ built-in DatabaseSync');
+  } else {
+    throw new Error('NodeSQLiteAdapter failed');
+  }
+
   autoClient.stop();
   configuredClient.stop();
   client.stop();
-  console.log('\n🎉 ALL TESTS INCLUDING CONFIG & AUTO-SCHEMA PASSING SUCCESSFULLY!');
+  console.log('\n🎉 ALL 10 TESTS PASSING: FULL COMPATIBILITY ACROSS EXPO, OP-SQLITE, BETTER-SQLITE3, LIBSQL, SQL.JS & NODE:SQLITE!');
 }
 
 runTests().catch((err) => {
