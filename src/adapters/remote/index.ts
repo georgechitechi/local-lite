@@ -7,3 +7,4 @@ export interface RemoteDBAdapter {
 }
 
 export * from './supabase.js';
+export * from './demo.js';
