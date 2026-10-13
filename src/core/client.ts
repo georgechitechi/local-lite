@@ -9,6 +9,7 @@ import {
   NetworkStatusProvider,
   SyncOp,
 } from './types.js';
+import { generateUUID } from '../utils/uuid.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -79,7 +80,7 @@ export class LocalFirstClient {
     options: MutateOptions = {}
   ): Promise<void> {
     const pk = options.primaryKey ?? this.primaryKey;
-    const outboxId = Math.random().toString(36).substring(2, 15);
+    const outboxId = generateUUID();
     const timestamp = options.customTimestamp ?? Date.now();
 
     const executeInTransaction = async (tx: LocalTransaction) => {
@@ -128,7 +129,7 @@ export class LocalFirstClient {
     payload: Record<string, any> | null,
     options: MutateOptions = {}
   ): Promise<string> {
-    const outboxId = Math.random().toString(36).substring(2, 15);
+    const outboxId = generateUUID();
     const timestamp = options.customTimestamp ?? Date.now();
 
     const executeInsert = async (tx: LocalTransaction) => {

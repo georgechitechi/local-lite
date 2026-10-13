@@ -4,19 +4,21 @@ import { LocalFirstClient } from '../core/client.js';
 /**
  * Hook to execute a query and automatically re-run it whenever the table is mutated
  * (either locally or via incoming remote delta).
+ * 
+ * Safely passes the non-null `client` instance to `queryFn(client)`.
  */
 export function useLiveQuery<T>(
   client: LocalFirstClient | null | undefined,
   tableName: string,
-  queryFn: () => Promise<T[]> | T[]
+  queryFn: (client: LocalFirstClient) => Promise<T[]> | T[]
 ): { data: T[]; refetch: () => Promise<void>; loading: boolean } {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
-    if (!client) return;
+    if (!client || !client.db) return;
     try {
-      const res = await queryFn();
+      const res = await queryFn(client);
       setData(res || []);
     } catch (err) {
       console.error(`Error in useLiveQuery("${tableName}"):`, err);
@@ -26,7 +28,7 @@ export function useLiveQuery<T>(
   }, [client, tableName, queryFn]);
 
   useEffect(() => {
-    if (!client) return;
+    if (!client || !client.db) return;
 
     refetch();
 
@@ -54,7 +56,7 @@ export function useOutboxStatus(client: LocalFirstClient | null | undefined): {
   const [pendingRecords, setPendingRecords] = useState<any[]>([]);
 
   const refresh = useCallback(async () => {
-    if (!client) return;
+    if (!client || !client.db) return;
     try {
       const records = await client.db.execute(
         'SELECT * FROM sync_outbox ORDER BY timestamp DESC'
@@ -67,7 +69,7 @@ export function useOutboxStatus(client: LocalFirstClient | null | undefined): {
   }, [client]);
 
   useEffect(() => {
-    if (!client) return;
+    if (!client || !client.db) return;
 
     refresh();
 

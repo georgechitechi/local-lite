@@ -5,15 +5,12 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   StatusBar,
 } from 'react-native';
-import {
-  LocalFirstClient,
-  useLiveQuery,
-  useOutboxStatus,
-} from 'outbox-sync';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LocalFirstClient, generateUUID } from 'outbox-sync';
+import { useLiveQuery, useOutboxStatus } from '../hooks/useSync';
 import { getSyncClient } from '../sync.config';
 
 interface Todo {
@@ -48,8 +45,8 @@ export default function Index() {
   }, []);
 
   // 2. Built-in outbox-sync hooks for live table queries and outbox inspection
-  const { data: todos } = useLiveQuery<Todo>(client, 'todos', async () => {
-    return (await client!.db.execute('SELECT * FROM todos ORDER BY id DESC')) as Todo[];
+  const { data: todos } = useLiveQuery<Todo>(client, 'todos', async (c) => {
+    return (await c.db.execute('SELECT * FROM todos ORDER BY id DESC')) as Todo[];
   });
 
   const { pendingCount, pendingRecords } = useOutboxStatus(client);
@@ -57,7 +54,7 @@ export default function Index() {
   // Add Todo (Atomic Dual-Write)
   const handleAddTodo = async () => {
     if (!client || !inputText.trim()) return;
-    const id = `todo_${Date.now()}`;
+    const id = generateUUID();
     const title = inputText.trim();
     setInputText('');
 
@@ -93,9 +90,10 @@ export default function Index() {
     const nextState = !isOnline;
     setIsOnline(nextState);
 
-    // Toggle client network provider
-    if ('setOnline' in (client as any).syncWorker.network) {
-      (client as any).syncWorker.network.setOnline(nextState);
+    // Toggle client network provider safely
+    const net = (client.syncWorker as any)?.network;
+    if (net && typeof net.setOnline === 'function') {
+      net.setOnline(nextState);
     }
 
     setStatusMessage(
