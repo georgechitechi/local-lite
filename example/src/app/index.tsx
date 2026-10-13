@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,18 +9,12 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
-import * as SQLite from 'expo-sqlite';
-import { createClient } from '@supabase/supabase-js';
 import {
   LocalFirstClient,
-  ExpoSQLiteAdapter,
-  SupabaseRemoteAdapter,
-  DefaultNetworkStatusProvider,
-  RemoteDBAdapter,
-  SyncOperation,
-  DeltaChanges,
+  useLiveQuery,
+  useOutboxStatus,
 } from 'outbox-sync';
-import { SUPABASE_URL as CONFIG_URL, SUPABASE_ANON_KEY as CONFIG_KEY } from '../supabaseConfig';
+import { getSyncClient } from '../sync.config';
 
 interface Todo {
   id: string;
@@ -28,199 +22,37 @@ interface Todo {
   completed: number;
 }
 
-interface OutboxItem {
-  id: string;
-  table_name: string;
-  row_id: string;
-  operation: string;
-  status: string;
-  retry_count: number;
-  timestamp: number;
-}
-
-// Fallback Mock Remote Adapter for offline testing without credentials
-class DemoRemoteAdapter implements RemoteDBAdapter {
-  public pushedItems: SyncOperation[] = [];
-  private liveSubscribers: ((changes: DeltaChanges) => void)[] = [];
-
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
-    await new Promise((r) => setTimeout(r, 400));
-    this.pushedItems.push(...operations);
-    return true;
-  }
-
-  async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
-    return { timestamp: Date.now(), changes: [] };
-  }
-
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): void {
-    this.liveSubscribers.push(callback);
-  }
-
-  simulateIncomingServerDelta(changes: DeltaChanges): void {
-    for (const sub of this.liveSubscribers) {
-      sub(changes);
-    }
-  }
-}
-
 export default function Index() {
   const [client, setClient] = useState<LocalFirstClient | null>(null);
-  const [demoRemote, setDemoRemote] = useState<DemoRemoteAdapter | null>(null);
-  const [networkProvider, setNetworkProvider] = useState<DefaultNetworkStatusProvider | null>(null);
-  const expoDbRef = useRef<any>(null);
-
-  // Supabase Configuration State
-  const [supabaseUrl, setSupabaseUrl] = useState(CONFIG_URL || '');
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState(CONFIG_KEY || '');
-  const [activeBackendName, setActiveBackendName] = useState('Demo Mock Remote');
-  const [showConfig, setShowConfig] = useState(false);
-
-  // App UI State
-  const [isOnline, setIsOnline] = useState(true);
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [inputText, setInputText] = useState('');
-  const [statusMessage, setStatusMessage] = useState('Initializing local database...');
+  const [isOnline, setIsOnline] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('Initializing client from sync.config.ts...');
 
-  // Setup client with given remote adapter
-  const setupClientWithRemote = useCallback(
-    async (remote: RemoteDBAdapter, backendName: string) => {
-      if (!expoDbRef.current) return;
-
-      if (client) {
-        client.stop();
-      }
-
-      const net = networkProvider ?? new DefaultNetworkStatusProvider(true);
-      if (!networkProvider) {
-        setNetworkProvider(net);
-      }
-
-      const newClient = new LocalFirstClient({
-        local: new ExpoSQLiteAdapter(expoDbRef.current),
-        remote,
-        network: net,
-        pushIntervalMs: 4000,
-        pullIntervalMs: 8000,
-        conflictResolver: 'last-write-wins',
-      });
-
-      await newClient.initialize();
-      setClient(newClient);
-      setActiveBackendName(backendName);
-      setStatusMessage(`Active Backend: ${backendName}`);
-    },
-    [client, networkProvider]
-  );
-
-  // 1. Initial Local Database Bootstrap
+  // 1. Initialize client using config file
   useEffect(() => {
-    async function initDb() {
-      try {
-        const expoDb = await SQLite.openDatabaseAsync('local_first_example.db');
-        expoDbRef.current = expoDb;
-
-        // Create application table
-        await expoDb.execAsync(`
-          CREATE TABLE IF NOT EXISTS todos (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            completed INTEGER DEFAULT 0
-          );
-        `);
-
-        // If credentials exist in supabaseConfig.ts, connect to Supabase immediately!
-        if (CONFIG_URL.trim() && CONFIG_KEY.trim()) {
-          const supabase = createClient(CONFIG_URL.trim(), CONFIG_KEY.trim());
-          const sbAdapter = new SupabaseRemoteAdapter(supabase, {
-            tables: ['todos'],
-            updatedAtColumn: 'updated_at',
-            primaryKey: 'id',
-          });
-          await setupClientWithRemote(sbAdapter, 'Supabase Cloud (Live)');
-        } else {
-          const demo = new DemoRemoteAdapter();
-          setDemoRemote(demo);
-          await setupClientWithRemote(demo, 'Demo Mock Remote');
+    let mounted = true;
+    getSyncClient()
+      .then((c) => {
+        if (mounted) {
+          setClient(c);
+          setStatusMessage('Engine ready! Local SQLite & SyncWorker active from config.');
         }
-      } catch (err: any) {
-        console.error('Initialization error:', err);
-        setStatusMessage(`Error initializing: ${err.message}`);
-      }
-    }
-
-    initDb();
-  }, []);
-
-  // 2. Query refresher
-  const refreshData = useCallback(async (engine: LocalFirstClient) => {
-    try {
-      const todoRows = (await engine.db.execute(
-        'SELECT * FROM todos ORDER BY id DESC'
-      )) as Todo[];
-      setTodos(todoRows || []);
-
-      const outboxRows = (await engine.db.execute(
-        'SELECT * FROM sync_outbox ORDER BY timestamp DESC'
-      )) as OutboxItem[];
-      setOutbox(outboxRows || []);
-    } catch (e) {
-      console.error('Query error:', e);
-    }
-  }, []);
-
-  // 3. Reactive Event Listeners
-  useEffect(() => {
-    if (!client) return;
-
-    refreshData(client);
-
-    const unsubTodos = client.events.on('todos', () => {
-      refreshData(client);
-    });
-
-    const unsubOutbox = client.events.on('sync_outbox', () => {
-      refreshData(client);
-    });
+      })
+      .catch((err) => {
+        setStatusMessage(`Config error: ${err.message}`);
+      });
 
     return () => {
-      unsubTodos();
-      unsubOutbox();
+      mounted = false;
     };
-  }, [client, refreshData]);
+  }, []);
 
-  // Connect to Supabase using entered credentials
-  const handleConnectSupabase = async () => {
-    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) {
-      setStatusMessage('Please enter both Supabase URL and Anon Key.');
-      return;
-    }
+  // 2. Built-in outbox-sync hooks for live table queries and outbox inspection
+  const { data: todos } = useLiveQuery<Todo>(client, 'todos', async () => {
+    return (await client!.db.execute('SELECT * FROM todos ORDER BY id DESC')) as Todo[];
+  });
 
-    try {
-      setStatusMessage('Connecting to Supabase...');
-      const supabase = createClient(supabaseUrl.trim(), supabaseAnonKey.trim());
-      const sbAdapter = new SupabaseRemoteAdapter(supabase, {
-        tables: ['todos'],
-        updatedAtColumn: 'updated_at',
-        primaryKey: 'id',
-      });
-
-      await setupClientWithRemote(sbAdapter, `Supabase: ${new URL(supabaseUrl.trim()).hostname}`);
-      setShowConfig(false);
-      setStatusMessage('✅ Connected to Supabase! Remote push & pull are active.');
-    } catch (err: any) {
-      setStatusMessage(`Connection failed: ${err.message}`);
-    }
-  };
-
-  // Switch back to Demo Mock Server
-  const handleSwitchToDemo = async () => {
-    const demo = demoRemote ?? new DemoRemoteAdapter();
-    setDemoRemote(demo);
-    await setupClientWithRemote(demo, 'Demo Mock Remote');
-    setStatusMessage('Switched to Demo Mock Remote.');
-  };
+  const { pendingCount, pendingRecords } = useOutboxStatus(client);
 
   // Add Todo (Atomic Dual-Write)
   const handleAddTodo = async () => {
@@ -239,7 +71,7 @@ export default function Index() {
     setStatusMessage(`Added "${title}". Instant optimistic write complete!`);
   };
 
-  // Toggle Todo
+  // Toggle Todo completion
   const handleToggleTodo = async (todo: Todo) => {
     if (!client) return;
     const newStatus = todo.completed ? 0 : 1;
@@ -257,39 +89,20 @@ export default function Index() {
 
   // Toggle Network Online / Offline
   const toggleNetwork = () => {
-    if (!networkProvider) return;
+    if (!client) return;
     const nextState = !isOnline;
     setIsOnline(nextState);
-    networkProvider.setOnline(nextState);
+
+    // Toggle client network provider
+    if ('setOnline' in (client as any).syncWorker.network) {
+      (client as any).syncWorker.network.setOnline(nextState);
+    }
+
     setStatusMessage(
       nextState
         ? 'Device connected: Outbox flushing immediately!'
         : 'Device offline: Mutations will queue in Outbox.'
     );
-  };
-
-  // Simulate Server Delta (for Demo Mode)
-  const handleSimulateServerChange = () => {
-    if (!demoRemote) {
-      setStatusMessage('Only available in Demo Mock Remote mode.');
-      return;
-    }
-    const serverId = `server_${Date.now().toString().slice(-4)}`;
-    demoRemote.simulateIncomingServerDelta({
-      timestamp: Date.now(),
-      changes: [
-        {
-          tableName: 'todos',
-          rowId: serverId,
-          operation: 'INSERT',
-          payload: {
-            title: `🌐 Server Item #${serverId}`,
-            completed: 1,
-          },
-        },
-      ],
-    });
-    setStatusMessage(`Simulated incoming server broadcast for ${serverId}!`);
   };
 
   return (
@@ -299,83 +112,7 @@ export default function Index() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>⚡ outbox-sync</Text>
-          <Text style={styles.subtitle}>Expo 57 + Local-First Sync Engine</Text>
-
-          {/* Active Backend Badge & Config Toggle */}
-          <View style={styles.backendRow}>
-            <View style={styles.backendBadge}>
-              <View
-                style={[
-                  styles.backendDot,
-                  {
-                    backgroundColor: activeBackendName.includes('Supabase')
-                      ? '#3ECF8E'
-                      : '#A855F7',
-                  },
-                ]}
-              />
-              <Text style={styles.backendText}>{activeBackendName}</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.configToggleBtn}
-              onPress={() => setShowConfig(!showConfig)}
-            >
-              <Text style={styles.configToggleText}>
-                {showConfig ? 'Close Settings ▲' : 'Supabase Settings ▼'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Collapsible Supabase Credentials Card */}
-          {showConfig && (
-            <View style={styles.configCard}>
-              <Text style={styles.configTitle}>🔑 Supabase Credentials</Text>
-              <Text style={styles.configHelp}>
-                Enter your Supabase URL & Anon Key (or set them in{' '}
-                <Text style={styles.codeText}>src/supabaseConfig.ts</Text>):
-              </Text>
-
-              <Text style={styles.inputLabel}>SUPABASE_URL:</Text>
-              <TextInput
-                style={styles.configInput}
-                placeholder="https://xyzcompany.supabase.co"
-                placeholderTextColor="#64748B"
-                value={supabaseUrl}
-                onChangeText={setSupabaseUrl}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-
-              <Text style={styles.inputLabel}>SUPABASE_ANON_KEY:</Text>
-              <TextInput
-                style={styles.configInput}
-                placeholder="eyJhbGciOiJIUzI1NiIsIn..."
-                placeholderTextColor="#64748B"
-                value={supabaseAnonKey}
-                onChangeText={setSupabaseAnonKey}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-              />
-
-              <View style={styles.configActionRow}>
-                <TouchableOpacity
-                  style={styles.connectButton}
-                  onPress={handleConnectSupabase}
-                >
-                  <Text style={styles.connectButtonText}>Connect to Supabase</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.mockButton}
-                  onPress={handleSwitchToDemo}
-                >
-                  <Text style={styles.mockButtonText}>Use Demo Mock</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+          <Text style={styles.subtitle}>Configured via src/sync.config.ts</Text>
 
           {/* Network Bar */}
           <View style={styles.networkBar}>
@@ -404,13 +141,13 @@ export default function Index() {
             </TouchableOpacity>
           </View>
 
-          {/* Status Message Box */}
+          {/* Status Message */}
           <View style={styles.statusBox}>
             <Text style={styles.statusText}>{statusMessage}</Text>
           </View>
         </View>
 
-        {/* Input Section */}
+        {/* Add Record Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Add Record (Instant Local Mutation)</Text>
           <View style={styles.inputRow}>
@@ -426,20 +163,9 @@ export default function Index() {
               <Text style={styles.addButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
-
-          {activeBackendName.includes('Demo') && (
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={handleSimulateServerChange}
-            >
-              <Text style={styles.secondaryButtonText}>
-                + Simulate Incoming Server Broadcast (Delta)
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* Todo List */}
+        {/* Live Todos List */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Local Table: "todos"</Text>
@@ -491,26 +217,25 @@ export default function Index() {
             <View
               style={[
                 styles.counterBadge,
-                { backgroundColor: outbox.length > 0 ? '#F59E0B' : '#10B981' },
+                { backgroundColor: pendingCount > 0 ? '#F59E0B' : '#10B981' },
               ]}
             >
               <Text style={styles.counterBadgeText}>
-                {outbox.length} pending
+                {pendingCount} pending
               </Text>
             </View>
           </View>
 
           <Text style={styles.outboxDescription}>
-            Mutations are written here atomically. When online, SyncWorker pushes
-            them to remote and clears successfully sent items.
+            Powered by useOutboxStatus() hook. Automatically tracked in real time.
           </Text>
 
-          {outbox.length === 0 ? (
+          {pendingCount === 0 ? (
             <Text style={styles.outboxEmpty}>
-              ✅ Outbox is clean! All mutations synced to server.
+              ✅ Outbox is clean! All mutations synced to remote.
             </Text>
           ) : (
-            outbox.map((row) => (
+            pendingRecords.map((row) => (
               <View key={row.id} style={styles.outboxRow}>
                 <View style={styles.outboxRowHeader}>
                   <Text style={styles.outboxOp}>{row.operation}</Text>
@@ -551,112 +276,6 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 4,
   },
-  backendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  backendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  backendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  backendText: {
-    color: '#F1F5F9',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  configToggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  configToggleText: {
-    color: '#60A5FA',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  configCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#3E506B',
-  },
-  configTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginBottom: 4,
-  },
-  configHelp: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginBottom: 10,
-  },
-  codeText: {
-    color: '#38BDF8',
-    fontFamily: 'monospace',
-  },
-  inputLabel: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  configInput: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#475569',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    color: '#F8FAFC',
-    fontSize: 12,
-    marginBottom: 10,
-  },
-  configActionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  connectButton: {
-    backgroundColor: '#10B981',
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    flex: 1,
-    alignItems: 'center',
-  },
-  connectButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  mockButton: {
-    backgroundColor: '#475569',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  mockButtonText: {
-    color: '#E2E8F0',
-    fontWeight: '600',
-    fontSize: 13,
-  },
   networkBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -664,7 +283,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     padding: 12,
     borderRadius: 12,
-    marginTop: 12,
+    marginTop: 14,
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -763,20 +382,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
-  },
-  secondaryButton: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  secondaryButtonText: {
-    color: '#60A5FA',
-    fontWeight: '600',
-    fontSize: 13,
   },
   emptyText: {
     color: '#64748B',

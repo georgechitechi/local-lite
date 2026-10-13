@@ -35,47 +35,75 @@ npm install @supabase/supabase-js
 
 ---
 
-## Quick Start (Expo SQLite + Supabase)
+### 1. Define your Configuration (`sync.config.ts`)
 
 ```typescript
+// sync.config.ts
+import { defineSyncConfig, createSyncClient } from 'outbox-sync';
 import * as SQLite from 'expo-sqlite';
-import { createClient } from '@supabase/supabase-js';
-import {
-  LocalFirstClient,
-  ExpoSQLiteAdapter,
-  SupabaseRemoteAdapter,
-  DefaultNetworkStatusProvider
-} from 'outbox-sync';
 
-// 1. Initialize Supabase
-const supabase = createClient('https://xyz.supabase.co', 'YOUR_ANON_KEY');
+export const syncConfig = defineSyncConfig({
+  // Open SQLite database
+  database: () => SQLite.openDatabaseAsync('app.db'),
 
-// 2. Open Local SQLite Database
-const expoDb = await SQLite.openDatabaseAsync('app.db');
+  // Tables to sync
+  tables: ['todos'],
 
-// 3. Initialize Outbox-Sync Client
-const client = new LocalFirstClient({
-  local: new ExpoSQLiteAdapter(expoDb),
-  remote: new SupabaseRemoteAdapter(supabase, {
-    tables: ['todos'],
-    updatedAtColumn: 'updated_at',
-    primaryKey: 'id',
-  }),
+  // Run SQL migrations automatically on startup
+  migrations: [
+    `CREATE TABLE IF NOT EXISTS todos (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      completed INTEGER DEFAULT 0
+    );`
+  ],
+
+  // Supabase backend configuration
+  supabase: {
+    url: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://xyz.supabase.co',
+    anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY',
+  },
+
+  // Fallback to in-memory demo mock if credentials are empty
+  demoFallback: true,
+
+  // Conflict handling strategy
   conflictResolver: 'last-write-wins',
 });
 
-await client.initialize();
+// Singleton client instance
+export const client = await createSyncClient(syncConfig);
+```
 
-// 4. Perform an Instant Local Mutation
-await client.mutate('todos', 'todo-1', 'INSERT', {
-  title: 'Local-first is awesome',
-  completed: false,
-});
+### 2. Use in React Native / Expo UI
 
-// 5. Subscribe to Reactive Changes (Local + Remote)
-client.events.on('todos', (event) => {
-  console.log(`Table "todos" changed via ${event.source}:`, event);
-});
+```tsx
+import { useLiveQuery, useOutboxStatus } from 'outbox-sync';
+import { client } from './sync.config';
+
+export function TodoScreen() {
+  // Automatically re-renders on local writes AND background remote pulls!
+  const { data: todos } = useLiveQuery(client, 'todos', async () => {
+    return await client.db.execute('SELECT * FROM todos ORDER BY id DESC');
+  });
+
+  const { pendingCount } = useOutboxStatus(client);
+
+  const addTodo = async (title: string) => {
+    // 0ms instant local write + queues outbox background sync
+    await client.mutate('todos', `todo_${Date.now()}`, 'INSERT', {
+      title,
+      completed: 0,
+    });
+  };
+
+  return (
+    <View>
+      <Text>Pending outbox items: {pendingCount}</Text>
+      {todos.map(t => <Text key={t.id}>{t.title}</Text>)}
+    </View>
+  );
+}
 ```
 
 ---

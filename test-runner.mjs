@@ -437,8 +437,36 @@ async function runTests() {
     throw new Error('SupabaseRemoteAdapter realtime subscription failed');
   }
 
+  // Test 7: defineSyncConfig & createSyncClient
+  console.log('\nTest 7: Testing defineSyncConfig & createSyncClient factory...');
+  const { defineSyncConfig, createSyncClient } = await import('./dist/index.js');
+
+  const configDb = new MockInMemoryDB();
+  const config = defineSyncConfig({
+    database: configDb,
+    tables: ['posts'],
+    migrations: [
+      'CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, title TEXT);'
+    ],
+    demoFallback: true,
+    conflictResolver: 'last-write-wins',
+    pushIntervalMs: 2000,
+    pullIntervalMs: 5000,
+  });
+
+  const configuredClient = await createSyncClient(config);
+  await configuredClient.mutate('posts', 'post-1', 'INSERT', { title: 'First Post' });
+
+  const posts = configDb.getAll('posts');
+  if (posts.length === 1 && posts[0].title === 'First Post') {
+    console.log('  ✅ createSyncClient initialized database, ran migrations, and performed mutations seamlessly!');
+  } else {
+    throw new Error('createSyncClient test failed');
+  }
+
+  configuredClient.stop();
   client.stop();
-  console.log('\n🎉 ALL TESTS INCLUDING SUPABASE ADAPTER PASSING SUCCESSFULLY!');
+  console.log('\n🎉 ALL TESTS INCLUDING CONFIG SYSTEM PASSING SUCCESSFULLY!');
 }
 
 runTests().catch((err) => {
