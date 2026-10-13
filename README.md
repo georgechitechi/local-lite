@@ -1,5 +1,9 @@
 # ⚡ local-lite
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0284c7.svg?style=flat-square)](https://georgechitechi.github.io/local-lite/)
+[![npm version](https://img.shields.io/npm/v/local-lite.svg?style=flat-square)](https://www.npmjs.com/package/local-lite)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
 A lightweight, vendor-agnostic **local-first synchronization engine** for React Native, Expo, and Web applications.
 
 Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant, zero-latency local writes in SQLite while guaranteeing offline resilience and asynchronous synchronization with your backend (including native **Supabase**, **Convex**, and **Firebase / Firestore** support).
@@ -8,13 +12,15 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 
 ## 📖 Documentation
 
-* **[Quickstart & Setup](docs/getting-started.md)** - 5-minute setup with Expo, React Native, or Node.js
-* **[Architecture](docs/architecture.md)** - Transactional outbox pattern, SyncWorker loops, and event pipeline
-* **[Configuration Reference](docs/configuration.md)** - Options for `defineSyncConfig()`, retries, and loggers
-* **[Local SQLite Adapters](docs/adapters-local.md)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
-* **[Remote Cloud Adapters](docs/adapters-remote.md)** - Supabase, Convex, Cloud Firestore, and custom adapters
-* **[React & Expo Hooks](docs/react-hooks.md)** - `useLiveQuery()` and `useSyncStatus()`
-* **[Conflict Resolution](docs/conflict-resolution.md)** - LWW, Client-Wins, Server-Wins, and custom resolvers
+> 🌐 **Interactive Documentation Site:** **[https://georgechitechi.github.io/local-lite/](https://georgechitechi.github.io/local-lite/)**
+
+* **[Quickstart & Setup](https://georgechitechi.github.io/local-lite/#/getting-started)** - 5-minute setup with Expo, React Native, or Node.js
+* **[Architecture](https://georgechitechi.github.io/local-lite/#/architecture)** - Transactional outbox pattern, SyncWorker loops, and event pipeline
+* **[Configuration Reference](https://georgechitechi.github.io/local-lite/#/configuration)** - Options for `defineSyncConfig()`, retries, and loggers
+* **[Local SQLite Adapters](https://georgechitechi.github.io/local-lite/#/adapters-local)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
+* **[Remote Cloud Adapters](https://georgechitechi.github.io/local-lite/#/adapters-remote)** - Supabase, Convex, Cloud Firestore, and custom adapters
+* **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()` and `useSyncStatus()`
+* **[Conflict Resolution](https://georgechitechi.github.io/local-lite/#/conflict-resolution)** - LWW, Client-Wins, Server-Wins, and custom resolvers
 
 ---
 
