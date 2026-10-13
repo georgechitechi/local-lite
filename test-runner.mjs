@@ -473,7 +473,7 @@ async function runTests() {
     migrations: [
       'CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, title TEXT);'
     ],
-    demoFallback: true,
+    inMemoryRemote: true,
     conflictResolver: 'last-write-wins',
     pushIntervalMs: 2000,
     pullIntervalMs: 5000,
@@ -504,7 +504,7 @@ async function runTests() {
     tables: ['catalog_items', 'orders'],
     // NO migrations array!
     autoSchema: true,
-    demoFallback: true,
+    inMemoryRemote: true,
   });
 
   const autoClient = await createSyncClient(autoConfig);

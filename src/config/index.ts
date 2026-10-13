@@ -77,10 +77,11 @@ export interface OutboxSyncConfig {
   remote?: RemoteDBAdapter;
 
   /**
-   * Whether to fallback to MemoryDemoRemoteAdapter if Supabase credentials are not provided.
+   * Whether to use an in-memory simulated remote backend if Supabase credentials are not provided.
+   * Allows running and testing full local-first sync workflows without cloud infrastructure.
    * Default: true
    */
-  demoFallback?: boolean;
+  inMemoryRemote?: boolean;
 
   /**
    * Conflict resolution strategy. Default: 'last-write-wins'
@@ -203,7 +204,7 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
       pushRpcName: config.supabase.pushRpcName,
       channelName: config.supabase.channelName,
     });
-  } else if (config.demoFallback !== false) {
+  } else if (config.inMemoryRemote !== false) {
     remoteAdapter = new MemoryDemoRemoteAdapter(300);
   } else {
     throw new Error(

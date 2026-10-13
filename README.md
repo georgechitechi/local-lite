@@ -58,8 +58,8 @@ export const syncConfig = defineSyncConfig({
     anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY',
   },
 
-  // Fallback to in-memory demo mock if credentials are empty
-  demoFallback: true,
+  // Use in-memory simulated remote if credentials are empty
+  inMemoryRemote: true,
 
   // Conflict handling strategy
   conflictResolver: 'last-write-wins',
@@ -85,10 +85,18 @@ export function TodoScreen() {
 
   const addTodo = async (title: string) => {
     // 0ms instant local write + queues outbox background sync
-    await client.mutate('todos', `todo_${Date.now()}`, 'INSERT', {
+    await client.insert('todos', {
       title,
       completed: 0,
     });
+  };
+
+  const toggleTodo = async (id: string, completed: number) => {
+    await client.update('todos', id, { completed: completed ? 0 : 1 });
+  };
+
+  const removeTodo = async (id: string) => {
+    await client.delete('todos', id);
   };
 
   return (
@@ -99,6 +107,49 @@ export function TodoScreen() {
   );
 }
 ```
+
+---
+
+## Supabase Backend Setup & Schema
+
+To synchronize with Supabase using zero-clock-skew delta queries and `deleted: true` soft deletes, execute the following script in your Supabase project (**Dashboard → SQL Editor**):
+
+```sql
+-- 1. Automatic Timestamp Trigger
+CREATE OR REPLACE FUNCTION public.set_sync_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = timezone('utc'::text, now());
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Create Synced Table (e.g. 'todos')
+CREATE TABLE IF NOT EXISTS public.todos (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  completed INTEGER DEFAULT 0,
+  deleted BOOLEAN DEFAULT FALSE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 3. Index for high-performance delta sync queries
+CREATE INDEX IF NOT EXISTS idx_todos_sync ON public.todos (updated_at);
+
+-- 4. Auto-update updated_at on changes (including soft deletes)
+CREATE OR REPLACE TRIGGER trigger_todos_updated_at
+BEFORE UPDATE ON public.todos
+FOR EACH ROW EXECUTE FUNCTION public.set_sync_updated_at();
+
+-- 5. Enable Supabase Realtime broadcast replication
+ALTER PUBLICATION supabase_realtime ADD TABLE public.todos;
+```
+
+### Why this schema?
+* **Zero Client Clock Skew:** `updated_at` is managed entirely by PostgreSQL `now()` on the server via trigger, making synchronization immune to incorrect client device clocks.
+* **`deleted: true` Soft Deletes:** When an item is deleted via `client.delete('todos', id)`, `outbox-sync` sets `deleted = true` on the server and updates `updated_at`. When other clients pull changes, rows marked `deleted: true` are purged from local SQLite.
+* **Fast Delta Pulls:** The index on `updated_at` ensures `SELECT * FROM table WHERE updated_at > :cursor` executes as a sub-millisecond index scan.
 
 ---
 

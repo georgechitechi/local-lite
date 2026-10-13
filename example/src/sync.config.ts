@@ -24,8 +24,8 @@ export const syncConfig = defineSyncConfig({
     deletedColumn: 'deleted', // Uses deleted: true soft deletes
   },
 
-  // Fallback to in-memory demo mock if Supabase URL is empty
-  demoFallback: true,
+  // Use in-memory simulated remote if Supabase URL is empty
+  inMemoryRemote: true,
 
   // Conflict resolution strategy
   conflictResolver: 'last-write-wins',
