@@ -34,10 +34,9 @@ export default function MaintenanceScreen() {
   const [priority, setPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
   const [cost, setCost] = useState('');
 
-  // Live Query: Maintenance Requests
-  const { data: tickets } = useLiveQuery<MaintenanceTicket>(client, 'maintenance_requests', async (c) => {
-    const rows = (await c.db.execute('SELECT * FROM maintenance_requests')) as MaintenanceTicket[];
-    return rows.sort((a, b) => (b.priority === 'HIGH' ? 1 : 0) - (a.priority === 'HIGH' ? 1 : 0));
+  // Live Query: Maintenance Requests (Declarative ordering, zero SQL)
+  const { data: tickets } = useLiveQuery<MaintenanceTicket>(client, 'maintenance_requests', {
+    orderBy: 'priority',
   });
 
   const highPriorityCount = tickets.filter((t) => t.priority === 'HIGH' && t.status !== 'RESOLVED').length;

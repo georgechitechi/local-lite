@@ -37,10 +37,10 @@ export default function PropertiesScreen() {
   const [bedrooms, setBedrooms] = useState('2');
   const [bathrooms, setBathrooms] = useState('1');
 
-  // Reactive Live Query on local SQLite
-  const { data: properties } = useLiveQuery<Property>(client, 'properties', async (c) => {
-    const rows = (await c.db.execute('SELECT * FROM properties')) as Property[];
-    return rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Reactive Live Query (Zero SQL required!)
+  const { data: properties } = useLiveQuery<Property>(client, 'properties', {
+    orderBy: 'name',
+    order: 'asc',
   });
 
   const totalRentRoll = properties.reduce(

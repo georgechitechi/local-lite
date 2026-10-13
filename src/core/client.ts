@@ -11,9 +11,11 @@ import {
   ConflictStrategy,
   MutateOptions,
   NetworkStatusProvider,
+  QueryOptions,
   SyncOp,
 } from './types.js';
 import { generateUUID } from '../utils/uuid.js';
+import { escapeIdentifier } from '../utils/sql.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -194,6 +196,84 @@ export class LocalFirstClient {
     options: MutateOptions = {}
   ): Promise<void> {
     await this.mutate(tableName, rowId, 'DELETE', null, options);
+  }
+
+  /**
+   * Reads records from a local SQLite table without requiring manual SQL.
+   * Supports where filtering, order, limit, and offset.
+   * Gracefully returns [] if table or columns have not been populated yet on empty schemas.
+   *
+   * Example:
+   * const tenants = await client.findMany('tenants', { where: { status: 'ACTIVE' }, orderBy: 'name' });
+   */
+  async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
+    const safeTable = escapeIdentifier(tableName);
+    let rows: any[];
+    try {
+      rows = await this.db.execute(`SELECT * FROM ${safeTable}`);
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('no such table') || msg.includes('no such column')) {
+        return [];
+      }
+      throw err;
+    }
+
+    if (!rows || rows.length === 0) return [];
+
+    let result = [...rows];
+
+    // 1. Where filtering
+    if (options?.where) {
+      const filterKeys = Object.keys(options.where);
+      result = result.filter((row) =>
+        filterKeys.every((k) => row[k] === options.where![k])
+      );
+    }
+
+    // 2. Order by
+    if (options?.orderBy) {
+      const key = options.orderBy;
+      const isAsc = (options.order || 'asc').toLowerCase() === 'asc';
+      result.sort((a, b) => {
+        const valA = a[key];
+        const valB = b[key];
+        if (valA === valB) return 0;
+        if (valA === null || valA === undefined) return isAsc ? 1 : -1;
+        if (valB === null || valB === undefined) return isAsc ? -1 : 1;
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return isAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return isAsc ? valA - valB : valB - valA;
+        }
+        return isAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+      });
+    }
+
+    // 3. Offset and Limit
+    if (options?.offset !== undefined && options.offset > 0) {
+      result = result.slice(options.offset);
+    }
+    if (options?.limit !== undefined && options.limit > 0) {
+      result = result.slice(0, options.limit);
+    }
+
+    return result as T[];
+  }
+
+  /**
+   * Finds a single record by primary key.
+   *
+   * Example:
+   * const tenant = await client.findById('tenants', 'ten-1');
+   */
+  async findById<T = any>(tableName: string, id: string): Promise<T | null> {
+    const results = await this.findMany<T>(tableName, {
+      where: { [this.primaryKey]: id },
+      limit: 1,
+    });
+    return results.length > 0 ? results[0] : null;
   }
 
   /**

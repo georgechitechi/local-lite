@@ -46,16 +46,14 @@ export default function TenantsScreen() {
   const [rentAmount, setRentAmount] = useState('');
   const [leaseEnd, setLeaseEnd] = useState('2027-12-31');
 
-  // Live Query: Tenants
-  const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants', async (c) => {
-    const rows = (await c.db.execute('SELECT * FROM tenants')) as Tenant[];
-    return rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Live Query: Tenants (Sorted by name with zero SQL)
+  const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants', {
+    orderBy: 'name',
+    order: 'asc',
   });
 
-  // Live Query: Available Properties
-  const { data: properties } = useLiveQuery<SimpleProperty>(client, 'properties', async (c) => {
-    return (await c.db.execute('SELECT * FROM properties')) as SimpleProperty[];
-  });
+  // Live Query: Available Properties (Just the table name!)
+  const { data: properties } = useLiveQuery<SimpleProperty>(client, 'properties');
 
   const activeCount = tenants.filter((t) => t.status === 'ACTIVE').length;
   const pendingCount = tenants.filter((t) => t.status === 'PENDING').length;

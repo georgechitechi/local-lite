@@ -60,3 +60,11 @@ export interface TableChangeEvent {
   payload?: Record<string, any> | null;
   source: 'local' | 'remote';
 }
+
+export interface QueryOptions {
+  where?: Record<string, any>;
+  orderBy?: string;
+  order?: 'asc' | 'desc' | 'ASC' | 'DESC';
+  limit?: number;
+  offset?: number;
+}

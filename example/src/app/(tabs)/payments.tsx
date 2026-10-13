@@ -32,10 +32,10 @@ export default function PaymentsScreen() {
   const [tenantName, setTenantName] = useState('');
   const [amount, setAmount] = useState('');
 
-  // Live Query: Payments
-  const { data: payments } = useLiveQuery<RentPayment>(client, 'payments', async (c) => {
-    const rows = (await c.db.execute('SELECT * FROM payments')) as RentPayment[];
-    return rows.sort((a, b) => (b.due_date || '').localeCompare(a.due_date || ''));
+  // Live Query: Payments (Declarative reverse due_date ordering)
+  const { data: payments } = useLiveQuery<RentPayment>(client, 'payments', {
+    orderBy: 'due_date',
+    order: 'desc',
   });
 
   const totalCollected = payments

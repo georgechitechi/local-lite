@@ -76,9 +76,10 @@ import { useLiveQuery, useOutboxStatus } from 'outbox-sync';
 import { client } from './sync.config';
 
 export function TodoScreen() {
-  // Automatically re-renders on local writes AND background remote pulls!
-  const { data: todos } = useLiveQuery(client, 'todos', async () => {
-    return await client.db.execute('SELECT * FROM todos ORDER BY id DESC');
+  // ⚡ Zero-SQL Reactive Live Query (Auto re-renders on local writes AND background remote pulls!)
+  const { data: todos } = useLiveQuery(client, 'todos', {
+    orderBy: 'id',
+    order: 'desc',
   });
 
   const { pendingCount } = useOutboxStatus(client);

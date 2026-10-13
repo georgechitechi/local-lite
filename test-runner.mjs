@@ -75,6 +75,12 @@ class MockInMemoryDB {
       return [];
     }
 
+    const selectAllMatch = q.match(/^SELECT \* FROM "?(\w+)"?$/i);
+    if (selectAllMatch) {
+      const table = selectAllMatch[1];
+      return Array.from(this.getTable(table).values());
+    }
+
     const selectRowMatch = q.match(/SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? = \?/i);
     if (selectRowMatch) {
       const table = selectRowMatch[1];
@@ -684,10 +690,31 @@ async function runTests() {
   console.log('  ✅ sync_meta table initialized and operates strictly device-local');
   console.log('  ✅ last_synced_at cursor persists and reloads correctly across sessions');
 
+  // Test 12: Declarative client.findMany and findById (Zero-SQL DX)
+  console.log('\nTest 12: Testing client.findMany & findById (Zero-SQL queries)...');
+  await client.insert('todos', { id: 'todo-sort-1', title: 'Buy Apples', completed: 0 });
+  await client.insert('todos', { id: 'todo-sort-2', title: 'Call Doctor', completed: 1 });
+  await client.insert('todos', { id: 'todo-sort-3', title: 'Answer Emails', completed: 0 });
+
+  const allTodos = await client.findMany('todos');
+  if (allTodos.length < 3) throw new Error('findMany should return all todos');
+
+  const filtered = await client.findMany('todos', { where: { completed: 0 } });
+  if (filtered.some(t => t.completed !== 0)) throw new Error('findMany where filter failed');
+
+  const sorted = await client.findMany('todos', { orderBy: 'title', order: 'asc' });
+  if (sorted[0].title > sorted[1].title) throw new Error('findMany orderBy failed');
+
+  const single = await client.findById('todos', 'todo-sort-2');
+  if (!single || single.title !== 'Call Doctor') throw new Error('findById failed');
+
+  console.log('  ✅ client.findMany supports zero-SQL full table reads');
+  console.log('  ✅ client.findMany supports where filtering, ordering, and findById');
+
   autoClient.stop();
   configuredClient.stop();
   client.stop();
-  console.log('\n🎉 ALL 11 TESTS PASSING: FULL COMPATIBILITY ACROSS EXPO, OP-SQLITE, BETTER-SQLITE3, LIBSQL, SQL.JS & NODE:SQLITE WITH PERSISTENT SYNC CURSOR!');
+  console.log('\n🎉 ALL 12 TESTS PASSING: FULL COMPATIBILITY ACROSS EXPO, OP-SQLITE, BETTER-SQLITE3, LIBSQL, SQL.JS & NODE:SQLITE WITH ZERO-SQL DX & SYNC CURSOR!');
 }
 
 runTests().catch((err) => {
