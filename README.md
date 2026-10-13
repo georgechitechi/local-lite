@@ -147,7 +147,7 @@ export const client = await createSyncClient(syncConfig);
 ### 2. Use in React Native / Expo UI
 
 ```tsx
-import { useLiveQuery, useOutboxStatus } from 'local-lite';
+import { useLiveQuery, useOutboxStatus } from 'local-lite/react';
 import { client } from './sync.config';
 
 export function TodoScreen() {

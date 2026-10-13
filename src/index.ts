@@ -12,7 +12,7 @@ export * from './adapters/local/index.js';
 export * from './adapters/remote/index.js';
 export * from './adapters/network/index.js';
 export * from './config/index.js';
-export * from './react/index.js';
+export type * from './react/index.js';
 export * from './utils/uuid.js';
 export * from './utils/sql.js';
 export * from './utils/logger.js';
