@@ -7,15 +7,23 @@ import { OutboxStore } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
 import { SchemaManager } from './schema-manager.js';
 import {
+  BatchMutation,
   ConflictResolver,
   ConflictStrategy,
   MutateOptions,
   NetworkStatusProvider,
+  OutboxRecord,
+  OutboxStatus,
   QueryOptions,
+  RetryConfig,
+  SyncMetrics,
   SyncOp,
+  TableChangeEvent,
 } from './types.js';
+import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier } from '../utils/sql.js';
+import { applyQueryOptions } from './query.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -26,8 +34,104 @@ export interface LocalFirstClientConfig {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
   maxRetries?: number;
+  retry?: number | RetryConfig;
+  logger?: SyncLogger | CustomLogger | boolean;
+  logLevel?: LogLevel;
   autoSchema?: boolean;
   tables?: string[];
+}
+
+export class TransactionalClient {
+  constructor(
+    private parent: LocalFirstClient,
+    private tx: LocalTransaction,
+    private queuedTableEvents: Array<{ tableName: string; event: TableChangeEvent }>,
+    private queuedOutboxIds: string[]
+  ) {}
+
+  async mutate(
+    tableName: string,
+    rowId: string,
+    operation: SyncOp,
+    payload: Record<string, any> | null,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    const pk = options.primaryKey ?? this.parent.getPrimaryKey();
+    const outboxId = generateUUID();
+    const timestamp = options.customTimestamp ?? Date.now();
+
+    await TableManager.applyMutation(this.tx, tableName, rowId, operation, payload, pk, {
+      autoSchema: this.parent.autoSchema,
+      schemaManager: this.parent.schemaManager,
+    });
+
+    if (!options.skipOutbox) {
+      await OutboxStore.insertRecord(this.tx, {
+        id: outboxId,
+        tableName,
+        rowId,
+        operation,
+        payload,
+        timestamp,
+      });
+      this.queuedOutboxIds.push(outboxId);
+    }
+
+    this.queuedTableEvents.push({
+      tableName,
+      event: {
+        operation,
+        rowId,
+        payload,
+        source: 'local',
+      },
+    });
+  }
+
+  async insert(
+    tableName: string,
+    rowIdOrPayload: string | Record<string, any>,
+    payloadOrOptions?: Record<string, any> | MutateOptions,
+    options?: MutateOptions
+  ): Promise<string> {
+    let rowId: string;
+    let payload: Record<string, any>;
+    let opts: MutateOptions = {};
+
+    if (typeof rowIdOrPayload === 'string') {
+      rowId = rowIdOrPayload;
+      payload = (payloadOrOptions as Record<string, any>) || {};
+      opts = options || {};
+    } else {
+      payload = rowIdOrPayload || {};
+      rowId = payload[this.parent.getPrimaryKey()] || generateUUID();
+      opts = (payloadOrOptions as MutateOptions) || {};
+    }
+
+    await this.mutate(tableName, rowId, 'INSERT', payload, opts);
+    return rowId;
+  }
+
+  async update(
+    tableName: string,
+    rowId: string,
+    payload: Record<string, any>,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    await this.mutate(tableName, rowId, 'UPDATE', payload, options);
+  }
+
+  async delete(
+    tableName: string,
+    rowId: string,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    await this.mutate(tableName, rowId, 'DELETE', null, options);
+  }
+
+  get rawTx(): LocalTransaction {
+    return this.tx;
+  }
 }
 
 export class LocalFirstClient {
@@ -56,11 +160,18 @@ export class LocalFirstClient {
       pushIntervalMs: config.pushIntervalMs,
       pullIntervalMs: config.pullIntervalMs,
       maxRetries: config.maxRetries,
+      retry: config.retry,
+      logger: config.logger,
+      logLevel: config.logLevel,
       autoSchema: this.autoSchema,
       schemaManager: this.schemaManager,
     };
 
     this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
+  }
+
+  getPrimaryKey(): string {
+    return this.primaryKey;
   }
 
   /**
@@ -138,6 +249,127 @@ export class LocalFirstClient {
   }
 
   /**
+   * Executes multiple mutations in a single atomic database transaction.
+   * Inserts all corresponding outbox entries together and schedules a single push.
+   */
+  async batch(mutations: BatchMutation[], options: MutateOptions = {}): Promise<string[]> {
+    if (!mutations || mutations.length === 0) return [];
+
+    const generatedIds: string[] = [];
+    const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
+    const queuedOutboxIds: string[] = [];
+
+    const executeInTx = async (tx: LocalTransaction) => {
+      for (const m of mutations) {
+        const pk = m.primaryKey ?? options.primaryKey ?? this.primaryKey;
+        const payload = m.payload ?? null;
+        const rowId: string =
+          m.rowId ||
+          (payload && payload[pk] !== undefined && payload[pk] !== null
+            ? String(payload[pk])
+            : generateUUID());
+        generatedIds.push(rowId);
+
+        await TableManager.applyMutation(tx, m.tableName, rowId, m.operation, payload, pk, {
+          autoSchema: this.autoSchema,
+          schemaManager: this.schemaManager,
+        });
+
+        const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
+        if (!skipOutbox) {
+          const outboxId = generateUUID();
+          const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
+          await OutboxStore.insertRecord(tx, {
+            id: outboxId,
+            tableName: m.tableName,
+            rowId,
+            operation: m.operation,
+            payload,
+            timestamp,
+          });
+          queuedOutboxIds.push(outboxId);
+        }
+
+        queuedEvents.push({
+          tableName: m.tableName,
+          event: {
+            operation: m.operation,
+            rowId,
+            payload,
+            source: 'local',
+          },
+        });
+      }
+    };
+
+    if (options.tx) {
+      await executeInTx(options.tx);
+    } else {
+      await this.db.transaction(executeInTx);
+    }
+
+    // Emit all buffered events after transaction commits
+    for (const item of queuedEvents) {
+      this.events.emit(item.tableName, item.event);
+    }
+
+    if (queuedOutboxIds.length > 0) {
+      this.events.emit('sync_outbox', { operation: 'INSERT', rowId: 'batch' });
+      this.syncWorker.schedulePush(20);
+    }
+
+    return generatedIds;
+  }
+
+  /**
+   * Convenience helper to insert an array of records into a table atomically.
+   */
+  async insertMany(
+    tableName: string,
+    records: Record<string, any>[],
+    options: MutateOptions = {}
+  ): Promise<string[]> {
+    const pk = options.primaryKey ?? this.primaryKey;
+    const mutations: BatchMutation[] = records.map((record) => {
+      const rowId = record[pk] || generateUUID();
+      return {
+        tableName,
+        rowId,
+        operation: 'INSERT',
+        payload: record,
+        primaryKey: pk,
+      };
+    });
+    return await this.batch(mutations, options);
+  }
+
+  /**
+   * Runs an arbitrary callback inside an atomic transaction with a scoped TransactionalClient.
+   * If the callback resolves, all changes and outbox records commit and events are emitted.
+   * If the callback throws, SQLite rolls back and no change events are emitted.
+   */
+  async transaction<T>(action: (txClient: TransactionalClient) => Promise<T>): Promise<T> {
+    const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
+    const queuedOutboxIds: string[] = [];
+
+    const result = await this.db.transaction(async (tx) => {
+      const txClient = new TransactionalClient(this, tx, queuedEvents, queuedOutboxIds);
+      return await action(txClient);
+    });
+
+    for (const item of queuedEvents) {
+      this.events.emit(item.tableName, item.event);
+    }
+
+    if (queuedOutboxIds.length > 0) {
+      this.events.emit('sync_outbox', { operation: 'INSERT', rowId: 'batch' });
+      this.syncWorker.schedulePush(20);
+    }
+
+    return result;
+  }
+
+  /**
    * Convenience helper to insert a record into a table.
    * Auto-generates a UUID if rowId is omitted or passed inside payload.
    * 
@@ -200,11 +432,12 @@ export class LocalFirstClient {
 
   /**
    * Reads records from a local SQLite table without requiring manual SQL.
-   * Supports where filtering, order, limit, and offset.
+   * Supports where filtering with rich operators ($in, $gt, $contains, $or, etc.), order, limit, and offset.
    * Gracefully returns [] if table or columns have not been populated yet on empty schemas.
    *
    * Example:
    * const tenants = await client.findMany('tenants', { where: { status: 'ACTIVE' }, orderBy: 'name' });
+   * const expensive = await client.findMany('properties', { where: { rent: { $gte: 2000 } } });
    */
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
     const safeTable = escapeIdentifier(tableName);
@@ -219,47 +452,7 @@ export class LocalFirstClient {
       throw err;
     }
 
-    if (!rows || rows.length === 0) return [];
-
-    let result = [...rows];
-
-    // 1. Where filtering
-    if (options?.where) {
-      const filterKeys = Object.keys(options.where);
-      result = result.filter((row) =>
-        filterKeys.every((k) => row[k] === options.where![k])
-      );
-    }
-
-    // 2. Order by
-    if (options?.orderBy) {
-      const key = options.orderBy;
-      const isAsc = (options.order || 'asc').toLowerCase() === 'asc';
-      result.sort((a, b) => {
-        const valA = a[key];
-        const valB = b[key];
-        if (valA === valB) return 0;
-        if (valA === null || valA === undefined) return isAsc ? 1 : -1;
-        if (valB === null || valB === undefined) return isAsc ? -1 : 1;
-        if (typeof valA === 'string' && typeof valB === 'string') {
-          return isAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        }
-        if (typeof valA === 'number' && typeof valB === 'number') {
-          return isAsc ? valA - valB : valB - valA;
-        }
-        return isAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
-      });
-    }
-
-    // 3. Offset and Limit
-    if (options?.offset !== undefined && options.offset > 0) {
-      result = result.slice(options.offset);
-    }
-    if (options?.limit !== undefined && options.limit > 0) {
-      result = result.slice(0, options.limit);
-    }
-
-    return result as T[];
+    return applyQueryOptions<T>(rows, options);
   }
 
   /**
@@ -318,6 +511,48 @@ export class LocalFirstClient {
     this.syncWorker.schedulePush(20);
 
     return outboxId;
+  }
+
+  /**
+   * Returns real-time telemetry metrics captured by the sync engine.
+   */
+  async getMetrics(): Promise<SyncMetrics> {
+    return await this.syncWorker.getMetrics();
+  }
+
+  /**
+   * Fetches outbox records with optional status filtering and pagination.
+   */
+  async getOutboxRecords(options?: {
+    status?: OutboxStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<OutboxRecord[]> {
+    return await OutboxStore.getAllRecords(this.db, options);
+  }
+
+  /**
+   * Re-queues failed outbox mutations for retry by resetting their status to PENDING.
+   * Triggers an immediate sync push.
+   */
+  async retryFailedMutations(ids?: string[]): Promise<number> {
+    const count = await OutboxStore.retryFailed(this.db, ids);
+    if (count > 0) {
+      this.events.emit('sync_outbox', { operation: 'UPDATE', rowId: 'retry' });
+      this.syncWorker.schedulePush(0);
+    }
+    return count;
+  }
+
+  /**
+   * Permanently clears failed mutations (removes poison-pill outbox records).
+   */
+  async clearFailedMutations(ids?: string[]): Promise<number> {
+    const count = await OutboxStore.clearFailed(this.db, ids);
+    if (count > 0) {
+      this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'clear' });
+    }
+    return count;
   }
 
   /**

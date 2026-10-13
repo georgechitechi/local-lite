@@ -1,216 +1,45 @@
 import { LocalFirstClient } from '../core/client.js';
-export { LocalFirstClient };
-import { LocalDBAdapter } from '../adapters/local/index.js';
-import { ExpoSQLiteAdapter } from '../adapters/local/expo-sqlite.js';
-import { OpSQLiteAdapter } from '../adapters/local/op-sqlite.js';
-import { BetterSQLite3Adapter } from '../adapters/local/better-sqlite3.js';
-import { LibSQLAdapter } from '../adapters/local/libsql.js';
-import { SqlJsAdapter } from '../adapters/local/sql-js.js';
-import { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
-import { RemoteDBAdapter } from '../adapters/remote/index.js';
-import { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
-import { MemoryDemoRemoteAdapter } from '../adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
-import { ConflictResolver, ConflictStrategy, NetworkStatusProvider } from '../core/types.js';
-import { createClient } from '@supabase/supabase-js';
+import { LocalLiteConfig } from './types.js';
+import { resolveLocalAdapter } from './resolve-local.js';
+import { resolveRemoteAdapter } from './resolve-remote.js';
 
-export interface SupabaseConfigOptions {
-  url?: string;
-  anonKey?: string;
-  client?: any;
-  schema?: string;
-  updatedAtColumn?: string;
-  deletedColumn?: string;
-  deletedValue?: any;
-  deletedAtColumn?: string;
-  pushRpcName?: string;
-  channelName?: string;
-}
+// Export all config types
+export * from './types.js';
 
-export interface OutboxSyncConfig {
-  /**
-   * Local SQLite Database instance, name, factory function, or LocalDBAdapter.
-   * - Pass an Expo database instance (e.g. from SQLite.openDatabaseAsync('app.db'))
-   * - Pass a factory: () => SQLite.openDatabaseAsync('app.db')
-   * - Pass a database file name: 'app.db'
-   * - Or a custom LocalDBAdapter
-   */
-  database?: any | string | (() => Promise<any> | any) | LocalDBAdapter;
+// Export adapter resolvers
+export { resolveLocalAdapter } from './resolve-local.js';
+export { resolveRemoteAdapter } from './resolve-remote.js';
 
-  /**
-   * Database name if database is not provided. Default: 'outbox_sync.db'
-   */
-  databaseName?: string;
-
-  /**
-   * List of tables to sync.
-   * e.g. ['todos', 'notes']
-   */
-  tables?: string[];
-
-  /**
-   * Initial SQL table schema migration queries to execute on startup.
-   * e.g. ["CREATE TABLE IF NOT EXISTS todos (id TEXT PRIMARY KEY, title TEXT);"]
-   */
-  migrations?: string[];
-
-  /**
-   * Automatically create tables and columns dynamically on the fly without manual SQL migrations.
-   * When true (default if migrations is not provided), tables in `tables` are created automatically,
-   * and any missing columns are added dynamically on insert/update/pull.
-   */
-  autoSchema?: boolean;
-
-  /**
-   * Primary key column. Default: 'id'
-   */
-  primaryKey?: string;
-
-  /**
-   * Supabase backend connection options.
-   */
-  supabase?: SupabaseConfigOptions;
-
-  /**
-   * Custom remote adapter (overrides Supabase).
-   */
-  remote?: RemoteDBAdapter;
-
-  /**
-   * Whether to use an in-memory simulated remote backend if Supabase credentials are not provided.
-   * Allows running and testing full local-first sync workflows without cloud infrastructure.
-   * Default: true
-   */
-  inMemoryRemote?: boolean;
-
-  /**
-   * Conflict resolution strategy. Default: 'last-write-wins'
-   */
-  conflictResolver?: ConflictStrategy | ConflictResolver;
-
-  /**
-   * Periodic outbox push interval in ms. Default: 5000
-   */
-  pushIntervalMs?: number;
-
-  /**
-   * Periodic remote pull interval in ms. Default: 10000
-   */
-  pullIntervalMs?: number;
-
-  /**
-   * Maximum retry attempts for failed push items. Default: 5
-   */
-  maxRetries?: number;
-
-  /**
-   * Network status provider. Default: DefaultNetworkStatusProvider
-   */
-  network?: NetworkStatusProvider;
-
-  /**
-   * Automatically call client.initialize() and create tables.
-   * Default: true
-   */
-  autoInitialize?: boolean;
-}
+// Re-export adapters and core client for convenience
+export { LocalFirstClient } from '../core/client.js';
+export { ExpoSQLiteAdapter } from '../adapters/local/expo-sqlite.js';
+export { OpSQLiteAdapter } from '../adapters/local/op-sqlite.js';
+export { BetterSQLite3Adapter } from '../adapters/local/better-sqlite3.js';
+export { LibSQLAdapter } from '../adapters/local/libsql.js';
+export { SqlJsAdapter } from '../adapters/local/sql-js.js';
+export { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
+export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
+export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
+export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
+export { MemoryDemoRemoteAdapter } from '../adapters/remote/demo.js';
 
 /**
  * Type-safe configuration helper function (similar to defineConfig in Vite/Tailwind).
  */
-export function defineSyncConfig(config: OutboxSyncConfig): OutboxSyncConfig {
+export function defineSyncConfig(config: LocalLiteConfig): LocalLiteConfig {
   return config;
 }
 
 /**
- * Factory that instantiates and initializes a LocalFirstClient from an OutboxSyncConfig.
+ * Factory that instantiates, wires up, and initializes a LocalFirstClient from a LocalLiteConfig.
  */
-export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalFirstClient> {
+export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFirstClient> {
   // 1. Resolve Local Database Adapter
-  let localAdapter: LocalDBAdapter;
+  const localAdapter = await resolveLocalAdapter(config);
 
-  let rawDb = config.database;
-  if (typeof rawDb === 'function') {
-    rawDb = await rawDb();
-  }
-
-  if (rawDb && typeof rawDb.batch === 'function' && typeof rawDb.execute === 'function') {
-    // @libsql/client (Turso / LibSQL) instance
-    localAdapter = new LibSQLAdapter(rawDb);
-  } else if (rawDb && typeof rawDb.export === 'function' && typeof rawDb.exec === 'function') {
-    // sql.js Database instance
-    localAdapter = new SqlJsAdapter(rawDb);
-  } else if (rawDb && typeof rawDb.execute === 'function' && typeof rawDb.transaction === 'function') {
-    // Already implements LocalDBAdapter
-    localAdapter = rawDb;
-  } else if (rawDb && typeof rawDb.getAllAsync === 'function') {
-    // Expo SQLite database instance
-    localAdapter = new ExpoSQLiteAdapter(rawDb);
-  } else if (rawDb && typeof rawDb.executeAsync === 'function') {
-    // @op-engineering/op-sqlite or react-native-quick-sqlite instance
-    localAdapter = new OpSQLiteAdapter(rawDb);
-  } else if (rawDb && typeof rawDb.prepare === 'function') {
-    // better-sqlite3 or node:sqlite database instance
-    localAdapter = new BetterSQLite3Adapter(rawDb);
-  } else if (typeof rawDb === 'string' || config.databaseName) {
-    const dbName = typeof rawDb === 'string' ? rawDb : (config.databaseName ?? 'outbox_sync.db');
-    try {
-      const expoSqlite: any = await import('expo-sqlite');
-      if (expoSqlite && typeof expoSqlite.openDatabaseAsync === 'function') {
-        const expoDb = await expoSqlite.openDatabaseAsync(dbName);
-        localAdapter = new ExpoSQLiteAdapter(expoDb);
-      } else {
-        throw new Error('expo-sqlite openDatabaseAsync not found');
-      }
-    } catch (err) {
-      throw new Error(
-        `Failed to auto-open SQLite database "${dbName}". ` +
-        `Please pass the database instance to config.database: ${err}`
-      );
-    }
-  } else {
-    throw new Error(
-      'No database provided in sync config. Please specify config.database or config.databaseName.'
-    );
-  }
-
-  // 2. Resolve Remote Adapter
-  let remoteAdapter: RemoteDBAdapter;
-
-  if (config.remote) {
-    remoteAdapter = config.remote;
-  } else if (config.supabase?.client) {
-    remoteAdapter = new SupabaseRemoteAdapter(config.supabase.client, {
-      tables: config.tables,
-      primaryKey: config.primaryKey,
-      schema: config.supabase.schema,
-      updatedAtColumn: config.supabase.updatedAtColumn,
-      deletedColumn: config.supabase.deletedColumn,
-      deletedValue: config.supabase.deletedValue,
-      deletedAtColumn: config.supabase.deletedAtColumn,
-      pushRpcName: config.supabase.pushRpcName,
-      channelName: config.supabase.channelName,
-    });
-  } else if (config.supabase?.url && config.supabase?.anonKey) {
-    const supabaseClient = createClient(config.supabase.url, config.supabase.anonKey);
-    remoteAdapter = new SupabaseRemoteAdapter(supabaseClient, {
-      tables: config.tables,
-      primaryKey: config.primaryKey,
-      schema: config.supabase.schema,
-      updatedAtColumn: config.supabase.updatedAtColumn,
-      deletedColumn: config.supabase.deletedColumn,
-      deletedValue: config.supabase.deletedValue,
-      deletedAtColumn: config.supabase.deletedAtColumn,
-      pushRpcName: config.supabase.pushRpcName,
-      channelName: config.supabase.channelName,
-    });
-  } else if (config.inMemoryRemote !== false) {
-    remoteAdapter = new MemoryDemoRemoteAdapter(300);
-  } else {
-    throw new Error(
-      'No remote adapter configured. Please specify config.supabase or config.remote.'
-    );
-  }
+  // 2. Resolve Remote Cloud Adapter
+  const remoteAdapter = await resolveRemoteAdapter(config);
 
   // 3. Resolve Network Provider
   const network = config.network ?? new DefaultNetworkStatusProvider(true);
@@ -220,7 +49,7 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
       ? config.autoSchema
       : !config.migrations || config.migrations.length === 0;
 
-  // 4. Create Client
+  // 4. Instantiate Local-First Client
   const client = new LocalFirstClient({
     local: localAdapter,
     remote: remoteAdapter,
@@ -230,6 +59,9 @@ export async function createSyncClient(config: OutboxSyncConfig): Promise<LocalF
     pushIntervalMs: config.pushIntervalMs ?? 5000,
     pullIntervalMs: config.pullIntervalMs ?? 10000,
     maxRetries: config.maxRetries ?? 5,
+    retry: config.retry,
+    logger: config.logger,
+    logLevel: config.logLevel,
     autoSchema,
     tables: config.tables ?? [],
   });

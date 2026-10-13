@@ -1,7 +1,7 @@
 {
-  "name": "outbox-sync",
-  "version": "0.0.0",
-  "description": "Vendor-agnostic local-first sync engine with outbox pattern and Supabase support",
+  "name": "local-lite",
+  "version": "0.0.2",
+  "description": "Never let a lost connection break a promise. Local-first sync that faithfully keeps data safe until you're back online.",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,6 +30,16 @@
       "types": "./dist/adapters/remote/supabase.d.ts",
       "import": "./dist/adapters/remote/supabase.js",
       "default": "./dist/adapters/remote/supabase.js"
+    },
+    "./convex": {
+      "types": "./dist/adapters/remote/convex.d.ts",
+      "import": "./dist/adapters/remote/convex.js",
+      "default": "./dist/adapters/remote/convex.js"
+    },
+    "./firebase": {
+      "types": "./dist/adapters/remote/firestore.d.ts",
+      "import": "./dist/adapters/remote/firestore.js",
+      "default": "./dist/adapters/remote/firestore.js"
     },
     "./expo-sqlite": {
       "types": "./dist/adapters/local/expo-sqlite.d.ts",
@@ -73,11 +83,23 @@
     "@op-engineering/op-sqlite": "^0.1.0",
     "@supabase/supabase-js": "^2.0.0",
     "better-sqlite3": "^8.0.0",
+    "convex": ">=1.0.0",
     "expo-sqlite": "^57.0.0",
+    "firebase": ">=9.0.0",
+    "react": ">=18.0.0",
     "sql.js": "^1.8.0"
   },
   "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
     "@supabase/supabase-js": {
+      "optional": true
+    },
+    "convex": {
+      "optional": true
+    },
+    "firebase": {
       "optional": true
     },
     "expo-sqlite": {

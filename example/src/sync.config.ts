@@ -1,44 +1,50 @@
-import { defineSyncConfig, createSyncClient, LocalFirstClient } from 'outbox-sync/config';
+import { defineSyncConfig, createSyncClient, LocalFirstClient } from 'local-lite/config';
 import * as SQLite from 'expo-sqlite';
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
 /**
- * Basic Outbox-Sync Configuration
+ * Rental Property Management local-lite Configuration
  *
- * All settings (local SQLite database, migrations, synced tables, and Supabase credentials)
- * are declared here in one place.
+ * Connected directly to Supabase cloud with Realtime replication enabled.
  */
 export const syncConfig = defineSyncConfig({
-  // Open or resolve the local SQLite database
-  database: () => SQLite.openDatabaseAsync('local_first_example.db'),
+  // Open local SQLite database
+  database: () => SQLite.openDatabaseAsync('rental_property_manager.db'),
 
-  // Tables to synchronize across devices
+  // Tables synchronized bidirectionally between SQLite and Supabase
   tables: ['properties', 'tenants', 'maintenance_requests', 'payments'],
 
-  // Automatic schema management: tables and columns are created on the fly with zero migrations!
+  // Dynamic schema management: tables and columns are created on the fly in SQLite
   autoSchema: true,
 
-  // Supabase backend configuration (reads from env vars or strings)
+  // Supabase backend configuration
   supabase: {
-    url: process.env.EXPO_PUBLIC_SUPABASE_URL || '',
-    anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
-    deletedColumn: 'deleted', // Uses deleted: true soft deletes
+    url: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    updatedAtColumn: 'updated_at',
+    deletedColumn: 'deleted',
+    deletedValue: true,
+    channelName: 'rental_property_sync',
   },
 
-  // Use in-memory simulated remote if Supabase URL is empty
-  inMemoryRemote: true,
+  // Disable in-memory mock remote: syncs with live Supabase cloud
+  inMemoryRemote: false,
 
-  // Conflict resolution strategy
+  // Conflict resolution strategy: latest write wins
   conflictResolver: 'last-write-wins',
 
-  // Sync heartbeat intervals
-  pushIntervalMs: 4000,
-  pullIntervalMs: 8000,
+  // Sync intervals
+  pushIntervalMs: 3000,
+  pullIntervalMs: 6000,
 });
 
 let clientPromise: Promise<LocalFirstClient> | null = null;
 
 export function getSyncClient(): Promise<LocalFirstClient> {
   if (!clientPromise) {
+    console.log(`Initializing client with Supabase...`);
     clientPromise = createSyncClient(syncConfig);
   }
   return clientPromise;

@@ -1,5 +1,5 @@
 -- ==============================================================================
--- outbox-sync Production Supabase Setup Script (deleted: true Soft Deletes)
+-- local-lite Production Supabase Setup Script (deleted: true Soft Deletes)
 --
 -- Run this in your Supabase SQL Editor (Dashboard -> SQL Editor).
 -- Uses standard `deleted = true` soft deletes for reliable offline-first sync.

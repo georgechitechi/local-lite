@@ -1,6 +1,13 @@
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { RemoteDBAdapter } from './index.js';
 import { DeltaChange, DeltaChanges, SyncOp, SyncOperation } from '../../core/types.js';
+import {
+  SyncLogger,
+  CustomLogger,
+  LogLevel,
+  defaultLogger,
+  formatSupabaseError,
+} from '../../utils/logger.js';
 
 export interface SupabaseAdapterOptions {
   /**
@@ -55,6 +62,16 @@ export interface SupabaseAdapterOptions {
    * Default: 'local_first_sync'
    */
   channelName?: string;
+
+  /**
+   * Custom logger or false to silence logs in production.
+   */
+  logger?: SyncLogger | CustomLogger | boolean;
+
+  /**
+   * Minimum log level. Default: 'info'
+   */
+  logLevel?: LogLevel;
 }
 
 export class SupabaseRemoteAdapter implements RemoteDBAdapter {
@@ -68,6 +85,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private schema: string;
   private channelName: string;
   private activeChannel?: RealtimeChannel;
+  public logger: SyncLogger;
 
   constructor(client: SupabaseClient, options: SupabaseAdapterOptions = {}) {
     this.client = client;
@@ -79,6 +97,16 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.pushRpcName = options.pushRpcName;
     this.schema = options.schema ?? 'public';
     this.channelName = options.channelName ?? 'local_first_sync';
+
+    if (options.logger instanceof SyncLogger) {
+      this.logger = options.logger;
+    } else if (typeof options.logger === 'boolean') {
+      this.logger = new SyncLogger({ enabled: options.logger, level: options.logLevel });
+    } else if (options.logger && typeof options.logger === 'object') {
+      this.logger = new SyncLogger({ customLogger: options.logger, level: options.logLevel });
+    } else {
+      this.logger = options.logLevel ? new SyncLogger({ level: options.logLevel }) : defaultLogger;
+    }
   }
 
   /**
@@ -110,7 +138,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       });
 
       if (error) {
-        console.error('Supabase batch push RPC error:', error);
+        this.logger.error(formatSupabaseError(error, { operation: 'batch_rpc' }));
         return false;
       }
       return true;
@@ -135,11 +163,48 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             .eq(this.primaryKey, op.rowId);
 
           if (error) {
-            console.error(`Supabase delete error on ${op.tableName}:`, error);
+            this.logger.error(formatSupabaseError(error, { table: op.tableName, operation: 'DELETE' }));
             return false;
           }
+        } else if (op.operation === 'UPDATE') {
+          // Partial UPDATE on existing record: only updates the modified columns to respect NOT NULL constraints
+          const patch: Record<string, any> = {
+            ...(op.payload || {}),
+            [this.deletedColumn]: false,
+          };
+
+          if (this.updatedAtColumn) {
+            patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
+          }
+
+          const { error, data } = await this.client
+            .from(op.tableName)
+            .update(patch)
+            .eq(this.primaryKey, op.rowId)
+            .select(this.primaryKey);
+
+          if (error) {
+            this.logger.error(formatSupabaseError(error, { table: op.tableName, operation: 'UPDATE' }));
+            return false;
+          }
+
+          // If row did not exist remotely (e.g. created & modified offline), fallback to upsert
+          if (!data || data.length === 0) {
+            const rowData = {
+              ...patch,
+              [this.primaryKey]: op.rowId,
+            };
+            const { error: upsertErr } = await this.client
+              .from(op.tableName)
+              .upsert(rowData);
+
+            if (upsertErr) {
+              this.logger.error(formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' }));
+              return false;
+            }
+          }
         } else {
-          // INSERT or UPDATE -> upsert into table with deleted: false
+          // INSERT -> upsert into table with deleted: false
           const rowData = {
             ...(op.payload || {}),
             [this.primaryKey]: op.rowId,
@@ -155,12 +220,12 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             .upsert(rowData);
 
           if (error) {
-            console.error(`Supabase upsert error on ${op.tableName}:`, error);
+            this.logger.error(formatSupabaseError(error, { table: op.tableName, operation: 'INSERT' }));
             return false;
           }
         }
       } catch (err) {
-        console.error(`Unexpected error syncing operation to ${op.tableName}:`, err);
+        this.logger.error(formatSupabaseError(err, { table: op.tableName, operation: op.operation }));
         return false;
       }
     }
@@ -193,18 +258,13 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
         const { data, error } = await query;
         if (error) {
-          console.error(`Supabase fetchChanges error on ${table}:`, error);
+          this.logger.error(formatSupabaseError(error, { table, operation: 'PULL' }));
           continue;
         }
 
         if (data && Array.isArray(data)) {
           for (const row of data) {
-            const isSoftDeleted = Boolean(
-              row[this.deletedColumn] === true ||
-              row[this.deletedColumn] === 1 ||
-              (row[this.deletedColumn] &&
-                !['false', '0', 'null', 'undefined'].includes(String(row[this.deletedColumn]).toLowerCase()))
-            );
+            const isSoftDeleted = this.isSoftDeleted(row);
 
             const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
             const rowTime = row[this.updatedAtColumn]
@@ -225,7 +285,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           }
         }
       } catch (err) {
-        console.error(`Unexpected error fetching changes from ${table}:`, err);
+        this.logger.error(formatSupabaseError(err, { table, operation: 'PULL' }));
       }
     }
 
@@ -233,6 +293,19 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       timestamp: changes.length > 0 ? maxServerTimestamp : sinceTimestamp,
       changes,
     };
+  }
+
+  /**
+   * Helper to determine if a record represents a soft delete.
+   */
+  private isSoftDeleted(record: Record<string, any> | null | undefined): boolean {
+    if (!record) return false;
+    const val = record[this.deletedColumn];
+    if (val === true || val === 1) return true;
+    if (val && !['false', '0', 'null', 'undefined'].includes(String(val).toLowerCase())) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -262,14 +335,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           const record = op === 'DELETE' ? payload.old : payload.new;
           if (!record) return;
 
-          const isSoftDeleted =
-            op !== 'DELETE' &&
-            Boolean(
-              record[this.deletedColumn] === true ||
-              record[this.deletedColumn] === 1 ||
-              (record[this.deletedColumn] &&
-                !['false', '0', 'null', 'undefined'].includes(String(record[this.deletedColumn]).toLowerCase()))
-            );
+          const isSoftDeleted = op !== 'DELETE' && this.isSoftDeleted(record);
 
           const finalOp: SyncOp = isSoftDeleted ? 'DELETE' : op;
           const rowId = String(record[this.primaryKey]);

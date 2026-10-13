@@ -1,8 +1,20 @@
-# ⚡ outbox-sync
+# ⚡ local-lite
 
 A lightweight, vendor-agnostic **local-first synchronization engine** for React Native, Expo, and Web applications.
 
-Built around the **Transactional Outbox Pattern**, `outbox-sync` ensures instant, zero-latency local writes in SQLite while guaranteeing offline resilience and asynchronous synchronization with your backend (including native **Supabase** support).
+Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant, zero-latency local writes in SQLite while guaranteeing offline resilience and asynchronous synchronization with your backend (including native **Supabase**, **Convex**, and **Firebase / Firestore** support).
+
+---
+
+## 📖 Documentation
+
+* **[Quickstart & Setup](docs/getting-started.md)** - 5-minute setup with Expo, React Native, or Node.js
+* **[Architecture](docs/architecture.md)** - Transactional outbox pattern, SyncWorker loops, and event pipeline
+* **[Configuration Reference](docs/configuration.md)** - Options for `defineSyncConfig()`, retries, and loggers
+* **[Local SQLite Adapters](docs/adapters-local.md)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
+* **[Remote Cloud Adapters](docs/adapters-remote.md)** - Supabase, Convex, Cloud Firestore, and custom adapters
+* **[React & Expo Hooks](docs/react-hooks.md)** - `useLiveQuery()` and `useOutboxStatus()`
+* **[Conflict Resolution](docs/conflict-resolution.md)** - LWW, Client-Wins, Server-Wins, and custom resolvers
 
 ---
 
@@ -10,7 +22,7 @@ Built around the **Transactional Outbox Pattern**, `outbox-sync` ensures instant
 
 * **⚡ 0ms Optimistic Writes:** Write to local SQLite immediately via atomic dual-write (`client.mutate()`).
 * **📦 Transactional Outbox:** Mutations are stored atomically in a local `sync_outbox` table, preventing data loss if the app closes or loses connectivity mid-write.
-* **🌐 Native Supabase Adapter:** First-class sync with Postgres tables using Supabase upserts, delta timestamp queries, and Realtime Channels.
+* **🌐 Native Cloud Adapters:** First-class sync with Postgres tables (via **Supabase**), reactive document datastores (via **Convex**), and document collections (via **Firebase / Firestore**).
 * **🛡️ Conflict Resolution:** Built-in strategies including **Last-Write-Wins (LWW)**, Server-Wins, Client-Wins, or custom resolver functions.
 * **📶 Network-Aware:** Automatically pauses polling when offline and triggers immediate sync flushes the instant connectivity is restored.
 * **🔄 Infinite-Loop Safe:** Incoming remote deltas update local tables and fire reactive UI listeners without echoing back into the outbox.
@@ -20,7 +32,7 @@ Built around the **Transactional Outbox Pattern**, `outbox-sync` ensures instant
 ## Installation
 
 ```bash
-npm install outbox-sync
+npm install local-lite
 ```
 
 Peer dependencies (install what you use):
@@ -31,25 +43,28 @@ npx expo install expo-sqlite @react-native-community/netinfo
 
 # If syncing with Supabase
 npm install @supabase/supabase-js
+
+# If syncing with Convex
+npm install convex
+
+# If syncing with Firebase / Firestore
+npm install firebase # or @react-native-firebase/firestore
 ```
 
 ---
 
 ### 1. Define your Configuration (`sync.config.ts`)
 
+#### Option A: With Supabase
+
 ```typescript
 // sync.config.ts
-import { defineSyncConfig, createSyncClient } from 'outbox-sync';
+import { defineSyncConfig, createSyncClient } from 'local-lite';
 import * as SQLite from 'expo-sqlite';
 
 export const syncConfig = defineSyncConfig({
-  // Open SQLite database
   database: () => SQLite.openDatabaseAsync('app.db'),
-
-  // Tables to sync
-  tables: ['todos', 'notes', 'tags'],
-
-  // Automatic schema: creates tables & alters columns on the fly (no migrations needed!)
+  tables: ['todos', 'notes'],
   autoSchema: true,
 
   // Supabase backend configuration
@@ -58,21 +73,81 @@ export const syncConfig = defineSyncConfig({
     anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY',
   },
 
-  // Use in-memory simulated remote if credentials are empty
-  inMemoryRemote: true,
-
-  // Conflict handling strategy
   conflictResolver: 'last-write-wins',
 });
 
-// Singleton client instance
 export const client = await createSyncClient(syncConfig);
 ```
+
+#### Option B: With Convex
+
+```typescript
+// sync.config.ts
+import { defineSyncConfig, createSyncClient } from 'local-lite';
+import { ConvexClient } from 'convex/browser';
+import * as SQLite from 'expo-sqlite';
+
+const convexClient = new ConvexClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
+
+export const syncConfig = defineSyncConfig({
+  database: () => SQLite.openDatabaseAsync('app.db'),
+  tables: ['properties', 'tenants'],
+  autoSchema: true,
+
+  // Convex backend configuration
+  convex: {
+    client: convexClient,
+    pushMutation: 'sync:pushBatch', // Or api.sync.pushBatch
+    pullQuery: 'sync:pullDeltas',   // Or api.sync.pullDeltas
+    deletedColumn: 'deleted',
+    updatedAtColumn: 'updatedAt',
+  },
+
+  conflictResolver: 'last-write-wins',
+});
+
+export const client = await createSyncClient(syncConfig);
+```
+
+#### Option C: With Firebase / Cloud Firestore
+
+```typescript
+// sync.config.ts
+import { defineSyncConfig, createSyncClient } from 'local-lite';
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import * as SQLite from 'expo-sqlite';
+
+const app = initializeApp({
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+});
+const db = getFirestore(app);
+
+export const syncConfig = defineSyncConfig({
+  database: () => SQLite.openDatabaseAsync('app.db'),
+  tables: ['properties', 'tenants'],
+  autoSchema: true,
+
+  // Firebase Firestore backend configuration
+  firebase: {
+    firestore: db,                // Modular Firestore or @react-native-firebase/firestore
+    updatedAtColumn: 'updatedAt', // Timestamp field used for delta sync
+    deletedColumn: 'deleted',     // Soft delete flag
+  },
+
+  conflictResolver: 'last-write-wins',
+});
+
+export const client = await createSyncClient(syncConfig);
+```
+
+---
 
 ### 2. Use in React Native / Expo UI
 
 ```tsx
-import { useLiveQuery, useOutboxStatus } from 'outbox-sync';
+import { useLiveQuery, useOutboxStatus } from 'local-lite';
 import { client } from './sync.config';
 
 export function TodoScreen() {
@@ -85,7 +160,6 @@ export function TodoScreen() {
   const { pendingCount } = useOutboxStatus(client);
 
   const addTodo = async (title: string) => {
-    // 0ms instant local write + queues outbox background sync
     await client.insert('todos', {
       title,
       completed: 0,
@@ -147,52 +221,94 @@ FOR EACH ROW EXECUTE FUNCTION public.set_sync_updated_at();
 ALTER PUBLICATION supabase_realtime ADD TABLE public.todos;
 ```
 
-### Why this schema?
-* **Zero Client Clock Skew:** `updated_at` is managed entirely by PostgreSQL `now()` on the server via trigger, making synchronization immune to incorrect client device clocks.
-* **`deleted: true` Soft Deletes:** When an item is deleted via `client.delete('todos', id)`, `outbox-sync` sets `deleted = true` on the server and updates `updated_at`. When other clients pull changes, rows marked `deleted: true` are purged from local SQLite.
-* **Fast Delta Pulls:** The index on `updated_at` ensures `SELECT * FROM table WHERE updated_at > :cursor` executes as a sub-millisecond index scan.
+---
+
+## Convex Backend Setup & Functions
+
+In Convex, create a sync module (e.g., `convex/sync.ts`):
+
+```typescript
+// convex/sync.ts
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+
+// 1. Push batch mutation from outbox
+export const pushBatch = mutation({
+  args: {
+    operations: v.array(
+      v.object({
+        id: v.string(),
+        tableName: v.string(),
+        rowId: v.string(),
+        operation: v.string(),
+        payload: v.any(),
+        timestamp: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    for (const op of args.operations) {
+      const table = op.tableName;
+      const existing = await ctx.db
+        .query(table as any)
+        .filter((q) => q.eq(q.field("id"), op.rowId))
+        .first();
+
+      if (op.operation === "DELETE") {
+        if (existing) {
+          await ctx.db.patch(existing._id, { deleted: true, updatedAt: now });
+        }
+      } else {
+        const doc = { ...(op.payload || {}), id: op.rowId, deleted: false, updatedAt: now };
+        if (existing) {
+          await ctx.db.patch(existing._id, doc);
+        } else {
+          await ctx.db.insert(table as any, doc);
+        }
+      }
+    }
+    return true;
+  },
+});
+
+// 2. Pull deltas query since timestamp cursor
+export const pullDeltas = query({
+  args: {
+    sinceTimestamp: v.number(),
+    tables: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const results: any[] = [];
+    for (const table of args.tables) {
+      const docs = await ctx.db
+        .query(table as any)
+        .filter((q) => q.gt(q.field("updatedAt"), args.sinceTimestamp))
+        .collect();
+
+      for (const d of docs) {
+        results.push({ ...d, tableName: table });
+      }
+    }
+    return results;
+  },
+});
+```
 
 ---
 
 ## Supported SQLite Drivers
 
-`outbox-sync` is fully driver-agnostic and auto-detects your SQLite instance directly:
+`local-lite` is fully driver-agnostic and auto-detects your SQLite instance directly:
 
 | Platform | Recommended Driver | Auto-Detected or Subpath Import |
 | :--- | :--- | :--- |
 | **Expo (iOS/Android/Web)** | `expo-sqlite` | `database: () => SQLite.openDatabaseAsync('app.db')` |
-| **Bare React Native** | `@op-engineering/op-sqlite` | `outbox-sync/op-sqlite` |
-| **Node.js / Electron / Desktop** | `better-sqlite3` | `outbox-sync/better-sqlite3` |
-| **Edge / Server / Turso** | `@libsql/client` (LibSQL) | `outbox-sync/libsql` |
-| **Web Browser / PWAs** | `sql.js` (WebAssembly) | `outbox-sync/sql-js` |
-| **Node.js 22+ (Built-in)** | `node:sqlite` (DatabaseSync) | `outbox-sync/node-sqlite` |
-
-```ts
-// 1. Bare React Native (@op-engineering/op-sqlite)
-import { open } from '@op-engineering/op-sqlite';
-export const syncConfig = defineSyncConfig({
-  database: open({ name: 'app.db' }), // Auto-detected!
-  tables: ['todos'],
-  autoSchema: true,
-});
-
-// 2. Turso / Edge (@libsql/client)
-import { createClient } from '@libsql/client';
-export const syncConfig = defineSyncConfig({
-  database: createClient({ url: 'file:local.db' }), // Auto-detected!
-  tables: ['todos'],
-  autoSchema: true,
-});
-
-// 3. Web Browsers (sql.js WASM)
-import initSqlJs from 'sql.js';
-const SQL = await initSqlJs();
-export const syncConfig = defineSyncConfig({
-  database: new SQL.Database(), // Auto-detected!
-  tables: ['todos'],
-  autoSchema: true,
-});
-```
+| **Bare React Native** | `@op-engineering/op-sqlite` | `local-lite/op-sqlite` |
+| **Node.js / Electron / Desktop** | `better-sqlite3` | `local-lite/better-sqlite3` |
+| **Edge / Server / Turso** | `@libsql/client` (LibSQL) | `local-lite/libsql` |
+| **Web Browser / PWAs** | `sql.js` (WebAssembly) | `local-lite/sql-js` |
+| **Node.js 22+ (Built-in)** | `node:sqlite` (DatabaseSync) | `local-lite/node-sqlite` |
 
 ---
 
@@ -210,7 +326,7 @@ sync_outbox (Pending queue)                 EventEmitter (UI refresh)
     ▼ (Immediate / Debounced / Network-Aware)
 SyncWorker
     │
-    ├──► pushChanges() ──► Remote Backend (Supabase / REST / WebSocket)
+    ├──► pushChanges() ──► Remote Backend (Supabase / Convex / Firebase / Custom)
     │
     └──◄ fetchChanges() ◄── Remote Deltas (Merged via Conflict Resolver)
 ```
@@ -220,6 +336,7 @@ SyncWorker
 ## Example App
 
 An interactive Expo app is included in the [`example/`](./example) directory demonstrating:
+- Rental property & tenant management application
 - Live SQLite reads and atomic dual-writes
 - Network online/offline toggle simulation
 - Real-time `sync_outbox` inspector
@@ -235,7 +352,7 @@ npm start
 
 ## Testing
 
-Run the test suite:
+Run the Vitest test suite:
 ```bash
 npm test
 ```

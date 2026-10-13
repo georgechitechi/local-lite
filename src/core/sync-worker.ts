@@ -2,12 +2,18 @@ import { LocalDBAdapter } from '../adapters/local/index.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import {
+  ConflictEvent,
   ConflictResolver,
   ConflictStrategy,
   DeltaChanges,
   NetworkStatusProvider,
   OutboxRecord,
+  PullEvent,
+  PushEvent,
+  RetryConfig,
+  SyncMetrics,
   SyncOperation,
+  SyncStatusEvent,
 } from './types.js';
 import { getConflictResolver } from './conflict.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
@@ -15,11 +21,15 @@ import { OutboxStore } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
 import { TableManager } from './table-manager.js';
 import { SchemaManager } from './schema-manager.js';
+import { SyncLogger, CustomLogger, LogLevel, defaultLogger } from '../utils/logger.js';
 
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
   maxRetries?: number;
+  retry?: number | RetryConfig;
+  logger?: SyncLogger | CustomLogger | boolean;
+  logLevel?: LogLevel;
   conflictResolver?: ConflictStrategy | ConflictResolver;
   network?: NetworkStatusProvider;
   primaryKey?: string;
@@ -36,6 +46,8 @@ export class SyncWorker {
   private primaryKey: string;
   private autoSchema: boolean;
   private schemaManager?: SchemaManager;
+  public logger: SyncLogger;
+  public retryConfig: RetryConfig;
 
   private pushIntervalMs: number;
   private pullIntervalMs: number;
@@ -50,6 +62,19 @@ export class SyncWorker {
   private isPulling = false;
   private lastPulledTimestamp = 0;
   private cursorLoaded = false;
+  private deltaQueue: Promise<void> = Promise.resolve();
+
+  // Telemetry metrics
+  private totalPushedOperations = 0;
+  private totalPulledDeltas = 0;
+  private totalPushCycles = 0;
+  private totalPullCycles = 0;
+  private lastPushDurationMs = 0;
+  private lastPullDurationMs = 0;
+  private lastPushTimestamp = 0;
+  private lastPullTimestamp = 0;
+  private lastPushError: string | null = null;
+  private lastPullError: string | null = null;
 
   constructor(
     db: LocalDBAdapter,
@@ -67,7 +92,47 @@ export class SyncWorker {
     this.schemaManager = options.schemaManager;
     this.pushIntervalMs = options.pushIntervalMs ?? 5000;
     this.pullIntervalMs = options.pullIntervalMs ?? 10000;
-    this.maxRetries = options.maxRetries ?? 5;
+
+    // Configure logger
+    if (options.logger instanceof SyncLogger) {
+      this.logger = options.logger;
+    } else if (typeof options.logger === 'boolean') {
+      this.logger = new SyncLogger({ enabled: options.logger, level: options.logLevel });
+    } else if (options.logger && typeof options.logger === 'object') {
+      this.logger = new SyncLogger({ customLogger: options.logger, level: options.logLevel });
+    } else {
+      this.logger = options.logLevel ? new SyncLogger({ level: options.logLevel }) : defaultLogger;
+    }
+
+    // Configure retries & backoff
+    const r = options.retry;
+    if (typeof r === 'number') {
+      this.retryConfig = {
+        maxRetries: r,
+        initialDelayMs: 1000,
+        backoffMultiplier: 1.5,
+        maxDelayMs: 30000,
+        jitter: true,
+      };
+    } else if (typeof r === 'object' && r !== null) {
+      this.retryConfig = {
+        maxRetries: r.maxRetries ?? options.maxRetries ?? 5,
+        initialDelayMs: r.initialDelayMs ?? 1000,
+        backoffMultiplier: r.backoffMultiplier ?? 1.5,
+        maxDelayMs: r.maxDelayMs ?? 30000,
+        jitter: r.jitter ?? true,
+        shouldRetry: r.shouldRetry,
+      };
+    } else {
+      this.retryConfig = {
+        maxRetries: options.maxRetries ?? 5,
+        initialDelayMs: 1000,
+        backoffMultiplier: 1.5,
+        maxDelayMs: 30000,
+        jitter: true,
+      };
+    }
+    this.maxRetries = this.retryConfig.maxRetries ?? 5;
   }
 
   /**
@@ -82,24 +147,27 @@ export class SyncWorker {
     // Subscribe to live remote changes
     this.remote.subscribeToLiveChanges((deltas) => {
       this.applyDeltasLocally(deltas).catch((err) => {
-        console.error('Error applying live remote deltas:', err);
+        this.logger.error('Error applying live remote deltas:', err);
       });
     });
 
     // Subscribe to network connectivity changes
     this.networkUnsubscribe = this.network.subscribe((online) => {
+      this.emitStatus();
       if (online) {
         this.schedulePush(0);
         this.pullRemoteChanges().catch((err) => {
-          console.error('Error pulling changes on reconnect:', err);
+          this.logger.error('Error pulling changes on reconnect:', err);
         });
       }
     });
 
     // Initial pull
     this.pullRemoteChanges().catch((err) => {
-      console.error('Initial pull failed:', err);
+      this.logger.error('Initial pull failed:', err);
     });
+
+    this.emitStatus();
   }
 
   /**
@@ -134,7 +202,7 @@ export class SyncWorker {
     this.pushDebounceTimer = setTimeout(() => {
       this.pushDebounceTimer = undefined;
       this.pushLocalChanges().catch((err) => {
-        console.error('Debounced push failed:', err);
+        this.logger.error('Debounced push failed:', err);
       });
     }, delayMs);
   }
@@ -147,6 +215,22 @@ export class SyncWorker {
     }
   }
 
+  private async emitStatus(): Promise<void> {
+    try {
+      const online = await this.isOnline();
+      const counts = await OutboxStore.getCounts(this.db);
+      const statusEvent: SyncStatusEvent = {
+        isOnline: online,
+        isPushing: this.isPushing,
+        isPulling: this.isPulling,
+        pendingCount: counts.pending,
+      };
+      this.events.emit('sync:status', statusEvent);
+    } catch {
+      // Ignored
+    }
+  }
+
   /**
    * Pushes pending outbox records to the remote database.
    */
@@ -155,9 +239,12 @@ export class SyncWorker {
     if (!(await this.isOnline())) return;
 
     this.isPushing = true;
+    this.emitStatus();
+    const startTime = Date.now();
     let pendingRecords: OutboxRecord[] = [];
 
     try {
+      this.totalPushCycles++;
       pendingRecords = await OutboxStore.getPending(this.db, this.maxRetries);
 
       if (pendingRecords.length === 0) {
@@ -179,31 +266,100 @@ export class SyncWorker {
       await OutboxStore.markProcessing(this.db, recordIds);
 
       const success = await this.remote.pushChanges(operations);
+      const durationMs = Date.now() - startTime;
+      this.lastPushDurationMs = durationMs;
+      this.lastPushTimestamp = Date.now();
 
       if (success) {
         // Successful push: delete rows from outbox
         await OutboxStore.deleteCompleted(this.db, recordIds);
+        this.totalPushedOperations += operations.length;
+        this.lastPushError = null;
+
+        const pushEvent: PushEvent = {
+          success: true,
+          count: operations.length,
+          durationMs,
+          error: null,
+        };
+        this.events.emit('sync:push', pushEvent);
         this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'batch' });
       } else {
-        await this.handlePushFailure(recordIds, 'Remote push returned false');
+        const errMsg = 'Remote push returned false';
+        this.lastPushError = errMsg;
+        const pushEvent: PushEvent = {
+          success: false,
+          count: operations.length,
+          durationMs,
+          error: errMsg,
+        };
+        this.events.emit('sync:push', pushEvent);
+        await this.handlePushFailure(pendingRecords, errMsg);
       }
     } catch (error: any) {
-      console.error('Sync Engine Outbox Push Error:', error);
+      const durationMs = Date.now() - startTime;
+      this.lastPushDurationMs = durationMs;
+      this.lastPushTimestamp = Date.now();
+      const errMsg = error?.message || String(error);
+      this.lastPushError = errMsg;
+
+      this.logger.error('Sync Engine Outbox Push Error:', error);
+      const pushEvent: PushEvent = {
+        success: false,
+        count: pendingRecords.length,
+        durationMs,
+        error: errMsg,
+      };
+      this.events.emit('sync:push', pushEvent);
+
       if (pendingRecords.length > 0) {
-        const recordIds = pendingRecords.map((r) => r.id);
-        await this.handlePushFailure(recordIds, error?.message || String(error));
+        await this.handlePushFailure(pendingRecords, errMsg, error);
       }
     } finally {
       this.isPushing = false;
+      this.emitStatus();
     }
   }
 
-  private async handlePushFailure(recordIds: string[], errorMessage: string): Promise<void> {
+  private async handlePushFailure(
+    records: OutboxRecord[],
+    errorMessage: string,
+    errorObj?: any
+  ): Promise<void> {
     try {
+      const recordIds = records.map((r) => r.id);
       await OutboxStore.markFailed(this.db, recordIds, errorMessage);
       this.events.emit('sync_outbox', { operation: 'UPDATE', rowId: 'batch' });
+
+      // If custom shouldRetry filter specifies an operation should NOT be retried, mark it FAILED permanently
+      if (this.retryConfig.shouldRetry && errorObj) {
+        for (const rec of records) {
+          if (!this.retryConfig.shouldRetry(errorObj, rec)) {
+            await OutboxStore.markFailed(this.db, [rec.id], `Non-retryable error: ${errorMessage}`);
+          }
+        }
+      }
+
+      // Schedule next retry with exponential backoff & optional jitter
+      const currentRetry = Math.max(...records.map((r) => r.retryCount || 0));
+      const isInfinite = !Number.isFinite(this.maxRetries) || this.maxRetries === -1;
+      if (isInfinite || currentRetry < this.maxRetries) {
+        let backoffDelay = Math.min(
+          (this.retryConfig.initialDelayMs || 1000) *
+            Math.pow(this.retryConfig.backoffMultiplier || 1.5, currentRetry),
+          this.retryConfig.maxDelayMs || 30000
+        );
+
+        // Apply ±15% jitter if enabled to avoid synchronized retry stampedes
+        if (this.retryConfig.jitter !== false) {
+          const jitterFactor = 0.85 + Math.random() * 0.3;
+          backoffDelay = Math.round(backoffDelay * jitterFactor);
+        }
+
+        this.schedulePush(backoffDelay);
+      }
     } catch (err) {
-      console.error('Failed to update outbox failure status:', err);
+      this.logger.error('Failed to update outbox failure status:', err);
     }
   }
 
@@ -215,27 +371,73 @@ export class SyncWorker {
     if (!(await this.isOnline())) return;
 
     this.isPulling = true;
+    this.emitStatus();
+    const startTime = Date.now();
+
     try {
+      this.totalPullCycles++;
       if (!this.cursorLoaded) {
         this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db);
         this.cursorLoaded = true;
       }
 
       const deltas = await this.remote.fetchChanges(this.lastPulledTimestamp);
+      const durationMs = Date.now() - startTime;
+      this.lastPullDurationMs = durationMs;
+      this.lastPullTimestamp = Date.now();
+      this.lastPullError = null;
+
+      const changesCount = deltas?.changes?.length || 0;
       if (deltas) {
+        this.totalPulledDeltas += changesCount;
         await this.applyDeltasLocally(deltas);
       }
-    } catch (error) {
-      console.error('Sync Engine Delta Pull Error:', error);
+
+      const pullEvent: PullEvent = {
+        success: true,
+        changesCount,
+        durationMs,
+        timestamp: this.lastPulledTimestamp,
+        error: null,
+      };
+      this.events.emit('sync:pull', pullEvent);
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime;
+      this.lastPullDurationMs = durationMs;
+      this.lastPullTimestamp = Date.now();
+      const errMsg = error?.message || String(error);
+      this.lastPullError = errMsg;
+
+      this.logger.error('Sync Engine Delta Pull Error:', error);
+      const pullEvent: PullEvent = {
+        success: false,
+        changesCount: 0,
+        durationMs,
+        timestamp: this.lastPulledTimestamp,
+        error: errMsg,
+      };
+      this.events.emit('sync:pull', pullEvent);
     } finally {
       this.isPulling = false;
+      this.emitStatus();
     }
   }
 
   /**
    * Applies incoming server delta changes to local tables with conflict resolution.
+   * Serializes execution in a queue to prevent concurrent SQLite transactions.
    */
   async applyDeltasLocally(deltas: DeltaChanges): Promise<void> {
+    const task = async () => {
+      await this.processDeltasLocally(deltas);
+    };
+
+    const next = this.deltaQueue.then(task, task);
+    this.deltaQueue = next.catch(() => {});
+    return await next;
+  }
+
+  private async processDeltasLocally(deltas: DeltaChanges): Promise<void> {
     if (!deltas.changes || deltas.changes.length === 0) {
       if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
         this.lastPulledTimestamp = deltas.timestamp;
@@ -273,6 +475,15 @@ export class SyncWorker {
               localRow,
             })
           );
+
+          const resolutionStr = typeof resolution === 'string' ? resolution : 'merge';
+          const conflictEvent: ConflictEvent = {
+            tableName: change.tableName,
+            rowId: change.rowId,
+            resolution: resolutionStr,
+            timestamp: Date.now(),
+          };
+          this.events.emit('sync:conflict', conflictEvent);
 
           if (resolution === 'keep-local') {
             // Local offline change takes precedence
@@ -332,5 +543,31 @@ export class SyncWorker {
     await MetaStore.clearLastSyncedAt(this.db);
     this.lastPulledTimestamp = 0;
     this.cursorLoaded = true;
+  }
+
+  /**
+   * Collects real-time engine telemetry snapshot.
+   */
+  async getMetrics(): Promise<SyncMetrics> {
+    const counts = await OutboxStore.getCounts(this.db);
+    const online = await this.isOnline();
+    return {
+      outboxPendingCount: counts.pending,
+      outboxFailedCount: counts.failed,
+      outboxProcessingCount: counts.processing,
+      totalPushedOperations: this.totalPushedOperations,
+      totalPulledDeltas: this.totalPulledDeltas,
+      totalPushCycles: this.totalPushCycles,
+      totalPullCycles: this.totalPullCycles,
+      lastPushDurationMs: this.lastPushDurationMs,
+      lastPullDurationMs: this.lastPullDurationMs,
+      lastPushTimestamp: this.lastPushTimestamp,
+      lastPullTimestamp: this.lastPullTimestamp,
+      lastPushError: this.lastPushError,
+      lastPullError: this.lastPullError,
+      isOnline: online,
+      isPushing: this.isPushing,
+      isPulling: this.isPulling,
+    };
   }
 }

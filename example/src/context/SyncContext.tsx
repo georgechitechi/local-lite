@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { LocalFirstClient } from 'outbox-sync';
-import { useOutboxStatus } from 'outbox-sync/react';
+import { LocalFirstClient } from 'local-lite';
+import { useOutboxStatus } from 'local-lite/react';
 import { getSyncClient } from '../sync.config';
-import { seedRentalPortfolio, clearRentalPortfolio } from '../data/seeder';
+import { clearRentalPortfolio } from '../data/seeder';
 
 interface SyncContextType {
   client: LocalFirstClient | null;
@@ -14,7 +14,6 @@ interface SyncContextType {
   refreshOutbox: () => Promise<void>;
   statusMessage: string;
   setStatusMessage: (msg: string) => void;
-  seedDemoData: () => Promise<void>;
   clearDemoData: () => Promise<void>;
   forceResync: () => Promise<void>;
 }
@@ -33,7 +32,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       .then((c) => {
         if (mounted) {
           setClient(c);
-          setStatusMessage('✅ PropFlow Local-First Engine active! 0ms SQLite transactions.');
+          setStatusMessage('✅ PropFlow connected to Supabase Realtime! SQLite transactions.');
           updateCursor(c);
         }
       })
@@ -95,19 +94,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const seedDemoData = async () => {
-    if (!client) return;
-    setStatusMessage('⚡ Seeding rental portfolio with demo units, tenants, tickets & invoices...');
-    try {
-      const stats = await seedRentalPortfolio(client);
-      setStatusMessage(
-        `🎉 Seeded ${stats.propertiesCount} units, ${stats.tenantsCount} tenants, ${stats.maintenanceCount} tickets & ${stats.paymentsCount} invoices!`
-      );
-    } catch (err: any) {
-      setStatusMessage(`Error seeding data: ${err.message}`);
-    }
-  };
-
   const clearDemoData = async () => {
     if (!client) return;
     try {
@@ -130,7 +116,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         refreshOutbox,
         statusMessage,
         setStatusMessage,
-        seedDemoData,
         clearDemoData,
         forceResync,
       }}

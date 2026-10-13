@@ -120,6 +120,48 @@ export class MockDB implements LocalDBAdapter {
       return [];
     }
 
+    // Select id from sync_outbox where status = 'FAILED'
+    if (lowerQ.startsWith('select') && lowerQ.includes('from sync_outbox') && lowerQ.includes("status = 'failed'")) {
+      const rows = Array.from(this.getTable('sync_outbox').values());
+      return rows.filter((r) => r.status === 'FAILED').map((r) => ({ id: r.id }));
+    }
+
+    // Reset sync_outbox status = 'PENDING'
+    if (normQ.includes("UPDATE sync_outbox SET status = 'PENDING'")) {
+      const rows = Array.from(this.getTable('sync_outbox').values());
+      for (const r of rows) {
+        if (params && params.length > 0) {
+          if (params.includes(r.id)) {
+            r.status = 'PENDING';
+            r.retry_count = 0;
+            r.last_error = null;
+          }
+        } else if (r.status === 'FAILED') {
+          r.status = 'PENDING';
+          r.retry_count = 0;
+          r.last_error = null;
+        }
+      }
+      return [];
+    }
+
+    // Delete failed records from sync_outbox
+    if (lowerQ.includes('delete from sync_outbox') && lowerQ.includes("status = 'failed'")) {
+      if (params && params.length > 0) {
+        for (const id of params) {
+          this.getTable('sync_outbox').delete(id);
+        }
+      } else {
+        const rows = Array.from(this.getTable('sync_outbox').values());
+        for (const r of rows) {
+          if (r.status === 'FAILED') {
+            this.getTable('sync_outbox').delete(r.id);
+          }
+        }
+      }
+      return [];
+    }
+
     // Update sync_outbox status = 'PROCESSING'
     if (q.includes("UPDATE sync_outbox SET status = 'PROCESSING'")) {
       for (const id of params) {
@@ -181,10 +223,20 @@ export class MockDB implements LocalDBAdapter {
   }
 
   async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
-    const tx: LocalTransaction = {
-      execute: (q: string, params?: any[]) => this.execute(q, params),
-    };
-    return await action(tx);
+    const snapshot = new Map<string, Map<string, any>>();
+    for (const [tName, map] of this.tables.entries()) {
+      snapshot.set(tName, new Map(Array.from(map.entries()).map(([k, v]) => [k, { ...v }])));
+    }
+
+    try {
+      const tx: LocalTransaction = {
+        execute: (q: string, params?: any[]) => this.execute(q, params),
+      };
+      return await action(tx);
+    } catch (err) {
+      this.tables = snapshot;
+      throw err;
+    }
   }
 
   getAll(table: string): any[] {

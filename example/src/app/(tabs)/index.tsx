@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLiveQuery } from 'outbox-sync/react';
+import { useLiveQuery } from 'local-lite/react';
 import { useSync } from '../../context/SyncContext';
 import { HeaderBar } from '../../components/HeaderBar';
 
@@ -26,8 +26,9 @@ export interface Property {
 }
 
 export default function PropertiesScreen() {
-  const { client, setStatusMessage, seedDemoData } = useSync();
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const { client, setStatusMessage } = useSync();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -51,26 +52,62 @@ export default function PropertiesScreen() {
   const occupancyRate =
     properties.length > 0 ? Math.round((occupiedCount / properties.length) * 100) : 0;
 
+  const handleOpenAdd = () => {
+    setEditingProperty(null);
+    setName('');
+    setUnit('');
+    setAddress('');
+    setRent('');
+    setBedrooms('2');
+    setBathrooms('1');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: Property) => {
+    setEditingProperty(item);
+    setName(item.name || '');
+    setUnit(item.unit || '');
+    setAddress(item.address || '');
+    setRent(item.rent ? String(item.rent) : '');
+    setBedrooms(item.bedrooms ? String(item.bedrooms) : '1');
+    setBathrooms(item.bathrooms ? String(item.bathrooms) : '1');
+    setIsModalOpen(true);
+  };
+
   const handleSave = async () => {
     if (!client || !name.trim() || !rent.trim()) return;
     const rentNum = parseFloat(rent) || 1200;
 
-    await client.insert('properties', {
-      name: name.trim(),
-      unit: unit.trim() || 'Unit 1',
-      address: address.trim() || 'Main St',
-      rent: rentNum,
-      status: 'Vacant',
-      bedrooms: parseInt(bedrooms, 10) || 1,
-      bathrooms: parseFloat(bathrooms) || 1,
-    });
+    if (editingProperty && editingProperty.id) {
+      await client.update('properties', editingProperty.id, {
+        name: name.trim(),
+        unit: unit.trim() || 'Unit 1',
+        address: address.trim() || 'Main St',
+        rent: rentNum,
+        status: editingProperty.status || 'Vacant',
+        bedrooms: parseInt(bedrooms, 10) || 1,
+        bathrooms: parseFloat(bathrooms) || 1,
+      });
+      setStatusMessage(`✏️ Updated property "${name.trim()}"`);
+    } else {
+      await client.insert('properties', {
+        name: name.trim(),
+        unit: unit.trim() || 'Unit 1',
+        address: address.trim() || 'Main St',
+        rent: rentNum,
+        status: 'Vacant',
+        bedrooms: parseInt(bedrooms, 10) || 1,
+        bathrooms: parseFloat(bathrooms) || 1,
+      });
+      setStatusMessage(`🏠 Created unit "${name.trim()}"`);
+    }
 
     setName('');
     setUnit('');
     setAddress('');
     setRent('');
-    setIsAddOpen(false);
-    setStatusMessage(`🏠 Created unit "${name}" (0ms local write)`);
+    setIsModalOpen(false);
+    setEditingProperty(null);
   };
 
   const handleToggleStatus = async (item: Property) => {
@@ -117,12 +154,7 @@ export default function PropertiesScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Rental Properties & Units</Text>
           <View style={styles.actionButtonsRow}>
-            {properties.length === 0 && (
-              <TouchableOpacity style={styles.seedBtn} onPress={seedDemoData}>
-                <Text style={styles.seedBtnText}>⚡ Seed Demo</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.addBtn} onPress={() => setIsAddOpen(true)}>
+            <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd}>
               <Text style={styles.addBtnText}>+ Add Unit</Text>
             </TouchableOpacity>
           </View>
@@ -133,15 +165,17 @@ export default function PropertiesScreen() {
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No properties yet</Text>
             <Text style={styles.emptyText}>
-              Add your first rental unit or seed demo data to test 0ms offline sync.
+              Add your first rental unit above to test offline sync.
             </Text>
-            <TouchableOpacity style={styles.seedPrimaryBtn} onPress={seedDemoData}>
-              <Text style={styles.seedPrimaryText}>🚀 Seed Demo Portfolio</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           properties.map((p) => (
-            <View key={p.id} style={styles.card}>
+            <TouchableOpacity
+              key={p.id}
+              style={styles.card}
+              onPress={() => handleOpenEdit(p)}
+              activeOpacity={0.85}
+            >
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleCol}>
                   <Text style={styles.cardTitle}>{p.name}</Text>
@@ -179,14 +213,23 @@ export default function PropertiesScreen() {
               </View>
 
               <View style={styles.cardActions}>
-                <TouchableOpacity
-                  style={styles.actionPill}
-                  onPress={() => handleToggleStatus(p)}
-                >
-                  <Text style={styles.actionPillText}>
-                    {p.status === 'Occupied' ? 'Mark Vacant' : 'Mark Occupied'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.actionPill}
+                    onPress={() => handleToggleStatus(p)}
+                  >
+                    <Text style={styles.actionPillText}>
+                      {p.status === 'Occupied' ? 'Mark Vacant' : 'Mark Occupied'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.editPill}
+                    onPress={() => handleOpenEdit(p)}
+                  >
+                    <Text style={styles.editPillText}>✏️ Edit</Text>
+                  </TouchableOpacity>
+                </View>
 
                 <TouchableOpacity
                   style={styles.deletePill}
@@ -195,16 +238,26 @@ export default function PropertiesScreen() {
                   <Text style={styles.deletePillText}>Delete</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
 
-      {/* Add Modal */}
-      <Modal visible={isAddOpen} transparent animationType="slide">
+      {/* Add / Edit Modal */}
+      <Modal visible={isModalOpen} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Add Rental Unit</Text>
+            <Text style={styles.modalTitle}>
+              {editingProperty ? 'Edit Rental Unit' : 'Add Rental Unit'}
+            </Text>
+
+            {editingProperty && (
+              <View style={styles.editingBadge}>
+                <Text style={styles.editingBadgeText}>
+                  ✏️ Editing Property{editingProperty.name ? ` • ${editingProperty.name}` : ''}
+                </Text>
+              </View>
+            )}
 
             <TextInput
               style={styles.input}
@@ -257,12 +310,14 @@ export default function PropertiesScreen() {
             <View style={styles.modalBtns}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => setIsAddOpen(false)}
+                onPress={() => setIsModalOpen(false)}
               >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveText}>Save Unit (0ms Write)</Text>
+                <Text style={styles.saveText}>
+                  {editingProperty ? 'Update Unit' : 'Save Unit'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -324,13 +379,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: '#F9FAFB', fontSize: 16, fontWeight: '700', marginBottom: 6 },
   emptyText: { color: '#9CA3AF', fontSize: 13, textAlign: 'center', marginBottom: 16 },
-  seedPrimaryBtn: {
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  seedPrimaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   card: {
     backgroundColor: '#111827',
     borderRadius: 14,
@@ -387,6 +435,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   actionPillText: { color: '#E2E8F0', fontSize: 11, fontWeight: '600' },
+  editPill: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+  },
+  editPillText: { color: '#38BDF8', fontSize: 11, fontWeight: '700' },
   deletePill: { paddingHorizontal: 8, paddingVertical: 6 },
   deletePillText: { color: '#EF4444', fontSize: 11, fontWeight: '600' },
   modalBackdrop: {
@@ -402,7 +459,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F2937',
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#F9FAFB', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#F9FAFB', marginBottom: 12 },
+  editingBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  editingBadgeText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   input: {
     backgroundColor: '#1F2937',
     borderRadius: 10,

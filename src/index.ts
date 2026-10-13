@@ -1,5 +1,6 @@
 export * from './core/client.js';
 export * from './core/types.js';
+export * from './core/query.js';
 export * from './core/sync-worker.js';
 export * from './core/conflict.js';
 export * from './core/outbox-store.js';
@@ -14,3 +15,4 @@ export * from './config/index.js';
 export * from './react/index.js';
 export * from './utils/uuid.js';
 export * from './utils/sql.js';
+export * from './utils/logger.js';

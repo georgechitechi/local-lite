@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLiveQuery } from 'outbox-sync/react';
+import { useLiveQuery } from 'local-lite/react';
 import { useSync } from '../../context/SyncContext';
 import { HeaderBar } from '../../components/HeaderBar';
 
@@ -90,7 +90,7 @@ export default function TenantsScreen() {
     setSelectedPropertyName('');
     setRentAmount('');
     setIsAddOpen(false);
-    setStatusMessage(`👤 Registered resident "${name}" (0ms local write)`);
+    setStatusMessage(`👤 Registered resident "${name}"`);
   };
 
   const handleCycleStatus = async (item: Tenant) => {
@@ -99,8 +99,8 @@ export default function TenantsScreen() {
       item.status === 'ACTIVE'
         ? 'FORMER'
         : item.status === 'FORMER'
-        ? 'PENDING'
-        : 'ACTIVE';
+          ? 'PENDING'
+          : 'ACTIVE';
 
     await client.update('tenants', item.id, { status: nextStatus });
     setStatusMessage(`Updated ${item.name} to ${nextStatus}`);
@@ -176,8 +176,8 @@ export default function TenantsScreen() {
                     t.status === 'ACTIVE'
                       ? styles.statusActive
                       : t.status === 'PENDING'
-                      ? styles.statusPending
-                      : styles.statusFormer,
+                        ? styles.statusPending
+                        : styles.statusFormer,
                   ]}
                 >
                   <Text
@@ -186,8 +186,8 @@ export default function TenantsScreen() {
                       t.status === 'ACTIVE'
                         ? styles.statusActiveText
                         : t.status === 'PENDING'
-                        ? styles.statusPendingText
-                        : styles.statusFormerText,
+                          ? styles.statusPendingText
+                          : styles.statusFormerText,
                     ]}
                   >
                     {t.status}
@@ -306,7 +306,7 @@ export default function TenantsScreen() {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveText}>Save Resident (0ms Write)</Text>
+                <Text style={styles.saveText}>Save Resident</Text>
               </TouchableOpacity>
             </View>
           </View>

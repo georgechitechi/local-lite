@@ -8,3 +8,5 @@ export interface RemoteDBAdapter {
 
 export * from './supabase.js';
 export * from './demo.js';
+export * from './convex.js';
+export * from './firestore.js';

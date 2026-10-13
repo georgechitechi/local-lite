@@ -1,4 +1,3 @@
-import { LocalTransaction } from '../adapters/local/index.js';
 import { escapeIdentifier } from '../utils/sql.js';
 
 export interface DBExecutable {

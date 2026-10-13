@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLiveQuery } from 'outbox-sync/react';
+import { useLiveQuery } from 'local-lite/react';
 import { useSync } from '../../context/SyncContext';
 import { HeaderBar } from '../../components/HeaderBar';
 
@@ -65,7 +65,7 @@ export default function PaymentsScreen() {
     setTenantName('');
     setAmount('');
     setIsAddOpen(false);
-    setStatusMessage(`💵 Created rent invoice (0ms local write)`);
+    setStatusMessage(`💵 Created rent invoice`);
   };
 
   const handleToggleStatus = async (item: RentPayment) => {
@@ -201,7 +201,7 @@ export default function PaymentsScreen() {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveText}>Save Invoice (0ms Write)</Text>
+                <Text style={styles.saveText}>Save Invoice</Text>
               </TouchableOpacity>
             </View>
           </View>

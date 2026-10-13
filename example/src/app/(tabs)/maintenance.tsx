@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLiveQuery } from 'outbox-sync/react';
+import { useLiveQuery } from 'local-lite/react';
 import { useSync } from '../../context/SyncContext';
 import { HeaderBar } from '../../components/HeaderBar';
 
@@ -63,7 +63,7 @@ export default function MaintenanceScreen() {
     setTitle('');
     setCost('');
     setIsAddOpen(false);
-    setStatusMessage(`🔧 Logged maintenance request "${title}" (0ms write)`);
+    setStatusMessage(`🔧 Logged maintenance request "${title}"`);
   };
 
   const handleCycleStatus = async (item: MaintenanceTicket) => {
@@ -72,8 +72,8 @@ export default function MaintenanceScreen() {
       item.status === 'PENDING'
         ? 'IN_PROGRESS'
         : item.status === 'IN_PROGRESS'
-        ? 'RESOLVED'
-        : 'PENDING';
+          ? 'RESOLVED'
+          : 'PENDING';
 
     await client.update('maintenance_requests', item.id, { status: nextStatus });
     setStatusMessage(`Work order updated to ${nextStatus}`);
@@ -145,8 +145,8 @@ export default function MaintenanceScreen() {
                     t.priority === 'HIGH'
                       ? styles.priorityHigh
                       : t.priority === 'MEDIUM'
-                      ? styles.priorityMed
-                      : styles.priorityLow,
+                        ? styles.priorityMed
+                        : styles.priorityLow,
                   ]}
                 >
                   <Text style={styles.priorityText}>{t.priority}</Text>
@@ -243,7 +243,7 @@ export default function MaintenanceScreen() {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveText}>Log Ticket (0ms Write)</Text>
+                <Text style={styles.saveText}>Log Ticket</Text>
               </TouchableOpacity>
             </View>
           </View>

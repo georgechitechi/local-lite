@@ -20,7 +20,7 @@ export default function SyncScreen() {
     refreshOutbox,
     lastSyncedText,
     forceResync,
-    seedDemoData,
+    clearDemoData,
   } = useSync();
 
   return (
@@ -81,8 +81,8 @@ export default function SyncScreen() {
             drain and flush immediately!
           </Text>
 
-          <TouchableOpacity style={styles.seedBannerBtn} onPress={seedDemoData}>
-            <Text style={styles.seedBannerText}>🚀 Seed Demo Portfolio (Multi-Table)</Text>
+          <TouchableOpacity style={[styles.clearCacheBtn, { backgroundColor: '#334155' }]} onPress={clearDemoData}>
+            <Text style={styles.clearCacheBtnText}>🗑️ Clear Local SQLite Cache</Text>
           </TouchableOpacity>
         </View>
 
@@ -208,14 +208,14 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 14, fontWeight: '700', color: '#F8FAFC', marginBottom: 6 },
   infoText: { fontSize: 12, color: '#94A3B8', lineHeight: 18 },
   codeText: { fontFamily: 'monospace', color: '#38BDF8', fontWeight: '600' },
-  seedBannerBtn: {
-    backgroundColor: '#2563EB',
+  clearCacheBtn: {
+    backgroundColor: '#334155',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 12,
   },
-  seedBannerText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  clearCacheBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

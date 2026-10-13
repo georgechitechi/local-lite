@@ -39,6 +39,7 @@ function extractRows(res: any): any[] {
  */
 export class OpSQLiteAdapter implements LocalDBAdapter {
   private db: OpSQLiteDatabase;
+  private txMutex: Promise<any> = Promise.resolve();
 
   constructor(opSqliteInstance: any) {
     this.db = opSqliteInstance as OpSQLiteDatabase;
@@ -50,20 +51,24 @@ export class OpSQLiteAdapter implements LocalDBAdapter {
   }
 
   async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
-    let result!: T;
+    const run = async (): Promise<T> => {
+      let result!: T;
+      await this.db.transactionAsync(async (txInstance: any) => {
+        const txWrapper: LocalTransaction = {
+          execute: async (q: string, p: any[] = []) => {
+            const res = typeof txInstance.executeAsync === 'function'
+              ? await txInstance.executeAsync(q, p)
+              : await txInstance.execute(q, p);
+            return extractRows(res);
+          },
+        };
+        result = await action(txWrapper);
+      });
+      return result;
+    };
 
-    await this.db.transactionAsync(async (txInstance: any) => {
-      const txWrapper: LocalTransaction = {
-        execute: async (q: string, p: any[] = []) => {
-          const res = typeof txInstance.executeAsync === 'function'
-            ? await txInstance.executeAsync(q, p)
-            : await txInstance.execute(q, p);
-          return extractRows(res);
-        },
-      };
-      result = await action(txWrapper);
-    });
-
-    return result;
+    const currentTx = this.txMutex.then(run, run);
+    this.txMutex = currentTx.catch(() => {});
+    return await currentTx;
   }
 }
