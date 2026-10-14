@@ -219,6 +219,22 @@ export class MockDB implements LocalDBAdapter {
       return [];
     }
 
+    // Unconditional DELETE FROM
+    const deleteEntireTableMatch = q.match(/^DELETE FROM "?(\w+)"?;?$/i);
+    if (deleteEntireTableMatch) {
+      const table = deleteEntireTableMatch[1];
+      this.getTable(table).clear();
+      return [];
+    }
+
+    // DROP TABLE IF EXISTS
+    const dropTableMatch = q.match(/^DROP TABLE (?:IF EXISTS )?"?(\w+)"?;?$/i);
+    if (dropTableMatch) {
+      const table = dropTableMatch[1];
+      this.tables.delete(table);
+      return [];
+    }
+
     return [];
   }
 

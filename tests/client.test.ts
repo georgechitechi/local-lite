@@ -128,4 +128,31 @@ describe('LocalFirstClient Core', () => {
 
     unsubscribe();
   });
+
+  it('resets tables and sync cursor with client.reset()', async () => {
+    client.tables = ['todos'];
+    await client.insert('todos', { id: 'reset-1', title: 'Before Reset' });
+    expect(await client.findById('todos', 'reset-1')).toBeDefined();
+
+    let resetEventFired = false;
+    client.events.on('reset', () => {
+      resetEventFired = true;
+    });
+
+    await client.reset();
+
+    expect(resetEventFired).toBe(true);
+    const after = await client.findById('todos', 'reset-1');
+    expect(after).toBeNull();
+  });
+
+  it('stops worker and releases database with client.close()', async () => {
+    let closed = false;
+    (db as any).close = () => {
+      closed = true;
+    };
+
+    await client.close();
+    expect(closed).toBe(true);
+  });
 });

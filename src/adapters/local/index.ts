@@ -5,6 +5,7 @@ export interface LocalTransaction {
 export interface LocalDBAdapter {
   execute(query: string, params?: any[]): Promise<any[]>;
   transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T>;
+  close?(): Promise<void> | void;
 }
 
 export * from './expo-sqlite.js';

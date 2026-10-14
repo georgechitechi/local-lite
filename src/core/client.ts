@@ -576,4 +576,42 @@ export class LocalFirstClient {
   stop(): void {
     this.syncWorker.stop();
   }
+
+  /**
+   * Stops background sync workers, cleans up remote listeners,
+   * and closes the local database adapter connection (releasing native locks).
+   */
+  async close(): Promise<void> {
+    this.stop();
+    if (typeof (this.remote as any).destroy === 'function') {
+      (this.remote as any).destroy();
+    }
+    if (typeof this.db.close === 'function') {
+      await this.db.close();
+    }
+  }
+
+  /**
+   * Resets local state by stopping sync and deleting or dropping all managed tables,
+   * clearing the sync_outbox and _sync_meta stores, and resetting the sync cursor.
+   */
+  async reset(options: { dropTables?: boolean } = {}): Promise<void> {
+    this.stop();
+
+    const tablesToReset = Array.from(new Set([...this.tables, 'sync_outbox', '_sync_meta']));
+    for (const table of tablesToReset) {
+      try {
+        if (options.dropTables) {
+          await this.db.execute(`DROP TABLE IF EXISTS "${table}"`);
+        } else {
+          await this.db.execute(`DELETE FROM "${table}"`);
+        }
+      } catch {
+        // Table may not exist yet; safe to ignore
+      }
+    }
+
+    await this.resetSyncCursor();
+    this.events.emit('reset', { dropTables: options.dropTables ?? false });
+  }
 }

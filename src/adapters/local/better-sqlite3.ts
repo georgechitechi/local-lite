@@ -56,4 +56,10 @@ export class BetterSQLite3Adapter implements LocalDBAdapter {
       throw err;
     }
   }
+
+  close(): void {
+    if (typeof this.db.close === 'function') {
+      this.db.close();
+    }
+  }
 }

@@ -4,6 +4,8 @@ interface ExpoDatabase {
   getAllAsync(query: string, params: any[]): Promise<any[]>;
   execAsync?(query: string): Promise<void>;
   withTransactionAsync(action: () => Promise<void>): Promise<void>;
+  closeAsync?(): Promise<void>;
+  closeSync?(): void;
 }
 
 export class ExpoSQLiteAdapter implements LocalDBAdapter {
@@ -58,5 +60,17 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
     const next = this.queue.then(run, run);
     this.queue = next.catch(() => {});
     return await next;
+  }
+
+  /**
+   * Waits for pending queries/transactions to finish and closes the underlying SQLite database connection.
+   */
+  async close(): Promise<void> {
+    await this.queue;
+    if (typeof this.db.closeAsync === 'function') {
+      await this.db.closeAsync();
+    } else if (typeof this.db.closeSync === 'function') {
+      this.db.closeSync();
+    }
   }
 }

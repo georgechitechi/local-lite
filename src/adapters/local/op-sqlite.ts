@@ -71,4 +71,11 @@ export class OpSQLiteAdapter implements LocalDBAdapter {
     this.txMutex = currentTx.catch(() => {});
     return await currentTx;
   }
+
+  async close(): Promise<void> {
+    await this.txMutex;
+    if (typeof this.db.close === 'function') {
+      this.db.close();
+    }
+  }
 }
