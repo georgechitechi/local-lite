@@ -38,6 +38,8 @@
   },
   "scripts": {
     "start": "expo start",
+    "seed": "node ./scripts/seed-supabase.mjs",
+    "seed:clean": "node ./scripts/seed-supabase.mjs --clear",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",

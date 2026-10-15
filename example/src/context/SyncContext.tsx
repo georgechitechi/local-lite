@@ -2,9 +2,16 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { LocalFirstClient } from 'local-lite';
 import { useSyncStatus } from 'local-lite/react';
 import { getSyncClient } from '../sync.config';
-import { clearRentalPortfolio } from '../data/seeder';
+import {
+  clearRentalPortfolio,
+  clearSupabaseCloud,
+  seedLocalPortfolio,
+  seedSupabaseCloud,
+  SeedProgress,
+  SeedResult,
+} from '../data/seeder';
 
-interface SyncContextType {
+export interface SyncContextType {
   client: LocalFirstClient | null;
   isOnline: boolean;
   toggleOnline: () => void;
@@ -14,8 +21,10 @@ interface SyncContextType {
   refreshOutbox: () => Promise<void>;
   statusMessage: string;
   setStatusMessage: (msg: string) => void;
-  clearDemoData: () => Promise<void>;
+  clearDemoData: (options?: { clearRemote?: boolean; clearOutbox?: boolean }) => Promise<void>;
   forceResync: () => Promise<void>;
+  seedLocalData: (count: number, skipOutbox?: boolean, onProgress?: (p: SeedProgress) => void) => Promise<SeedResult>;
+  seedRemoteData: (count: number, onProgress?: (p: SeedProgress) => void) => Promise<SeedResult>;
 }
 
 const SyncContext = createContext<SyncContextType | null>(null);
@@ -94,13 +103,65 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const clearDemoData = async () => {
+  const clearDemoData = async (options?: { clearRemote?: boolean; clearOutbox?: boolean }) => {
     if (!client) return;
     try {
-      await clearRentalPortfolio(client);
-      setStatusMessage('🗑️ Rental portfolio cleared from local SQLite.');
+      await clearRentalPortfolio(client, { clearOutbox: options?.clearOutbox });
+      if (options?.clearRemote) {
+        await clearSupabaseCloud();
+      }
+      setStatusMessage(
+        options?.clearRemote
+          ? '🗑️ Rental portfolio cleared from BOTH local SQLite & Supabase Cloud.'
+          : '🗑️ Rental portfolio cleared from local SQLite.'
+      );
+      await refreshOutbox();
     } catch (err: any) {
       setStatusMessage(`Error clearing data: ${err.message}`);
+    }
+  };
+
+  const seedLocalData = async (
+    count: number,
+    skipOutbox: boolean = false,
+    onProgress?: (p: SeedProgress) => void
+  ): Promise<SeedResult> => {
+    if (!client) throw new Error('LocalFirstClient not initialized');
+    setStatusMessage(`🚀 Seeding ${count} records into local SQLite...`);
+    try {
+      const result = await seedLocalPortfolio(client, {
+        totalCount: count,
+        skipOutbox,
+        onProgress,
+      });
+      setStatusMessage(
+        `✅ Seeded ${result.totalInserted} records into SQLite in ${(result.durationMs / 1000).toFixed(2)}s (${result.rate} rec/s)`
+      );
+      await refreshOutbox();
+      return result;
+    } catch (err: any) {
+      setStatusMessage(`❌ Seeding failed: ${err.message}`);
+      throw err;
+    }
+  };
+
+  const seedRemoteData = async (
+    count: number,
+    onProgress?: (p: SeedProgress) => void
+  ): Promise<SeedResult> => {
+    setStatusMessage(`☁️ Seeding ${count} records directly into Supabase Cloud...`);
+    try {
+      const result = await seedSupabaseCloud({
+        totalCount: count,
+        onProgress,
+      });
+      setStatusMessage(
+        `✅ Seeded ${result.totalInserted} records into Supabase in ${(result.durationMs / 1000).toFixed(2)}s (${result.rate} rec/s). Ready to pull!`
+      );
+      return result;
+    } catch (err: any) {
+      setStatusMessage(`❌ Remote seeding failed: ${err.message}`);
+      throw err;
     }
   };
 
@@ -118,6 +179,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         setStatusMessage,
         clearDemoData,
         forceResync,
+        seedLocalData,
+        seedRemoteData,
       }}
     >
       {children}

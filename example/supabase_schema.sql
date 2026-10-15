@@ -1,8 +1,94 @@
 -- ==============================================================================
--- Supabase Schema for local-lite (Rental Property Management App)
+-- Supabase Schema for local-lite
 -- Realtime: ENABLED
 -- Row Level Security (RLS): DISABLED
 -- ==============================================================================
+SET client_min_messages = 'WARNING';
+-- =============================================
+-- INITIAL SETUP & CLEANUP
+-- =============================================
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_cron";
+CREATE EXTENSION IF NOT EXISTS "pgmq";
+CREATE EXTENSION IF NOT EXISTS "pg_net";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- =============================================
+-- CLEANUP EXISTING OBJECTS
+-- =============================================
+-- Drop all base tables in schema public
+DO $$
+DECLARE
+  r RECORD;
+  sql TEXT;
+BEGIN
+  FOR r IN
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+  LOOP
+    sql := format('DROP TABLE IF EXISTS public.%I CASCADE;', r.table_name);
+    EXECUTE sql;
+  END LOOP;
+END;
+$$;
+
+-- Drop all functions in schema public
+DO $$
+DECLARE
+  r RECORD;
+  sql TEXT;
+BEGIN
+  FOR r IN
+    SELECT p.oid, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public'
+  LOOP
+    sql := format('DROP FUNCTION IF EXISTS public.%I(%s) CASCADE;', r.proname, r.args);
+    EXECUTE sql;
+  END LOOP;
+END;
+$$;
+
+-- This will DROP every RLS policy on tables in schemas "public" and "storage".
+DO $$
+DECLARE
+  r RECORD;
+  sql TEXT;
+BEGIN
+  FOR r IN
+    SELECT p.polname AS policy_name,
+           n.nspname  AS schema_name,
+           c.relname  AS table_name
+    FROM pg_policy p
+    JOIN pg_class c ON p.polrelid = c.oid
+    JOIN pg_namespace n ON c.relnamespace = n.oid
+    WHERE n.nspname = 'public' OR (n.nspname = 'storage' AND c.relname = 'objects')
+  LOOP
+    sql := format('DROP POLICY IF EXISTS %I ON %I.%I;', r.policy_name, r.schema_name, r.table_name);
+    EXECUTE sql;
+  END LOOP;
+END;
+$$;
+
+-- Drop all non-internal triggers on tables in schema public
+DO $$
+DECLARE
+  r RECORD;
+  sql TEXT;
+BEGIN
+  FOR r IN
+    SELECT c.relname AS table_name, t.tgname AS trigger_name
+    FROM pg_trigger t
+    JOIN pg_class c ON t.tgrelid = c.oid
+    JOIN pg_namespace n ON c.relnamespace = n.oid
+    WHERE n.nspname = 'public' AND NOT t.tgisinternal
+  LOOP
+    sql := format('DROP TRIGGER IF EXISTS %I ON public.%I CASCADE;', r.trigger_name, r.table_name);
+    EXECUTE sql;
+  END LOOP;
+END;
+$$;
 
 -- 1. Automatic Timestamp Trigger Function
 CREATE OR REPLACE FUNCTION public.set_sync_updated_at()
