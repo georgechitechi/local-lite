@@ -126,6 +126,14 @@ export class MockDB implements LocalDBAdapter {
       return rows.filter((r) => r.status === 'FAILED').map((r) => ({ id: r.id }));
     }
 
+    // Recover interrupted pushes without changing failure history.
+    if (normQ === "UPDATE sync_outbox SET status = 'PENDING' WHERE status = 'PROCESSING'") {
+      for (const row of this.getTable('sync_outbox').values()) {
+        if (row.status === 'PROCESSING') row.status = 'PENDING';
+      }
+      return [];
+    }
+
     // Reset sync_outbox status = 'PENDING'
     if (normQ.includes("UPDATE sync_outbox SET status = 'PENDING'")) {
       const rows = Array.from(this.getTable('sync_outbox').values());

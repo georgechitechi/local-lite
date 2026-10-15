@@ -26,6 +26,12 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 
 ## Features
 
+Interrupted pushes recover automatically at startup and before the next push cycle,
+including when a temporary database error prevented saving a failure status.
+Use one active sync client per local database. Recovery may replay a remote write,
+so custom remote adapters should handle repeated operation IDs idempotently.
+This recovers sync state; it does not repair corrupt SQLite files or cancel hung adapter calls.
+
 * **⚡ 0ms Optimistic Writes:** Write to local SQLite immediately via atomic dual-write (`client.mutate()`).
 * **📦 Transactional Outbox:** Mutations are stored atomically in a local `sync_outbox` table, preventing data loss if the app closes or loses connectivity mid-write.
 * **🌐 Native Cloud Adapters:** First-class sync with Postgres tables (via **Supabase**), reactive document datastores (via **Convex**), and document collections (via **Firebase / Firestore**).

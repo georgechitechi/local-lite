@@ -236,7 +236,6 @@ export class SyncWorker {
    */
   async pushLocalChanges(): Promise<void> {
     if (this.isPushing) return;
-    if (!(await this.isOnline())) return;
 
     this.isPushing = true;
     this.emitStatus();
@@ -244,7 +243,10 @@ export class SyncWorker {
     let pendingRecords: OutboxRecord[] = [];
 
     try {
+      if (!(await this.isOnline())) return;
       this.totalPushCycles++;
+      // No push is active: recover records left behind by a failed status write.
+      await OutboxStore.resetStaleProcessing(this.db);
       pendingRecords = await OutboxStore.getPending(this.db, this.maxRetries);
 
       if (pendingRecords.length === 0) {
@@ -368,13 +370,13 @@ export class SyncWorker {
    */
   async pullRemoteChanges(): Promise<void> {
     if (this.isPulling) return;
-    if (!(await this.isOnline())) return;
 
     this.isPulling = true;
     this.emitStatus();
     const startTime = Date.now();
 
     try {
+      if (!(await this.isOnline())) return;
       this.totalPullCycles++;
       if (!this.cursorLoaded) {
         this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db);
@@ -440,8 +442,8 @@ export class SyncWorker {
   private async processDeltasLocally(deltas: DeltaChanges): Promise<void> {
     if (!deltas.changes || deltas.changes.length === 0) {
       if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
+        await MetaStore.setLastSyncedAt(this.db, deltas.timestamp);
         this.lastPulledTimestamp = deltas.timestamp;
-        await MetaStore.setLastSyncedAt(this.db, this.lastPulledTimestamp);
       }
       return;
     }
