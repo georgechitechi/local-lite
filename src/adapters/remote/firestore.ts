@@ -1,5 +1,5 @@
 import { RemoteDBAdapter } from './index.js';
-import { DeltaChange, DeltaChanges, SyncOp, SyncOperation } from '../../core/types.js';
+import { DeltaChange, DeltaChanges, SyncOp, SyncOperation, PushResult } from '../../core/types.js';
 import {
   SyncLogger,
   CustomLogger,
@@ -116,11 +116,15 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes outbox operations as batch writes to Firestore.
    * Chunks operations into batches of 450 (below Firestore 500-write limit).
+   * Falls back to individual writes if a batch fails, returning partial push results.
    */
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult> {
     if (!operations || operations.length === 0) {
       return true;
     }
+
+    const failedIds: string[] = [];
+    const errors: Record<string, string> = {};
 
     try {
       const isCompat = typeof this.db.batch === 'function' && typeof this.db.collection === 'function';
@@ -131,64 +135,73 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
         const chunk = operations.slice(i, i + CHUNK_SIZE);
         const now = Date.now();
 
+        const buildDocData = (op: SyncOperation) => {
+          if (op.operation === 'DELETE') {
+            return {
+              [this.primaryKey]: op.rowId,
+              [this.deletedColumn]: true,
+              [this.updatedAtColumn]: now,
+            };
+          } else {
+            return {
+              ...(op.payload || {}),
+              [this.primaryKey]: op.rowId,
+              [this.deletedColumn]: false,
+              [this.updatedAtColumn]: now,
+            };
+          }
+        };
+
         if (isCompat) {
           // React Native Firebase / Compat SDK
-          const batch = this.db.batch();
-          for (const op of chunk) {
-            const docRef = this.db.collection(op.tableName).doc(op.rowId);
-            if (op.operation === 'DELETE') {
-              batch.set(
-                docRef,
-                {
-                  [this.primaryKey]: op.rowId,
-                  [this.deletedColumn]: true,
-                  [this.updatedAtColumn]: now,
-                },
-                { merge: true }
-              );
-            } else {
-              batch.set(
-                docRef,
-                {
-                  ...(op.payload || {}),
-                  [this.primaryKey]: op.rowId,
-                  [this.deletedColumn]: false,
-                  [this.updatedAtColumn]: now,
-                },
-                { merge: true }
-              );
+          try {
+            const batch = this.db.batch();
+            for (const op of chunk) {
+              const docRef = this.db.collection(op.tableName).doc(op.rowId);
+              batch.set(docRef, buildDocData(op), { merge: true });
+            }
+            await batch.commit();
+          } catch (batchError: any) {
+            this.logger.warn(
+              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`
+            );
+            for (const op of chunk) {
+              try {
+                const docRef = this.db.collection(op.tableName).doc(op.rowId);
+                await docRef.set(buildDocData(op), { merge: true });
+              } catch (opErr: any) {
+                failedIds.push(op.id);
+                errors[op.id] = opErr?.message || String(opErr);
+              }
             }
           }
-          await batch.commit();
         } else if (mod && typeof mod.writeBatch === 'function') {
           // Modular Firebase SDK
-          const batch = mod.writeBatch(this.db);
-          for (const op of chunk) {
-            const docRef = mod.doc(mod.collection(this.db, op.tableName), op.rowId);
-            if (op.operation === 'DELETE') {
-              batch.set(
-                docRef,
-                {
-                  [this.primaryKey]: op.rowId,
-                  [this.deletedColumn]: true,
-                  [this.updatedAtColumn]: now,
-                },
-                { merge: true }
-              );
-            } else {
-              batch.set(
-                docRef,
-                {
-                  ...(op.payload || {}),
-                  [this.primaryKey]: op.rowId,
-                  [this.deletedColumn]: false,
-                  [this.updatedAtColumn]: now,
-                },
-                { merge: true }
-              );
+          try {
+            const batch = mod.writeBatch(this.db);
+            for (const op of chunk) {
+              const docRef = mod.doc(mod.collection(this.db, op.tableName), op.rowId);
+              batch.set(docRef, buildDocData(op), { merge: true });
+            }
+            await batch.commit();
+          } catch (batchError: any) {
+            this.logger.warn(
+              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`
+            );
+            for (const op of chunk) {
+              try {
+                const docRef = mod.doc(mod.collection(this.db, op.tableName), op.rowId);
+                if (typeof mod.setDoc === 'function') {
+                  await mod.setDoc(docRef, buildDocData(op), { merge: true });
+                } else {
+                  throw batchError;
+                }
+              } catch (opErr: any) {
+                failedIds.push(op.id);
+                errors[op.id] = opErr?.message || String(opErr);
+              }
             }
           }
-          await batch.commit();
         } else {
           throw new Error(
             'Firestore client does not have .batch() and modular firebase/firestore writeBatch could not be loaded.'
@@ -196,6 +209,13 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
         }
       }
 
+      if (failedIds.length > 0) {
+        return {
+          success: false,
+          failedIds,
+          errors,
+        };
+      }
       return true;
     } catch (error) {
       this.logger.error(formatFirestoreError(error, { operation: 'pushChanges' }));

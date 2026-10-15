@@ -17,44 +17,62 @@ export interface BetterSqliteDatabase {
  */
 export class BetterSQLite3Adapter implements LocalDBAdapter {
   private db: BetterSqliteDatabase;
+  private queue: Promise<any> = Promise.resolve();
 
   constructor(betterSqliteInstance: any) {
     this.db = betterSqliteInstance as BetterSqliteDatabase;
   }
 
   async execute(query: string, params: any[] = []): Promise<any[]> {
-    const trimmed = query.trim();
-    const stmt = this.db.prepare(trimmed);
+    const run = async (): Promise<any[]> => {
+      const trimmed = query.trim();
+      const stmt = this.db.prepare(trimmed);
 
-    // If query returns rows (SELECT, PRAGMA) or is marked as reader
-    if (stmt.reader || /^SELECT|^PRAGMA/i.test(trimmed)) {
-      return stmt.all(...params);
-    }
+      // If query returns rows (SELECT, PRAGMA) or is marked as reader
+      if (stmt.reader || /^SELECT|^PRAGMA/i.test(trimmed)) {
+        return stmt.all(...params);
+      }
 
-    const info = stmt.run(...params);
-    return [info];
+      const info = stmt.run(...params);
+      return [info];
+    };
+
+    const next = this.queue.then(run, run);
+    this.queue = next.catch(() => {});
+    return await next;
   }
 
   async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
-    // Explicit transaction control compatible with async actions
-    this.db.prepare('BEGIN IMMEDIATE').run();
-    try {
-      const txWrapper: LocalTransaction = {
-        execute: async (q: string, p: any[] = []) => {
-          return await this.execute(q, p);
-        },
-      };
-      const result = await action(txWrapper);
-      this.db.prepare('COMMIT').run();
-      return result;
-    } catch (err) {
+    const run = async (): Promise<T> => {
+      // Explicit transaction control compatible with async actions
+      this.db.prepare('BEGIN IMMEDIATE').run();
       try {
-        this.db.prepare('ROLLBACK').run();
-      } catch {
-        // Ignore secondary rollback error if connection closed
+        const txWrapper: LocalTransaction = {
+          execute: async (q: string, p: any[] = []) => {
+            const trimmed = q.trim();
+            const stmt = this.db.prepare(trimmed);
+            if (stmt.reader || /^SELECT|^PRAGMA/i.test(trimmed)) {
+              return stmt.all(...p);
+            }
+            return [stmt.run(...p)];
+          },
+        };
+        const result = await action(txWrapper);
+        this.db.prepare('COMMIT').run();
+        return result;
+      } catch (err) {
+        try {
+          this.db.prepare('ROLLBACK').run();
+        } catch {
+          // Ignore secondary rollback error if connection closed
+        }
+        throw err;
       }
-      throw err;
-    }
+    };
+
+    const next = this.queue.then(run, run);
+    this.queue = next.catch(() => {});
+    return await next;
   }
 
   close(): void {

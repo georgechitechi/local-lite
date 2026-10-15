@@ -1,6 +1,6 @@
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { RemoteDBAdapter } from './index.js';
-import { DeltaChange, DeltaChanges, SyncOp, SyncOperation } from '../../core/types.js';
+import { DeltaChange, DeltaChanges, PushResult, SyncOp, SyncOperation } from '../../core/types.js';
 import {
   SyncLogger,
   CustomLogger,
@@ -72,6 +72,11 @@ export interface SupabaseAdapterOptions {
    * Minimum log level. Default: 'info'
    */
   logLevel?: LogLevel;
+
+  /**
+   * Maximum records pulled per page from Supabase. Default: 1000
+   */
+  fetchLimit?: number;
 }
 
 export class SupabaseRemoteAdapter implements RemoteDBAdapter {
@@ -85,6 +90,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private schema: string;
   private channelName: string;
   private activeChannel?: RealtimeChannel;
+  private fetchLimit: number;
   public logger: SyncLogger;
 
   constructor(client: SupabaseClient, options: SupabaseAdapterOptions = {}) {
@@ -97,6 +103,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.pushRpcName = options.pushRpcName;
     this.schema = options.schema ?? 'public';
     this.channelName = options.channelName ?? 'local_first_sync';
+    this.fetchLimit = options.fetchLimit ?? 1000;
 
     if (options.logger instanceof SyncLogger) {
       this.logger = options.logger;
@@ -119,7 +126,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes outbox operations to Supabase.
    */
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult> {
     if (!operations || operations.length === 0) {
       return true;
     }
@@ -144,15 +151,114 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       return true;
     }
 
-    // 2. Direct table operations
-    for (const op of operations) {
-      try {
-        if (op.operation === 'DELETE') {
-          // Soft delete: sets deleted = true and stamps updated_at
+    // 2. Direct table operations with consecutive batching and per-operation tracking
+    const successfulIds: string[] = [];
+    const failedIds: string[] = [];
+    const errors: Record<string, string> = {};
+
+    let i = 0;
+    while (i < operations.length) {
+      const op = operations[i];
+
+      // Batch consecutive INSERTs for the same table
+      if (op.operation === 'INSERT') {
+        const batch: SyncOperation[] = [];
+        while (
+          i < operations.length &&
+          operations[i].operation === 'INSERT' &&
+          operations[i].tableName === op.tableName
+        ) {
+          batch.push(operations[i]);
+          i++;
+        }
+
+        const buildRowData = (item: SyncOperation) => {
+          const row: Record<string, any> = {
+            ...(item.payload || {}),
+            [this.primaryKey]: item.rowId,
+            [this.deletedColumn]: false,
+          };
+          if (this.updatedAtColumn && !row[this.updatedAtColumn]) {
+            row[this.updatedAtColumn] = new Date(item.timestamp).toISOString();
+          }
+          return row;
+        };
+
+        if (batch.length === 1) {
+          try {
+            const rowData = buildRowData(batch[0]);
+            const { error } = await this.client.from(op.tableName).upsert(rowData);
+            if (error) {
+              const msg = formatSupabaseError(error, { table: op.tableName, operation: 'INSERT' });
+              this.logger.error(msg);
+              failedIds.push(batch[0].id);
+              errors[batch[0].id] = msg;
+            } else {
+              successfulIds.push(batch[0].id);
+            }
+          } catch (err: any) {
+            const msg = formatSupabaseError(err, { table: op.tableName, operation: 'INSERT' });
+            this.logger.error(msg);
+            failedIds.push(batch[0].id);
+            errors[batch[0].id] = msg;
+          }
+        } else {
+          // Bulk upsert for multiple consecutive inserts
+          try {
+            const rows = batch.map(buildRowData);
+            const { error } = await this.client.from(op.tableName).upsert(rows);
+            if (!error) {
+              for (const item of batch) successfulIds.push(item.id);
+            } else {
+              // On bulk failure, retry individually to isolate only the failing records
+              for (const item of batch) {
+                try {
+                  const singleRow = buildRowData(item);
+                  const { error: singleErr } = await this.client.from(op.tableName).upsert(singleRow);
+                  if (singleErr) {
+                    const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
+                    failedIds.push(item.id);
+                    errors[item.id] = msg;
+                  } else {
+                    successfulIds.push(item.id);
+                  }
+                } catch (singleErr: any) {
+                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
+                  failedIds.push(item.id);
+                  errors[item.id] = msg;
+                }
+              }
+            }
+          } catch {
+            // Retry individually if bulk threw
+            for (const item of batch) {
+              try {
+                const singleRow = buildRowData(item);
+                const { error: singleErr } = await this.client.from(op.tableName).upsert(singleRow);
+                if (singleErr) {
+                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
+                  failedIds.push(item.id);
+                  errors[item.id] = msg;
+                } else {
+                  successfulIds.push(item.id);
+                }
+              } catch (singleErr: any) {
+                const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
+                failedIds.push(item.id);
+                errors[item.id] = msg;
+              }
+            }
+          }
+        }
+        continue;
+      }
+
+      // Handle DELETE
+      if (op.operation === 'DELETE') {
+        try {
           const patch: Record<string, any> = {
             [this.deletedColumn]: this.deletedValue,
           };
-
           if (this.updatedAtColumn) {
             patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
           }
@@ -163,16 +269,30 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             .eq(this.primaryKey, op.rowId);
 
           if (error) {
-            this.logger.error(formatSupabaseError(error, { table: op.tableName, operation: 'DELETE' }));
-            return false;
+            const msg = formatSupabaseError(error, { table: op.tableName, operation: 'DELETE' });
+            this.logger.error(msg);
+            failedIds.push(op.id);
+            errors[op.id] = msg;
+          } else {
+            successfulIds.push(op.id);
           }
-        } else if (op.operation === 'UPDATE') {
-          // Partial UPDATE on existing record: only updates the modified columns to respect NOT NULL constraints
+        } catch (err: any) {
+          const msg = formatSupabaseError(err, { table: op.tableName, operation: 'DELETE' });
+          this.logger.error(msg);
+          failedIds.push(op.id);
+          errors[op.id] = msg;
+        }
+        i++;
+        continue;
+      }
+
+      // Handle UPDATE
+      if (op.operation === 'UPDATE') {
+        try {
           const patch: Record<string, any> = {
             ...(op.payload || {}),
             [this.deletedColumn]: false,
           };
-
           if (this.updatedAtColumn) {
             patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
           }
@@ -184,53 +304,51 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             .select(this.primaryKey);
 
           if (error) {
-            this.logger.error(formatSupabaseError(error, { table: op.tableName, operation: 'UPDATE' }));
-            return false;
-          }
-
-          // If row did not exist remotely (e.g. created & modified offline), fallback to upsert
-          if (!data || data.length === 0) {
+            const msg = formatSupabaseError(error, { table: op.tableName, operation: 'UPDATE' });
+            this.logger.error(msg);
+            failedIds.push(op.id);
+            errors[op.id] = msg;
+          } else if (!data || data.length === 0) {
+            // If row did not exist remotely, fallback to upsert
             const rowData = {
               ...patch,
               [this.primaryKey]: op.rowId,
             };
-            const { error: upsertErr } = await this.client
-              .from(op.tableName)
-              .upsert(rowData);
-
+            const { error: upsertErr } = await this.client.from(op.tableName).upsert(rowData);
             if (upsertErr) {
-              this.logger.error(formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' }));
-              return false;
+              const msg = formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' });
+              this.logger.error(msg);
+              failedIds.push(op.id);
+              errors[op.id] = msg;
+            } else {
+              successfulIds.push(op.id);
             }
+          } else {
+            successfulIds.push(op.id);
           }
-        } else {
-          // INSERT -> upsert into table with deleted: false
-          const rowData = {
-            ...(op.payload || {}),
-            [this.primaryKey]: op.rowId,
-            [this.deletedColumn]: false,
-          };
-
-          if (this.updatedAtColumn && !rowData[this.updatedAtColumn]) {
-            rowData[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
-          }
-
-          const { error } = await this.client
-            .from(op.tableName)
-            .upsert(rowData);
-
-          if (error) {
-            this.logger.error(formatSupabaseError(error, { table: op.tableName, operation: 'INSERT' }));
-            return false;
-          }
+        } catch (err: any) {
+          const msg = formatSupabaseError(err, { table: op.tableName, operation: 'UPDATE' });
+          this.logger.error(msg);
+          failedIds.push(op.id);
+          errors[op.id] = msg;
         }
-      } catch (err) {
-        this.logger.error(formatSupabaseError(err, { table: op.tableName, operation: op.operation }));
-        return false;
+        i++;
+        continue;
       }
+
+      i++;
     }
 
-    return true;
+    if (failedIds.length === 0) {
+      return true;
+    }
+
+    return {
+      success: false,
+      successfulIds,
+      failedIds,
+      errors,
+    };
   }
 
   /**
@@ -244,43 +362,69 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
     for (const table of this.tables) {
       try {
-        let query = this.client
-          .from(table)
-          .select('*');
+        let hasMore = true;
+        let currentSinceIso = sinceIso;
 
-        if (sinceIso) {
-          query = query.gt(this.updatedAtColumn, sinceIso);
-        }
+        while (hasMore) {
+          let query = this.client
+            .from(table)
+            .select('*');
 
-        if (typeof query.order === 'function') {
-          query = query.order(this.updatedAtColumn, { ascending: true });
-        }
+          if (currentSinceIso) {
+            query = query.gt(this.updatedAtColumn, currentSinceIso);
+          }
 
-        const { data, error } = await query;
-        if (error) {
-          throw error;
-        }
+          if (typeof query.order === 'function') {
+            query = query.order(this.updatedAtColumn, { ascending: true });
+          }
 
-        if (data && Array.isArray(data)) {
-          for (const row of data) {
-            const isSoftDeleted = this.isSoftDeleted(row);
+          if (typeof query.limit === 'function') {
+            query = query.limit(this.fetchLimit);
+          }
 
-            const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
-            const rowTime = row[this.updatedAtColumn]
-              ? new Date(row[this.updatedAtColumn]).getTime()
-              : Date.now();
+          const { data, error } = await query;
+          if (error) {
+            throw error;
+          }
 
-            if (rowTime > maxServerTimestamp) {
-              maxServerTimestamp = rowTime;
+          if (data && Array.isArray(data) && data.length > 0) {
+            for (const row of data) {
+              const isSoftDeleted = this.isSoftDeleted(row);
+
+              const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
+              const rowTime = row[this.updatedAtColumn]
+                ? new Date(row[this.updatedAtColumn]).getTime()
+                : Date.now();
+
+              if (rowTime > maxServerTimestamp) {
+                maxServerTimestamp = rowTime;
+              }
+
+              changes.push({
+                tableName: table,
+                operation,
+                rowId: String(row[this.primaryKey]),
+                payload: isSoftDeleted ? null : row,
+                timestamp: rowTime,
+              });
             }
 
-            changes.push({
-              tableName: table,
-              operation,
-              rowId: String(row[this.primaryKey]),
-              payload: isSoftDeleted ? null : row,
-              timestamp: rowTime,
-            });
+            // Stop paging if unpaginated query or fewer rows than limit returned
+            if (typeof query.limit !== 'function' || data.length < this.fetchLimit) {
+              hasMore = false;
+            } else {
+              const lastRow = data[data.length - 1];
+              const nextIso = lastRow[this.updatedAtColumn]
+                ? new Date(lastRow[this.updatedAtColumn]).toISOString()
+                : null;
+              if (nextIso && nextIso !== currentSinceIso) {
+                currentSinceIso = nextIso;
+              } else {
+                hasMore = false;
+              }
+            }
+          } else {
+            hasMore = false;
           }
         }
       } catch (err) {

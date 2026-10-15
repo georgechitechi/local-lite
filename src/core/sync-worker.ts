@@ -10,6 +10,7 @@ import {
   OutboxRecord,
   PullEvent,
   PushEvent,
+  PushResult,
   RetryConfig,
   SyncMetrics,
   SyncOperation,
@@ -25,6 +26,9 @@ import { SyncLogger, CustomLogger, LogLevel, defaultLogger } from '../utils/logg
 
 /** Maximum outbox records sent per push cycle. */
 const PUSH_BATCH_SIZE = 50;
+
+/** Maximum incoming delta changes applied in a single database transaction. */
+const DELTA_CHUNK_SIZE = 250;
 
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
@@ -310,42 +314,69 @@ export class SyncWorker {
       // Mark records as PROCESSING
       await OutboxStore.markProcessing(this.db, recordIds);
 
-      const success = await this.remote.pushChanges(operations);
+      const pushRes = await this.remote.pushChanges(operations);
       const durationMs = Date.now() - startTime;
       this.lastPushDurationMs = durationMs;
       this.lastPushTimestamp = Date.now();
 
-      if (success) {
-        // Successful push: delete rows from outbox
-        await OutboxStore.deleteCompleted(this.db, recordIds);
-        this.totalPushedOperations += operations.length;
-        this.lastPushError = null;
+      let isSuccess = false;
+      let successfulIds: string[] = [];
+      let failedIds: string[] = [];
+      let errorsMap: Record<string, string> = {};
 
+      if (typeof pushRes === 'boolean') {
+        isSuccess = pushRes;
+        if (pushRes) {
+          successfulIds = recordIds;
+        } else {
+          failedIds = recordIds;
+        }
+      } else if (pushRes && typeof pushRes === 'object') {
+        isSuccess = Boolean(pushRes.success);
+        successfulIds = pushRes.successfulIds ?? (isSuccess ? recordIds : []);
+        failedIds = pushRes.failedIds ?? (isSuccess ? [] : recordIds.filter((id) => !successfulIds.includes(id)));
+        errorsMap = pushRes.errors ?? {};
+      }
+
+      if (successfulIds.length > 0) {
+        // Delete records that were pushed successfully
+        await OutboxStore.deleteCompleted(this.db, successfulIds);
+        this.totalPushedOperations += successfulIds.length;
+        this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'batch' });
+      }
+
+      if (failedIds.length === 0) {
+        this.lastPushError = null;
         const pushEvent: PushEvent = {
           success: true,
-          count: operations.length,
+          count: successfulIds.length,
           durationMs,
           error: null,
         };
         this.events.emit('sync:push', pushEvent);
-        this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'batch' });
 
-        // Drain backlog: a full batch likely means more records are waiting, so continue
-        // immediately instead of idling until the next push interval tick.
+        // Drain backlog: if a full batch was processed and all succeeded, continue immediately
         if (operations.length >= PUSH_BATCH_SIZE) {
           this.schedulePush(0);
         }
       } else {
-        const errMsg = 'Remote push returned false';
+        const errMsg = Object.values(errorsMap)[0] || 'Remote push returned failure';
         this.lastPushError = errMsg;
         const pushEvent: PushEvent = {
           success: false,
-          count: operations.length,
+          count: failedIds.length,
           durationMs,
           error: errMsg,
         };
         this.events.emit('sync:push', pushEvent);
-        await this.handlePushFailure(pendingRecords, errMsg);
+
+        const failedRecords = pendingRecords.filter((r) => failedIds.includes(r.id));
+        await this.handlePushFailure(failedRecords, errMsg, undefined, errorsMap);
+
+        // If part of the batch succeeded, keep draining the rest
+        if (successfulIds.length > 0 && operations.length >= PUSH_BATCH_SIZE) {
+          this.schedulePush(0);
+        }
       }
     } catch (error: any) {
       const durationMs = Date.now() - startTime;
@@ -375,11 +406,19 @@ export class SyncWorker {
   private async handlePushFailure(
     records: OutboxRecord[],
     errorMessage: string,
-    errorObj?: any
+    errorObj?: any,
+    errorsByRecordId?: Record<string, string>
   ): Promise<void> {
     try {
-      const recordIds = records.map((r) => r.id);
-      await OutboxStore.markFailed(this.db, recordIds, errorMessage);
+      if (errorsByRecordId && Object.keys(errorsByRecordId).length > 0) {
+        for (const rec of records) {
+          const msg = errorsByRecordId[rec.id] || errorMessage;
+          await OutboxStore.markFailed(this.db, [rec.id], msg);
+        }
+      } else {
+        const recordIds = records.map((r) => r.id);
+        await OutboxStore.markFailed(this.db, recordIds, errorMessage);
+      }
       this.events.emit('sync_outbox', { operation: 'UPDATE', rowId: 'batch' });
 
       // If custom shouldRetry filter specifies an operation should NOT be retried, mark it FAILED permanently
@@ -503,99 +542,111 @@ export class SyncWorker {
       return;
     }
 
-    // Events are buffered and emitted only after the transaction commits, so listeners
-    // never observe rolled-back data or issue reads while the write transaction is open.
-    const queuedEvents: Array<{ event: string; data: any }> = [];
+    const totalChanges = deltas.changes.length;
 
-    await this.db.transaction(async (tx) => {
-      for (const change of deltas.changes) {
-        // 1. Check for pending local mutations for this (table_name, row_id)
-        const localPendingRecord = await OutboxStore.findPendingByRow(
-          tx,
-          change.tableName,
-          change.rowId
-        );
+    // Apply incoming deltas in chunks to avoid holding long SQLite write locks
+    // and starving concurrent UI reads on mobile/embedded environments.
+    for (let i = 0; i < totalChanges; i += DELTA_CHUNK_SIZE) {
+      const chunk = deltas.changes.slice(i, i + DELTA_CHUNK_SIZE);
+      const isLastChunk = i + DELTA_CHUNK_SIZE >= totalChanges;
+      const queuedEvents: Array<{ event: string; data: any }> = [];
 
-        // 2. Conflict resolution if there is a pending local change
-        if (localPendingRecord) {
-          // Only load the current local row when a resolver actually needs it.
-          const localRow = await TableManager.fetchRow(
+      await this.db.transaction(async (tx) => {
+        for (const change of chunk) {
+          // 1. Check for pending local mutations for this (table_name, row_id)
+          const localPendingRecord = await OutboxStore.findPendingByRow(
+            tx,
+            change.tableName,
+            change.rowId
+          );
+
+          // 2. Conflict resolution if there is a pending local change
+          if (localPendingRecord) {
+            // Only load the current local row when a resolver actually needs it.
+            const localRow = await TableManager.fetchRow(
+              tx,
+              change.tableName,
+              change.rowId,
+              this.primaryKey,
+              { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
+            );
+
+            const resolution = await Promise.resolve(
+              this.conflictResolver({
+                tableName: change.tableName,
+                rowId: change.rowId,
+                remoteChange: change,
+                localOutboxRecord: localPendingRecord,
+                localRow,
+              })
+            );
+
+            const resolutionStr = typeof resolution === 'string' ? resolution : 'merge';
+            const conflictEvent: ConflictEvent = {
+              tableName: change.tableName,
+              rowId: change.rowId,
+              resolution: resolutionStr,
+              timestamp: Date.now(),
+            };
+            queuedEvents.push({ event: 'sync:conflict', data: conflictEvent });
+
+            if (resolution === 'keep-local') {
+              // Local offline change takes precedence
+              continue;
+            }
+
+            if (resolution === 'apply-remote') {
+              // Remote change wins: remove the superseded local pending outbox mutation
+              await OutboxStore.deleteRecord(tx, localPendingRecord.id);
+            } else if (typeof resolution === 'object' && resolution.mergePayload) {
+              // Merge scenario
+              change.payload = resolution.mergePayload;
+              await OutboxStore.updatePayload(tx, localPendingRecord.id, resolution.mergePayload);
+            }
+          }
+
+          // 3. Apply remote change to local database
+          await TableManager.applyMutation(
             tx,
             change.tableName,
             change.rowId,
+            change.operation,
+            change.payload,
             this.primaryKey,
             { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
           );
 
-          const resolution = await Promise.resolve(
-            this.conflictResolver({
-              tableName: change.tableName,
+          // 4. Queue table change event to notify reactive listeners after commit
+          queuedEvents.push({
+            event: change.tableName,
+            data: {
+              operation: change.operation,
               rowId: change.rowId,
-              remoteChange: change,
-              localOutboxRecord: localPendingRecord,
-              localRow,
-            })
-          );
-
-          const resolutionStr = typeof resolution === 'string' ? resolution : 'merge';
-          const conflictEvent: ConflictEvent = {
-            tableName: change.tableName,
-            rowId: change.rowId,
-            resolution: resolutionStr,
-            timestamp: Date.now(),
-          };
-          queuedEvents.push({ event: 'sync:conflict', data: conflictEvent });
-
-          if (resolution === 'keep-local') {
-            // Local offline change takes precedence
-            continue;
-          }
-
-          if (resolution === 'apply-remote') {
-            // Remote change wins: remove the superseded local pending outbox mutation
-            await OutboxStore.deleteRecord(tx, localPendingRecord.id);
-          } else if (typeof resolution === 'object' && resolution.mergePayload) {
-            // Merge scenario
-            change.payload = resolution.mergePayload;
-            await OutboxStore.updatePayload(tx, localPendingRecord.id, resolution.mergePayload);
-          }
+              payload: change.payload,
+              source: 'remote',
+            },
+          });
         }
 
-        // 3. Apply remote change to local database
-        await TableManager.applyMutation(
-          tx,
-          change.tableName,
-          change.rowId,
-          change.operation,
-          change.payload,
-          this.primaryKey,
-          { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
-        );
+        // Advance durable checkpoint only when a valid pull timestamp was provided
+        if (isLastChunk && deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
+          await MetaStore.setLastSyncedAt(tx, deltas.timestamp);
+        }
+      });
 
-        // 4. Queue table change event to notify reactive listeners after commit
-        queuedEvents.push({
-          event: change.tableName,
-          data: {
-            operation: change.operation,
-            rowId: change.rowId,
-            payload: change.payload,
-            source: 'remote',
-          },
-        });
+      // Emit events after chunk commit
+      for (const item of queuedEvents) {
+        this.events.emit(item.event, item.data);
       }
 
-      // Persist sync cursor atomically within the same transaction as delta writes
-      if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
-        await MetaStore.setLastSyncedAt(tx, deltas.timestamp);
+      // Yield between chunks if there are multiple chunks
+      if (totalChanges > DELTA_CHUNK_SIZE && !isLastChunk) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
-    });
+    }
 
     if (deltas.timestamp) {
       this.lastPulledTimestamp = Math.max(this.lastPulledTimestamp, deltas.timestamp);
-    }
-
-    for (const item of queuedEvents) {
-      this.events.emit(item.event, item.data);
     }
   }
 

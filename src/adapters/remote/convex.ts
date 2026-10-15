@@ -1,5 +1,5 @@
 import { RemoteDBAdapter } from './index.js';
-import { DeltaChange, DeltaChanges, SyncOp, SyncOperation } from '../../core/types.js';
+import { DeltaChange, DeltaChanges, SyncOp, SyncOperation, PushResult } from '../../core/types.js';
 import {
   SyncLogger,
   CustomLogger,
@@ -96,7 +96,7 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes outbox operations as a batch mutation to Convex.
    */
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult> {
     if (!operations || operations.length === 0) {
       return true;
     }
@@ -114,6 +114,14 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
       const res = await this.client.mutation(this.pushMutation, {
         operations: payload,
       });
+
+      if (res && typeof res === 'object' && Array.isArray(res.failedIds)) {
+        return {
+          success: res.failedIds.length === 0,
+          failedIds: res.failedIds,
+          errors: res.errors,
+        };
+      }
 
       return res !== false;
     } catch (error) {

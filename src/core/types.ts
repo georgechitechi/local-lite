@@ -10,6 +10,13 @@ export interface SyncOperation {
   timestamp: number;
 }
 
+export interface PushResult {
+  success?: boolean;
+  successfulIds?: string[];
+  failedIds?: string[];
+  errors?: Record<string, string>;
+}
+
 export interface OutboxRecord extends SyncOperation {
   status: OutboxStatus;
   retryCount: number;

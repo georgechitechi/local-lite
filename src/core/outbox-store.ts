@@ -1,5 +1,5 @@
 import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
-import { OutboxRecord, OutboxStatus, SyncOperation } from './types.js';
+import { OutboxRecord, OutboxStatus, SyncOp, SyncOperation } from './types.js';
 
 /**
  * Maps a raw sync_outbox row into an OutboxRecord.
@@ -159,16 +159,41 @@ export class OutboxStore {
   }
 
   /**
-   * Updates an outbox record's payload (used during conflict merge).
+   * Updates an outbox record's payload (used during conflict merge or coalescing).
    */
   static async updatePayload(
     tx: LocalTransaction,
     id: string,
-    payload: Record<string, any>
+    payload: Record<string, any>,
+    timestamp?: number
   ): Promise<void> {
+    if (timestamp) {
+      await tx.execute(
+        `UPDATE sync_outbox SET payload = ?, timestamp = ? WHERE id = ?`,
+        [JSON.stringify(payload), timestamp, id]
+      );
+    } else {
+      await tx.execute(
+        `UPDATE sync_outbox SET payload = ? WHERE id = ?`,
+        [JSON.stringify(payload), id]
+      );
+    }
+  }
+
+  /**
+   * Updates an outbox record's operation and payload (used during mutation coalescing).
+   */
+  static async updateOperation(
+    tx: LocalTransaction,
+    id: string,
+    operation: SyncOp,
+    payload: Record<string, any> | null,
+    timestamp?: number
+  ): Promise<void> {
+    const ts = timestamp ?? Date.now();
     await tx.execute(
-      `UPDATE sync_outbox SET payload = ? WHERE id = ?`,
-      [JSON.stringify(payload), id]
+      `UPDATE sync_outbox SET operation = ?, payload = ?, timestamp = ? WHERE id = ?`,
+      [operation, payload ? JSON.stringify(payload) : null, ts, id]
     );
   }
 

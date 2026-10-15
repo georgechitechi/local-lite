@@ -229,4 +229,61 @@ describe('FirestoreRemoteAdapter', () => {
     adapter.destroy();
     expect(unsubscribeSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('falls back to per-document writes when batch.commit fails, returning PushResult with failedIds', async () => {
+    const commitSpy = vi.fn().mockRejectedValue(new Error('Batch failed: document 2 forbidden'));
+    const setSpy = vi.fn();
+
+    const mockDoc1 = {
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+    const mockDoc2 = {
+      set: vi.fn().mockRejectedValue(new Error('Permission denied on doc 2')),
+    };
+
+    const mockCollection = vi.fn().mockImplementation((table) => ({
+      doc: vi.fn().mockImplementation((id) => (id === 'p-1' ? mockDoc1 : mockDoc2)),
+    }));
+
+    const mockBatch = {
+      set: setSpy,
+      commit: commitSpy,
+    };
+
+    const mockFirestore = {
+      batch: vi.fn().mockReturnValue(mockBatch),
+      collection: mockCollection,
+    };
+
+    const adapter = new FirestoreRemoteAdapter(mockFirestore as any, {
+      tables: ['properties'],
+    });
+
+    const result = await adapter.pushChanges([
+      {
+        id: 'op-1',
+        tableName: 'properties',
+        rowId: 'p-1',
+        operation: 'INSERT',
+        payload: { title: 'Beach House' },
+        timestamp: Date.now(),
+      },
+      {
+        id: 'op-2',
+        tableName: 'properties',
+        rowId: 'p-2',
+        operation: 'INSERT',
+        payload: { title: 'Penthouse' },
+        timestamp: Date.now(),
+      },
+    ]);
+
+    expect(result).toEqual({
+      success: false,
+      failedIds: ['op-2'],
+      errors: { 'op-2': 'Permission denied on doc 2' },
+    });
+    expect(mockDoc1.set).toHaveBeenCalledTimes(1);
+    expect(mockDoc2.set).toHaveBeenCalledTimes(1);
+  });
 });

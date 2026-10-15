@@ -68,13 +68,6 @@ export class MockDB implements LocalDBAdapter {
       return [];
     }
 
-    // Select all rows from table
-    const selectAllMatch = q.match(/^SELECT \* FROM "?(\w+)"?$/i);
-    if (selectAllMatch) {
-      const table = selectAllMatch[1];
-      return Array.from(this.getTable(table).values());
-    }
-
     // Select 1 from table where id = ?
     const select1Match = normQ.match(/SELECT 1 FROM "?(\w+)"? WHERE "?(\w+)"? = \?/i);
     if (select1Match) {
@@ -85,7 +78,7 @@ export class MockDB implements LocalDBAdapter {
     }
 
     // Outbox find pending by row
-    if (normQ.includes('FROM sync_outbox WHERE table_name = ? AND row_id = ?')) {
+    if (normQ.includes('FROM sync_outbox') && normQ.includes('table_name = ? AND row_id = ?')) {
       const rows = Array.from(this.getTable('sync_outbox').values());
       const filtered = rows.filter(
         (r) => r.table_name === params[0] && r.row_id === params[1] && r.status !== 'FAILED'
@@ -105,14 +98,25 @@ export class MockDB implements LocalDBAdapter {
       return pending.slice(0, 50);
     }
 
-    // Select single row
-    const selectRowMatch = q.match(/SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? = \?/i);
-    if (selectRowMatch) {
+    // Select single row or filter by column (with optional LIMIT 1)
+    const selectRowMatch = normQ.match(/^SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? = \?(?:\s+LIMIT \d+)?$/i);
+    if (selectRowMatch && selectRowMatch[1] !== 'sync_outbox') {
       const table = selectRowMatch[1];
-      const id = params[0];
+      const col = selectRowMatch[2];
+      const val = params[0];
       const rows = this.getTable(table);
-      const row = rows.get(id);
-      return row ? [row] : [];
+      if (col.toLowerCase() === 'id') {
+        const row = rows.get(val);
+        return row ? [row] : [];
+      }
+      return Array.from(rows.values()).filter((r: any) => r[col] === val);
+    }
+
+    // Select all rows from table (with optional WHERE / ORDER / LIMIT)
+    const selectAllMatch = normQ.match(/^SELECT \* FROM "?(\w+)"?(?:\s+WHERE\s+[^;]+)?(?:\s+ORDER BY\s+[^;]+)?(?:\s+LIMIT\s+[^;]+)?;?$/i);
+    if (selectAllMatch) {
+      const table = selectAllMatch[1];
+      return Array.from(this.getTable(table).values());
     }
 
     // Insert into sync_outbox

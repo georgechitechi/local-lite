@@ -41,6 +41,7 @@ export interface LocalFirstClientConfig {
   tables?: string[];
   migrations?: string[];
   autoStart?: boolean;
+  coalesceOutbox?: boolean;
 }
 
 export class TransactionalClient {
@@ -68,15 +69,17 @@ export class TransactionalClient {
     });
 
     if (!options.skipOutbox) {
-      await OutboxStore.insertRecord(this.tx, {
-        id: outboxId,
+      const outboxId = await this.parent.recordOutboxMutation(
+        this.tx,
         tableName,
         rowId,
         operation,
         payload,
-        timestamp,
-      });
-      this.queuedOutboxIds.push(outboxId);
+        timestamp
+      );
+      if (outboxId) {
+        this.queuedOutboxIds.push(outboxId);
+      }
     }
 
     this.queuedTableEvents.push({
@@ -143,6 +146,7 @@ export class LocalFirstClient {
   public syncWorker: SyncWorker;
   public schemaManager: SchemaManager;
   public autoSchema: boolean;
+  public coalesceOutbox: boolean;
   public tables: string[];
   private primaryKey: string;
   private migrations: string[];
@@ -155,6 +159,7 @@ export class LocalFirstClient {
     this.events = new EventEmitter();
     this.primaryKey = config.primaryKey ?? 'id';
     this.autoSchema = config.autoSchema ?? false;
+    this.coalesceOutbox = config.coalesceOutbox ?? true;
     this.tables = config.tables ?? [];
     this.migrations = config.migrations ?? [];
     this.autoStart = config.autoStart ?? true;
@@ -180,6 +185,53 @@ export class LocalFirstClient {
 
   getPrimaryKey(): string {
     return this.primaryKey;
+  }
+
+  /**
+   * Writes a mutation to the outbox table, optionally coalescing with existing PENDING records for the same row.
+   * Returns the affected outboxId, or undefined if an offline INSERT was deleted offline before pushing.
+   */
+  async recordOutboxMutation(
+    tx: LocalTransaction,
+    tableName: string,
+    rowId: string,
+    operation: SyncOp,
+    payload: Record<string, any> | null,
+    timestamp: number
+  ): Promise<string | undefined> {
+    if (this.coalesceOutbox) {
+      const existing = await OutboxStore.findPendingByRow(tx, tableName, rowId);
+      if (existing && existing.status === 'PENDING') {
+        if (operation === 'DELETE') {
+          if (existing.operation === 'INSERT') {
+            // Created offline and deleted offline before ever being pushed to server: clean up outbox completely
+            await OutboxStore.deleteRecord(tx, existing.id);
+            return undefined;
+          } else {
+            await OutboxStore.updateOperation(tx, existing.id, 'DELETE', null, timestamp);
+            return existing.id;
+          }
+        } else if (operation === 'UPDATE') {
+          const merged = { ...(existing.payload || {}), ...(payload || {}) };
+          await OutboxStore.updatePayload(tx, existing.id, merged, timestamp);
+          return existing.id;
+        } else if (operation === 'INSERT') {
+          await OutboxStore.updateOperation(tx, existing.id, 'INSERT', payload, timestamp);
+          return existing.id;
+        }
+      }
+    }
+
+    const outboxId = generateUUID();
+    await OutboxStore.insertRecord(tx, {
+      id: outboxId,
+      tableName,
+      rowId,
+      operation,
+      payload,
+      timestamp,
+    });
+    return outboxId;
   }
 
   /**
@@ -234,6 +286,8 @@ export class LocalFirstClient {
     const outboxId = generateUUID();
     const timestamp = options.customTimestamp ?? Date.now();
 
+    let affectedOutboxId: string | undefined;
+
     const executeInTransaction = async (tx: LocalTransaction) => {
       // 1. Mutate local table
       await TableManager.applyMutation(tx, tableName, rowId, operation, payload, pk, {
@@ -243,14 +297,14 @@ export class LocalFirstClient {
 
       // 2. Insert into sync_outbox (if not skipped)
       if (!options.skipOutbox) {
-        await OutboxStore.insertRecord(tx, {
-          id: outboxId,
+        affectedOutboxId = await this.recordOutboxMutation(
+          tx,
           tableName,
           rowId,
           operation,
           payload,
-          timestamp,
-        });
+          timestamp
+        );
       }
     };
 
@@ -269,7 +323,10 @@ export class LocalFirstClient {
     });
 
     if (!options.skipOutbox) {
-      this.events.emit('sync_outbox', { operation: 'INSERT', rowId: outboxId });
+      this.events.emit('sync_outbox', {
+        operation: affectedOutboxId ? 'INSERT' : 'DELETE',
+        rowId: affectedOutboxId || rowId,
+      });
       // 4. Trigger immediate debounced push
       this.syncWorker.schedulePush(20);
     }
@@ -304,17 +361,18 @@ export class LocalFirstClient {
 
         const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
         if (!skipOutbox) {
-          const outboxId = generateUUID();
           const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
-          await OutboxStore.insertRecord(tx, {
-            id: outboxId,
-            tableName: m.tableName,
+          const outboxId = await this.recordOutboxMutation(
+            tx,
+            m.tableName,
             rowId,
-            operation: m.operation,
+            m.operation,
             payload,
-            timestamp,
-          });
-          queuedOutboxIds.push(outboxId);
+            timestamp
+          );
+          if (outboxId) {
+            queuedOutboxIds.push(outboxId);
+          }
         }
 
         queuedEvents.push({
@@ -460,6 +518,7 @@ export class LocalFirstClient {
   /**
    * Reads records from a local SQLite table without requiring manual SQL.
    * Supports where filtering with rich operators ($in, $gt, $contains, $or, etc.), order, limit, and offset.
+   * Pushes simple equality where clauses down to SQLite for high performance, with memory fallback.
    * Gracefully returns [] if table or columns have not been populated yet on empty schemas.
    *
    * Example:
@@ -469,14 +528,37 @@ export class LocalFirstClient {
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
     const safeTable = escapeIdentifier(tableName);
     let rows: any[];
+    let sql = `SELECT * FROM ${safeTable}`;
+    const params: any[] = [];
+
+    // Push down simple where equality conditions to SQLite
+    if (options?.where && typeof options.where === 'object' && !Array.isArray(options.where)) {
+      const entries = Object.entries(options.where).filter(
+        ([k, v]) =>
+          k !== '$or' &&
+          k !== '$and' &&
+          (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+      );
+      if (entries.length > 0) {
+        const whereClauses = entries.map(([col]) => `${escapeIdentifier(col)} = ?`);
+        sql += ` WHERE ${whereClauses.join(' AND ')}`;
+        params.push(...entries.map(([, val]) => (typeof val === 'boolean' ? (val ? 1 : 0) : val)));
+      }
+    }
+
     try {
-      rows = await this.db.execute(`SELECT * FROM ${safeTable}`);
+      rows = await this.db.execute(sql, params);
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {
         return [];
       }
-      throw err;
+      // Fallback to select * if pushdown syntax differs
+      try {
+        rows = await this.db.execute(`SELECT * FROM ${safeTable}`);
+      } catch {
+        return [];
+      }
     }
 
     return applyQueryOptions<T>(rows, options);

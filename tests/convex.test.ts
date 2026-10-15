@@ -72,6 +72,40 @@ describe('ConvexRemoteAdapter', () => {
     expect(result).toBe(false);
   });
 
+  it('returns structured PushResult when Convex backend reports partial failures', async () => {
+    const mutationSpy = vi.fn().mockResolvedValue({
+      failedIds: ['op-2'],
+      errors: { 'op-2': 'Row forbidden' },
+    });
+    const mockConvex = { mutation: mutationSpy, query: vi.fn() };
+    const adapter = new ConvexRemoteAdapter(mockConvex as any);
+
+    const result = await adapter.pushChanges([
+      {
+        id: 'op-1',
+        tableName: 'properties',
+        rowId: 'p-1',
+        operation: 'INSERT',
+        payload: { title: 'Test 1' },
+        timestamp: Date.now(),
+      },
+      {
+        id: 'op-2',
+        tableName: 'properties',
+        rowId: 'p-2',
+        operation: 'INSERT',
+        payload: { title: 'Test 2' },
+        timestamp: Date.now(),
+      },
+    ]);
+
+    expect(result).toEqual({
+      success: false,
+      failedIds: ['op-2'],
+      errors: { 'op-2': 'Row forbidden' },
+    });
+  });
+
   it('fetches delta changes when Convex query returns structured DeltaChanges', async () => {
     const mockQuery = vi.fn().mockResolvedValue({
       timestamp: 1700005000000,
