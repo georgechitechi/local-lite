@@ -58,7 +58,7 @@ export function useSchedulesFlow() {
 
   const allBackupSchedules = useBackupSchedules(selectedBusiness?.id);
   const allReportSchedules = useReportSchedules(selectedBusiness?.id);
-  const { insert, update, delete: deleteRecord } = useCoreMutations();
+  const { insert, update, delete: deleteRecord, client } = useCoreMutations();
 
   const [loading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -337,16 +337,25 @@ export function useSchedulesFlow() {
         if (backupForm.enabled) {
         } else {
           // Schedule is disabled, check if any active backup schedules remain
-          const { data: enabledSchedules } = await supabase
-            .from('schedules')
-            .select('id')
-            .eq('schedule_type', 'system_backup')
-            .eq('status', 'active')
-            .limit(1);
+          let hasActive = false;
+          if (client) {
+            const rows = await client.findMany('schedules', {
+              where: { schedule_type: 'system_backup', status: 'active' },
+            }).catch(() => []);
+            hasActive = (rows || []).some((r: any) => !r.deleted && r.id !== backupSchedule?.id);
+          } else if (supabase) {
+            const { data: enabledSchedules } = await supabase
+              .from('schedules')
+              .select('id')
+              .eq('schedule_type', 'system_backup')
+              .eq('status', 'active')
+              .limit(1);
+            hasActive = !!enabledSchedules && enabledSchedules.length > 0;
+          }
 
-          if (!enabledSchedules || enabledSchedules.length === 0) {
+          if (!hasActive && supabase) {
             // No enabled schedules, remove the master cron job
-            await cronManager.removeMasterBackupJob();
+            await cronManager.removeMasterBackupJob().catch(() => {});
             showSnackbar('Backup schedule disabled and cron job removed', 'success');
           } else {
             showSnackbar('Backup schedule disabled', 'success');

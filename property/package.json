@@ -52,7 +52,7 @@
     "expo-task-manager": "~57.0.21",
     "expo-updates": "~57.0.26",
     "libphonenumber-js": "^1.13.14",
-    "local-lite": "^0.0.3",
+    "local-lite": "file:..",
     "native-android-sms": "^0.2.0",
     "native-in-app-updates": "^0.2.0",
     "react": "19.2.3",

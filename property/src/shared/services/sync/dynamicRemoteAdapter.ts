@@ -4,6 +4,7 @@ import {
   type RemoteDBAdapter,
   SupabaseRemoteAdapter,
   type SyncOperation,
+  type PushResult,
 } from 'local-lite';
 import {
   getAuthStateSyncSnapshot,
@@ -98,7 +99,7 @@ export class DynamicSupabaseAdapter implements RemoteDBAdapter {
     return this.activeAdapter;
   }
 
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult> {
     const adapter = this.getAdapter();
     if (!adapter) {
       // Offline / Demo mode: do not fail, but keep changes queued in SQLite outbox
@@ -106,7 +107,7 @@ export class DynamicSupabaseAdapter implements RemoteDBAdapter {
     }
     const pushPromise = adapter.pushChanges(operations);
     const timeoutPromise = new Promise<boolean>(resolve =>
-      setTimeout(() => resolve(false), 8000),
+      setTimeout(() => resolve(false), 15000),
     );
     return await Promise.race([pushPromise, timeoutPromise]);
   }

@@ -518,19 +518,8 @@ export default function MessageTemplatesManager() {
         updated_at: new Date().toISOString(),
       });
 
-        // Also direct update for guaranteed database persistence
-        await supabase
-          .from('message_templates')
-          .update({
-            title: formData.title,
-            content: formData.content,
-            is_html: formData.is_html,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingTemplate.id);
-
-        showSnackbar('Template updated successfully', 'success');
-        setEditModalVisible(false);
+      showSnackbar('Template updated successfully', 'success');
+      setEditModalVisible(false);
     } catch (error) {
       console.error('Error saving template:', error);
       showSnackbar('Failed to save template', 'error');
@@ -592,17 +581,7 @@ export default function MessageTemplatesManager() {
         count++;
       }
 
-      // 2. Direct Supabase upsert to guarantee instant database persistence
-      if (recordsToUpsert.length > 0) {
-        const { error: dbError } = await supabase
-          .from('message_templates')
-          .upsert(recordsToUpsert, { onConflict: 'business_id,name,channel' });
 
-        if (dbError) {
-          console.error('Supabase direct upsert error:', dbError);
-          throw dbError;
-        }
-      }
 
       if (showToast) {
         showSnackbar(

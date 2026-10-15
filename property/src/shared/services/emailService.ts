@@ -1,3 +1,4 @@
+import { getSyncClient, getSyncClientSync } from '@/shared/services/sync/client';
 import { supabase } from '@/shared/services/supabase';
 import { formatDate } from '@/shared/utils/formatters';
 import { properCase, snakeCaseToTitleCase } from '@/shared/utils/helper';
@@ -46,25 +47,46 @@ const getBusinessWebsiteLink = async (
   if (!businessId) return '';
 
   try {
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('setting_value')
-      .eq('business_id', businessId)
-      .eq('setting_key', 'links')
-      .maybeSingle();
+    const client = getSyncClientSync() || (await getSyncClient().catch(() => null));
+    if (client) {
+      const rows = await client.findMany('settings', {
+        where: { business_id: businessId, setting_key: 'links' },
+      }).catch(() => []);
+      const found = (rows || []).find((r: any) => !r.deleted);
+      if (found?.setting_value) {
+        try {
+          const linksData =
+            typeof found.setting_value === 'string'
+              ? JSON.parse(found.setting_value)
+              : found.setting_value;
+          if (linksData?.website) {
+            return linksData.website;
+          }
+        } catch {}
+      }
+    }
 
-    if (settings?.setting_value) {
-      try {
-        const linksData =
-          typeof settings.setting_value === 'string'
-            ? JSON.parse(settings.setting_value)
-            : settings.setting_value;
+    if (supabase) {
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('business_id', businessId)
+        .eq('setting_key', 'links')
+        .maybeSingle();
 
-        if (linksData?.website) {
-          return linksData.website;
+      if (settings?.setting_value) {
+        try {
+          const linksData =
+            typeof settings.setting_value === 'string'
+              ? JSON.parse(settings.setting_value)
+              : settings.setting_value;
+
+          if (linksData?.website) {
+            return linksData.website;
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse links setting:', parseError);
         }
-      } catch (parseError) {
-        console.warn('Failed to parse links setting:', parseError);
       }
     }
   } catch (settingsError) {
@@ -434,24 +456,39 @@ export const sendReceiptEmail = async (
   pdfBase64?: string,
 ): Promise<boolean> => {
   try {
-    // Get business details
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('id', receipt.business_id)
-      .maybeSingle();
+    const client = getSyncClientSync() || (await getSyncClient().catch(() => null));
+    let business: any = null;
+    let settings: any = null;
 
-    if (businessError) throw new Error(businessError.message);
+    if (client) {
+      business = await client.findById('businesses', receipt.business_id).catch(() => null);
+      const settingsRows = await client.findMany('settings', {
+        where: { business_id: receipt.business_id, setting_key: 'currency_settings' },
+      }).catch(() => []);
+      settings = (settingsRows || []).find((r: any) => !r.deleted);
+    }
+
+    if (!business && supabase) {
+      const { data } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('id', receipt.business_id)
+        .maybeSingle();
+      business = data;
+    }
+
     if (!business) throw new Error(`Business with ID ${receipt.business_id} not found`);
     if (!tenant.email) throw new Error('Tenant email not found');
 
-    // Get business settings for currency
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('setting_value')
-      .eq('business_id', business.id)
-      .eq('setting_key', 'currency_settings')
-      .maybeSingle();
+    if (!settings && supabase) {
+      const { data } = await supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('business_id', business.id)
+        .eq('setting_key', 'currency_settings')
+        .maybeSingle();
+      settings = data;
+    }
 
     const currencySettings = settings?.setting_value as { currency?: string } | undefined;
     const currency = currencySettings?.currency || 'KES';
