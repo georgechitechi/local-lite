@@ -44,10 +44,7 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
   // 3. Resolve Network Provider
   const network = config.network ?? new DefaultNetworkStatusProvider(true);
 
-  const autoSchema =
-    config.autoSchema !== undefined
-      ? config.autoSchema
-      : !config.migrations || config.migrations.length === 0;
+  const autoSchema = config.autoSchema ?? false;
 
   // 4. Instantiate Local-First Client
   const client = new LocalFirstClient({
@@ -64,19 +61,14 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
     logLevel: config.logLevel,
     autoSchema,
     tables: config.tables ?? [],
+    migrations: config.migrations,
+    autoStart: config.autoStart,
   });
 
   // 5. Execute Migrations & Auto-initialize
   if (config.autoInitialize !== false) {
     await client.initialize();
 
-    if (config.migrations && config.migrations.length > 0) {
-      for (const query of config.migrations) {
-        if (query && query.trim()) {
-          await client.db.execute(query);
-        }
-      }
-    }
   }
 
   return client;

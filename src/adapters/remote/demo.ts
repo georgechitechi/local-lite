@@ -31,8 +31,11 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
     };
   }
 
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): void {
+  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
     this.liveSubscribers.push(callback);
+    return () => {
+      this.liveSubscribers = this.liveSubscribers.filter((subscriber) => subscriber !== callback);
+    };
   }
 
   /**

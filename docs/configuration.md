@@ -15,11 +15,12 @@ import { defineSyncConfig } from 'local-lite/config';
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `database` | `any \| string \| (() => Promise<any>) \| LocalDBAdapter` | Optional | Database instance, factory function, or custom adapter. |
-| `databaseName` | `string` | `'local_lite.db'` | Database filename when auto-opening via `expo-sqlite`. |
+| `databaseName` | `string` | Not set | Database filename when auto-opening via `expo-sqlite`. |
 | `tables` | `string[]` | `[]` | List of table names to synchronize. |
-| `autoSchema` | `boolean` | `true` | When true, automatically creates tables and adds missing columns dynamically on insert/update. |
+| `autoSchema` | `boolean` | `false` | When true, automatically creates tables and adds missing columns dynamically on insert/update. |
 | `primaryKey` | `string` | `'id'` | Primary key column name used across tables. |
-| `migrations` | `string[]` | `[]` | Raw SQL statements executed sequentially on startup if manual schema migration is desired. |
+| `migrations` | `string[]` | `[]` | Idempotent SQL executed in a transaction during initialization, before sync starts. |
+| `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
 
 ---
@@ -71,7 +72,7 @@ Pass an object implementing `RemoteDBAdapter` to bypass built-in cloud providers
 
 #### `inMemoryRemote`
 * Type: `boolean`
-* Default: `true` (when no cloud backend is provided)
+* Default: `false`. Missing backend configuration throws unless demo mode is explicitly enabled.
 * When enabled without cloud credentials, simulates an in-memory remote server with artificial network delays (300ms) for testing offline-first workflows locally without any cloud setup.
 
 ---
@@ -93,7 +94,7 @@ retry: {
   maxDelayMs: 30000,        // Max ceiling delay (30 seconds)
   backoffMultiplier: 1.5,   // Exponential multiplier
   jitter: true,             // Add randomized jitter to prevent thundering herd
-  retryPredicate: (err) => true, // Custom function to decide whether an error is retryable
+  shouldRetry: (err, operation) => true, // Custom function to decide whether an error is retryable
 }
 ```
 
@@ -115,3 +116,19 @@ logger: {
   error: (msg, ...args) => Sentry.captureMessage(msg),
 }
 ```
+
+## Lifecycle and adapter boundaries
+
+For an explicit adapter-only setup, import `LocalFirstClient` and adapter types
+from `local-lite/core`. The `local-lite/config` factory retains optional provider
+conveniences. See the README compatibility notes for changed defaults.
+
+With `autoInitialize: false`, call `await client.initialize()` before using storage.
+Configured migrations still run during that call. Concurrent calls share the same
+initialization; a failure can be retried. To resume after `client.stop()`, use
+`client.syncWorker.start()`. `autoStart: false` disables automatic push scheduling
+as well as polling and subscriptions until start is called.
+
+The library retains failed outbox writes for inspection/retry or explicit
+`clearFailedMutations()` calls. Application-specific error handling, authentication,
+account switching, reloads, and schema policies belong to the consuming app.

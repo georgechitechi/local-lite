@@ -24,6 +24,53 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 
 ---
 
+## Independent core and explicit policies
+
+Use `local-lite/core` for the sync engine with your own `LocalDBAdapter` and
+`RemoteDBAdapter`. This entry point does not load provider implementations,
+configuration auto-detection, or React. UI hooks and backend adapters remain optional.
+
+```typescript
+import { LocalFirstClient } from 'local-lite/core';
+
+const client = new LocalFirstClient({
+  local: myLocalAdapter,
+  remote: myRemoteAdapter,
+  autoSchema: false,
+  autoStart: false,
+  conflictResolver: myConflictResolver,
+});
+await client.initialize();
+// Writes remain in the outbox until you push manually or enable automatic sync.
+await client.syncWorker.pushLocalChanges();
+// Or enable polling, reconnect handling, and realtime subscriptions:
+client.syncWorker.start();
+```
+
+Authentication, account switching, application schemas, UI reloads, and decisions
+to discard failed writes belong to the caller. The core does not inspect backend
+error codes to delete failed mutations. Conflict resolution and retry settings
+remain configurable; the existing default conflict strategy is last-write-wins.
+
+### Compatibility changes from 0.0.3
+
+- Missing remote configuration now throws. Temporary demo behavior requires
+  `inMemoryRemote: true`; it must never silently acknowledge production writes.
+- `autoSchema` now defaults to `false` in the configuration factory as well as the
+  core constructor. Set `autoSchema: true` to retain inferred schema behavior.
+- Migrations run transactionally before sync starts, including when initialization
+  is deferred with `autoInitialize: false`. Use idempotent SQL; this is not a
+  versioned migration framework.
+- `initialize()` is safe to call repeatedly or concurrently. After `stop()`, call
+  `client.syncWorker.start()` to resume. Mutations after stop remain queued.
+- `autoStart: false` prepares storage without automatic sync. Explicit push/pull
+  methods remain available. Stop does not cancel adapter calls already in flight.
+- Realtime changes update local rows without advancing the durable pull cursor.
+  Custom pull adapters must return complete batches through their checkpoint and
+  reject partial failures. Supabase table failures now reject the pull.
+- Custom realtime adapters may return an unsubscribe function. Legacy adapters
+  returning void remain supported; stopped workers ignore their later callbacks.
+
 ## Features
 
 Interrupted pushes recover automatically at startup and before the next push cycle,

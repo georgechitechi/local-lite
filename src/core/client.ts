@@ -39,6 +39,8 @@ export interface LocalFirstClientConfig {
   logLevel?: LogLevel;
   autoSchema?: boolean;
   tables?: string[];
+  migrations?: string[];
+  autoStart?: boolean;
 }
 
 export class TransactionalClient {
@@ -47,7 +49,7 @@ export class TransactionalClient {
     private tx: LocalTransaction,
     private queuedTableEvents: Array<{ tableName: string; event: TableChangeEvent }>,
     private queuedOutboxIds: string[]
-  ) {}
+  ) { }
 
   async mutate(
     tableName: string,
@@ -143,6 +145,9 @@ export class LocalFirstClient {
   public autoSchema: boolean;
   public tables: string[];
   private primaryKey: string;
+  private migrations: string[];
+  private autoStart: boolean;
+  private initialization?: Promise<void>;
 
   constructor(config: LocalFirstClientConfig) {
     this.db = config.local;
@@ -151,6 +156,8 @@ export class LocalFirstClient {
     this.primaryKey = config.primaryKey ?? 'id';
     this.autoSchema = config.autoSchema ?? false;
     this.tables = config.tables ?? [];
+    this.migrations = config.migrations ?? [];
+    this.autoStart = config.autoStart ?? true;
     this.schemaManager = new SchemaManager();
 
     const workerOptions: SyncWorkerOptions = {
@@ -165,6 +172,7 @@ export class LocalFirstClient {
       logLevel: config.logLevel,
       autoSchema: this.autoSchema,
       schemaManager: this.schemaManager,
+      autoSync: this.autoStart,
     };
 
     this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
@@ -176,12 +184,31 @@ export class LocalFirstClient {
 
   /**
    * Initializes the client: creates sync_outbox schema, ensures autoSchema tables if enabled,
-   * and starts the background sync worker.
+   * applies migrations, and optionally starts automatic sync. Concurrent/repeated calls
+   * share initialization; failures can be retried. After stop(), explicitly start the worker.
    */
   async initialize(): Promise<void> {
+    if (!this.initialization) {
+      this.initialization = this.initializeStorage().catch((error) => {
+        this.initialization = undefined;
+        throw error;
+      });
+    }
+    await this.initialization;
+  }
+
+  private async initializeStorage(): Promise<void> {
     await OutboxStore.ensureSchema(this.db);
     await MetaStore.ensureSchema(this.db);
     await OutboxStore.resetStaleProcessing(this.db);
+
+    if (this.migrations.length > 0) {
+      await this.db.transaction(async (tx) => {
+        for (const query of this.migrations) {
+          if (query.trim()) await tx.execute(query);
+        }
+      });
+    }
 
     if (this.autoSchema && this.tables.length > 0) {
       for (const table of this.tables) {
@@ -189,7 +216,7 @@ export class LocalFirstClient {
       }
     }
 
-    this.syncWorker.start();
+    if (this.autoStart) this.syncWorker.start();
   }
 
   /**
@@ -611,6 +638,7 @@ export class LocalFirstClient {
       }
     }
 
+    if (options.dropTables) this.initialization = undefined;
     await this.resetSyncCursor();
     this.events.emit('reset', { dropTables: options.dropTables ?? false });
   }

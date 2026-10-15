@@ -35,6 +35,7 @@ export interface SyncWorkerOptions {
   primaryKey?: string;
   autoSchema?: boolean;
   schemaManager?: SchemaManager;
+  autoSync?: boolean;
 }
 
 export class SyncWorker {
@@ -57,6 +58,9 @@ export class SyncWorker {
   private pullIntervalTimer?: any;
   private pushDebounceTimer?: any;
   private networkUnsubscribe?: () => void;
+  private remoteUnsubscribe?: () => void;
+  private subscriptionGeneration = 0;
+  private automaticSync: boolean;
 
   private isPushing = false;
   private isPulling = false;
@@ -83,6 +87,7 @@ export class SyncWorker {
     options: SyncWorkerOptions = {}
   ) {
     this.db = db;
+    this.automaticSync = options.autoSync ?? true;
     this.remote = remote;
     this.events = events;
     this.network = options.network ?? new DefaultNetworkStatusProvider();
@@ -140,16 +145,22 @@ export class SyncWorker {
    */
   start(): void {
     this.stop();
+    this.automaticSync = true;
+    const generation = this.subscriptionGeneration;
 
     this.pushIntervalTimer = setInterval(() => this.pushLocalChanges(), this.pushIntervalMs);
     this.pullIntervalTimer = setInterval(() => this.pullRemoteChanges(), this.pullIntervalMs);
 
     // Subscribe to live remote changes
-    this.remote.subscribeToLiveChanges((deltas) => {
-      this.applyDeltasLocally(deltas).catch((err) => {
+    const unsubscribe = this.remote.subscribeToLiveChanges((deltas) => {
+      if (generation !== this.subscriptionGeneration) return;
+      // A realtime event is not a complete pull page and cannot advance its checkpoint.
+      this.applyDeltasLocally(deltas, { advanceCursor: false }).catch((err) => {
         this.logger.error('Error applying live remote deltas:', err);
       });
     });
+
+    if (typeof unsubscribe === 'function') this.remoteUnsubscribe = unsubscribe;
 
     // Subscribe to network connectivity changes
     this.networkUnsubscribe = this.network.subscribe((online) => {
@@ -174,6 +185,12 @@ export class SyncWorker {
    * Stops all active intervals, timers, and listeners.
    */
   stop(): void {
+    this.automaticSync = false;
+    this.subscriptionGeneration++;
+    if (this.remoteUnsubscribe) {
+      this.remoteUnsubscribe();
+      this.remoteUnsubscribe = undefined;
+    }
     if (this.pushIntervalTimer) {
       clearInterval(this.pushIntervalTimer);
       this.pushIntervalTimer = undefined;
@@ -196,6 +213,7 @@ export class SyncWorker {
    * Schedules an immediate push with a short debounce.
    */
   schedulePush(delayMs: number = 50): void {
+    if (!this.automaticSync) return;
     if (this.pushDebounceTimer) {
       clearTimeout(this.pushDebounceTimer);
     }
@@ -348,7 +366,7 @@ export class SyncWorker {
       if (isInfinite || currentRetry < this.maxRetries) {
         let backoffDelay = Math.min(
           (this.retryConfig.initialDelayMs || 1000) *
-            Math.pow(this.retryConfig.backoffMultiplier || 1.5, currentRetry),
+          Math.pow(this.retryConfig.backoffMultiplier || 1.5, currentRetry),
           this.retryConfig.maxDelayMs || 30000
         );
 
@@ -429,13 +447,19 @@ export class SyncWorker {
    * Applies incoming server delta changes to local tables with conflict resolution.
    * Serializes execution in a queue to prevent concurrent SQLite transactions.
    */
-  async applyDeltasLocally(deltas: DeltaChanges): Promise<void> {
+  async applyDeltasLocally(
+    deltas: DeltaChanges,
+    options: { advanceCursor?: boolean } = {}
+  ): Promise<void> {
     const task = async () => {
-      await this.processDeltasLocally(deltas);
+      await this.getLastPulledTimestamp();
+      await this.processDeltasLocally(
+        options.advanceCursor === false ? { ...deltas, timestamp: 0 } : deltas
+      );
     };
 
     const next = this.deltaQueue.then(task, task);
-    this.deltaQueue = next.catch(() => {});
+    this.deltaQueue = next.catch(() => { });
     return await next;
   }
 

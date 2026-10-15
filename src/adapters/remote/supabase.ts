@@ -258,8 +258,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
         const { data, error } = await query;
         if (error) {
-          this.logger.error(formatSupabaseError(error, { table, operation: 'PULL' }));
-          continue;
+          throw error;
         }
 
         if (data && Array.isArray(data)) {
@@ -286,6 +285,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         }
       } catch (err) {
         this.logger.error(formatSupabaseError(err, { table, operation: 'PULL' }));
+        throw err;
       }
     }
 

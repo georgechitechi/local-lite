@@ -70,6 +70,11 @@
       "types": "./dist/adapters/local/node-sqlite.d.ts",
       "import": "./dist/adapters/local/node-sqlite.js",
       "default": "./dist/adapters/local/node-sqlite.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "default": "./dist/core/index.js"
     }
   },
   "scripts": {

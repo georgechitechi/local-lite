@@ -59,7 +59,6 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
 
     // In CommonJS / React Native Metro environments, synchronous require avoids async chunk split failure
     try {
-      // @ts-ignore
       if (typeof require === 'function') {
         supabaseModule = require('@supabase/supabase-js');
       }
@@ -95,12 +94,12 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
     });
   }
 
-  // 6. In-Memory Simulated Remote (Default when no cloud credentials provided)
-  if (config.inMemoryRemote !== false) {
+  // 6. Explicitly selected demo backend only; never acknowledge writes into a temporary backend implicitly.
+  if (config.inMemoryRemote === true) {
     return new MemoryDemoRemoteAdapter(300);
   }
 
   throw new Error(
-    'No remote adapter configured. Please specify config.supabase, config.convex, config.firebase, or config.remote.'
+    'No remote adapter configured. Please specify config.supabase, config.convex, config.firebase, or config.remote. For demos only, explicitly set config.inMemoryRemote: true.'
   );
 }

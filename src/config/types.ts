@@ -88,7 +88,7 @@ export interface LocalLiteConfig {
   database?: any | string | (() => Promise<any> | any) | LocalDBAdapter;
 
   /**
-   * Database name if database is not provided. Default: 'local_lite.db'
+   * Explicit database filename for the Expo convenience opener when database is not provided.
    */
   databaseName?: string;
 
@@ -106,7 +106,7 @@ export interface LocalLiteConfig {
 
   /**
    * Automatically create tables and columns dynamically on the fly without manual SQL migrations.
-   * When true (default if migrations is not provided), tables in `tables` are created automatically,
+   * Opt-in (default: false). When true, tables in `tables` are created automatically,
    * and any missing columns are added dynamically on insert/update/pull.
    */
   autoSchema?: boolean;
@@ -137,9 +137,9 @@ export interface LocalLiteConfig {
   remote?: RemoteDBAdapter;
 
   /**
-   * Whether to use an in-memory simulated remote backend if Supabase, Convex, or Firebase credentials are not provided.
-   * Allows running and testing full local-first sync workflows without cloud infrastructure.
-   * Default: true
+   * Explicitly enable a temporary simulated remote for demos when no backend is provided.
+   * Acknowledged writes exist only in memory. Never enabled implicitly.
+   * Default: false
    */
   inMemoryRemote?: boolean;
 
@@ -188,4 +188,11 @@ export interface LocalLiteConfig {
    * Default: true
    */
   autoInitialize?: boolean;
+
+  /**
+   * Start automatic sync after initialization. Default: true.
+   * Set false to initialize storage and queue writes without timers or subscriptions.
+   * Call client.syncWorker.start() to enable automatic sync, or push/pull manually.
+   */
+  autoStart?: boolean;
 }
