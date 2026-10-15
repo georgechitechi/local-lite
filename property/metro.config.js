@@ -16,6 +16,8 @@ config.resolver.extraNodeModules = {
   'expo-sqlite': path.resolve(projectRoot, 'node_modules/expo-sqlite'),
   'expo-modules-core': path.resolve(projectRoot, 'node_modules/expo-modules-core'),
   'react-native-screens': path.resolve(projectRoot, 'node_modules/react-native-screens'),
+  'react-native-reanimated': path.resolve(projectRoot, 'node_modules/react-native-reanimated'),
+  'expo-router': path.resolve(projectRoot, 'node_modules/expo-router'),
 };
 
 // 3. Prioritize local node_modules and disable lookup in parent directories
