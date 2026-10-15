@@ -60,8 +60,19 @@ export async function resolveLocalAdapter(config: LocalLiteConfig): Promise<Loca
   // 9. Auto-open by name using expo-sqlite if available
   if (typeof rawDb === 'string' || config.databaseName) {
     const dbName = typeof rawDb === 'string' ? rawDb : (config.databaseName ?? 'local_lite.db');
+    let expoSqlite: any;
     try {
-      const expoSqlite: any = await import('expo-sqlite');
+      if (typeof require === 'function') {
+        expoSqlite = require('expo-sqlite');
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      if (!expoSqlite) {
+        expoSqlite = await import('expo-sqlite');
+      }
       if (expoSqlite && typeof expoSqlite.openDatabaseAsync === 'function') {
         const expoDb = await expoSqlite.openDatabaseAsync(dbName);
         return new ExpoSQLiteAdapter(expoDb);

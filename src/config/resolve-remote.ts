@@ -56,13 +56,29 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
   // 5. Supabase with URL + anonKey (lazy dynamic import)
   if (config.supabase?.url && config.supabase?.anonKey) {
     let supabaseModule: any;
+
+    // In CommonJS / React Native Metro environments, synchronous require avoids async chunk split failure
     try {
       // @ts-ignore
-      supabaseModule = await import('@supabase/supabase-js');
+      if (typeof require === 'function') {
+        supabaseModule = require('@supabase/supabase-js');
+      }
     } catch {
-      throw new Error(
-        'To initialize Supabase from url and anonKey, please install @supabase/supabase-js or provide a pre-configured client to config.supabase.client'
-      );
+      // ignore
+    }
+
+    if (!supabaseModule && typeof (globalThis as any)?.supabase?.createClient === 'function') {
+      supabaseModule = (globalThis as any).supabase;
+    }
+
+    if (!supabaseModule) {
+      try {
+        supabaseModule = await import('@supabase/supabase-js');
+      } catch {
+        throw new Error(
+          'To initialize Supabase from url and anonKey, please install @supabase/supabase-js or provide a pre-configured client to config.supabase.client'
+        );
+      }
     }
     const createClientFn = supabaseModule.createClient || supabaseModule.default?.createClient;
     const supabaseClient = createClientFn(config.supabase.url, config.supabase.anonKey);
