@@ -23,6 +23,9 @@ import { TableManager } from './table-manager.js';
 import { SchemaManager } from './schema-manager.js';
 import { SyncLogger, CustomLogger, LogLevel, defaultLogger } from '../utils/logger.js';
 
+/** Maximum outbox records sent per push cycle. */
+const PUSH_BATCH_SIZE = 50;
+
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
@@ -67,6 +70,8 @@ export class SyncWorker {
   private lastPulledTimestamp = 0;
   private cursorLoaded = false;
   private deltaQueue: Promise<void> = Promise.resolve();
+  private statusRun?: Promise<void>;
+  private statusRerunRequested = false;
 
   // Telemetry metrics
   private totalPushedOperations = 0;
@@ -233,20 +238,40 @@ export class SyncWorker {
     }
   }
 
-  private async emitStatus(): Promise<void> {
-    try {
-      const online = await this.isOnline();
-      const counts = await OutboxStore.getCounts(this.db);
-      const statusEvent: SyncStatusEvent = {
-        isOnline: online,
-        isPushing: this.isPushing,
-        isPulling: this.isPulling,
-        pendingCount: counts.pending,
-      };
-      this.events.emit('sync:status', statusEvent);
-    } catch {
-      // Ignored
+  /**
+   * Emits a `sync:status` snapshot. Calls are coalesced: while one snapshot is being
+   * computed, further requests collapse into a single trailing run that reflects the
+   * latest state, so bursts of push/pull transitions cost at most two COUNT queries.
+   */
+  private emitStatus(): Promise<void> {
+    if (this.statusRun) {
+      this.statusRerunRequested = true;
+      return this.statusRun;
     }
+
+    const run = async () => {
+      do {
+        this.statusRerunRequested = false;
+        try {
+          const online = await this.isOnline();
+          const counts = await OutboxStore.getCounts(this.db);
+          const statusEvent: SyncStatusEvent = {
+            isOnline: online,
+            isPushing: this.isPushing,
+            isPulling: this.isPulling,
+            pendingCount: counts.pending,
+          };
+          this.events.emit('sync:status', statusEvent);
+        } catch {
+          // Ignored
+        }
+      } while (this.statusRerunRequested);
+    };
+
+    this.statusRun = run().finally(() => {
+      this.statusRun = undefined;
+    });
+    return this.statusRun;
   }
 
   /**
@@ -265,7 +290,7 @@ export class SyncWorker {
       this.totalPushCycles++;
       // No push is active: recover records left behind by a failed status write.
       await OutboxStore.resetStaleProcessing(this.db);
-      pendingRecords = await OutboxStore.getPending(this.db, this.maxRetries);
+      pendingRecords = await OutboxStore.getPending(this.db, this.maxRetries, PUSH_BATCH_SIZE);
 
       if (pendingRecords.length === 0) {
         return;
@@ -304,6 +329,12 @@ export class SyncWorker {
         };
         this.events.emit('sync:push', pushEvent);
         this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'batch' });
+
+        // Drain backlog: a full batch likely means more records are waiting, so continue
+        // immediately instead of idling until the next push interval tick.
+        if (operations.length >= PUSH_BATCH_SIZE) {
+          this.schedulePush(0);
+        }
       } else {
         const errMsg = 'Remote push returned false';
         this.lastPushError = errMsg;
@@ -472,6 +503,10 @@ export class SyncWorker {
       return;
     }
 
+    // Events are buffered and emitted only after the transaction commits, so listeners
+    // never observe rolled-back data or issue reads while the write transaction is open.
+    const queuedEvents: Array<{ event: string; data: any }> = [];
+
     await this.db.transaction(async (tx) => {
       for (const change of deltas.changes) {
         // 1. Check for pending local mutations for this (table_name, row_id)
@@ -481,17 +516,17 @@ export class SyncWorker {
           change.rowId
         );
 
-        // 2. Query current local row if it exists
-        const localRow = await TableManager.fetchRow(
-          tx,
-          change.tableName,
-          change.rowId,
-          this.primaryKey,
-          { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
-        );
-
-        // 3. Conflict resolution if there is a pending local change
+        // 2. Conflict resolution if there is a pending local change
         if (localPendingRecord) {
+          // Only load the current local row when a resolver actually needs it.
+          const localRow = await TableManager.fetchRow(
+            tx,
+            change.tableName,
+            change.rowId,
+            this.primaryKey,
+            { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
+          );
+
           const resolution = await Promise.resolve(
             this.conflictResolver({
               tableName: change.tableName,
@@ -509,7 +544,7 @@ export class SyncWorker {
             resolution: resolutionStr,
             timestamp: Date.now(),
           };
-          this.events.emit('sync:conflict', conflictEvent);
+          queuedEvents.push({ event: 'sync:conflict', data: conflictEvent });
 
           if (resolution === 'keep-local') {
             // Local offline change takes precedence
@@ -526,7 +561,7 @@ export class SyncWorker {
           }
         }
 
-        // 4. Apply remote change to local database
+        // 3. Apply remote change to local database
         await TableManager.applyMutation(
           tx,
           change.tableName,
@@ -537,12 +572,15 @@ export class SyncWorker {
           { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
         );
 
-        // 5. Emit table change event to notify reactive listeners
-        this.events.emit(change.tableName, {
-          operation: change.operation,
-          rowId: change.rowId,
-          payload: change.payload,
-          source: 'remote',
+        // 4. Queue table change event to notify reactive listeners after commit
+        queuedEvents.push({
+          event: change.tableName,
+          data: {
+            operation: change.operation,
+            rowId: change.rowId,
+            payload: change.payload,
+            source: 'remote',
+          },
         });
       }
 
@@ -554,6 +592,10 @@ export class SyncWorker {
 
     if (deltas.timestamp) {
       this.lastPulledTimestamp = Math.max(this.lastPulledTimestamp, deltas.timestamp);
+    }
+
+    for (const item of queuedEvents) {
+      this.events.emit(item.event, item.data);
     }
   }
 

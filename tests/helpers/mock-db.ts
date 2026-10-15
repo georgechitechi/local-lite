@@ -21,8 +21,33 @@ export class MockDB implements LocalDBAdapter {
       return [];
     }
 
-    if (q.startsWith('ALTER TABLE') || q.startsWith('PRAGMA table_info')) {
+    if (q.startsWith('ALTER TABLE') || q.startsWith('PRAGMA table_info') || q.startsWith('CREATE INDEX')) {
       return [];
+    }
+
+    // Outbox status counts
+    if (lowerQ.startsWith('select status, count(*)') && lowerQ.includes('from sync_outbox')) {
+      const counts = new Map<string, number>();
+      for (const r of this.getTable('sync_outbox').values()) {
+        counts.set(r.status, (counts.get(r.status) || 0) + 1);
+      }
+      return Array.from(counts.entries()).map(([status, count]) => ({ status, count }));
+    }
+
+    // Outbox listing: SELECT * FROM sync_outbox [WHERE status = ?] ORDER BY timestamp DESC [LIMIT ? OFFSET ?]
+    if (/^SELECT \* FROM sync_outbox(?: WHERE status = \?)? ORDER BY timestamp DESC/i.test(normQ)) {
+      const p = [...params];
+      let rows = Array.from(this.getTable('sync_outbox').values());
+      if (/WHERE status = \?/i.test(normQ)) {
+        const status = p.shift();
+        rows = rows.filter((r) => r.status === status);
+      }
+      rows.sort((a, b) => b.timestamp - a.timestamp);
+      if (/LIMIT \? OFFSET \?/i.test(normQ)) {
+        const [limit, offset] = p;
+        rows = rows.slice(offset, limit > 0 ? offset + limit : undefined);
+      }
+      return rows;
     }
 
     // sync_meta queries

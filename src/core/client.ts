@@ -489,11 +489,22 @@ export class LocalFirstClient {
    * const tenant = await client.findById('tenants', 'ten-1');
    */
   async findById<T = any>(tableName: string, id: string): Promise<T | null> {
-    const results = await this.findMany<T>(tableName, {
-      where: { [this.primaryKey]: id },
-      limit: 1,
-    });
-    return results.length > 0 ? results[0] : null;
+    // Primary-key lookup in SQLite instead of loading the whole table into JS.
+    const safeTable = escapeIdentifier(tableName);
+    const safePk = escapeIdentifier(this.primaryKey);
+    try {
+      const rows = await this.db.execute(
+        `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
+        [id]
+      );
+      return rows && rows.length > 0 ? (rows[0] as T) : null;
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('no such table') || msg.includes('no such column')) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -625,7 +636,7 @@ export class LocalFirstClient {
   async reset(options: { dropTables?: boolean } = {}): Promise<void> {
     this.stop();
 
-    const tablesToReset = Array.from(new Set([...this.tables, 'sync_outbox', '_sync_meta']));
+    const tablesToReset = Array.from(new Set([...this.tables, 'sync_outbox', 'sync_meta']));
     for (const table of tablesToReset) {
       try {
         if (options.dropTables) {
@@ -638,7 +649,11 @@ export class LocalFirstClient {
       }
     }
 
-    if (options.dropTables) this.initialization = undefined;
+    if (options.dropTables) {
+      this.initialization = undefined;
+      // Dropped tables must be re-created by autoSchema on next write.
+      this.schemaManager.clearCache();
+    }
     await this.resetSyncCursor();
     this.events.emit('reset', { dropTables: options.dropTables ?? false });
   }

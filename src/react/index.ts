@@ -5,6 +5,40 @@ import { QueryOptions, SyncMetrics, SyncStatusEvent } from '../core/types.js';
 export type LiveQueryFn<T> = (client: LocalFirstClient) => Promise<T[]> | T[];
 
 /**
+ * Returns a stable trigger that coalesces bursts of calls into a single run of `fn`.
+ * - Calls in the same tick collapse into one run scheduled on the next macrotask.
+ * - Calls while a run is in flight collapse into exactly one trailing run.
+ * This keeps reactive hooks from re-querying SQLite once per emitted row event.
+ */
+function useCoalescedRunner(fn: () => Promise<void>): () => void {
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  const state = useRef({ scheduled: false, running: false, rerun: false });
+
+  return useCallback(() => {
+    const s = state.current;
+    if (s.running) {
+      s.rerun = true;
+      return;
+    }
+    if (s.scheduled) return;
+    s.scheduled = true;
+    setTimeout(async () => {
+      s.scheduled = false;
+      s.running = true;
+      try {
+        do {
+          s.rerun = false;
+          await fnRef.current();
+        } while (s.rerun);
+      } finally {
+        s.running = false;
+      }
+    }, 0);
+  }, []);
+}
+
+/**
  * Hook to execute a live reactive table query that automatically re-runs
  * whenever the table is mutated locally or via incoming remote delta.
  *
@@ -60,19 +94,21 @@ export function useLiveQuery<T = any>(
     }
   }, [client, tableName]);
 
+  const scheduleRefetch = useCoalescedRunner(refetch);
+
   useEffect(() => {
     if (!client || !client.db) return;
 
     refetch();
 
     const unsubscribe = client.events.on(tableName, () => {
-      refetch();
+      scheduleRefetch();
     });
 
     return () => {
       unsubscribe();
     };
-  }, [client, tableName, refetch]);
+  }, [client, tableName, refetch, scheduleRefetch]);
 
   return { data, refetch, loading };
 }
@@ -126,6 +162,8 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
     }
   }, [client]);
 
+  const scheduleRefresh = useCoalescedRunner(refresh);
+
   useEffect(() => {
     if (!client || !client.db) return;
 
@@ -139,15 +177,15 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
     });
 
     const unsubOutbox = client.events.on('sync_outbox', () => {
-      refresh();
+      scheduleRefresh();
     });
 
     const unsubPush = client.events.on('sync:push', () => {
-      refresh();
+      scheduleRefresh();
     });
 
     const unsubPull = client.events.on('sync:pull', () => {
-      refresh();
+      scheduleRefresh();
     });
 
     return () => {
@@ -156,7 +194,7 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
       unsubPush();
       unsubPull();
     };
-  }, [client, refresh]);
+  }, [client, refresh, scheduleRefresh]);
 
   return {
     isOnline,
@@ -192,28 +230,30 @@ export function useSyncMetrics(
     }
   }, [client]);
 
+  const scheduleRefresh = useCoalescedRunner(refresh);
+
   useEffect(() => {
     if (!client) return;
 
     refresh();
 
-    // Listen to sync events for immediate refresh
+    // Listen to sync events for immediate (coalesced) refresh
     const unsubs = [
-      client.events.on('sync:push', () => refresh()),
-      client.events.on('sync:pull', () => refresh()),
-      client.events.on('sync:status', () => refresh()),
+      client.events.on('sync:push', () => scheduleRefresh()),
+      client.events.on('sync:pull', () => scheduleRefresh()),
+      client.events.on('sync:status', () => scheduleRefresh()),
     ];
 
     let timer: any;
     if (pollIntervalMs > 0) {
-      timer = setInterval(refresh, pollIntervalMs);
+      timer = setInterval(scheduleRefresh, pollIntervalMs);
     }
 
     return () => {
       unsubs.forEach((u) => u());
       if (timer) clearInterval(timer);
     };
-  }, [client, refresh, pollIntervalMs]);
+  }, [client, refresh, scheduleRefresh, pollIntervalMs]);
 
   return { metrics, refresh };
 }

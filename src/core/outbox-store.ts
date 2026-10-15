@@ -1,6 +1,23 @@
 import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
 import { OutboxRecord, OutboxStatus, SyncOperation } from './types.js';
 
+/**
+ * Maps a raw sync_outbox row into an OutboxRecord.
+ */
+function mapOutboxRow(r: any): OutboxRecord {
+  return {
+    id: r.id,
+    tableName: r.table_name,
+    rowId: r.row_id,
+    operation: r.operation,
+    payload: r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : null,
+    timestamp: Number(r.timestamp),
+    status: r.status,
+    retryCount: Number(r.retry_count || 0),
+    lastError: r.last_error,
+  };
+}
+
 export class OutboxStore {
   /**
    * Initializes the sync_outbox schema if it does not already exist.
@@ -18,6 +35,14 @@ export class OutboxStore {
         retry_count INTEGER NOT NULL DEFAULT 0,
         last_error TEXT
       );`
+    );
+    // Indexes for the hot paths: pending scans (push), per-row conflict lookups (pull),
+    // and status counts (telemetry). Executed separately: many drivers prepare one statement.
+    await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_ts ON sync_outbox (status, timestamp);`
+    );
+    await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_row ON sync_outbox (table_name, row_id, timestamp);`
     );
   }
 
@@ -70,17 +95,7 @@ export class OutboxStore {
 
     if (!rows || rows.length === 0) return [];
 
-    return rows.map((r: any) => ({
-      id: r.id,
-      tableName: r.table_name,
-      rowId: r.row_id,
-      operation: r.operation,
-      payload: r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : null,
-      timestamp: Number(r.timestamp),
-      status: r.status,
-      retryCount: Number(r.retry_count || 0),
-      lastError: r.last_error,
-    }));
+    return rows.map(mapOutboxRow);
   }
 
   /**
@@ -100,18 +115,7 @@ export class OutboxStore {
 
     if (!rows || rows.length === 0) return undefined;
 
-    const r = rows[0];
-    return {
-      id: r.id,
-      tableName: r.table_name,
-      rowId: r.row_id,
-      operation: r.operation,
-      payload: r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : null,
-      timestamp: Number(r.timestamp),
-      status: r.status,
-      retryCount: Number(r.retry_count || 0),
-      lastError: r.last_error,
-    };
+    return mapOutboxRow(rows[0]);
   }
 
   /**
@@ -198,27 +202,25 @@ export class OutboxStore {
     total: number;
   }> {
     try {
-      const rows = await db.execute(`SELECT * FROM sync_outbox`);
-      if (!rows || rows.length === 0) {
-        return { pending: 0, failed: 0, processing: 0, total: 0 };
-      }
+      // Aggregate in SQLite (index-only scan) instead of loading every row and payload into JS.
+      const rows = await db.execute(
+        `SELECT status, COUNT(*) AS count FROM sync_outbox GROUP BY status`
+      );
 
       let pending = 0;
       let failed = 0;
       let processing = 0;
+      let total = 0;
 
-      for (const row of rows) {
-        if (row.status === 'PENDING') pending++;
-        else if (row.status === 'FAILED') failed++;
-        else if (row.status === 'PROCESSING') processing++;
+      for (const row of rows || []) {
+        const count = Number(row.count ?? 0);
+        total += count;
+        if (row.status === 'PENDING') pending = count;
+        else if (row.status === 'FAILED') failed = count;
+        else if (row.status === 'PROCESSING') processing = count;
       }
 
-      return {
-        pending,
-        failed,
-        processing,
-        total: rows.length,
-      };
+      return { pending, failed, processing, total };
     } catch {
       return { pending: 0, failed: 0, processing: 0, total: 0 };
     }
@@ -288,35 +290,26 @@ export class OutboxStore {
     options?: { status?: OutboxStatus; limit?: number; offset?: number }
   ): Promise<OutboxRecord[]> {
     try {
-      const rows = await db.execute(`SELECT * FROM sync_outbox`);
-      if (!rows || rows.length === 0) return [];
-
-      let mapped: OutboxRecord[] = rows.map((r: any) => ({
-        id: r.id,
-        tableName: r.table_name,
-        rowId: r.row_id,
-        operation: r.operation,
-        payload: r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : null,
-        timestamp: Number(r.timestamp),
-        status: r.status,
-        retryCount: Number(r.retry_count || 0),
-        lastError: r.last_error,
-      }));
-
+      // Filter, order and paginate in SQLite so only the requested page is parsed.
+      const params: any[] = [];
+      let query = `SELECT * FROM sync_outbox`;
       if (options?.status) {
-        mapped = mapped.filter((r) => r.status === options.status);
+        query += ` WHERE status = ?`;
+        params.push(options.status);
+      }
+      query += ` ORDER BY timestamp DESC`;
+
+      const limit = options?.limit && options.limit > 0 ? options.limit : -1;
+      const offset = options?.offset && options.offset > 0 ? options.offset : 0;
+      if (limit > 0 || offset > 0) {
+        // SQLite requires LIMIT when OFFSET is used; -1 means "no limit".
+        query += ` LIMIT ? OFFSET ?`;
+        params.push(limit, offset);
       }
 
-      mapped.sort((a, b) => b.timestamp - a.timestamp);
-
-      if (options?.offset && options.offset > 0) {
-        mapped = mapped.slice(options.offset);
-      }
-      if (options?.limit && options.limit > 0) {
-        mapped = mapped.slice(0, options.limit);
-      }
-
-      return mapped;
+      const rows = await db.execute(query, params);
+      if (!rows || rows.length === 0) return [];
+      return rows.map(mapOutboxRow);
     } catch {
       return [];
     }
