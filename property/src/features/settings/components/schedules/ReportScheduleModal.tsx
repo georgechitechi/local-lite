@@ -14,6 +14,7 @@ import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { createCronJobManager } from '@/shared/services/cronJobManager';
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase } from '@/shared/services/supabase';
+import { getSyncClientSync } from '@/shared/services/sync/client';
 import { generateUUID } from '@/shared/utils/helper';
 import { isActiveScheduleStatus } from '@/shared/utils/statusHelper';
 import type { Schedule } from '@/stores/types';
@@ -185,20 +186,13 @@ export default function ReportScheduleModal({
         )) as string;
         const cronManager = createCronJobManager(supabase, supabaseUrl);
 
-        if (isActiveScheduleStatus(reportForm)) {
-          const { data: activeSchedules } = await supabase
-            .from('schedules')
-            .select('id')
-            .neq('schedule_type', 'system_backup')
-            .eq('status', 'active')
-            .limit(1);
-
-          if (activeSchedules && activeSchedules.length > 0) {
-            const cronResult = await cronManager.syncMasterReportJob('0 * * * *');
-            if (!cronResult.success) {
-              console.warn('Master report cron job sync warning:', cronResult.error);
-            }
-          }
+        let activeCount = 0;
+        const client = getSyncClientSync();
+        if (client) {
+          const rows = await client.db.execute(
+            "SELECT COUNT(*) as count FROM schedules WHERE schedule_type != 'system_backup' AND status = 'active'"
+          );
+          activeCount = Number(rows?.[0]?.count ?? 0);
         } else {
           const { data: activeSchedules } = await supabase
             .from('schedules')
@@ -206,8 +200,18 @@ export default function ReportScheduleModal({
             .neq('schedule_type', 'system_backup')
             .eq('status', 'active')
             .limit(1);
+          activeCount = activeSchedules?.length ?? 0;
+        }
 
-          if (!activeSchedules || activeSchedules.length === 0) {
+        if (isActiveScheduleStatus(reportForm)) {
+          if (activeCount > 0) {
+            const cronResult = await cronManager.syncMasterReportJob('0 * * * *');
+            if (!cronResult.success) {
+              console.warn('Master report cron job sync warning:', cronResult.error);
+            }
+          }
+        } else {
+          if (activeCount === 0) {
             await cronManager.removeMasterReportJob();
           }
         }

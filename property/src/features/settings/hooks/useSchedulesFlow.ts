@@ -587,15 +587,19 @@ export function useSchedulesFlow() {
       if (backupSchedule?.id) {
         // Set to 5 minutes ago to ensure backend cron picks it up
         const targetTime = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        // Update database so backend scheduler sees it's time
-        await supabase
-          .from('schedules')
-          .update({ next_run: targetTime })
-          .eq('id', backupSchedule.id);
-
-        // Update local store for UI
+        // Update local store for UI and sync queue
         if (update) {
           await update('schedules', backupSchedule.id, { next_run: targetTime });
+        }
+
+        // Direct remote sync if online
+        try {
+          await supabase
+            .from('schedules')
+            .update({ next_run: targetTime })
+            .eq('id', backupSchedule.id);
+        } catch {
+          // Handled via local-lite outbox sync
         }
       }
 
