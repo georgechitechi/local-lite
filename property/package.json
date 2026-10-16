@@ -17,12 +17,12 @@
     "supabase:generate": "npx supabase gen types typescript --project-id \"pklaiemezeenaywnnfxt\" --schema public > src/shared/types/database.types.ts"
   },
   "dependencies": {
-    "@expo/ui": "~57.0.24",
+    "@expo/ui": "~57.0.25",
     "@react-native-community/netinfo": "12.0.1",
     "@react-native-vector-icons/material-design-icons": "^13.1.4",
     "@supabase/supabase-js": "2.117.2",
     "accesscontrol": "^3.1.1",
-    "expo": "~57.0.29",
+    "expo": "~57.0.30",
     "expo-background-task": "~57.0.21",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.20",
@@ -42,7 +42,7 @@
     "expo-observe": "~57.0.25",
     "expo-pdf-text-extract": "^1.1.0",
     "expo-print": "~57.0.2",
-    "expo-router": "~57.0.27",
+    "expo-router": "~57.0.28",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.23",
     "expo-splash-screen": "~57.0.10",

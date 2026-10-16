@@ -79,8 +79,17 @@ export interface SupabaseAdapterOptions {
   fetchLimit?: number;
 }
 
+export type AnySupabaseClient = SupabaseClient<any, any, any> | any;
+
+export type SupabaseClientResolver =
+  | AnySupabaseClient
+  | (() => AnySupabaseClient | null | undefined)
+  | null
+  | undefined;
+
 export class SupabaseRemoteAdapter implements RemoteDBAdapter {
-  private client: SupabaseClient;
+  private clientResolver?: SupabaseClientResolver;
+  private activeLiveCallback?: (changes: DeltaChanges) => void;
   private tables: string[];
   private updatedAtColumn: string;
   private primaryKey: string;
@@ -93,8 +102,29 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private fetchLimit: number;
   public logger: SyncLogger;
 
-  constructor(client: SupabaseClient, options: SupabaseAdapterOptions = {}) {
-    this.client = client;
+  constructor(
+    clientOrOptions?: SupabaseClientResolver | SupabaseAdapterOptions,
+    maybeOptions: SupabaseAdapterOptions = {}
+  ) {
+    let client: SupabaseClientResolver;
+    let options: SupabaseAdapterOptions;
+
+    // Allow new SupabaseRemoteAdapter(options) shorthand when no client is passed initially
+    if (
+      clientOrOptions &&
+      typeof clientOrOptions === 'object' &&
+      !('channel' in clientOrOptions) &&
+      !('from' in clientOrOptions) &&
+      !('auth' in clientOrOptions)
+    ) {
+      client = null;
+      options = clientOrOptions as SupabaseAdapterOptions;
+    } else {
+      client = clientOrOptions as SupabaseClientResolver;
+      options = maybeOptions;
+    }
+
+    this.clientResolver = client;
     this.tables = options.tables ?? [];
     this.updatedAtColumn = options.updatedAtColumn ?? 'updated_at';
     this.primaryKey = options.primaryKey ?? 'id';
@@ -117,6 +147,48 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   }
 
   /**
+   * Resolves the active Supabase client instance dynamically.
+   */
+  public getClient(): AnySupabaseClient {
+    if (typeof this.clientResolver === 'function') {
+      try {
+        return this.clientResolver() ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return this.clientResolver ?? null;
+  }
+
+  /**
+   * Property getter for backwards-compatibility.
+   */
+  public get client(): AnySupabaseClient {
+    return this.getClient();
+  }
+
+  /**
+   * Dynamically sets or updates the Supabase client or getter function.
+   * Automatically cleans up the previous realtime channel and re-subscribes if active.
+   */
+  public setClient(client: SupabaseClientResolver): void {
+    const previousClient = this.getClient();
+    this.clientResolver = client;
+    const newClient = this.getClient();
+
+    if (this.activeChannel && previousClient?.removeChannel && previousClient !== newClient) {
+      try {
+        previousClient.removeChannel(this.activeChannel);
+      } catch {}
+      this.activeChannel = undefined;
+    }
+
+    if (this.activeLiveCallback && newClient && typeof newClient.channel === 'function') {
+      this.subscribeToLiveChanges(this.activeLiveCallback);
+    }
+  }
+
+  /**
    * Set or update tracked tables dynamically.
    */
   setTables(tables: string[]): void {
@@ -131,9 +203,15 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       return true;
     }
 
+    const client = this.getClient();
+    if (!client) {
+      this.logger.debug('Supabase client is not available; skipping remote push.');
+      return false;
+    }
+
     // 1. If custom RPC is configured, perform atomic batch RPC
     if (this.pushRpcName) {
-      const { error } = await this.client.rpc(this.pushRpcName, {
+      const { error } = await client.rpc(this.pushRpcName, {
         operations: operations.map((op) => ({
           id: op.id,
           table_name: op.tableName,
@@ -187,7 +265,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         if (batch.length === 1) {
           try {
             const rowData = buildRowData(batch[0]);
-            const { error } = await this.client.from(op.tableName).upsert(rowData);
+            const { error } = await client.from(op.tableName).upsert(rowData);
             if (error) {
               const msg = formatSupabaseError(error, { table: op.tableName, operation: 'INSERT' });
               this.logger.error(msg);
@@ -206,7 +284,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           // Bulk upsert for multiple consecutive inserts
           try {
             const rows = batch.map(buildRowData);
-            const { error } = await this.client.from(op.tableName).upsert(rows);
+            const { error } = await client.from(op.tableName).upsert(rows);
             if (!error) {
               for (const item of batch) successfulIds.push(item.id);
             } else {
@@ -214,7 +292,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               for (const item of batch) {
                 try {
                   const singleRow = buildRowData(item);
-                  const { error: singleErr } = await this.client.from(op.tableName).upsert(singleRow);
+                  const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
                   if (singleErr) {
                     const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
                     failedIds.push(item.id);
@@ -234,7 +312,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             for (const item of batch) {
               try {
                 const singleRow = buildRowData(item);
-                const { error: singleErr } = await this.client.from(op.tableName).upsert(singleRow);
+                const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
                 if (singleErr) {
                   const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
                   failedIds.push(item.id);
@@ -263,7 +341,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
           }
 
-          const { error } = await this.client
+          const { error } = await client
             .from(op.tableName)
             .update(patch)
             .eq(this.primaryKey, op.rowId);
@@ -297,7 +375,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
           }
 
-          const { error, data } = await this.client
+          const { error, data } = await client
             .from(op.tableName)
             .update(patch)
             .eq(this.primaryKey, op.rowId)
@@ -314,7 +392,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               ...patch,
               [this.primaryKey]: op.rowId,
             };
-            const { error: upsertErr } = await this.client.from(op.tableName).upsert(rowData);
+            const { error: upsertErr } = await client.from(op.tableName).upsert(rowData);
             if (upsertErr) {
               const msg = formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' });
               this.logger.error(msg);
@@ -356,6 +434,15 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Reads updated records and checks `deleted: true` to propagate soft deletes.
    */
   async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
+    const client = this.getClient();
+    if (!client) {
+      this.logger.debug('Supabase client is not available; skipping fetchChanges.');
+      return {
+        timestamp: sinceTimestamp,
+        changes: [],
+      };
+    }
+
     const changes: DeltaChange[] = [];
     const sinceIso = sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : null;
     let maxServerTimestamp = sinceTimestamp;
@@ -366,7 +453,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         let currentSinceIso = sinceIso;
 
         while (hasMore) {
-          let query = this.client
+          let query = client
             .from(table)
             .select('*');
 
@@ -455,17 +542,33 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   /**
    * Subscribes to live realtime postgres_changes from Supabase.
    */
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): void {
-    if (this.activeChannel) {
-      this.client.removeChannel(this.activeChannel);
+  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): (() => void) | void {
+    this.activeLiveCallback = callback;
+    const client = this.getClient();
+
+    if (this.activeChannel && client?.removeChannel) {
+      try {
+        client.removeChannel(this.activeChannel);
+      } catch {}
       this.activeChannel = undefined;
     }
 
-    if (this.tables.length === 0) {
-      return;
+    if (!client || typeof client.channel !== 'function') {
+      this.logger.debug('Supabase client is not available; skipping live changes subscription.');
+      return () => {
+        this.activeLiveCallback = undefined;
+        this.destroy();
+      };
     }
 
-    const channel = this.client.channel(this.channelName);
+    if (this.tables.length === 0) {
+      return () => {
+        this.activeLiveCallback = undefined;
+        this.destroy();
+      };
+    }
+
+    const channel = client.channel(this.channelName);
 
     for (const table of this.tables) {
       channel.on(
@@ -510,14 +613,22 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     });
 
     this.activeChannel = channel;
+
+    return () => {
+      this.activeLiveCallback = undefined;
+      this.destroy();
+    };
   }
 
   /**
    * Clean up active realtime channels.
    */
   destroy(): void {
-    if (this.activeChannel) {
-      this.client.removeChannel(this.activeChannel);
+    const client = this.getClient();
+    if (this.activeChannel && client?.removeChannel) {
+      try {
+        client.removeChannel(this.activeChannel);
+      } catch {}
       this.activeChannel = undefined;
     }
   }

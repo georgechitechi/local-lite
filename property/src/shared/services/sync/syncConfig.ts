@@ -19,7 +19,7 @@ export const syncConfig = defineSyncConfig({
   autoInitialize: false,
   autoStart: false,
   primaryKey: 'id',
-  remote: new SupabaseRemoteAdapter(supabase as any, {
+  remote: new SupabaseRemoteAdapter(() => supabase, {
     tables: [...CORE_TABLES],
     updatedAtColumn: 'updated_at',
     deletedColumn: 'deleted',
