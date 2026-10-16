@@ -33,8 +33,7 @@ export function useLocalSync() {
   const enableSync = async (url: string, key: string) => {
     const client = await configureSupabaseClient(url, key);
     if (localClient?.syncWorker) {
-      localClient.syncWorker.schedulePush(0);
-      localClient.syncWorker.pullRemoteChanges().catch(() => {});
+      localClient.syncWorker.start();
     }
     return client;
   };

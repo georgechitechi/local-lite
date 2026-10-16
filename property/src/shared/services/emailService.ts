@@ -65,30 +65,6 @@ const getBusinessWebsiteLink = async (
         } catch {}
       }
     }
-
-    if (supabase) {
-      const { data: settings } = await supabase
-        .from('settings')
-        .select('setting_value')
-        .eq('business_id', businessId)
-        .eq('setting_key', 'links')
-        .maybeSingle();
-
-      if (settings?.setting_value) {
-        try {
-          const linksData =
-            typeof settings.setting_value === 'string'
-              ? JSON.parse(settings.setting_value)
-              : settings.setting_value;
-
-          if (linksData?.website) {
-            return linksData.website;
-          }
-        } catch (parseError) {
-          console.warn('Failed to parse links setting:', parseError);
-        }
-      }
-    }
   } catch (settingsError) {
     console.warn('Failed to fetch business settings:', settingsError);
   }
@@ -468,27 +444,8 @@ export const sendReceiptEmail = async (
       settings = (settingsRows || []).find((r: any) => !r.deleted);
     }
 
-    if (!business && supabase) {
-      const { data } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', receipt.business_id)
-        .maybeSingle();
-      business = data;
-    }
-
     if (!business) throw new Error(`Business with ID ${receipt.business_id} not found`);
     if (!tenant.email) throw new Error('Tenant email not found');
-
-    if (!settings && supabase) {
-      const { data } = await supabase
-        .from('settings')
-        .select('setting_value')
-        .eq('business_id', business.id)
-        .eq('setting_key', 'currency_settings')
-        .maybeSingle();
-      settings = data;
-    }
 
     const currencySettings = settings?.setting_value as { currency?: string } | undefined;
     const currency = currencySettings?.currency || 'KES';

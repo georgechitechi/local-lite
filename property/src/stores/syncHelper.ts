@@ -8,17 +8,7 @@ import { safeReloadApp } from '@/shared/utils/safeReload';
 export async function clearAllPersistence(options: { reload?: boolean } = {}): Promise<void> {
   const client = await getSyncClient();
   try {
-    client.stop();
-    await client.db.transaction(async tx => {
-      for (const table of [...client.tables, 'sync_outbox', 'sync_meta']) {
-        await tx.execute(`DELETE FROM "${table.replace(/"/g, '""')}"`);
-      }
-    });
-    await client.resetSyncCursor();
-    (client.remote as any)?.reset?.();
-    for (const table of [...client.tables, 'sync_outbox']) {
-      client.events.emit(table, { operation: 'DELETE', rowId: '*', source: 'local' });
-    }
+    await client.reset({ dropTables: false });
     await Storage.clearAsync();
   } catch (error) {
     console.error('clearAllPersistence failed:', error);

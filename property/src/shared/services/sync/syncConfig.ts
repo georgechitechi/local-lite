@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
+import { SupabaseRemoteAdapter } from 'local-lite';
 import { defineSyncConfig } from 'local-lite/config';
-import { DynamicSupabaseAdapter } from './dynamicRemoteAdapter';
+import { supabase } from '@/shared/services/supabase';
 import { CORE_TABLES } from './tables';
 
 export const syncConfig = defineSyncConfig({
@@ -16,8 +17,15 @@ export const syncConfig = defineSyncConfig({
   tables: [...CORE_TABLES],
   autoSchema: true,
   autoInitialize: false,
+  autoStart: false,
   primaryKey: 'id',
-  remote: new DynamicSupabaseAdapter([...CORE_TABLES]),
+  remote: new SupabaseRemoteAdapter(supabase as any, {
+    tables: [...CORE_TABLES],
+    updatedAtColumn: 'updated_at',
+    deletedColumn: 'deleted',
+    deletedValue: true,
+    primaryKey: 'id',
+  }),
   conflictResolver: 'last-write-wins',
   pushIntervalMs: 10000,
   pullIntervalMs: 60000,

@@ -1,5 +1,4 @@
 import { createSyncClient, type LocalFirstClient } from 'local-lite/config';
-import { ensureCoreSchemas } from './schemaMigrations';
 import { syncConfig } from './syncConfig';
 
 let clientInstance: LocalFirstClient | null = null;
@@ -23,21 +22,10 @@ export async function getSyncClient(): Promise<LocalFirstClient> {
         );
       });
 
-      try {
-        await ensureCoreSchemas(client);
-      } catch (sErr) {
-        console.error('Failed to ensure core schemas:', sErr);
-      }
-
       await client.initialize();
-      (syncConfig.remote as any)?.setDb?.(client.db);
 
       // Clean up any unrecoverable unique constraint / duplicate key violations from the outbox queue
-      await client.db
-        .execute(
-          `DELETE FROM sync_outbox WHERE (last_error LIKE '%unique constraint%' OR last_error LIKE '%duplicate key%' OR last_error LIKE '%23505%') AND status = 'FAILED'`,
-        )
-        .catch(() => {});
+      await client.clearFailedMutations().catch(() => {});
 
       clientInstance = client;
       return client;

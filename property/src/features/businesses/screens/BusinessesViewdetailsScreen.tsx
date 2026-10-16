@@ -171,27 +171,7 @@ export default function BusinessView() {
           if (active && data && !data.deleted) {
             setDirectBusiness(data);
             if (client) {
-              await client.db
-                .execute(
-                  `INSERT OR REPLACE INTO "businesses" ("id", "name", "phone", "email", "address", "latitude", "longitude", "user_id", "is_system", "logo_url", "deleted", "created_at", "updated_at")
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [
-                    data.id,
-                    data.name || '',
-                    data.phone || null,
-                    data.email || null,
-                    data.address || null,
-                    data.latitude ?? null,
-                    data.longitude ?? null,
-                    data.user_id || '',
-                    data.is_system ? 1 : 0,
-                    data.logo_url || null,
-                    data.deleted ? 1 : 0,
-                    data.created_at || new Date().toISOString(),
-                    data.updated_at || new Date().toISOString(),
-                  ],
-                )
-                .catch(() => {});
+              await client.insert('businesses', data, { skipOutbox: true }).catch(() => {});
             }
           }
         }

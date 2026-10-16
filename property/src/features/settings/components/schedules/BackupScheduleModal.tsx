@@ -13,6 +13,7 @@ import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
 import { createCronJobManager } from '@/shared/services/cronJobManager';
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase } from '@/shared/services/supabase';
+import { getSyncClientSync } from '@/shared/services/sync/client';
 import { generateUUID } from '@/shared/utils/helper';
 import { isActiveScheduleStatus } from '@/shared/utils/statusHelper';
 import type { Schedule } from '@/stores/types';
@@ -132,14 +133,24 @@ export default function BackupScheduleModal({
         const cronManager = createCronJobManager(supabase, supabaseUrl);
 
         if (!backupForm.enabled) {
-          const { data: enabledSchedules } = await supabase
-            .from('schedules')
-            .select('id')
-            .eq('schedule_type', 'system_backup')
-            .eq('status', 'active')
-            .limit(1);
+          let hasActive = false;
+          const client = getSyncClientSync();
+          if (client) {
+            const rows = await client.findMany('schedules', {
+              where: { schedule_type: 'system_backup', status: 'active' },
+            }).catch(() => []);
+            hasActive = (rows || []).some((r: any) => !r.deleted && r.id !== backupSchedule?.id);
+          } else if (supabase) {
+            const { data: enabledSchedules } = await supabase
+              .from('schedules')
+              .select('id')
+              .eq('schedule_type', 'system_backup')
+              .eq('status', 'active')
+              .limit(1);
+            hasActive = !!enabledSchedules && enabledSchedules.length > 0;
+          }
 
-          if (!enabledSchedules || enabledSchedules.length === 0) {
+          if (!hasActive) {
             await cronManager.removeMasterBackupJob();
             showSnackbar('Backup schedule disabled and cron job removed', 'success');
           } else {

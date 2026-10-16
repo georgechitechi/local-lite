@@ -28,10 +28,11 @@ export const SyncClientProvider: React.FC<{ children: React.ReactNode }> = ({
           setClient(c);
           setIsReady(true);
 
-          if (getAuthStateSyncSnapshot().isLoggedIn) {
-            c.syncWorker.pullRemoteChanges().catch(mErr => {
-              console.warn('Initial background remote pull failed:', mErr);
-            });
+          const isOnline = getAuthStateSyncSnapshot().isLoggedIn;
+          if (isOnline) {
+            c.syncWorker.start();
+          } else {
+            c.syncWorker.stop();
           }
         }
       })

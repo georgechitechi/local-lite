@@ -189,10 +189,11 @@ export default function ReportScheduleModal({
         let activeCount = 0;
         const client = getSyncClientSync();
         if (client) {
-          const rows = await client.db.execute(
-            "SELECT COUNT(*) as count FROM schedules WHERE schedule_type != 'system_backup' AND status = 'active'"
-          );
-          activeCount = Number(rows?.[0]?.count ?? 0);
+          const rows = await client.findMany('schedules', {
+            where: (r: Record<string, any>) =>
+              !r.deleted && r.schedule_type !== 'system_backup' && r.status === 'active',
+          });
+          activeCount = rows.length;
         } else {
           const { data: activeSchedules } = await supabase
             .from('schedules')

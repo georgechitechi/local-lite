@@ -104,14 +104,10 @@ export const setOnlineSession = async (
   });
   updateAuthStateSync({ isLoggedIn: true });
 
-  // Trigger initial remote pull after login
+  // Start background sync worker after login
   getSyncClient()
-    .then(async client => {
-      try {
-        await client.syncWorker.pullRemoteChanges();
-      } catch (err) {
-        console.warn('Post-login sync warning:', err);
-      }
+    .then(client => {
+      client.syncWorker.start();
     })
     .catch(() => {});
 };

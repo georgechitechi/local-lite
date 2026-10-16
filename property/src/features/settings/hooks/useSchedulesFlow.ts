@@ -21,6 +21,7 @@ import {
 import { getAllScheduledReminders } from '@/shared/services/notifications';
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase } from '@/shared/services/supabase';
+import { getSyncClientSync } from '@/shared/services/sync/client';
 import { EMPTY_ARRAY, generateUUID, snakeCaseToTitleCase } from '@/shared/utils/helper';
 import { isActiveScheduleStatus } from '@/shared/utils/statusHelper';
 import type { Schedule } from '@/stores/types';
@@ -531,16 +532,26 @@ export function useSchedulesFlow() {
         )) as string;
         const cronManager = createCronJobManager(supabase, supabaseUrl);
 
-        if (isActiveScheduleStatus(reportForm)) {
-          // Check if there are any active report schedules across all businesses
+        let activeCount = 0;
+        const client = getSyncClientSync();
+        if (client) {
+          const rows = await client.findMany('schedules', {
+            where: (r: Record<string, any>) =>
+              !r.deleted && r.schedule_type !== 'system_backup' && r.status === 'active',
+          });
+          activeCount = rows.length;
+        } else if (supabase) {
           const { data: activeSchedules } = await supabase
             .from('schedules')
             .select('id')
             .neq('schedule_type', 'system_backup')
             .eq('status', 'active')
             .limit(1);
+          activeCount = activeSchedules?.length ?? 0;
+        }
 
-          if (activeSchedules && activeSchedules.length > 0) {
+        if (isActiveScheduleStatus(reportForm)) {
+          if (activeCount > 0) {
             // Ensure master report job exists and runs hourly
             const cronResult = await cronManager.syncMasterReportJob('0 * * * *'); // Every hour
             if (!cronResult.success) {
@@ -549,14 +560,7 @@ export function useSchedulesFlow() {
           }
         } else {
           // Schedule is inactive, check if any active schedules remain
-          const { data: activeSchedules } = await supabase
-            .from('schedules')
-            .select('id')
-            .neq('schedule_type', 'system_backup')
-            .eq('status', 'active')
-            .limit(1);
-
-          if (!activeSchedules || activeSchedules.length === 0) {
+          if (activeCount === 0) {
             // No active schedules, remove the master cron job
             await cronManager.removeMasterReportJob();
           }
@@ -587,19 +591,8 @@ export function useSchedulesFlow() {
       if (backupSchedule?.id) {
         // Set to 5 minutes ago to ensure backend cron picks it up
         const targetTime = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        // Update local store for UI and sync queue
         if (update) {
           await update('schedules', backupSchedule.id, { next_run: targetTime });
-        }
-
-        // Direct remote sync if online
-        try {
-          await supabase
-            .from('schedules')
-            .update({ next_run: targetTime })
-            .eq('id', backupSchedule.id);
-        } catch {
-          // Handled via local-lite outbox sync
         }
       }
 
