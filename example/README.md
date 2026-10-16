@@ -1,56 +1,57 @@
-# Welcome to your Expo app 👋
+# PropFlow: local-lite + Convex
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The rental manager uses local-lite for SQLite reads, reactive queries, transactional
+outbox writes, conflict resolution, and Convex synchronization. Convex is the only
+remote backend. Local SQLite remains available offline.
 
-## Get started
+## Setup
 
-1. Install dependencies
+From the repository root, run `npm install` and `npm run build`.
+Then from `example/`:
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```sh
+npm install
+npm run convex:dev
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Follow the Convex CLI prompts to create/select a development deployment and deploy
+`convex/schema.ts` and `convex/sync.ts`. Set `EXPO_PUBLIC_CONVEX_URL` in `.env.local`
+to its deployment URL (see `.env.example`), then run `npm start`.
+Restart Expo after changing the URL. No generated API files are needed by the app.
 
-### Other setup steps
+This is a shared, unauthenticated demo backend. Use a development deployment with
+sample data; add authentication and per-user authorization before using real data.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Seed and clear
 
-## Learn more
+The Sync tab can seed SQLite (optionally queuing writes) or seed Convex through
+local-lite's `ConvexRemoteAdapter`. CLI equivalents:
 
-To learn more about developing your project with Expo, look at the following resources:
+```sh
+npm run seed -- 500
+npm run seed -- 2000
+npm run seed:clean
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Clear sends tombstones through the same sync API so offline clients receive deletes.
+The CLI reads `.env.local`. Shell environment variables take precedence.
 
-## Join the community
+## Sync protocol
 
-Join our community of developers creating universal apps.
+`sync:pushBatch` accepts local-lite operations, deduplicates retries by operation ID,
+merges partial updates, and applies last-write-wins using the write timestamp.
+`sync:pullDeltas` returns SQL-facing payloads without Convex system fields. A strictly
+increasing server cursor and retained tombstones support reconnects and cursor resets.
+The four logical tables are stored in `rentalRows`, indexed by table/row and cursor.
+The demo pulls all changed rows; larger production datasets need a paginated protocol
+and retention policy for operation IDs and tombstones.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The app uses `rental_property_convex.db` to avoid reusing a previous backend's cursor.
+Existing local or remote data is not copied automatically.
+
+## Checks
+
+```sh
+npm run typecheck
+npm run lint
+```

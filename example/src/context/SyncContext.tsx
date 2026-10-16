@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { LocalFirstClient } from 'local-lite';
+import type { LocalFirstClient } from 'local-lite/core';
 import { useSyncStatus } from 'local-lite/react';
-import { getSyncClient } from '../sync.config';
+import { getSyncClient, syncNetwork } from '../sync.config';
 import {
   clearRentalPortfolio,
   clearConvexCloud,
@@ -35,25 +35,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastSyncedText, setLastSyncedText] = useState('Never');
   const [statusMessage, setStatusMessage] = useState('Initializing local-first SQLite engine...');
 
-  useEffect(() => {
-    let mounted = true;
-    getSyncClient()
-      .then((c) => {
-        if (mounted) {
-          setClient(c);
-          setStatusMessage('✅ PropFlow connected to Convex Realtime! SQLite transactions.');
-          updateCursor(c);
-        }
-      })
-      .catch((err) => {
-        setStatusMessage(`❌ Initialization error: ${err.message}`);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
   const updateCursor = async (c: LocalFirstClient) => {
     try {
       const ts = await c.getLastSyncedAt();
@@ -67,6 +48,27 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setLastSyncedText('Local only');
     }
   };
+
+
+  useEffect(() => {
+    let mounted = true;
+    getSyncClient()
+      .then((c) => {
+        if (mounted) {
+          setClient(c);
+          setStatusMessage('✅ PropFlow initialized with SQLite and Convex sync.');
+          updateCursor(c);
+        }
+      })
+      .catch((err) => {
+        setStatusMessage(`❌ Initialization error: ${err.message}`);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
 
   useEffect(() => {
     if (!client) return;
@@ -82,9 +84,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     if (!client) return;
     const nextState = !isOnline;
     setIsOnline(nextState);
-    if ((client as any).network && typeof (client as any).network.setOnline === 'function') {
-      (client as any).network.setOnline(nextState);
-    }
+    syncNetwork.setOnline(nextState);
     setStatusMessage(
       nextState
         ? '📶 Network ONLINE: Pending outbox items flushing to backend!'

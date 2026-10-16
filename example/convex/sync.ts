@@ -1,5 +1,11 @@
-import { mutationGeneric as mutation, queryGeneric as query } from 'convex/server';
+import { mutationGeneric, queryGeneric } from 'convex/server';
+import type { DataModelFromSchemaDefinition, MutationBuilder, QueryBuilder } from 'convex/server';
 import { v } from 'convex/values';
+import schema from './schema';
+
+type DataModel = DataModelFromSchemaDefinition<typeof schema>;
+const mutation: MutationBuilder<DataModel, 'public'> = mutationGeneric;
+const query: QueryBuilder<DataModel, 'public'> = queryGeneric;
 
 const tableName = v.union(v.literal('properties'), v.literal('tenants'),
   v.literal('maintenance_requests'), v.literal('payments'));
@@ -49,7 +55,7 @@ export const pullDeltas = query({
       .withIndex('by_timestamp', q => q.gt('timestamp', sinceTimestamp)).collect();
     return {
       timestamp: rows.reduce((latest, row) => Math.max(latest, row.timestamp), sinceTimestamp),
-      changes: rows.filter(row => tables.length === 0 || tables.includes(row.tableName)).map(row => ({
+      changes: rows.filter(row => tables.length === 0 || tables.some(table => table === row.tableName)).map(row => ({
         tableName: row.tableName, rowId: row.rowId,
         operation: row.deleted ? 'DELETE' : 'UPDATE', payload: row.payload, timestamp: row.timestamp,
       })),

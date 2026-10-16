@@ -1,5 +1,5 @@
-import { LocalFirstClient, BatchMutation } from 'local-lite';
-import { getConvexRemote, rentalTables } from '../convex';
+import type { LocalFirstClient, BatchMutation, DeltaChange } from 'local-lite/core';
+import { getConvexClient, syncApi, getConvexRemote, rentalTables } from '../convex';
 
 export interface SeedProgress {
   current: number;
@@ -84,7 +84,7 @@ const LAST_NAMES = [
   'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez'
 ];
 
-const MAINTENANCE_TITLES: Array<{ title: string; priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY'; baseCost: number }> = [
+const MAINTENANCE_TITLES: { title: string; priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY'; baseCost: number }[] = [
   { title: 'AC compressor blowing lukewarm air', priority: 'HIGH', baseCost: 350 },
   { title: 'Kitchen sink disposal humming & jammed', priority: 'MEDIUM', baseCost: 120 },
   { title: 'Water heater tank leaking onto floor', priority: 'EMERGENCY', baseCost: 850 },
@@ -387,10 +387,10 @@ export async function clearRentalPortfolio(
 // ---------------------------------------------------------------------------
 export async function clearConvexCloud(): Promise<void> {
   const remote = getConvexRemote();
-  const snapshot = await remote.fetchChanges(0);
-  const rows = snapshot.changes.filter(row => row.operation !== 'DELETE' && rentalTables.includes(row.tableName));
+  const snapshot = await getConvexClient().query(syncApi.pullDeltas, { sinceTimestamp: 0, tables: rentalTables });
+  const rows = snapshot.changes.filter((row: DeltaChange) => row.operation !== 'DELETE' && rentalTables.includes(row.tableName));
   for (let i = 0; i < rows.length; i += 150) {
-    const result = await remote.pushChanges(rows.slice(i, i + 150).map(row => ({
+    const result = await remote.pushChanges(rows.slice(i, i + 150).map((row: DeltaChange) => ({
       id: generateId(), tableName: row.tableName, rowId: row.rowId,
       operation: 'DELETE' as const, payload: null, timestamp: Date.now(),
     })));
