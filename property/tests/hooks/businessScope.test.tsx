@@ -114,5 +114,5 @@ it('revokes a selected business when its share becomes inactive', async () => {
     mockRows.business_shares = [{ ...mockRows.business_shares[0], status: 'inactive' }];
     mockListeners.get('business_shares')?.forEach(listener => listener());
   });
-  expect(result.current.selectedBusiness).toBeNull();
+  await waitFor(() => expect(result.current.selectedBusiness).toBeNull());
 });
