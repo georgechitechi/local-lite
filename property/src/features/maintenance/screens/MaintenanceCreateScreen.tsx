@@ -209,7 +209,7 @@ export default function CreateMaintenanceScreen() {
         'Maintenance Request Submitted',
         `Your ${form.priority} priority request has been submitted successfully.`,
         { type: 'maintenance', maintenanceId: id, status: 'pending' },
-      ).catch(() => {});
+      ).catch(() => { });
 
       // Clear fields
       setForm({
@@ -224,11 +224,7 @@ export default function CreateMaintenanceScreen() {
         event_date: new Date(),
       });
 
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)/maintenance');
-      }
+      router.replace('/(tabs)/maintenance');
     } catch (error) {
       console.error('Error creating request:', error);
       showSnackbar('Failed to submit request', 'error');

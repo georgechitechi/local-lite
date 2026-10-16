@@ -188,9 +188,9 @@ export default function CreateReceiptScreen() {
             : undefined,
           house: house
             ? {
-                house_number: house.house_number,
-                property: property ? { name: property.name } : undefined,
-              }
+              house_number: house.house_number,
+              property: property ? { name: property.name } : undefined,
+            }
             : undefined,
         } as ExtendedContract;
       });
@@ -355,7 +355,7 @@ export default function CreateReceiptScreen() {
       form.type === 'others'
         ? 'paid'
         : (effectiveRentAmount > 0 || isRentWaived) &&
-            amount >= effectiveRentAmount - 0.01
+          amount >= effectiveRentAmount - 0.01
           ? 'paid'
           : 'partial';
     setForm(prev => ({ ...prev, amount: text, status }));
@@ -437,11 +437,7 @@ export default function CreateReceiptScreen() {
     resetForm();
     setSelectedBankMessages([]);
     setSearchQuery('');
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/receipts');
-    }
+    router.replace('/(tabs)/receipts');
   };
 
   const handleSendEmail = async (receipt: any, tenant: any, messages?: any[]) => {
@@ -557,7 +553,7 @@ export default function CreateReceiptScreen() {
         'Payment Received',
         `A payment of ${form.amount} has been successfully recorded.`,
         { type: 'payment', paymentId: receiptId },
-      ).catch(() => {});
+      ).catch(() => { });
 
       // Link payment messages
       if (selectedBankMessages.length > 0) {

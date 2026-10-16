@@ -198,15 +198,11 @@ export default function CreateTenantScreen() {
         'New Tenant Added',
         `${tenantData.name} has been successfully added as a tenant.`,
         { type: 'tenant', tenantId: id },
-      ).catch(() => {});
+      ).catch(() => { });
 
       showSnackbar('Tenant created successfully', 'success');
       resetForm();
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)/tenants');
-      }
+      router.replace('/(tabs)/tenants');
     } catch (error: any) {
       console.error('Error creating tenant:', error);
       showSnackbar(`Failed to create tenant: ${error.message}`, 'error');

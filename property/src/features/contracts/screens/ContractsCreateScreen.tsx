@@ -230,14 +230,10 @@ export default function CreateContractScreen() {
         'New Contract Created',
         `A new contract has been created for House ${form.house_number}.`,
         { type: 'contract', contractId },
-      ).catch(() => {});
+      ).catch(() => { });
 
       showSnackbar('Contract created successfully!', 'success');
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)/contracts');
-      }
+      router.replace('/(tabs)/contracts');
     } catch (error: any) {
       console.error('Error creating contract:', error);
       showSnackbar('Failed to create contract', 'error');

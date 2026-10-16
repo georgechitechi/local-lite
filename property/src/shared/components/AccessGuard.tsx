@@ -63,13 +63,7 @@ export default function AccessGuard({
         </Text>
         <Button
           mode="contained"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/');
-            }
-          }}
+          onPress={() => router.replace('/')}
           style={styles.button}
           labelStyle={{ fontSize: 16 }}
         >
