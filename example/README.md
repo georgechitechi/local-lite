@@ -58,13 +58,3 @@ Existing local or remote data is not copied automatically.
 npm run typecheck
 npm run lint
 ```
-
-## Upgrading from the shared rentalRows table
-
-Deploy the new schema and functions with `npm run convex:dev`. Run
-`npx convex run sync:migrateRentalRows '{}'` repeatedly until it reports `migrated: 0`.
-Each batch atomically copies up to 200 legacy records into their entity tables and
-removes those legacy records. IDs, deletion markers, and write timestamps are
-preserved; new sync cursors make migrated rows visible to connected clients.
-Newer records already in the target tables are preserved. The migration is internal
-and cannot be called by app clients. The old table is no longer part of the schema.

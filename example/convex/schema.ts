@@ -21,7 +21,7 @@ export default defineSchema({
     rent: number,
     status: text,
     bedrooms: number, bathrooms: number,
-  }).index('by_id', ['id']).index('by_timestamp', ['timestamp']),
+  }).index('by_rowId', ['id']).index('by_timestamp', ['timestamp']),
   tenants: defineTable({
     ...common,
     name: text,
@@ -33,7 +33,7 @@ export default defineSchema({
     lease_end: text,
     rent_amount: number,
     status: text,
-  }).index('by_id', ['id']).index('by_timestamp', ['timestamp']).index('by_property', ['property_id']),
+  }).index('by_rowId', ['id']).index('by_timestamp', ['timestamp']).index('by_property', ['property_id']),
   maintenance_requests: defineTable({
     ...common,
     property_name: text,
@@ -42,7 +42,7 @@ export default defineSchema({
     status: text,
     estimated_cost: number,
     reported_date: text,
-  }).index('by_id', ['id']).index('by_timestamp', ['timestamp']),
+  }).index('by_rowId', ['id']).index('by_timestamp', ['timestamp']),
   payments: defineTable({
     ...common,
     property_name: text,
@@ -50,7 +50,7 @@ export default defineSchema({
     amount: number,
     due_date: text,
     status: text,
-  }).index('by_id', ['id']).index('by_timestamp', ['timestamp']),
+  }).index('by_rowId', ['id']).index('by_timestamp', ['timestamp']),
   syncClock: defineTable({ timestamp: v.number() }),
   syncOperations: defineTable({
     operationId: v.string()
