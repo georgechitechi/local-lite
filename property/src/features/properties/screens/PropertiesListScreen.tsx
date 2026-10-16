@@ -37,6 +37,7 @@ import {
   useHousesByPropertyId,
   useProperties,
   useStoreRefresh,
+  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatDateForDB, formatWithCurrency } from '@/shared/utils/formatters';
@@ -329,6 +330,7 @@ export default function PropertiesScreen() {
   const contracts = useContracts(selectedBusiness?.id);
   const { batch } = useCoreMutations();
   const { refreshing, onRefresh } = useStoreRefresh();
+  const isInitialSyncing = useIsInitialSyncing();
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
 
   const housesByPropertyId = useHousesByPropertyId(selectedBusiness?.id);
@@ -626,7 +628,11 @@ export default function PropertiesScreen() {
           removeClippedSubviews={false}
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={
-            <EmptyState icon="home-city-outline" title="No properties found" />
+            refreshing || isInitialSyncing ? (
+              <LoadingCard iconName="home-city-outline" text="Loading properties..." />
+            ) : (
+              <EmptyState icon="home-city-outline" title="No properties found" />
+            )
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

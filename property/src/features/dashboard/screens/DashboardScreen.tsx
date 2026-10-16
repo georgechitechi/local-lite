@@ -40,6 +40,7 @@ import {
   useCoreIndexMap,
   useExpenses,
   useHouses,
+  useIsInitialSyncing,
   useMaintenanceRequests,
   usePaymentMessageReceipts,
   usePaymentMessages,
@@ -137,47 +138,22 @@ const Dashboard = function Dashboard() {
 
   const propertiesPersistLoaded = properties !== undefined;
 
-  const [isWaitingForInitialSync, setIsWaitingForInitialSync] = useState(false);
-
-  const hasTriggeredWait = React.useRef(false);
-  const lastBizRef = React.useRef(selectedBusinessId);
-
-  if (selectedBusinessId !== lastBizRef.current) {
-    hasTriggeredWait.current = false;
-    lastBizRef.current = selectedBusinessId;
-  }
+  const isInitialSyncing = useIsInitialSyncing();
+  const [isWaitingForInitialSync, setIsWaitingForInitialSync] = useState(true);
 
   React.useEffect(() => {
-    if (!selectedBusinessId) {
-      setIsWaitingForInitialSync(false);
-      return;
-    }
-    if (propertiesPersistLoaded && !hasTriggeredWait.current) {
-      hasTriggeredWait.current = true;
-      if (properties.length === 0 && houses.length === 0 && isSyncingStore) {
-        setIsWaitingForInitialSync(true);
-      }
-    }
-  }, [
-    selectedBusinessId,
-    propertiesPersistLoaded,
-    properties.length,
-    houses.length,
-    isSyncingStore,
-  ]);
-
-  React.useEffect(() => {
-    if (!isSyncingStore && isWaitingForInitialSync) {
+    // If neither initial pull nor ongoing sync is active, unblock dashboard
+    if (!isSyncingStore && !isInitialSyncing) {
       setIsWaitingForInitialSync(false);
     }
-  }, [isSyncingStore, isWaitingForInitialSync]);
+  }, [isSyncingStore, isInitialSyncing]);
 
-  // Safety timer: Never allow initial sync wait to block the dashboard for more than 1.5 seconds
+  // Safety timer: Never allow initial sync wait to block the dashboard for more than 3.5 seconds
   React.useEffect(() => {
     if (isWaitingForInitialSync) {
       const timer = setTimeout(() => {
         setIsWaitingForInitialSync(false);
-      }, 1500);
+      }, 3500);
       return () => clearTimeout(timer);
     }
   }, [isWaitingForInitialSync]);
@@ -560,9 +536,15 @@ const Dashboard = function Dashboard() {
   if (
     accessLoading ||
     isHydratingSelection ||
-    (isWaitingForInitialSync && !selectedBusiness)
+    isWaitingForInitialSync ||
+    isInitialSyncing
   ) {
-    return <LoadingCard iconName="view-dashboard-variant" text="Loading workspace..." />;
+    return (
+      <LoadingCard
+        iconName="view-dashboard-variant"
+        text="Loading workspace data..."
+      />
+    );
   }
 
   if (!selectedBusiness) {

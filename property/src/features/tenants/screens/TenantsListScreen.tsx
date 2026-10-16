@@ -45,6 +45,7 @@ import {
   useReceipts,
   useStoreRefresh,
   useTenants,
+  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendBookingApprovalNotification } from '@/shared/services/emailService';
@@ -124,6 +125,7 @@ export default function TenantsScreen() {
   const paymentMessages = usePaymentMessages(selectedBusiness?.id);
   const paymentMessageReceipts = usePaymentMessageReceipts(selectedBusiness?.id);
   const { refreshing, onRefresh } = useStoreRefresh();
+  const isInitialSyncing = useIsInitialSyncing();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
@@ -1166,7 +1168,11 @@ export default function TenantsScreen() {
           bookings,
         }}
         ListEmptyComponent={
-          <EmptyState icon="account-group-outline" title="No tenants found" />
+          refreshing || isInitialSyncing ? (
+            <LoadingCard iconName="account-group" text="Loading tenants..." />
+          ) : (
+            <EmptyState icon="account-group-outline" title="No tenants found" />
+          )
         }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />

@@ -33,7 +33,11 @@ import type {
 } from '@/shared/types/types';
 import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
-export { useLocalClient } from '@/providers/SyncClientProvider';
+export {
+  useLocalClient,
+  useSyncClientContext,
+  useIsInitialSyncing,
+} from '@/providers/SyncClientProvider';
 
 // ---------------------------------------------------------------------------
 // Core Table Live Queries (Powered directly by local-lite SQLite)
