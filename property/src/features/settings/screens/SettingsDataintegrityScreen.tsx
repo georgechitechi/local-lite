@@ -146,6 +146,8 @@ export default function DataIntegrityScreen() {
     allContracts,
     allProperties,
     allHouses,
+    allReceipts,
+    allBookings,
     allPaymentMessages,
     allPaymentMessageReceipts,
     contractsById,

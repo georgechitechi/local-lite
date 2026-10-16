@@ -26,7 +26,6 @@ export function useReminders() {
   const state = useReminderState(settings);
   const data = useReminderData(selectedBusiness, state);
   const actions = useReminderActions(
-    null,
     user,
     business,
     defaultCurrency,
@@ -49,7 +48,6 @@ export function useReminders() {
     defaultCurrency,
     hasAccess,
     fetchData,
-    store: null,
     showSnackbar,
   };
 }

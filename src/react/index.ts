@@ -96,6 +96,13 @@ export function useLiveQuery<T = any>(
 
   const scheduleRefetch = useCoalescedRunner(refetch);
 
+  const queryKey =
+    typeof queryOrOptions === 'object' && queryOrOptions !== null
+      ? JSON.stringify(queryOrOptions)
+      : typeof queryOrOptions === 'function'
+      ? queryOrOptions
+      : undefined;
+
   useEffect(() => {
     if (!client || !client.db) return;
 
@@ -108,7 +115,7 @@ export function useLiveQuery<T = any>(
     return () => {
       unsubscribe();
     };
-  }, [client, tableName, refetch, scheduleRefetch]);
+  }, [client, tableName, queryKey, refetch, scheduleRefetch]);
 
   return { data, refetch, loading };
 }

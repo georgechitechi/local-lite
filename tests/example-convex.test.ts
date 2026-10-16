@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { pullDeltas, pushBatch } from '../example/convex/sync';
+import { existsSync } from 'node:fs';
 
 // Exercise the deployed handlers with a small indexed database double.
 function database() {
@@ -39,8 +39,10 @@ function database() {
   };
 }
 
-describe('example Convex sync protocol', () => {
+// Root-only installs do not install the example's optional backend dependencies.
+describe.skipIf(!existsSync(new URL('../example/node_modules/convex/package.json', import.meta.url)))('example Convex sync protocol', () => {
   it('merges updates, ignores retries and stale writes, and delivers offline deletions', async () => {
+    const { pullDeltas, pushBatch } = await import('../example/convex/sync');
     const ctx = { db: database() };
     const push = (operations: any[]) => (pushBatch as any)._handler(ctx, { operations });
     const pull = (sinceTimestamp = 0) => (pullDeltas as any)._handler(ctx, {

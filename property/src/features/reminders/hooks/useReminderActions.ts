@@ -18,7 +18,6 @@ import { supabase } from '@/shared/services/supabase';
 import { generateUUID } from '@/shared/utils/helper';
 
 export function useReminderActions(
-  store: any,
   user: any,
   business: any,
   defaultCurrency: any,

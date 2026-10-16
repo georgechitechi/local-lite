@@ -12,13 +12,12 @@ import {
   resolveHouseStatusFromContracts,
 } from '@/shared/utils/statusHelper';
 
-const batch = (fn: () => void) => fn();
-
 interface UseDataIntegrityActionsProps {
-  store?: any;
   allContracts: any[];
   allProperties: any[];
   allHouses?: any[];
+  allReceipts?: any[];
+  allBookings?: any[];
   allPaymentMessages: any[];
   allPaymentMessageReceipts: any[];
   contractsById: { get: (id: string) => any | undefined };
@@ -29,10 +28,11 @@ interface UseDataIntegrityActionsProps {
 }
 
 export function useDataIntegrityActions({
-  store,
   allContracts,
   allProperties,
   allHouses = [],
+  allReceipts = [],
+  allBookings = [],
   allPaymentMessages,
   allPaymentMessageReceipts,
   contractsById,
@@ -80,68 +80,69 @@ export function useDataIntegrityActions({
   // 1. Data Cleanup (mask phone numbers, remove duplicate messages)
   const handleDataCleanup = () =>
     withProcessing(
-      !!(store || client),
+      !!client,
       async () => {
         let msgDeleted = 0;
         let msgMasked = 0;
         let receiptMasked = 0;
-        const receiptMutations: BatchMutation[] = [];
+        const mutations: BatchMutation[] = [];
 
-        batch(() => {
-          if (store?.paymentMessages$) {
-            const msgs = Object.values(store.paymentMessages$.get() || {});
-            const seenMessageIds = new Set<string>();
+        const msgs = [...allPaymentMessages];
+        const seenMessageIds = new Set<string>();
 
-            msgs.sort((a: any, b: any) => {
-              const tA = new Date(a.created_at || 0).getTime();
-              const tB = new Date(b.created_at || 0).getTime();
-              return tB - tA;
-            });
+        msgs.sort((a: any, b: any) => {
+          const tA = new Date(a.created_at || 0).getTime();
+          const tB = new Date(b.created_at || 0).getTime();
+          return tB - tA;
+        });
 
-            msgs.forEach((msg: any) => {
-              if (msg.deleted) return;
-              let isDuplicate = false;
-              if (msg.message_id) {
-                if (seenMessageIds.has(msg.message_id)) {
-                  store.paymentMessages$[msg.id].delete();
-                  msgDeleted++;
-                  isDuplicate = true;
-                } else {
-                  seenMessageIds.add(msg.message_id);
-                }
-              }
-              if (!isDuplicate && msg.message_content) {
-                const updated = maskPhoneNumber(msg.message_content);
-                if (updated !== msg.message_content) {
-                  store.paymentMessages$[msg.id].assign({ message_content: updated });
-                  msgMasked++;
-                }
-              }
-            });
+        msgs.forEach((msg: any) => {
+          if (msg.deleted) return;
+          let isDuplicate = false;
+          if (msg.message_id) {
+            if (seenMessageIds.has(msg.message_id)) {
+              mutations.push({
+                tableName: 'payment_messages',
+                operation: 'DELETE',
+                rowId: msg.id,
+              });
+              msgDeleted++;
+              isDuplicate = true;
+            } else {
+              seenMessageIds.add(msg.message_id);
+            }
           }
-
-          if (store?.receipts$) {
-            const receipts = Object.values(store.receipts$.get() || {});
-            receipts.forEach((r: any) => {
-              if (!r.deleted && r.notes) {
-                const updated = maskPhoneNumber(r.notes);
-                if (updated !== r.notes) {
-                  store.receipts$[r.id].assign({ notes: updated });
-                  receiptMutations.push({
-                    tableName: 'receipts',
-                    operation: 'UPDATE',
-                    rowId: r.id,
-                    payload: { notes: updated },
-                  });
-                  receiptMasked++;
-                }
-              }
-            });
+          if (!isDuplicate && msg.message_content) {
+            const updated = maskPhoneNumber(msg.message_content);
+            if (updated !== msg.message_content) {
+              mutations.push({
+                tableName: 'payment_messages',
+                operation: 'UPDATE',
+                rowId: msg.id,
+                payload: { message_content: updated },
+              });
+              msgMasked++;
+            }
           }
         });
 
-        if (receiptMutations.length > 0 && client) {
-          await client.batch(receiptMutations);
+        allReceipts.forEach((r: any) => {
+          if (!r.deleted && r.notes) {
+            const updated = maskPhoneNumber(r.notes);
+            if (updated !== r.notes) {
+              mutations.push({
+                tableName: 'receipts',
+                operation: 'UPDATE',
+                rowId: r.id,
+                payload: { notes: updated },
+              });
+              receiptMasked++;
+            }
+          }
+        });
+
+        if (mutations.length > 0 && client) {
+          await client.batch(mutations);
         }
 
         showSnackbar(
@@ -163,9 +164,6 @@ export function useDataIntegrityActions({
           status: 'active',
           end_date: formatDateForDB(newEndDate),
         };
-        if (store?.contracts$?.[contractId]) {
-          store.contracts$[contractId].assign(payload);
-        }
         if (client) {
           await client.update('contracts', contractId, payload);
         }
@@ -183,9 +181,6 @@ export function useDataIntegrityActions({
         const endDate = formatDateForDB(dateVacated);
 
         // 1. Tenant status -> former
-        if (store?.tenants$?.[tenant.id]) {
-          store.tenants$[tenant.id].assign({ status: 'former' });
-        }
         mutations.push({
           tableName: 'tenants',
           operation: 'UPDATE',
@@ -204,12 +199,6 @@ export function useDataIntegrityActions({
         );
 
         activeContracts.forEach((contract: any) => {
-          if (store?.contracts$?.[contract.id]) {
-            store.contracts$[contract.id].assign({
-              status: 'terminated',
-              end_date: endDate,
-            });
-          }
           mutations.push({
             tableName: 'contracts',
             operation: 'UPDATE',
@@ -227,17 +216,12 @@ export function useDataIntegrityActions({
         ] as string[];
 
         houseIds.forEach(houseId => {
-          const houseData =
-            store?.houses$?.[houseId]?.get() ||
-            allHouses.find((h: any) => h.id === houseId);
+          const houseData = allHouses.find((h: any) => h.id === houseId);
           const newStatus = resolveHouseStatusFromContracts(
             houseData?.status,
             contractsAfterUpdate,
             houseId,
           );
-          if (store?.houses$?.[houseId]) {
-            store.houses$[houseId].assign({ status: newStatus });
-          }
           mutations.push({
             tableName: 'houses',
             operation: 'UPDATE',
@@ -252,12 +236,6 @@ export function useDataIntegrityActions({
           !activeContracts.some((c: any) => c.id === tenant.latest_contract.id)
         ) {
           const latestContractId = tenant.latest_contract.id;
-          if (store?.contracts$?.[latestContractId]) {
-            store.contracts$[latestContractId].assign({
-              status: 'terminated',
-              end_date: endDate,
-            });
-          }
           mutations.push({
             tableName: 'contracts',
             operation: 'UPDATE',
@@ -270,9 +248,7 @@ export function useDataIntegrityActions({
 
           if (tenant.latest_contract.house_id) {
             const houseId = tenant.latest_contract.house_id;
-            const houseData =
-              store?.houses$?.[houseId]?.get() ||
-              allHouses.find((h: any) => h.id === houseId);
+            const houseData = allHouses.find((h: any) => h.id === houseId);
             const contractsAfterUpdate2 = allContracts.map(c =>
               c.id === latestContractId
                 ? { ...c, status: 'terminated', end_date: endDate }
@@ -283,9 +259,6 @@ export function useDataIntegrityActions({
               contractsAfterUpdate2,
               houseId,
             );
-            if (store?.houses$?.[houseId]) {
-              store.houses$[houseId].assign({ status: newStatus });
-            }
             mutations.push({
               tableName: 'houses',
               operation: 'UPDATE',
@@ -314,9 +287,6 @@ export function useDataIntegrityActions({
           house.id,
         );
         if (house.status !== correctStatus) {
-          if (store?.houses$?.[house.id]) {
-            store.houses$[house.id].assign({ status: correctStatus });
-          }
           if (client) {
             await client.update('houses', house.id, { status: correctStatus });
           }
@@ -347,15 +317,9 @@ export function useDataIntegrityActions({
 
         if (target === 'property' && house.property_id) {
           const property = allProperties.find((p: any) => p.id === house.property_id);
-          const propData = store?.properties$?.[house.property_id]?.get() || property;
-          const oldPropMeta = safeParseJSON<Record<string, any>>(propData?.metadata, {});
+          const oldPropMeta = safeParseJSON<Record<string, any>>(property?.metadata, {});
           const newPropMeta = { ...oldPropMeta, effective_date: dateStr };
 
-          if (store?.properties$?.[house.property_id]) {
-            store.properties$[house.property_id].assign({
-              metadata: newPropMeta,
-            });
-          }
           mutations.push({
             tableName: 'properties',
             operation: 'UPDATE',
@@ -363,7 +327,7 @@ export function useDataIntegrityActions({
             payload: { metadata: newPropMeta },
           });
 
-          const currentHouse = store?.houses$?.[house.id]?.get() || house;
+          const currentHouse = house;
           const currentHouseMeta = safeParseJSON<Record<string, any>>(
             currentHouse?.metadata,
             {},
@@ -371,9 +335,6 @@ export function useDataIntegrityActions({
           if (currentHouseMeta.effective_date) {
             const oldHouseMeta = { ...currentHouseMeta };
             delete oldHouseMeta.effective_date;
-            if (store?.houses$?.[house.id]) {
-              store.houses$[house.id].assign({ metadata: oldHouseMeta });
-            }
             mutations.push({
               tableName: 'houses',
               operation: 'UPDATE',
@@ -391,15 +352,10 @@ export function useDataIntegrityActions({
             'success',
           );
         } else {
-          const currentHouse = store?.houses$?.[house.id]?.get() || house;
+          const currentHouse = house;
           const oldMeta = safeParseJSON<Record<string, any>>(currentHouse?.metadata, {});
           const newMeta = { ...oldMeta, effective_date: dateStr };
 
-          if (store?.houses$?.[house.id]) {
-            store.houses$[house.id].assign({
-              metadata: newMeta,
-            });
-          }
           if (client) {
             await client.update('houses', house.id, { metadata: newMeta });
           }
@@ -420,9 +376,6 @@ export function useDataIntegrityActions({
       !!contract?.id,
       async () => {
         const dateStr = formatDateForDB(newDate);
-        if (store?.contracts$?.[contract.id]) {
-          store.contracts$[contract.id].assign({ start_date: dateStr });
-        }
         if (client) {
           await client.update('contracts', contract.id, { start_date: dateStr });
         }
@@ -441,19 +394,12 @@ export function useDataIntegrityActions({
       contracts?.length > 0,
       async () => {
         const dateStr = formatDateForDB(newDate);
-        const mutations: BatchMutation[] = [];
-
-        contracts.forEach((c: any) => {
-          if (store?.contracts$?.[c.id]) {
-            store.contracts$[c.id].assign({ start_date: dateStr });
-          }
-          mutations.push({
-            tableName: 'contracts',
-            operation: 'UPDATE',
-            rowId: c.id,
-            payload: { start_date: dateStr },
-          });
-        });
+        const mutations: BatchMutation[] = contracts.map((c: any) => ({
+          tableName: 'contracts',
+          operation: 'UPDATE',
+          rowId: c.id,
+          payload: { start_date: dateStr },
+        }));
 
         if (mutations.length > 0 && client) {
           await client.batch(mutations);
@@ -475,13 +421,10 @@ export function useDataIntegrityActions({
       !!(item?.house?.id || item?.id),
       async () => {
         const houseId = item?.house?.id || item?.id;
-        const existing = store?.houses$?.[houseId]?.get() || item?.house || item;
+        const existing = item?.house || item;
         const currentMeta = safeParseJSON<Record<string, any>>(existing?.metadata, {});
         const updatedMeta = { ...currentMeta, ignore_occupied_before_built: true };
 
-        if (store?.houses$?.[houseId]) {
-          store.houses$[houseId].assign({ metadata: updatedMeta });
-        }
         if (client) {
           await client.update('houses', houseId, { metadata: updatedMeta });
         }
@@ -498,25 +441,20 @@ export function useDataIntegrityActions({
       async () => {
         const mutations: BatchMutation[] = [];
 
-        batch(() => {
-          items.forEach((item: any) => {
-            const houseId = item?.house?.id || item?.id;
-            if (!houseId) return;
-            const existing = store?.houses$?.[houseId]?.get() || item?.house || item;
-            const currentMeta = safeParseJSON<Record<string, any>>(
-              existing?.metadata,
-              {},
-            );
-            const updatedMeta = { ...currentMeta, ignore_occupied_before_built: true };
-            if (store?.houses$?.[houseId]) {
-              store.houses$[houseId].assign({ metadata: updatedMeta });
-            }
-            mutations.push({
-              tableName: 'houses',
-              operation: 'UPDATE',
-              rowId: houseId,
-              payload: { metadata: updatedMeta },
-            });
+        items.forEach((item: any) => {
+          const houseId = item?.house?.id || item?.id;
+          if (!houseId) return;
+          const existing = item?.house || item;
+          const currentMeta = safeParseJSON<Record<string, any>>(
+            existing?.metadata,
+            {},
+          );
+          const updatedMeta = { ...currentMeta, ignore_occupied_before_built: true };
+          mutations.push({
+            tableName: 'houses',
+            operation: 'UPDATE',
+            rowId: houseId,
+            payload: { metadata: updatedMeta },
           });
         });
 
@@ -537,19 +475,12 @@ export function useDataIntegrityActions({
       items?.length > 0,
       async () => {
         const todayStr = formatDateForDB(new Date());
-        const mutations: BatchMutation[] = [];
-
-        items.forEach((item: any) => {
-          if (store?.contracts$?.[item.id]) {
-            store.contracts$[item.id].assign({ end_date: todayStr });
-          }
-          mutations.push({
-            tableName: 'contracts',
-            operation: 'UPDATE',
-            rowId: item.id,
-            payload: { end_date: todayStr },
-          });
-        });
+        const mutations: BatchMutation[] = items.map((item: any) => ({
+          tableName: 'contracts',
+          operation: 'UPDATE',
+          rowId: item.id,
+          payload: { end_date: todayStr },
+        }));
 
         if (mutations.length > 0 && client) {
           await client.batch(mutations);
@@ -572,9 +503,6 @@ export function useDataIntegrityActions({
 
         items.forEach((item: any) => {
           if (item.better_contract_id) {
-            if (store?.receipts$?.[item.id]) {
-              store.receipts$[item.id].assign({ contract_id: item.better_contract_id });
-            }
             mutations.push({
               tableName: 'receipts',
               operation: 'UPDATE',
@@ -601,9 +529,6 @@ export function useDataIntegrityActions({
     withProcessing(
       !!item?.better_contract_id,
       async () => {
-        if (store?.receipts$?.[item.id]) {
-          store.receipts$[item.id].assign({ contract_id: item.better_contract_id });
-        }
         if (client) {
           await client.update('receipts', item.id, {
             contract_id: item.better_contract_id,
@@ -620,13 +545,10 @@ export function useDataIntegrityActions({
     withProcessing(
       !!item?.id,
       async () => {
-        const existing = store?.receipts$?.[item.id]?.get() || item;
+        const existing = item;
         const currentMeta = safeParseJSON<Record<string, any>>(existing?.metadata, {});
         const updatedMeta = { ...currentMeta, ignore_date_mismatch: true };
 
-        if (store?.receipts$?.[item.id]) {
-          store.receipts$[item.id].assign({ metadata: updatedMeta });
-        }
         if (client) {
           await client.update('receipts', item.id, { metadata: updatedMeta });
         }
@@ -643,23 +565,18 @@ export function useDataIntegrityActions({
       async () => {
         const mutations: BatchMutation[] = [];
 
-        batch(() => {
-          items.forEach((item: any) => {
-            const existing = store?.receipts$?.[item.id]?.get() || item;
-            const currentMeta = safeParseJSON<Record<string, any>>(
-              existing?.metadata,
-              {},
-            );
-            const updatedMeta = { ...currentMeta, ignore_date_mismatch: true };
-            if (store?.receipts$?.[item.id]) {
-              store.receipts$[item.id].assign({ metadata: updatedMeta });
-            }
-            mutations.push({
-              tableName: 'receipts',
-              operation: 'UPDATE',
-              rowId: item.id,
-              payload: { metadata: updatedMeta },
-            });
+        items.forEach((item: any) => {
+          const existing = item;
+          const currentMeta = safeParseJSON<Record<string, any>>(
+            existing?.metadata,
+            {},
+          );
+          const updatedMeta = { ...currentMeta, ignore_date_mismatch: true };
+          mutations.push({
+            tableName: 'receipts',
+            operation: 'UPDATE',
+            rowId: item.id,
+            payload: { metadata: updatedMeta },
           });
         });
 
@@ -680,9 +597,6 @@ export function useDataIntegrityActions({
       !!receipt?.id,
       async () => {
         const dateStr = formatDateForDB(newDate);
-        if (store?.receipts$?.[receipt.id]) {
-          store.receipts$[receipt.id].assign({ payment_date: dateStr });
-        }
         if (client) {
           await client.update('receipts', receipt.id, { payment_date: dateStr });
         }
@@ -720,9 +634,6 @@ export function useDataIntegrityActions({
         const mutations: BatchMutation[] = [];
         let count = 0;
         Object.entries(contractAdjustments).forEach(([id, adj]) => {
-          if (store?.contracts$?.[id]) {
-            store.contracts$[id].assign({ start_date: adj.start, end_date: adj.end });
-          }
           mutations.push({
             tableName: 'contracts',
             operation: 'UPDATE',
@@ -748,14 +659,20 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        items.forEach((item: any) => {
-          if (store?.bookings$?.[item.id]) {
-            store.bookings$[item.id].assign({
-              status: 'pending',
-              converted_tenant_id: null,
-            });
-          }
-        });
+        const mutations: BatchMutation[] = items.map((item: any) => ({
+          tableName: 'bookings',
+          operation: 'UPDATE',
+          rowId: item.id,
+          payload: {
+            status: 'pending',
+            converted_tenant_id: null,
+          },
+        }));
+
+        if (mutations.length > 0 && client) {
+          await client.batch(mutations);
+        }
+
         showSnackbar(`Successfully reset ${items.length} booking(s).`, 'success');
       },
       '',
@@ -772,24 +689,29 @@ export function useDataIntegrityActions({
 
         items.forEach((item: any) => {
           if (type === 'message' && item.message_content) {
-            store?.paymentMessages$?.[item.id]?.assign({
-              message_content: formatAmountsInText(item.message_content),
-            });
+            const formatted = formatAmountsInText(item.message_content);
+            if (formatted !== item.message_content) {
+              mutations.push({
+                tableName: 'payment_messages',
+                operation: 'UPDATE',
+                rowId: item.id,
+                payload: { message_content: formatted },
+              });
+            }
           } else if (type === 'receipt' && item.notes) {
             const formatted = formatAmountsInText(item.notes);
-            if (store?.receipts$?.[item.id]) {
-              store.receipts$[item.id].assign({ notes: formatted });
+            if (formatted !== item.notes) {
+              mutations.push({
+                tableName: 'receipts',
+                operation: 'UPDATE',
+                rowId: item.id,
+                payload: { notes: formatted },
+              });
             }
-            mutations.push({
-              tableName: 'receipts',
-              operation: 'UPDATE',
-              rowId: item.id,
-              payload: { notes: formatted },
-            });
           }
         });
 
-        if (type === 'receipt' && mutations.length > 0 && client) {
+        if (mutations.length > 0 && client) {
           await client.batch(mutations);
         }
 
@@ -808,14 +730,14 @@ export function useDataIntegrityActions({
       !!item,
       async () => {
         if (type === 'message' && item.message_content) {
-          store?.paymentMessages$?.[item.id]?.assign({
-            message_content: formatAmountsInText(item.message_content),
-          });
+          const formatted = formatAmountsInText(item.message_content);
+          if (client) {
+            await client.update('payment_messages', item.id, {
+              message_content: formatted,
+            });
+          }
         } else if (type === 'receipt' && item.notes) {
           const formatted = formatAmountsInText(item.notes);
-          if (store?.receipts$?.[item.id]) {
-            store.receipts$[item.id].assign({ notes: formatted });
-          }
           if (client) {
             await client.update('receipts', item.id, { notes: formatted });
           }
@@ -835,24 +757,29 @@ export function useDataIntegrityActions({
 
         items.forEach((item: any) => {
           if (type === 'message' && item.message_content) {
-            store?.paymentMessages$?.[item.id]?.assign({
-              message_content: maskPhoneNumber(item.message_content),
-            });
+            const masked = maskPhoneNumber(item.message_content);
+            if (masked !== item.message_content) {
+              mutations.push({
+                tableName: 'payment_messages',
+                operation: 'UPDATE',
+                rowId: item.id,
+                payload: { message_content: masked },
+              });
+            }
           } else if (type === 'receipt' && item.notes) {
             const masked = maskPhoneNumber(item.notes);
-            if (store?.receipts$?.[item.id]) {
-              store.receipts$[item.id].assign({ notes: masked });
+            if (masked !== item.notes) {
+              mutations.push({
+                tableName: 'receipts',
+                operation: 'UPDATE',
+                rowId: item.id,
+                payload: { notes: masked },
+              });
             }
-            mutations.push({
-              tableName: 'receipts',
-              operation: 'UPDATE',
-              rowId: item.id,
-              payload: { notes: masked },
-            });
           }
         });
 
-        if (type === 'receipt' && mutations.length > 0 && client) {
+        if (mutations.length > 0 && client) {
           await client.batch(mutations);
         }
 
@@ -884,9 +811,6 @@ export function useDataIntegrityActions({
               }
             });
             if (updated !== item.notes) {
-              if (store?.receipts$?.[item.id]) {
-                store.receipts$[item.id].assign({ notes: updated });
-              }
               mutations.push({
                 tableName: 'receipts',
                 operation: 'UPDATE',
@@ -936,9 +860,6 @@ export function useDataIntegrityActions({
             .join('\n\n');
 
           if (newNotes && newNotes !== item.notes) {
-            if (store?.receipts$?.[item.id]) {
-              store.receipts$[item.id].assign({ notes: newNotes });
-            }
             mutations.push({
               tableName: 'receipts',
               operation: 'UPDATE',

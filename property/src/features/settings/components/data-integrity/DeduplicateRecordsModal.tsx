@@ -17,7 +17,6 @@ interface DeduplicateRecordsModalProps {
   allExpenses: any[];
   allPaymentMessageReceipts: any[];
   receiptsById: { get: (id: string) => any | undefined };
-  store?: any;
   checkOnline: (action: string) => boolean;
   showSnackbar: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
   onSuccess: () => void;
@@ -31,7 +30,6 @@ export default function DeduplicateRecordsModal({
   allExpenses,
   allPaymentMessageReceipts,
   receiptsById,
-  store,
   checkOnline,
   showSnackbar,
   onSuccess,
