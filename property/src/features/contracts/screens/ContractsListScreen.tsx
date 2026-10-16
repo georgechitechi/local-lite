@@ -39,6 +39,7 @@ import {
   useSettings,
   useStoreRefresh,
   useTenantsById,
+  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendContractEmail } from '@/shared/services/emailService';
@@ -138,6 +139,7 @@ export default function ContractsScreen() {
   const settings = useSettings(selectedBusiness?.id);
   const { batch, update } = useCoreMutations();
   const { refreshing, onRefresh } = useStoreRefresh();
+  const isInitialSyncing = useIsInitialSyncing();
 
   const housesById = useHousesById(selectedBusiness?.id);
   const propertiesById = usePropertiesById(selectedBusiness?.id);
@@ -887,7 +889,11 @@ export default function ContractsScreen() {
           removeClippedSubviews={false}
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={
-            <EmptyState icon="file-document-outline" title="No contracts found" />
+            refreshing || isInitialSyncing ? (
+              <LoadingCard iconName="file-document-outline" text="Loading contracts..." />
+            ) : (
+              <EmptyState icon="file-document-outline" title="No contracts found" />
+            )
           }
         />
 

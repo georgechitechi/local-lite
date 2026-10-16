@@ -58,7 +58,7 @@ export default function SyncScreen() {
   const handleSeedRemote = async () => {
     setIsSeeding(true);
     setSeedPercent(0);
-    setSeedStage('Connecting to Supabase...');
+    setSeedStage('Connecting to Convex...');
     setLastResult(null);
     try {
       const res = await seedRemoteData(selectedCount, (p) => {
@@ -67,7 +67,7 @@ export default function SyncScreen() {
         if (p.rate) setSeedRate(p.rate);
       });
       setLastResult(
-        `☁️ Seeded ${res.totalInserted} rows into Supabase in ${(res.durationMs / 1000).toFixed(2)}s (${res.rate} rec/s). Ready to sync!`
+        `☁️ Seeded ${res.totalInserted} rows into Convex in ${(res.durationMs / 1000).toFixed(2)}s (${res.rate} rec/s). Ready to sync!`
       );
     } catch (err: any) {
       setLastResult(`❌ Error: ${err?.message || err}`);
@@ -78,10 +78,10 @@ export default function SyncScreen() {
 
   const handleClearAll = async () => {
     setIsSeeding(true);
-    setSeedStage('Clearing local SQLite and Supabase tables...');
+    setSeedStage('Clearing local SQLite and Convex tables...');
     try {
       await clearDemoData({ clearRemote: true, clearOutbox: true });
-      setLastResult('🧹 All local SQLite & Supabase tables cleared!');
+      setLastResult('🧹 All local SQLite & Convex tables cleared!');
     } catch (err: any) {
       setLastResult(`❌ Error clearing: ${err?.message || err}`);
     } finally {
@@ -137,7 +137,7 @@ export default function SyncScreen() {
           <View style={styles.seederHeader}>
             <Text style={styles.seederTitle}>⚡ Massive Data Generator & Stress Test</Text>
             <Text style={styles.seederSubtitle}>
-              Test local SQLite insertion speed, outbox drain throughput, or Supabase pull paging.
+              Test local SQLite insertion speed, outbox drain throughput, or Convex pull paging.
             </Text>
           </View>
 
@@ -198,7 +198,7 @@ export default function SyncScreen() {
               onPress={handleSeedRemote}
               disabled={isSeeding}
             >
-              <Text style={styles.seedActionBtnText}>☁️ Seed Supabase</Text>
+              <Text style={styles.seedActionBtnText}>☁️ Seed Convex</Text>
             </TouchableOpacity>
           </View>
 
@@ -207,7 +207,7 @@ export default function SyncScreen() {
             onPress={handleClearAll}
             disabled={isSeeding}
           >
-            <Text style={styles.clearAllBtnText}>🗑️ Clear All (Local SQLite & Supabase)</Text>
+            <Text style={styles.clearAllBtnText}>🗑️ Clear All (Local SQLite & Convex)</Text>
           </TouchableOpacity>
 
           {/* Live Progress Bar */}

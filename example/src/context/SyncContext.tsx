@@ -4,9 +4,9 @@ import { useSyncStatus } from 'local-lite/react';
 import { getSyncClient } from '../sync.config';
 import {
   clearRentalPortfolio,
-  clearSupabaseCloud,
+  clearConvexCloud,
   seedLocalPortfolio,
-  seedSupabaseCloud,
+  seedConvexCloud,
   SeedProgress,
   SeedResult,
 } from '../data/seeder';
@@ -41,7 +41,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       .then((c) => {
         if (mounted) {
           setClient(c);
-          setStatusMessage('✅ PropFlow connected to Supabase Realtime! SQLite transactions.');
+          setStatusMessage('✅ PropFlow connected to Convex Realtime! SQLite transactions.');
           updateCursor(c);
         }
       })
@@ -108,11 +108,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     try {
       await clearRentalPortfolio(client, { clearOutbox: options?.clearOutbox });
       if (options?.clearRemote) {
-        await clearSupabaseCloud();
+        await clearConvexCloud();
       }
       setStatusMessage(
         options?.clearRemote
-          ? '🗑️ Rental portfolio cleared from BOTH local SQLite & Supabase Cloud.'
+          ? '🗑️ Rental portfolio cleared from BOTH local SQLite & Convex Cloud.'
           : '🗑️ Rental portfolio cleared from local SQLite.'
       );
       await refreshOutbox();
@@ -149,14 +149,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     count: number,
     onProgress?: (p: SeedProgress) => void
   ): Promise<SeedResult> => {
-    setStatusMessage(`☁️ Seeding ${count} records directly into Supabase Cloud...`);
+    setStatusMessage(`☁️ Seeding ${count} records directly into Convex Cloud...`);
     try {
-      const result = await seedSupabaseCloud({
+      const result = await seedConvexCloud({
         totalCount: count,
         onProgress,
       });
       setStatusMessage(
-        `✅ Seeded ${result.totalInserted} records into Supabase in ${(result.durationMs / 1000).toFixed(2)}s (${result.rate} rec/s). Ready to pull!`
+        `✅ Seeded ${result.totalInserted} records into Convex in ${(result.durationMs / 1000).toFixed(2)}s (${result.rate} rec/s). Ready to pull!`
       );
       return result;
     } catch (err: any) {

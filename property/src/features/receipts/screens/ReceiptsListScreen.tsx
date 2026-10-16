@@ -37,6 +37,7 @@ import {
   useReceipts,
   useStoreRefresh,
   useTenants,
+  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendReceiptEmail } from '@/shared/services/emailService';
@@ -122,6 +123,7 @@ export default function ReceiptsScreen() {
   // Core refunds query
   const receiptRefunds = useReceiptRefunds(selectedBusiness?.id);
   const { refreshing, onRefresh } = useStoreRefresh();
+  const isInitialSyncing = useIsInitialSyncing();
 
   const params = useLocalSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
@@ -927,10 +929,14 @@ export default function ReceiptsScreen() {
         maxToRenderPerBatch={10}
         windowSize={10}
         ListEmptyComponent={
-          <EmptyState
-            icon="receipt"
-            title={isTenant ? 'No receipts found for your account' : 'No receipts found'}
-          />
+          refreshing || isInitialSyncing ? (
+            <LoadingCard iconName="receipt" text="Loading receipts..." />
+          ) : (
+            <EmptyState
+              icon="receipt"
+              title={isTenant ? 'No receipts found for your account' : 'No receipts found'}
+            />
+          )
         }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />

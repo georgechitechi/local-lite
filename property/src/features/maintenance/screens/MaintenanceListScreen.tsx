@@ -28,6 +28,7 @@ import {
   useMaintenanceRequests,
   usePropertiesById,
   useStoreRefresh,
+  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendNotification } from '@/shared/services/notifications';
@@ -96,6 +97,7 @@ export default function MaintenanceScreen() {
   const expensesById = useExpensesById(selectedBusiness?.id);
 
   const { refreshing, onRefresh } = useStoreRefresh();
+  const isInitialSyncing = useIsInitialSyncing();
 
   const requests = useMemo(() => {
     if (!maintenanceRequests) return [];
@@ -664,11 +666,15 @@ export default function MaintenanceScreen() {
         stickySectionHeadersEnabled={true}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <EmptyState
-            icon="tools"
-            title="No Records"
-            description="Try adjusting your filters or search terms"
-          />
+          refreshing || isInitialSyncing ? (
+            <LoadingCard iconName="tools" text="Loading maintenance records..." />
+          ) : (
+            <EmptyState
+              icon="tools"
+              title="No Records"
+              description="Try adjusting your filters or search terms"
+            />
+          )
         }
       />
       <Portal>

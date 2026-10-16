@@ -1,5 +1,5 @@
 import { LocalFirstClient, BatchMutation } from 'local-lite';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getConvexRemote, rentalTables } from '../convex';
 
 export interface SeedProgress {
   current: number;
@@ -26,12 +26,6 @@ export interface SeedOptions {
   skipOutbox?: boolean;
   batchChunkSize?: number;
   onProgress?: (progress: SeedProgress) => void;
-}
-
-export interface SupabaseSeedOptions extends SeedOptions {
-  supabaseUrl?: string;
-  supabaseKey?: string;
-  client?: SupabaseClient;
 }
 
 // ---------------------------------------------------------------------------
@@ -294,28 +288,29 @@ export async function seedLocalPortfolio(
 }
 
 // ---------------------------------------------------------------------------
-// Supabase Cloud Seeder (Direct Cloud Batch Upsert)
+// Convex Cloud Seeder (Direct Cloud Batch Upsert)
 // ---------------------------------------------------------------------------
-export async function seedSupabaseCloud(options: SupabaseSeedOptions = {}): Promise<SeedResult> {
+export async function seedConvexCloud(options: SeedOptions = {}): Promise<SeedResult> {
   const totalCount = options.totalCount ?? 500;
-  const url = options.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-  const key = options.supabaseKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-
-  const supabase = options.client || createClient(url, key);
+  const remote = getConvexRemote();
   const startTime = Date.now();
 
   const { properties, tenants, maintenanceRequests, payments } = generateRentalDataset(totalCount);
   const totalRecords = properties.length + tenants.length + maintenanceRequests.length + payments.length;
 
   let insertedCount = 0;
-  const BATCH_SIZE = 500;
+  const BATCH_SIZE = options.batchChunkSize ?? 150;
+  if (!Number.isInteger(BATCH_SIZE) || BATCH_SIZE < 1 || BATCH_SIZE > 500) throw new Error("Batch size must be between 1 and 500");
 
   const pushTableInChunks = async (tableName: string, rows: any[]) => {
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const chunk = rows.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase.from(tableName).upsert(chunk);
-      if (error) {
-        throw new Error(`Failed seeding ${tableName}: ${error.message}`);
+      const result = await remote.pushChanges(chunk.map(row => ({
+        id: generateId(), tableName, rowId: row.id, operation: 'INSERT' as const,
+        payload: row, timestamp: Date.now(),
+      })));
+      if (result === false || (typeof result === 'object' && (result.success === false || result.failedIds?.length))) {
+        throw new Error(`Failed seeding ${tableName}`);
       }
       insertedCount += chunk.length;
 
@@ -324,7 +319,7 @@ export async function seedSupabaseCloud(options: SupabaseSeedOptions = {}): Prom
         options.onProgress({
           current: insertedCount,
           total: totalRecords,
-          stage: `Pushing to Supabase [${tableName}] (${insertedCount}/${totalRecords})...`,
+          stage: `Pushing to Convex [${tableName}] (${insertedCount}/${totalRecords})...`,
           percent: Math.round((insertedCount / totalRecords) * 100),
           rate: Math.round(insertedCount / elapsedSec),
         });
@@ -388,22 +383,19 @@ export async function clearRentalPortfolio(
 }
 
 // ---------------------------------------------------------------------------
-// Remote Supabase Cloud Clearer
+// Remote Convex Cloud Clearer
 // ---------------------------------------------------------------------------
-export async function clearSupabaseCloud(options?: {
-  supabaseUrl?: string;
-  supabaseKey?: string;
-  client?: SupabaseClient;
-}): Promise<void> {
-  const url = options?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-  const key = options?.supabaseKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-  const supabase = options?.client || createClient(url, key);
-
-  const tables = ['payments', 'maintenance_requests', 'tenants', 'properties'];
-  for (const t of tables) {
-    const { error } = await supabase.from(t).delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (error) {
-      console.warn(`Error clearing remote table ${t}:`, error.message);
+export async function clearConvexCloud(): Promise<void> {
+  const remote = getConvexRemote();
+  const snapshot = await remote.fetchChanges(0);
+  const rows = snapshot.changes.filter(row => row.operation !== 'DELETE' && rentalTables.includes(row.tableName));
+  for (let i = 0; i < rows.length; i += 150) {
+    const result = await remote.pushChanges(rows.slice(i, i + 150).map(row => ({
+      id: generateId(), tableName: row.tableName, rowId: row.rowId,
+      operation: 'DELETE' as const, payload: null, timestamp: Date.now(),
+    })));
+    if (result === false || (typeof result === 'object' && (result.success === false || result.failedIds?.length))) {
+      throw new Error('Failed clearing Convex records');
     }
   }
 }
