@@ -56,7 +56,7 @@ testsprite_tests
 .maestro/
 
 # Supabase (not needed for builds — local dev tool only)
-supabase/
+/supabase/
 
 # Private keys (never upload)
 *.pem
