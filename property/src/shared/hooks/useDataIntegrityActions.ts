@@ -392,15 +392,13 @@ export function useDataIntegrityActions({
       contracts?.length > 0,
       async () => {
         const dateStr = formatDateForDB(newDate);
-        const mutations: BatchMutation[] = contracts.map((c: any) => ({
-          tableName: 'contracts',
-          operation: 'UPDATE',
-          rowId: c.id,
+        const updates = contracts.map((c: any) => ({
+          id: c.id,
           payload: { start_date: dateStr },
         }));
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('contracts', updates);
         }
 
         showSnackbar(
@@ -437,7 +435,7 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           const houseId = item?.house?.id || item?.id;
@@ -445,16 +443,14 @@ export function useDataIntegrityActions({
           const existing = item?.house || item;
           const currentMeta = safeParseJSON<Record<string, any>>(existing?.metadata, {});
           const updatedMeta = { ...currentMeta, ignore_occupied_before_built: true };
-          mutations.push({
-            tableName: 'houses',
-            operation: 'UPDATE',
-            rowId: houseId,
+          updates.push({
+            id: houseId,
             payload: { metadata: updatedMeta },
           });
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('houses', updates);
         }
 
         showSnackbar(`Accepted ${items.length} house(s) as is.`, 'success');
@@ -470,15 +466,13 @@ export function useDataIntegrityActions({
       items?.length > 0,
       async () => {
         const todayStr = formatDateForDB(new Date());
-        const mutations: BatchMutation[] = items.map((item: any) => ({
-          tableName: 'contracts',
-          operation: 'UPDATE',
-          rowId: item.id,
+        const updates = items.map((item: any) => ({
+          id: item.id,
           payload: { end_date: todayStr },
         }));
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('contracts', updates);
         }
 
         showSnackbar(`Successfully updated ${items.length} contract(s).`, 'success');
@@ -494,22 +488,20 @@ export function useDataIntegrityActions({
       items?.length > 0,
       async () => {
         let count = 0;
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           if (item.better_contract_id) {
-            mutations.push({
-              tableName: 'receipts',
-              operation: 'UPDATE',
-              rowId: item.id,
+            updates.push({
+              id: item.id,
               payload: { contract_id: item.better_contract_id },
             });
             count++;
           }
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('receipts', updates);
         }
 
         showSnackbar(`Successfully re-linked ${count} receipt(s).`, 'success');
@@ -558,22 +550,20 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           const existing = item;
           const currentMeta = safeParseJSON<Record<string, any>>(existing?.metadata, {});
           const updatedMeta = { ...currentMeta, ignore_date_mismatch: true };
-          mutations.push({
-            tableName: 'receipts',
-            operation: 'UPDATE',
-            rowId: item.id,
+          updates.push({
+            id: item.id,
             payload: { metadata: updatedMeta },
           });
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('receipts', updates);
         }
 
         showSnackbar(`Accepted ${items.length} receipt(s) as is.`, 'success');
@@ -623,20 +613,18 @@ export function useDataIntegrityActions({
           contractAdjustments[c.id] = adj;
         });
 
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
         let count = 0;
         Object.entries(contractAdjustments).forEach(([id, adj]) => {
-          mutations.push({
-            tableName: 'contracts',
-            operation: 'UPDATE',
-            rowId: id,
+          updates.push({
+            id,
             payload: { start_date: adj.start, end_date: adj.end },
           });
           count++;
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('contracts', updates);
         }
 
         showSnackbar(`Successfully adjusted ${count} contract(s).`, 'success');
@@ -651,18 +639,16 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = items.map((item: any) => ({
-          tableName: 'bookings',
-          operation: 'UPDATE',
-          rowId: item.id,
+        const updates = items.map((item: any) => ({
+          id: item.id,
           payload: {
             status: 'pending',
             converted_tenant_id: null,
           },
         }));
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('bookings', updates);
         }
 
         showSnackbar(`Successfully reset ${items.length} booking(s).`, 'success');
@@ -677,34 +663,33 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           if (type === 'message' && item.message_content) {
             const formatted = formatAmountsInText(item.message_content);
             if (formatted !== item.message_content) {
-              mutations.push({
-                tableName: 'payment_messages',
-                operation: 'UPDATE',
-                rowId: item.id,
+              updates.push({
+                id: item.id,
                 payload: { message_content: formatted },
               });
             }
           } else if (type === 'receipt' && item.notes) {
             const formatted = formatAmountsInText(item.notes);
             if (formatted !== item.notes) {
-              mutations.push({
-                tableName: 'receipts',
-                operation: 'UPDATE',
-                rowId: item.id,
+              updates.push({
+                id: item.id,
                 payload: { notes: formatted },
               });
             }
           }
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany(
+            type === 'message' ? 'payment_messages' : 'receipts',
+            updates,
+          );
         }
 
         showSnackbar(
@@ -745,34 +730,33 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           if (type === 'message' && item.message_content) {
             const masked = maskPhoneNumber(item.message_content);
             if (masked !== item.message_content) {
-              mutations.push({
-                tableName: 'payment_messages',
-                operation: 'UPDATE',
-                rowId: item.id,
+              updates.push({
+                id: item.id,
                 payload: { message_content: masked },
               });
             }
           } else if (type === 'receipt' && item.notes) {
             const masked = maskPhoneNumber(item.notes);
             if (masked !== item.notes) {
-              mutations.push({
-                tableName: 'receipts',
-                operation: 'UPDATE',
-                rowId: item.id,
+              updates.push({
+                id: item.id,
                 payload: { notes: masked },
               });
             }
           }
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany(
+            type === 'message' ? 'payment_messages' : 'receipts',
+            updates,
+          );
         }
 
         showSnackbar(
@@ -790,7 +774,7 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           if (!item.notes) return;
@@ -803,18 +787,16 @@ export function useDataIntegrityActions({
               }
             });
             if (updated !== item.notes) {
-              mutations.push({
-                tableName: 'receipts',
-                operation: 'UPDATE',
-                rowId: item.id,
+              updates.push({
+                id: item.id,
                 payload: { notes: updated },
               });
             }
           }
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('receipts', updates);
         }
 
         showSnackbar(
@@ -832,7 +814,7 @@ export function useDataIntegrityActions({
     withProcessing(
       items?.length > 0,
       async () => {
-        const mutations: BatchMutation[] = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
 
         items.forEach((item: any) => {
           const links = allPaymentMessageReceipts.filter(
@@ -852,17 +834,15 @@ export function useDataIntegrityActions({
             .join('\n\n');
 
           if (newNotes && newNotes !== item.notes) {
-            mutations.push({
-              tableName: 'receipts',
-              operation: 'UPDATE',
-              rowId: item.id,
+            updates.push({
+              id: item.id,
               payload: { notes: newNotes },
             });
           }
         });
 
-        if (mutations.length > 0 && client) {
-          await client.batch(mutations);
+        if (updates.length > 0 && client) {
+          await client.updateMany('receipts', updates);
         }
 
         showSnackbar(

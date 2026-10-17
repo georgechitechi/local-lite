@@ -88,17 +88,28 @@ export function useCoreTableWithLoading<
   },
 >(tableName: CoreTableName, businessId?: string): CoreTableResult<T> {
   const client = useLocalClient();
-  const { data, loading } = useLiveQuery<T>(client, tableName);
+  const scoped = (BUSINESS_COLLECTIONS as readonly string[]).includes(tableName);
+  const targetId = normalizeIdentity(businessId);
+
+  const queryOptions = useMemo(() => {
+    if (scoped && !targetId) return null;
+    const where: Record<string, any> = { deleted: { $ne: 1 } };
+    if (scoped && targetId) {
+      where.business_id = targetId;
+    }
+    return { where };
+  }, [scoped, targetId]);
+
+  const { data, loading } = useLiveQuery<T>(
+    client,
+    tableName,
+    queryOptions ?? { where: { id: '__none__' } },
+  );
+
   const filtered = useMemo(() => {
-    const scoped = (BUSINESS_COLLECTIONS as readonly string[]).includes(tableName);
-    const targetId = normalizeIdentity(businessId);
     if (!client || (scoped && !targetId)) return EMPTY_ARRAY as T[];
-    return (data ?? []).filter(
-      row =>
-        !isDeletedRecord(row) &&
-        (!scoped || normalizeIdentity(row.business_id) === targetId),
-    );
-  }, [client, data, tableName, businessId]);
+    return (data ?? []).filter(row => !isDeletedRecord(row));
+  }, [client, data, scoped, targetId]);
 
   return {
     data: filtered,

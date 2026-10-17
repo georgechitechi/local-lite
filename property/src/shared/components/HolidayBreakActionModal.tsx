@@ -47,7 +47,7 @@ export default function HolidayBreakActionModal({
   const { selectedBusiness } = useBusiness();
   const contracts = useContracts(selectedBusiness?.id);
   const receipts = useReceipts(selectedBusiness?.id);
-  const { update: updateContract, batch } = useCoreMutations();
+  const { update: updateContract, updateMany } = useCoreMutations();
   const activeTenants = useTenants(selectedBusiness?.id);
   const { showSnackbar } = useSnackbar();
 
@@ -198,7 +198,7 @@ export default function HolidayBreakActionModal({
       } else {
         // Handle Create (Single or Bulk)
         const contractIds = finalContractIds;
-        const mutations = [];
+        const updates: Array<{ id: string; payload: Record<string, any> }> = [];
         for (const contractId of contractIds) {
           const tenantContract = contracts.find(c => c.id === contractId);
           if (tenantContract) {
@@ -212,10 +212,8 @@ export default function HolidayBreakActionModal({
               is_partial: isPartial,
               created_at: new Date().toISOString(),
             };
-            mutations.push({
-              tableName: 'contracts',
-              operation: 'UPDATE' as const,
-              rowId: tenantContract.id,
+            updates.push({
+              id: tenantContract.id,
               payload: {
                 metadata: {
                   ...currentMetadata,
@@ -226,10 +224,10 @@ export default function HolidayBreakActionModal({
           }
         }
 
-        if (mutations.length > 0 && batch) {
-          await batch(mutations);
+        if (updates.length > 0 && updateMany) {
+          await updateMany('contracts', updates);
           showSnackbar(
-            `Holiday break applied to ${mutations.length} tenant(s).`,
+            `Holiday break applied to ${updates.length} tenant(s).`,
             'success',
           );
         }

@@ -45,7 +45,7 @@ export default function HolidayBreaks() {
   const contracts = useContracts(selectedBusiness?.id);
   const houses = useHouses(selectedBusiness?.id);
   const properties = useProperties(selectedBusiness?.id);
-  const { update: updateContract, batch } = useCoreMutations();
+  const { update: updateContract, updateMany } = useCoreMutations();
   const { showSnackbar } = useSnackbar();
 
   const [loading, setLoading] = useState(false);
@@ -307,7 +307,7 @@ export default function HolidayBreaks() {
         {} as Record<string, string[]>,
       );
 
-      const mutations = [];
+      const updates = [];
       for (const contractId in grouped) {
         const contract = contracts.find(c => c.id === contractId);
         if (contract) {
@@ -315,10 +315,8 @@ export default function HolidayBreaks() {
           const breaks = metadata.breaks || [];
           const breakIdsToRemove = grouped[contractId];
 
-          mutations.push({
-            tableName: 'contracts',
-            operation: 'UPDATE' as const,
-            rowId: contractId,
+          updates.push({
+            id: contractId,
             payload: {
               metadata: {
                 ...metadata,
@@ -329,8 +327,8 @@ export default function HolidayBreaks() {
         }
       }
 
-      if (mutations.length > 0 && batch) {
-        await batch(mutations);
+      if (updates.length > 0) {
+        await updateMany('contracts', updates);
       }
 
       showSnackbar(

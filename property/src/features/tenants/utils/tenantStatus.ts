@@ -60,6 +60,12 @@ async function applyClientMutations(
       c => isActiveContractStatus(c.status) && !c.deleted,
     );
 
+    const houseIds = activeContracts
+      .map(c => c.house_id)
+      .filter((id): id is string => Boolean(id));
+    const houses = await client.findByIds('houses', houseIds);
+    const houseMap = new Map(houses.map((h: any) => [h.id, h]));
+
     for (const c of activeContracts) {
       mutations.push({
         tableName: 'contracts',
@@ -78,7 +84,7 @@ async function applyClientMutations(
             ? { ...hc, status: 'terminated', end_date: today }
             : hc,
         );
-        const house = await client.findById('houses', c.house_id);
+        const house = houseMap.get(c.house_id);
         const resolvedStatus = resolveHouseStatusFromContracts(
           house?.status,
           remainingContracts,

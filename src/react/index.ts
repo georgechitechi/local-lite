@@ -306,6 +306,11 @@ export interface UseMutationsResult<TTable extends string = string> {
     payload: Partial<T>,
     options?: MutateOptions
   ) => Promise<void>;
+  updateMany: <T extends Record<string, any> = Record<string, any>>(
+    tableName: TTable | (string & {}),
+    updates: Array<{ id: string; payload: Partial<T> }>,
+    options?: MutateOptions
+  ) => Promise<void>;
   delete: (
     tableName: TTable | (string & {}),
     rowId: string,
@@ -330,6 +335,8 @@ export function useMutations<TTable extends string = string>(
         client ? client.insertMany(table, records, opts) : Promise.resolve(undefined),
       update: (table, id, payload, opts) =>
         client ? client.update(table, id, payload, opts) : Promise.resolve(),
+      updateMany: (table, updates, opts) =>
+        client ? client.updateMany(table, updates, opts) : Promise.resolve(),
       delete: (table, id, opts) =>
         client ? client.delete(table, id, opts) : Promise.resolve(),
       batch: (mutations) =>
