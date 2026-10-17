@@ -37,13 +37,6 @@ export const BUSINESS_COLLECTIONS = [
  * Complete list of all synchronized tables across the application.
  */
 export const CORE_TABLES = [...GLOBAL_TABLES, ...BUSINESS_COLLECTIONS] as const;
-
-/**
- * Backward-compatible alias for CORE_TABLES.
- */
-export const SYNC_TABLES = CORE_TABLES;
-
 export type GlobalTableName = (typeof GLOBAL_TABLES)[number];
 export type BusinessTableName = (typeof BUSINESS_COLLECTIONS)[number];
 export type CoreTableName = (typeof CORE_TABLES)[number];
-export type SyncTableName = CoreTableName;
