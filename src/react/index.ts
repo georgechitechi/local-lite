@@ -38,6 +38,18 @@ function useCoalescedRunner(fn: () => Promise<void>): () => void {
   }, []);
 }
 
+// In-memory query result cache to eliminate initial render latency and flickering
+const queryCache = new Map<string, any[]>();
+const inFlightQueries = new Map<string, Promise<any[]>>();
+
+/**
+ * Clears the in-memory live query cache.
+ */
+export function clearLiveQueryCache(): void {
+  queryCache.clear();
+  inFlightQueries.clear();
+}
+
 /**
  * Hook to execute a live reactive table query that automatically re-runs
  * whenever the table is mutated locally or via incoming remote delta.
@@ -61,25 +73,44 @@ export function useLiveQuery<T = any>(
   tableName: string,
   queryOrOptions?: LiveQueryFn<T> | QueryOptions
 ): { data: T[]; refetch: () => Promise<void>; loading: boolean } {
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryKey =
+    typeof queryOrOptions === 'object' && queryOrOptions !== null
+      ? JSON.stringify(queryOrOptions)
+      : typeof queryOrOptions === 'function'
+      ? 'custom'
+      : 'all';
+  const cacheKey = `${tableName}:${queryKey}`;
+
+  // Read-through cache: return instant cached rows on mount (0ms latency, zero flicker)
+  const [data, setData] = useState<T[]>(() => (queryCache.get(cacheKey) as T[]) || []);
+  const [loading, setLoading] = useState(() => !queryCache.has(cacheKey));
   const queryParamRef = useRef(queryOrOptions);
   queryParamRef.current = queryOrOptions;
 
   const refetch = useCallback(async () => {
     if (!client || !client.db) return;
     try {
-      const param = queryParamRef.current;
-      let res: T[];
-
-      if (typeof param === 'function') {
-        res = (await param(client)) || [];
-      } else if (typeof param === 'object' && param !== null) {
-        res = await client.findMany<T>(tableName, param);
-      } else {
-        res = await client.findMany<T>(tableName);
+      // De-duplicate simultaneous identical in-flight queries
+      let inFlight = inFlightQueries.get(cacheKey);
+      if (!inFlight) {
+        inFlight = (async () => {
+          const param = queryParamRef.current;
+          if (typeof param === 'function') {
+            return (await param(client)) || [];
+          } else if (typeof param === 'object' && param !== null) {
+            return await client.findMany<T>(tableName, param);
+          } else {
+            return await client.findMany<T>(tableName);
+          }
+        })();
+        inFlightQueries.set(cacheKey, inFlight);
+        inFlight.finally(() => {
+          inFlightQueries.delete(cacheKey);
+        });
       }
 
+      const res: T[] = await inFlight;
+      queryCache.set(cacheKey, res || []);
       setData(res || []);
     } catch (err: any) {
       const msg = String(err?.message || err || '');
@@ -92,16 +123,9 @@ export function useLiveQuery<T = any>(
     } finally {
       setLoading(false);
     }
-  }, [client, tableName]);
+  }, [client, tableName, cacheKey]);
 
   const scheduleRefetch = useCoalescedRunner(refetch);
-
-  const queryKey =
-    typeof queryOrOptions === 'object' && queryOrOptions !== null
-      ? JSON.stringify(queryOrOptions)
-      : typeof queryOrOptions === 'function'
-      ? queryOrOptions
-      : undefined;
 
   useEffect(() => {
     if (!client || !client.db) return;

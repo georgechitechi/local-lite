@@ -129,4 +129,26 @@ describe('Advanced Query Operators', () => {
     expect(filtered).toHaveLength(2);
     expect(filtered.map((p) => p.id)).toEqual(expect.arrayContaining(['p-1', 'p-2']));
   });
+
+  it('supports orderBy, limit, and offset pushdown', async () => {
+    const sortedDesc = await client.findMany('products', {
+      orderBy: 'price',
+      order: 'desc',
+      limit: 2,
+    });
+    expect(sortedDesc).toHaveLength(2);
+    expect(sortedDesc[0].id).toBe('p-2'); // 1099
+    expect(sortedDesc[1].id).toBe('p-1'); // 999
+
+    const paged = await client.findMany('products', {
+      orderBy: 'price',
+      order: 'asc',
+      limit: 2,
+      offset: 1,
+    });
+    expect(paged).toHaveLength(2);
+    expect(paged[0].id).toBe('p-5'); // 79 (after 19)
+    expect(paged[1].id).toBe('p-3'); // 249
+  });
 });
+

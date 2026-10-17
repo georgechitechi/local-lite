@@ -70,6 +70,7 @@ export function formatValueForStorage(value: any): any {
 export class SchemaManager {
   private knownTables: Set<string> = new Set();
   private knownColumns: Set<string> = new Set();
+  private knownIndexes: Set<string> = new Set();
 
   /**
    * Resets the schema cache (useful for testing or full database resets).
@@ -77,6 +78,7 @@ export class SchemaManager {
   clearCache(): void {
     this.knownTables.clear();
     this.knownColumns.clear();
+    this.knownIndexes.clear();
   }
 
   /**
@@ -169,6 +171,28 @@ export class SchemaManager {
           }
 
           this.knownColumns.add(cacheKey);
+        }
+
+        // Auto-index foreign keys and common query columns
+        const lowerKey = key.toLowerCase();
+        if (
+          lowerKey.endsWith('_id') ||
+          lowerKey === 'business_id' ||
+          lowerKey === 'deleted' ||
+          lowerKey === 'created_at' ||
+          lowerKey === 'payment_date'
+        ) {
+          const indexKey = `${tableName}:${lowerKey}`;
+          if (!this.knownIndexes.has(indexKey)) {
+            this.knownIndexes.add(indexKey);
+            try {
+              const idxName = escapeIdentifier(`idx_${tableName}_${key}`);
+              const safeCol = escapeIdentifier(key);
+              await db.execute(`CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeCol});`);
+            } catch {
+              // Ignore if indexes are not supported by adapter or already exist
+            }
+          }
         }
       }
     }

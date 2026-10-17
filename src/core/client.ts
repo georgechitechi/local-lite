@@ -531,18 +531,81 @@ export class LocalFirstClient {
     let sql = `SELECT * FROM ${safeTable}`;
     const params: any[] = [];
 
-    // Push down simple where equality conditions to SQLite
+    // Push down where conditions to SQLite
     if (options?.where && typeof options.where === 'object' && !Array.isArray(options.where)) {
-      const entries = Object.entries(options.where).filter(
-        ([k, v]) =>
-          k !== '$or' &&
-          k !== '$and' &&
-          (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
-      );
-      if (entries.length > 0) {
-        const whereClauses = entries.map(([col]) => `${escapeIdentifier(col)} = ?`);
+      const whereClauses: string[] = [];
+      for (const [col, filter] of Object.entries(options.where)) {
+        if (col === '$or' || col === '$and') continue;
+        const safeCol = escapeIdentifier(col);
+
+        if (filter === null) {
+          whereClauses.push(`${safeCol} IS NULL`);
+        } else if (typeof filter === 'boolean') {
+          whereClauses.push(`${safeCol} = ?`);
+          params.push(filter ? 1 : 0);
+        } else if (typeof filter === 'string' || typeof filter === 'number') {
+          whereClauses.push(`${safeCol} = ?`);
+          params.push(filter);
+        } else if (typeof filter === 'object' && !Array.isArray(filter)) {
+          const ops = filter as any;
+          if (ops.$eq !== undefined) {
+            whereClauses.push(`${safeCol} = ?`);
+            params.push(typeof ops.$eq === 'boolean' ? (ops.$eq ? 1 : 0) : ops.$eq);
+          }
+          if (ops.$ne !== undefined) {
+            whereClauses.push(`${safeCol} != ?`);
+            params.push(typeof ops.$ne === 'boolean' ? (ops.$ne ? 1 : 0) : ops.$ne);
+          }
+          if (ops.$gt !== undefined) {
+            whereClauses.push(`${safeCol} > ?`);
+            params.push(ops.$gt);
+          }
+          if (ops.$gte !== undefined) {
+            whereClauses.push(`${safeCol} >= ?`);
+            params.push(ops.$gte);
+          }
+          if (ops.$lt !== undefined) {
+            whereClauses.push(`${safeCol} < ?`);
+            params.push(ops.$lt);
+          }
+          if (ops.$lte !== undefined) {
+            whereClauses.push(`${safeCol} <= ?`);
+            params.push(ops.$lte);
+          }
+          if (Array.isArray(ops.$in) && ops.$in.length > 0) {
+            const placeholders = ops.$in.map(() => '?').join(', ');
+            whereClauses.push(`${safeCol} IN (${placeholders})`);
+            params.push(...ops.$in.map((v: any) => (typeof v === 'boolean' ? (v ? 1 : 0) : v)));
+          }
+          if (Array.isArray(ops.$nin) && ops.$nin.length > 0) {
+            const placeholders = ops.$nin.map(() => '?').join(', ');
+            whereClauses.push(`${safeCol} NOT IN (${placeholders})`);
+            params.push(...ops.$nin.map((v: any) => (typeof v === 'boolean' ? (v ? 1 : 0) : v)));
+          }
+          if (ops.$null !== undefined) {
+            whereClauses.push(ops.$null ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
+          }
+        }
+      }
+      if (whereClauses.length > 0) {
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
-        params.push(...entries.map(([, val]) => (typeof val === 'boolean' ? (val ? 1 : 0) : val)));
+      }
+    }
+
+    // Push down ORDER BY
+    if (options?.orderBy && typeof options.orderBy === 'string') {
+      const safeCol = escapeIdentifier(options.orderBy);
+      const dir = options.order && String(options.order).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+      sql += ` ORDER BY ${safeCol} ${dir}`;
+    }
+
+    // Push down LIMIT & OFFSET
+    if (typeof options?.limit === 'number' && options.limit > 0) {
+      sql += ` LIMIT ?`;
+      params.push(options.limit);
+      if (typeof options.offset === 'number' && options.offset > 0) {
+        sql += ` OFFSET ?`;
+        params.push(options.offset);
       }
     }
 

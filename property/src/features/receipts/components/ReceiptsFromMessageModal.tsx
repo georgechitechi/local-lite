@@ -39,6 +39,7 @@ import {
   formatWithCurrency,
   MONTHS,
   parseLocalDate,
+  parsePeriod,
   YEARS,
 } from '@/shared/utils/formatters';
 import { generateUUID } from '@/shared/utils/helper';
@@ -98,30 +99,31 @@ export default function ReceiptsFromMessageModal({
   // Compute existing receipts for the selected contract and year to avoid duplicates
   const existingReceiptsForYear = React.useMemo(() => {
     if (!selectedContract || !selectedYear) return [];
-    return receipts.filter(
-      r =>
-        r.contract_id === selectedContract.id &&
-        (r.payment_period as any)?.year === selectedYear &&
-        !r.is_refunded,
-    );
+    return receipts.filter(r => {
+      if (r.contract_id !== selectedContract.id || r.is_refunded) return false;
+      const period = parsePeriod(r.payment_period);
+      return period?.year === selectedYear;
+    });
   }, [receipts, selectedContract, selectedYear]);
 
-  const conflictingMonths = existingReceiptsForYear.map(
-    r => (r.payment_period as any)?.month,
-  );
+  const conflictingMonths = existingReceiptsForYear
+    .map(r => parsePeriod(r.payment_period)?.month)
+    .filter((m): m is number => typeof m === 'number');
   const selectedConflicts = selectedMonths.filter(m => conflictingMonths.includes(m));
 
-  // Compute active contracts with joined data
+  // Compute active contracts with joined data (O(1) Map lookups)
   const activeContracts = React.useMemo(() => {
     if (!businessId) return [];
+    const tenantMap = new Map(storeTenants.map((t: any) => [t.id, t]));
+    const houseMap = new Map(storeHouses.map((h: any) => [h.id, h]));
+    const propertyMap = new Map(storeProperties.map((p: any) => [p.id, p]));
+
     return storeContracts
       .filter((c: any) => isActiveContractStatus(c.status))
       .map((c: any) => {
-        const tenant = storeTenants.find((t: any) => t.id === c.tenant_id);
-        const house = storeHouses.find((h: any) => h.id === c.house_id);
-        const property = house
-          ? storeProperties.find((p: any) => p.id === house.property_id)
-          : undefined;
+        const tenant = tenantMap.get(c.tenant_id);
+        const house = houseMap.get(c.house_id);
+        const property = house ? propertyMap.get(house.property_id) : undefined;
 
         return {
           ...c,

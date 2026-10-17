@@ -14,6 +14,7 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { parseNextOfKin } from '@/shared/services/contactsSync';
+import { parsePeriod } from '@/shared/utils/formatters';
 import { calculateEffectiveRent } from '@/shared/utils/helper';
 import {
   isActiveContractStatus,
@@ -96,13 +97,10 @@ export function useReminderData(selectedBusiness: any, state: any) {
         if (isOnFullBreak) return null;
 
         const contractReceipts = receiptsByContractId.get(contract.id) || [];
-        const paidReceipts = contractReceipts.filter(
-          r =>
-            r.payment_period &&
-            typeof r.payment_period === 'object' &&
-            (r.payment_period as any).month === periodMonth &&
-            (r.payment_period as any).year === periodYear,
-        );
+        const paidReceipts = contractReceipts.filter(r => {
+          const p = parsePeriod(r.payment_period);
+          return p?.month === periodMonth && p?.year === periodYear;
+        });
 
         const paidAmount = paidReceipts.reduce(
           (sum, r) =>

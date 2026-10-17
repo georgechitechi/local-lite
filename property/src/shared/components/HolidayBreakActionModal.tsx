@@ -14,7 +14,7 @@ import {
   useTenants,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
-import { formatDateForDB } from '@/shared/utils/formatters';
+import { formatDateForDB, parsePeriod } from '@/shared/utils/formatters';
 import { generateUUID, parseMetadata } from '@/shared/utils/helper';
 
 interface HolidayBreakActionModalProps {
@@ -129,7 +129,7 @@ export default function HolidayBreakActionModal({
         if (contract) {
           const hasPayment = receipts.some(r => {
             if (r.contract_id !== contract.id || r.is_refunded || r.deleted) return false;
-            const period = r.payment_period as any;
+            const period = parsePeriod(r.payment_period);
             if (!period?.month || !period.year) return false;
             return affectedMonths.some(
               m => m.month === period.month && m.year === period.year,
@@ -145,7 +145,7 @@ export default function HolidayBreakActionModal({
             const hasPayment = receipts.some(r => {
               if (r.contract_id !== contract.id || r.is_refunded || r.deleted)
                 return false;
-              const period = r.payment_period as any;
+              const period = parsePeriod(r.payment_period);
               if (!period?.month || !period.year) return false;
               return affectedMonths.some(
                 m => m.month === period.month && m.year === period.year,
