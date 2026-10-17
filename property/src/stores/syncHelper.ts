@@ -12,7 +12,9 @@ export async function clearAllPersistence(
   const client = await getSyncClient();
   try {
     // Immediately stop syncWorker so no in-flight or background pulls/pushes occur during or after wipe
-    client.syncWorker.stop();
+    if (typeof client.syncWorker?.stop === 'function') {
+      client.syncWorker.stop();
+    }
     await client.reset({ dropTables: false });
     await Storage.clearAsync();
   } catch (error) {
@@ -23,7 +25,7 @@ export async function clearAllPersistence(
     await safeReloadApp();
   }
   // Only restart syncWorker if the user is actively authenticated online
-  if (getAuthStateSyncSnapshot().isLoggedIn) {
+  if (getAuthStateSyncSnapshot().isLoggedIn && typeof client.syncWorker?.start === 'function') {
     client.syncWorker.start();
   }
 }
