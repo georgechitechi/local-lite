@@ -8,7 +8,7 @@ jest.mock('@/shared/services/sync/client', () => ({
   getSyncClient: jest.fn(async () => ({
     tables: ['businesses', 'tenants'],
     stop: mockStop,
-    reset: jest.fn(async ({ dropTables: _dropTables }: { dropTables?: boolean } = {}) => {
+    reset: jest.fn(async () => {
       mockStop();
       await mockExecute('DELETE FROM "businesses"');
       await mockExecute('DELETE FROM "tenants"');

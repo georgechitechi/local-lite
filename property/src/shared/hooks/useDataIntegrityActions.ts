@@ -17,7 +17,6 @@ interface UseDataIntegrityActionsProps {
   allProperties: any[];
   allHouses?: any[];
   allReceipts?: any[];
-  allBookings?: any[];
   allPaymentMessages: any[];
   allPaymentMessageReceipts: any[];
   contractsById: { get: (id: string) => any | undefined };
@@ -32,7 +31,6 @@ export function useDataIntegrityActions({
   allProperties,
   allHouses = [],
   allReceipts = [],
-  allBookings: _allBookings = [],
   allPaymentMessages,
   allPaymentMessageReceipts,
   contractsById,
