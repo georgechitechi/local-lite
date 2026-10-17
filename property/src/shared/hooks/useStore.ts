@@ -1,4 +1,3 @@
-import type { BatchMutation, TransactionalClient } from 'local-lite';
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useLocalClient } from '@/providers/SyncClientProvider';
@@ -141,18 +140,12 @@ export const useReceiptsWithLoading = (businessId?: string) =>
 
 export const useExpenses = (businessId?: string) =>
   useCoreTable<Expense>('expenses', businessId);
-export const useExpensesWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<Expense>('expenses', businessId);
 
 export const useSettings = (businessId?: string) =>
   useCoreTable<Setting>('settings', businessId);
-export const useSettingsWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<Setting>('settings', businessId);
 
 export const useMaintenanceRequests = (businessId?: string) =>
   useCoreTable<MaintenanceRequest>('maintenance_requests', businessId);
-export const useMaintenanceRequestsWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<MaintenanceRequest>('maintenance_requests', businessId);
 
 export const usePaymentMessages = (businessId?: string) =>
   useCoreTable<PaymentMessage>('payment_messages', businessId);
@@ -166,28 +159,18 @@ export const usePaymentMessageReceiptsWithLoading = (businessId?: string) =>
 
 export const useBookings = (businessId?: string) =>
   useCoreTable<Booking>('bookings', businessId);
-export const useBookingsWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<Booking>('bookings', businessId);
 
 export const usePromotions = (businessId?: string) =>
   useCoreTable<Promotion>('promotions', businessId);
-export const usePromotionsWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<Promotion>('promotions', businessId);
 
 export const useMessageTemplates = (businessId?: string) =>
   useCoreTable<MessageTemplate>('message_templates', businessId);
-export const useMessageTemplatesWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<MessageTemplate>('message_templates', businessId);
 
 export const useSchedules = (businessId?: string) =>
   useCoreTable<Schedule>('schedules', businessId);
-export const useSchedulesWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<Schedule>('schedules', businessId);
 
 export const useReminderLogs = (businessId?: string) =>
   useCoreTable<ReminderLog>('reminder_logs', businessId);
-export const useReminderLogsWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<ReminderLog>('reminder_logs', businessId);
 
 export const useReceiptRefunds = (businessId?: string) =>
   useCoreTable<ReceiptRefund>('receipt_refunds', businessId);
@@ -205,8 +188,6 @@ export const useGalleryImages = (businessId?: string) =>
 
 export const useTransactions = (businessId?: string) =>
   useCoreTable<Transaction>('transactions', businessId);
-export const useTransactionsWithLoading = (businessId?: string) =>
-  useCoreTableWithLoading<Transaction>('transactions', businessId);
 
 // ---------------------------------------------------------------------------
 // Top-level (non-business) selectors
@@ -317,49 +298,6 @@ export function useReceiptsById(businessId: string | undefined): IndexMap<Receip
   return useCoreIndexMap<Receipt>(receipts);
 }
 
-export function useMaintenanceRequestsById(
-  businessId: string | undefined,
-): IndexMap<MaintenanceRequest> {
-  const requests = useMaintenanceRequests(businessId);
-  return useCoreIndexMap<MaintenanceRequest>(requests);
-}
-
-export function usePaymentMessagesById(
-  businessId: string | undefined,
-): IndexMap<PaymentMessage> {
-  const messages = usePaymentMessages(businessId);
-  return useCoreIndexMap<PaymentMessage>(messages);
-}
-
-export function useBookingsById(businessId: string | undefined): IndexMap<Booking> {
-  const bookings = useBookings(businessId);
-  return useCoreIndexMap<Booking>(bookings);
-}
-
-export function usePromotionsById(businessId: string | undefined): IndexMap<Promotion> {
-  const promotions = usePromotions(businessId);
-  return useCoreIndexMap<Promotion>(promotions);
-}
-
-export function useMessageTemplatesById(
-  businessId: string | undefined,
-): IndexMap<MessageTemplate> {
-  const templates = useMessageTemplates(businessId);
-  return useCoreIndexMap<MessageTemplate>(templates);
-}
-
-export function useSchedulesById(businessId: string | undefined): IndexMap<Schedule> {
-  const schedules = useSchedules(businessId);
-  return useCoreIndexMap<Schedule>(schedules);
-}
-
-export function useReminderLogsById(
-  businessId: string | undefined,
-): IndexMap<ReminderLog> {
-  const reminderLogs = useReminderLogs(businessId);
-  return useCoreIndexMap<ReminderLog>(reminderLogs);
-}
-
 export function useBackupSchedules(businessId?: string): Schedule[] {
   const schedules = useSchedules(businessId);
   return useMemo(
@@ -374,30 +312,6 @@ export function useReportSchedules(businessId?: string): Schedule[] {
     () => schedules.filter(s => s.schedule_type !== 'system_backup'),
     [schedules],
   );
-}
-
-export function useReceiptRefundsByReceiptId(
-  businessId: string | undefined,
-): GroupMap<ReceiptRefund> {
-  const refunds = useReceiptRefunds(businessId);
-  return useCoreGroupMap<ReceiptRefund>(refunds, 'receipt_id');
-}
-
-export function useApiKeysById(businessId: string | undefined): IndexMap<ApiKey> {
-  const keys = useApiKeys(businessId);
-  return useCoreIndexMap<ApiKey>(keys);
-}
-
-export function useBackupLogsById(businessId: string | undefined): IndexMap<BackupLog> {
-  const logs = useBackupLogs(businessId);
-  return useCoreIndexMap<BackupLog>(logs);
-}
-
-export function useTransactionsById(
-  businessId: string | undefined,
-): IndexMap<Transaction> {
-  const txs = useTransactions(businessId);
-  return useCoreIndexMap<Transaction>(txs);
 }
 
 // ---------------------------------------------------------------------------
@@ -466,20 +380,6 @@ export function useHousesByPropertyId(businessId: string | undefined): GroupMap<
   return useCoreGroupMap<House>(houses, 'property_id');
 }
 
-export function usePaymentMessageReceiptsByMessageId(
-  businessId: string | undefined,
-): GroupMap<PaymentMessageReceipt> {
-  const links = usePaymentMessageReceipts(businessId);
-  return useCoreGroupMap<PaymentMessageReceipt>(links, 'payment_message_id');
-}
-
-export function usePaymentMessageReceiptsByReceiptId(
-  businessId: string | undefined,
-): GroupMap<PaymentMessageReceipt> {
-  const links = usePaymentMessageReceipts(businessId);
-  return useCoreGroupMap<PaymentMessageReceipt>(links, 'receipt_id');
-}
-
 // ---------------------------------------------------------------------------
 // Direct Mutation API for Core Tables (Simple insert, update, delete)
 // ---------------------------------------------------------------------------
@@ -512,11 +412,6 @@ export function useProfileByEmail(email: string | undefined | null): Profile | u
     const lower = email.toLowerCase();
     return profiles.find(p => p.email?.toLowerCase() === lower);
   }, [profiles, email]);
-}
-
-export function useProfilesById(): IndexMap<Profile> {
-  const profiles = useProfiles();
-  return useCoreIndexMap<Profile>(profiles);
 }
 
 // ---------------------------------------------------------------------------

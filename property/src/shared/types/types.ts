@@ -176,25 +176,6 @@ export interface Booking extends SyncedRow<DBBooking> {
   };
 }
 
-export interface StoreState {
-  properties: Record<string, Property>;
-  houses: Record<string, House>;
-  tenants: Record<string, Tenant>;
-  contracts: Record<string, Contract>;
-  receipts: Record<string, Receipt>;
-  expenses: Record<string, Expense>;
-  bookings: Record<string, Booking>;
-  paymentMessages: Record<string, PaymentMessage>;
-  reminderLogs: Record<string, ReminderLog>;
-  paymentMessageReceipts: Record<string, PaymentMessageReceipt>;
-  settings: Record<string, Setting>;
-  receiptRefunds: Record<string, ReceiptRefund>;
-  schedules: Record<string, Schedule>;
-  backupLogs: Record<string, BackupLog>;
-  maintenanceRequests: Record<string, MaintenanceRequest>;
-  promotions: Record<string, Promotion>;
-  apiKeys: Record<string, ApiKey>;
-}
 
 // Payment Methods
 export interface PaymentMethodField {

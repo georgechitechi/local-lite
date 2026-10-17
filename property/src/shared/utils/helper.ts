@@ -10,7 +10,6 @@ interface NextOfKin {
 export const generateUUID = () => uuidv4();
 
 export const EMPTY_ARRAY: any[] = [];
-export const EMPTY_OBJECT: Record<string, any> = Object.freeze({});
 
 export function properCase(str: string | null | undefined): string {
   if (!str) return '';
