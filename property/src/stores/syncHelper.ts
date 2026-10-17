@@ -25,7 +25,10 @@ export async function clearAllPersistence(
     await safeReloadApp();
   }
   // Only restart syncWorker if the user is actively authenticated online
-  if (getAuthStateSyncSnapshot().isLoggedIn && typeof client.syncWorker?.start === 'function') {
+  if (
+    getAuthStateSyncSnapshot().isLoggedIn &&
+    typeof client.syncWorker?.start === 'function'
+  ) {
     client.syncWorker.start();
   }
 }
