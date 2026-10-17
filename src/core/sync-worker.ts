@@ -43,6 +43,7 @@ export interface SyncWorkerOptions {
   autoSchema?: boolean;
   schemaManager?: SchemaManager;
   autoSync?: boolean;
+  syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
 }
 
 export class SyncWorker {
@@ -54,6 +55,7 @@ export class SyncWorker {
   private primaryKey: string;
   private autoSchema: boolean;
   private schemaManager?: SchemaManager;
+  private syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
   public logger: SyncLogger;
   public retryConfig: RetryConfig;
 
@@ -106,6 +108,7 @@ export class SyncWorker {
     this.schemaManager = options.schemaManager;
     this.pushIntervalMs = options.pushIntervalMs ?? 5000;
     this.pullIntervalMs = options.pullIntervalMs ?? 10000;
+    this.syncScope = options.syncScope;
 
     this.logger = createSyncLogger(options.logger, options.logLevel);
 
@@ -223,6 +226,13 @@ export class SyncWorker {
         this.logger.error('Debounced push failed:', err);
       });
     }, delayMs);
+  }
+
+  /**
+   * Dynamically sets or updates the active sync scope (e.g. switching active businessId or userId).
+   */
+  setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
+    this.syncScope = scope;
   }
 
   private async isOnline(): Promise<boolean> {
@@ -462,7 +472,10 @@ export class SyncWorker {
         this.cursorLoaded = true;
       }
 
-      const deltas = await this.remote.fetchChanges(this.lastPulledTimestamp);
+      const scope = typeof this.syncScope === 'function' ? await this.syncScope() : this.syncScope;
+      const deltas = scope !== undefined
+        ? await this.remote.fetchChanges(this.lastPulledTimestamp, scope)
+        : await this.remote.fetchChanges(this.lastPulledTimestamp);
       const durationMs = Date.now() - startTime;
       this.lastPullDurationMs = durationMs;
       this.lastPullTimestamp = Date.now();

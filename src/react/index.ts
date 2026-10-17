@@ -144,6 +144,183 @@ export function useLiveQuery<T = any>(
   return { data, refetch, loading };
 }
 
+/**
+ * Reactive hook to query a single record by primary key with 0ms cache read-through.
+ * Automatically re-renders only when this specific row or table changes.
+ */
+export function useLiveRow<T = any>(
+  client: LocalFirstClient | null | undefined,
+  tableName: string,
+  rowId: string | null | undefined
+): { data: T | null; refetch: () => Promise<void>; loading: boolean } {
+  const cacheKey = `${tableName}:row:${rowId || 'null'}`;
+  const [data, setData] = useState<T | null>(() => {
+    if (!rowId) return null;
+    const cached = queryCache.get(cacheKey);
+    return cached && cached.length > 0 ? (cached[0] as T) : null;
+  });
+  const [loading, setLoading] = useState(() => Boolean(rowId && !queryCache.has(cacheKey)));
+
+  const refetch = useCallback(async () => {
+    if (!client || !client.db || !rowId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      let inFlight = inFlightQueries.get(cacheKey);
+      if (!inFlight) {
+        inFlight = client.findById<T>(tableName, rowId).then((r) => (r ? [r] : []));
+        inFlightQueries.set(cacheKey, inFlight);
+        inFlight.finally(() => inFlightQueries.delete(cacheKey));
+      }
+      const res = await inFlight;
+      const row = res.length > 0 ? (res[0] as T) : null;
+      if (row) {
+        queryCache.set(cacheKey, [row]);
+      } else {
+        queryCache.delete(cacheKey);
+      }
+      setData(row);
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('no such column') || msg.includes('no such table')) {
+        setData(null);
+      } else {
+        console.error(`Error in useLiveRow("${tableName}", "${rowId}"):`, err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [client, tableName, rowId, cacheKey]);
+
+  const scheduleRefetch = useCoalescedRunner(refetch);
+
+  useEffect(() => {
+    if (!client || !client.db || !rowId) return;
+
+    refetch();
+
+    const unsubscribe = client.events.on(tableName, (event: any) => {
+      // Precise row-level invalidation: only refetch if event affects this rowId or is a bulk event
+      if (!event || !event.rowId || event.rowId === rowId || event.rowId === 'batch') {
+        scheduleRefetch();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [client, tableName, rowId, refetch, scheduleRefetch]);
+
+  return { data, refetch, loading };
+}
+
+export interface InfiniteQueryOptions extends QueryOptions {
+  pageSize?: number;
+}
+
+export interface UseLiveInfiniteQueryResult<T> {
+  data: T[];
+  loading: boolean;
+  isFetchingNextPage: boolean;
+  hasNextPage: boolean;
+  fetchNextPage: () => Promise<void>;
+  refetch: () => Promise<void>;
+}
+
+/**
+ * Reactive infinite query hook that progressively loads pages of records
+ * with live updates when underlying table rows are inserted, updated, or synced.
+ */
+export function useLiveInfiniteQuery<T = any>(
+  client: LocalFirstClient | null | undefined,
+  tableName: string,
+  options: InfiniteQueryOptions = {}
+): UseLiveInfiniteQueryResult<T> {
+  const pageSize = options.pageSize || options.limit || 25;
+  const [pageCount, setPageCount] = useState(1);
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
+  const [hasNextPage, setHasNextPage] = useState(true);
+
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  const pageCountRef = useRef(pageCount);
+  pageCountRef.current = pageCount;
+
+  const loadData = useCallback(async (pages: number, isNextPage: boolean = false) => {
+    if (!client || !client.db) return;
+    if (isNextPage) setIsFetchingNextPage(true);
+
+    try {
+      const currentOpts = optionsRef.current;
+      const fetchLimit = pages * pageSize + 1; // +1 to check for hasNextPage
+      const rows = await client.findMany<T>(tableName, {
+        ...currentOpts,
+        limit: fetchLimit,
+        offset: currentOpts.offset || 0,
+      });
+
+      if (rows.length > pages * pageSize) {
+        setHasNextPage(true);
+        setData(rows.slice(0, pages * pageSize));
+      } else {
+        setHasNextPage(false);
+        setData(rows);
+      }
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('no such column') || msg.includes('no such table')) {
+        setData([]);
+        setHasNextPage(false);
+      } else {
+        console.error(`Error in useLiveInfiniteQuery("${tableName}"):`, err);
+      }
+    } finally {
+      setLoading(false);
+      if (isNextPage) setIsFetchingNextPage(false);
+    }
+  }, [client, tableName, pageSize]);
+
+  const refetch = useCallback(async () => {
+    await loadData(pageCountRef.current, false);
+  }, [loadData]);
+
+  const scheduleRefetch = useCoalescedRunner(refetch);
+
+  const fetchNextPage = useCallback(async () => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    const nextPages = pageCountRef.current + 1;
+    setPageCount(nextPages);
+    await loadData(nextPages, true);
+  }, [hasNextPage, isFetchingNextPage, loadData]);
+
+  useEffect(() => {
+    if (!client || !client.db) return;
+
+    loadData(1, false);
+
+    const unsubscribe = client.events.on(tableName, () => {
+      scheduleRefetch();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [client, tableName, loadData, scheduleRefetch]);
+
+  return {
+    data,
+    loading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  };
+}
+
 export interface UseSyncStatusResult {
   isOnline: boolean;
   isPushing: boolean;
@@ -288,3 +465,6 @@ export function useSyncMetrics(
 
   return { metrics, refresh };
 }
+
+export { SyncInspector } from './SyncInspector.js';
+export type { SyncInspectorProps } from './SyncInspector.js';

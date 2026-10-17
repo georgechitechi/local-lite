@@ -42,6 +42,9 @@ export interface LocalFirstClientConfig {
   migrations?: string[];
   autoStart?: boolean;
   coalesceOutbox?: boolean;
+  jsonColumns?: Record<string, string[]>;
+  autoHydrateJSON?: boolean;
+  syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
 }
 
 export class TransactionalClient {
@@ -147,6 +150,8 @@ export class LocalFirstClient {
   public autoSchema: boolean;
   public coalesceOutbox: boolean;
   public tables: string[];
+  public jsonColumns: Record<string, string[]>;
+  public autoHydrateJSON: boolean;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -162,6 +167,8 @@ export class LocalFirstClient {
     this.tables = config.tables ?? [];
     this.migrations = config.migrations ?? [];
     this.autoStart = config.autoStart ?? true;
+    this.jsonColumns = config.jsonColumns ?? {};
+    this.autoHydrateJSON = config.autoHydrateJSON ?? false;
     this.schemaManager = new SchemaManager();
 
     const workerOptions: SyncWorkerOptions = {
@@ -177,6 +184,7 @@ export class LocalFirstClient {
       autoSchema: this.autoSchema,
       schemaManager: this.schemaManager,
       autoSync: this.autoStart,
+      syncScope: config.syncScope,
     };
 
     this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
@@ -184,6 +192,50 @@ export class LocalFirstClient {
 
   getPrimaryKey(): string {
     return this.primaryKey;
+  }
+
+  /**
+   * Automatically deserializes JSON string columns into JavaScript objects/arrays.
+   */
+  hydrateRow<T = any>(tableName: string, row: any): T {
+    if (!row || typeof row !== 'object') return row;
+    const cols = this.jsonColumns[tableName];
+    if (cols && cols.length > 0) {
+      const copy = { ...row };
+      for (const col of cols) {
+        if (typeof copy[col] === 'string') {
+          const val = copy[col].trim();
+          if ((val.startsWith('{') && val.endsWith('}')) || (val.startsWith('[') && val.endsWith(']'))) {
+            try {
+              copy[col] = JSON.parse(val);
+            } catch {
+              // keep string if not valid JSON
+            }
+          }
+        }
+      }
+      return copy as T;
+    }
+    if (this.autoHydrateJSON) {
+      const copy = { ...row };
+      for (const [key, val] of Object.entries(copy)) {
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if (
+            (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))
+          ) {
+            try {
+              copy[key] = JSON.parse(trimmed);
+            } catch {
+              // keep string
+            }
+          }
+        }
+      }
+      return copy as T;
+    }
+    return row as T;
   }
 
   /**
@@ -634,7 +686,12 @@ export class LocalFirstClient {
       }
     }
 
-    return applyQueryOptions<T>(rows, options);
+    const hasJsonConfig = Boolean(this.jsonColumns[tableName] || this.autoHydrateJSON);
+    const hydratedRows = hasJsonConfig
+      ? rows.map((r) => this.hydrateRow(tableName, r))
+      : rows;
+
+    return applyQueryOptions<T>(hydratedRows, options);
   }
 
   /**
@@ -652,7 +709,7 @@ export class LocalFirstClient {
         `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
         [id]
       );
-      return rows && rows.length > 0 ? (rows[0] as T) : null;
+      return rows && rows.length > 0 ? this.hydrateRow<T>(tableName, rows[0]) : null;
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {
@@ -761,6 +818,13 @@ export class LocalFirstClient {
    */
   async resetSyncCursor(): Promise<void> {
     await this.syncWorker.resetSyncCursor();
+  }
+
+  /**
+   * Dynamically sets or updates the active sync scope.
+   */
+  setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
+    this.syncWorker.setSyncScope(scope);
   }
 
   /**

@@ -65,11 +65,37 @@ export class OutboxStore {
   }
 
   /**
-   * Inserts multiple outbox entries within an existing database transaction.
+   * Inserts multiple outbox entries in high-throughput multi-row SQL chunks within an existing transaction.
    */
   static async insertRecords(tx: LocalTransaction, ops: SyncOperation[]): Promise<void> {
-    for (const op of ops) {
-      await this.insertRecord(tx, op);
+    if (!ops || ops.length === 0) return;
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+      const chunk = ops.slice(i, i + CHUNK_SIZE);
+      const valueClauses: string[] = [];
+      const params: any[] = [];
+      for (const op of chunk) {
+        valueClauses.push('(?, ?, ?, ?, ?, ?, "PENDING", 0)');
+        params.push(
+          op.id,
+          op.tableName,
+          op.rowId,
+          op.operation,
+          op.payload ? JSON.stringify(op.payload) : null,
+          op.timestamp
+        );
+      }
+      try {
+        await tx.execute(
+          `INSERT INTO sync_outbox (id, table_name, row_id, operation, payload, timestamp, status, retry_count) VALUES ${valueClauses.join(', ')}`,
+          params
+        );
+      } catch {
+        // Transparent fallback to per-record insert for mock drivers or custom engines
+        for (const op of chunk) {
+          await this.insertRecord(tx, op);
+        }
+      }
     }
   }
 

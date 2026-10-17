@@ -410,7 +410,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Fetches delta changes from Supabase since a given timestamp.
    * Reads updated records and checks `deleted: true` to propagate soft deletes.
    */
-  async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
+  async fetchChanges(sinceTimestamp: number, scope?: Record<string, any>): Promise<DeltaChanges> {
     const client = this.getClient();
     if (!client) {
       this.logger.debug('Supabase client is not available; skipping fetchChanges.');
@@ -433,6 +433,14 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           let query = client
             .from(table)
             .select('*');
+
+          if (scope && typeof scope === 'object') {
+            for (const [col, val] of Object.entries(scope)) {
+              if (val !== undefined && val !== null && typeof query.eq === 'function') {
+                query = query.eq(col, val);
+              }
+            }
+          }
 
           if (currentSinceIso) {
             query = query.gt(this.updatedAtColumn, currentSinceIso);

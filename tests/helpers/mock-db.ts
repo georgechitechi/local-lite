@@ -119,19 +119,23 @@ export class MockDB implements LocalDBAdapter {
       return Array.from(this.getTable(table).values());
     }
 
-    // Insert into sync_outbox
+    // Insert into sync_outbox (single or multi-row batch)
     if (q.startsWith('INSERT INTO sync_outbox')) {
-      const [id, table_name, row_id, operation, payload, timestamp] = params;
-      this.getTable('sync_outbox').set(id, {
-        id,
-        table_name,
-        row_id,
-        operation,
-        payload,
-        timestamp,
-        status: 'PENDING',
-        retry_count: 0,
-      });
+      const stride = 6;
+      for (let i = 0; i < params.length; i += stride) {
+        const [id, table_name, row_id, operation, payload, timestamp, status] = params.slice(i, i + stride);
+        if (!id) break;
+        this.getTable('sync_outbox').set(id, {
+          id,
+          table_name,
+          row_id,
+          operation,
+          payload,
+          timestamp,
+          status: status || 'PENDING',
+          retry_count: 0,
+        });
+      }
       return [];
     }
 
