@@ -206,7 +206,39 @@ export async function runSQLiteBenchmark(
       status: 'success',
     });
 
-    // 5. client.findMany() with SQL Pushdown Filters (40 queries)
+    // 5. client.findByIds() Batched PK Lookups (400 entities loaded in 20 queries)
+    onProgress?.('Testing client.findByIds() batched lookups (400 entities)...', 0.55);
+    const batchedQueryCount = 20;
+    const batchLookupSize = 20;
+    const tBatchFindStart = Date.now();
+    for (let i = 0; i < batchedQueryCount; i++) {
+      const ids = Array.from(
+        { length: batchLookupSize },
+        (_, idx) => `b-batch-${(i * batchLookupSize + idx) % batchCount}`,
+      );
+      if (client?.findByIds) {
+        await client.findByIds('_sync_bench_temp', ids);
+      } else {
+        const placeholders = ids.map(() => '?').join(', ');
+        await db.execute(
+          `SELECT * FROM "_sync_bench_temp" WHERE id IN (${placeholders})`,
+          ids,
+        );
+      }
+    }
+    const tBatchFindDuration = Math.max(1, Date.now() - tBatchFindStart);
+    const totalBatchedFinds = batchedQueryCount * batchLookupSize;
+    list.push({
+      name: 'client.findByIds() Batched',
+      category: 'Local-Lite Client',
+      description: '400 entity lookups compiled into batched WHERE id IN (...) single-trip SQL',
+      operations: totalBatchedFinds,
+      durationMs: tBatchFindDuration,
+      opsPerSec: Math.round((totalBatchedFinds / tBatchFindDuration) * 1000),
+      status: 'success',
+    });
+
+    // 6. client.findMany() with SQL Pushdown Filters (40 queries)
     onProgress?.('Testing client.findMany() query filter compilation (40 queries)...', 0.6);
     const findManyCount = 40;
     const t5Start = Date.now();

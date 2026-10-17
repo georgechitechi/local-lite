@@ -111,6 +111,20 @@ describe('LocalFirstClient Core', () => {
     // Find by ID
     const single = await client.findById('items', 'item-2');
     expect(single?.name).toBe('Apple');
+
+    // Find by multiple IDs
+    const multiple = await client.findByIds('items', ['item-1', 'item-2']);
+    expect(multiple).toHaveLength(2);
+    expect(multiple.map((m: any) => m.name)).toEqual(['Zebra', 'Apple']);
+
+    // updateMany batch updates
+    await client.updateMany('items', [
+      { id: 'item-1', payload: { category: 'organic-fruit' } },
+      { id: 'item-2', payload: { category: 'organic-fruit' } },
+    ]);
+    const updated = await client.findByIds('items', ['item-1', 'item-2']);
+    expect(updated[0].category).toBe('organic-fruit');
+    expect(updated[1].category).toBe('organic-fruit');
   });
 
   it('emits reactive table change events on mutation', async () => {

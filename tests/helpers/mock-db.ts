@@ -112,6 +112,19 @@ export class MockDB implements LocalDBAdapter {
       return Array.from(rows.values()).filter((r: any) => r[col] === val);
     }
 
+    // Select multiple rows by column IN (...)
+    const selectInMatch = normQ.match(/^SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? IN \([^)]+\)$/i);
+    if (selectInMatch && selectInMatch[1] !== 'sync_outbox') {
+      const table = selectInMatch[1];
+      const col = selectInMatch[2];
+      const rows = this.getTable(table);
+      const idSet = new Set(params);
+      if (col.toLowerCase() === 'id') {
+        return params.map((id) => rows.get(id)).filter(Boolean);
+      }
+      return Array.from(rows.values()).filter((r: any) => idSet.has(r[col]));
+    }
+
     // Select all rows from table (with optional WHERE / ORDER / LIMIT)
     const selectAllMatch = normQ.match(/^SELECT \* FROM "?(\w+)"?(?:\s+WHERE\s+[^;]+)?(?:\s+ORDER BY\s+[^;]+)?(?:\s+LIMIT\s+[^;]+)?;?$/i);
     if (selectAllMatch) {
@@ -149,7 +162,12 @@ export class MockDB implements LocalDBAdapter {
         obj[c] = params[idx];
       });
       const id = obj.id || params[0];
-      this.getTable(table).set(id, obj);
+      const existing = this.getTable(table).get(id);
+      if (existing && /ON CONFLICT/i.test(q)) {
+        this.getTable(table).set(id, { ...existing, ...obj });
+      } else {
+        this.getTable(table).set(id, obj);
+      }
       return [];
     }
 
