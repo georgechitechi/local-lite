@@ -22,13 +22,13 @@ import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import LoadingCard from '@/shared/components/LoadingCard';
 import { useNetworkStatus } from '@/shared/hooks/useNetworkStatus';
 import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
+import { useCoreMutations, useProfile } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { ensureUserProfile } from '@/shared/services/auth';
 import { deleteImage, uploadImage } from '@/shared/services/fileUpload';
 import { supabase } from '@/shared/services/supabase';
 import { normalizePhoneNumber } from '@/shared/utils/helper';
 import { validateFields, validations } from '@/shared/utils/validations';
-import { useCoreMutations, useProfile } from '@/shared/hooks/useStore';
 
 interface ProfileData {
   id: string;

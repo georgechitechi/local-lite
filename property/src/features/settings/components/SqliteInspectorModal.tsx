@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import * as Clipboard from 'expo-clipboard';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,7 +18,6 @@ import {
   IconButton,
   Searchbar,
   SegmentedButtons,
-  Surface,
   Text,
 } from 'react-native-paper';
 import { useSnackbar } from '@/context/SnackbarContext';
@@ -66,9 +65,11 @@ export default function SqliteInspectorModal({
 
       // 1. Fetch table names from sqlite_master
       const rawTables = await client.db.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%' ORDER BY name ASC;"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%' ORDER BY name ASC;",
       );
-      const tableNames: string[] = (rawTables || []).map((t: any) => t.name).filter(Boolean);
+      const tableNames: string[] = (rawTables || [])
+        .map((t: any) => t.name)
+        .filter(Boolean);
 
       if (tableNames.length === 0) {
         setTables([]);
@@ -82,7 +83,7 @@ export default function SqliteInspectorModal({
         let rowCount = 0;
         try {
           const res = await client.db.execute(
-            `SELECT count(*) as count FROM "${name.replace(/"/g, '""')}";`
+            `SELECT count(*) as count FROM "${name.replace(/"/g, '""')}";`,
           );
           rowCount = Number(res?.[0]?.count ?? 0);
         } catch {
@@ -122,7 +123,7 @@ export default function SqliteInspectorModal({
       try {
         const client = await getSyncClient();
         const rows = await client.db.execute(
-          `SELECT * FROM "${tableName.replace(/"/g, '""')}" LIMIT ${limit};`
+          `SELECT * FROM "${tableName.replace(/"/g, '""')}" LIMIT ${limit};`,
         );
         const recordList = rows || [];
         setTableRecords(recordList);
@@ -144,7 +145,7 @@ export default function SqliteInspectorModal({
             };
           });
           setTables(prev =>
-            prev.map(t => (t.name === tableName ? { ...t, columns: cols } : t))
+            prev.map(t => (t.name === tableName ? { ...t, columns: cols } : t)),
           );
         }
       } catch (err: any) {
@@ -155,7 +156,7 @@ export default function SqliteInspectorModal({
         setRecordsLoading(false);
       }
     },
-    [showSnackbar]
+    [showSnackbar],
   );
 
   // When a table is selected in detail view
@@ -176,10 +177,10 @@ export default function SqliteInspectorModal({
         try {
           const client = await getSyncClient();
           const rows = await client.db.execute(
-            `SELECT * FROM "${tableName.replace(/"/g, '""')}" LIMIT 10;`
+            `SELECT * FROM "${tableName.replace(/"/g, '""')}" LIMIT 10;`,
           );
           setTables(prev =>
-            prev.map(t => (t.name === tableName ? { ...t, sampleRows: rows || [] } : t))
+            prev.map(t => (t.name === tableName ? { ...t, sampleRows: rows || [] } : t)),
           );
         } catch {
           // ignore
@@ -291,7 +292,10 @@ export default function SqliteInspectorModal({
         {loading && (
           <View style={styles.loadingBanner}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text variant="bodySmall" style={{ marginLeft: 8, color: colors.onSurfaceVariant }}>
+            <Text
+              variant="bodySmall"
+              style={{ marginLeft: 8, color: colors.onSurfaceVariant }}
+            >
               Scanning SQLite database tables...
             </Text>
           </View>
@@ -301,9 +305,14 @@ export default function SqliteInspectorModal({
         {selectedTable ? (
           <View style={styles.detailContainer}>
             {/* Controls Bar */}
-            <View style={[styles.detailControls, { backgroundColor: colors.surfaceVariant }]}>
+            <View
+              style={[styles.detailControls, { backgroundColor: colors.surfaceVariant }]}
+            >
               <View style={styles.limitPicker}>
-                <Text variant="labelSmall" style={{ color: colors.onSurfaceVariant, marginRight: 6 }}>
+                <Text
+                  variant="labelSmall"
+                  style={{ color: colors.onSurfaceVariant, marginRight: 6 }}
+                >
                   Limit:
                 </Text>
                 {[10, 25, 50].map(lim => (
@@ -365,22 +374,38 @@ export default function SqliteInspectorModal({
             {recordsLoading ? (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text variant="bodySmall" style={{ marginTop: 8, color: colors.onSurfaceVariant }}>
+                <Text
+                  variant="bodySmall"
+                  style={{ marginTop: 8, color: colors.onSurfaceVariant }}
+                >
                   Loading {selectedTable} records...
                 </Text>
               </View>
             ) : tableRecords.length === 0 ? (
               <View style={styles.centerBox}>
-                <MaterialCommunityIcons name="database-off" size={44} color={colors.outline} />
-                <Text variant="titleSmall" style={{ marginTop: 8, color: colors.onSurfaceVariant }}>
+                <MaterialCommunityIcons
+                  name="database-off"
+                  size={44}
+                  color={colors.outline}
+                />
+                <Text
+                  variant="titleSmall"
+                  style={{ marginTop: 8, color: colors.onSurfaceVariant }}
+                >
                   Table is currently empty (0 records)
                 </Text>
               </View>
             ) : viewMode === 'json' ? (
-              <ScrollView style={styles.jsonContainer} contentContainerStyle={{ padding: 12 }}>
+              <ScrollView
+                style={styles.jsonContainer}
+                contentContainerStyle={{ padding: 12 }}
+              >
                 <Text
                   variant="bodySmall"
-                  style={[styles.codeText, { color: colors.onSurface, backgroundColor: colors.surface }]}
+                  style={[
+                    styles.codeText,
+                    { color: colors.onSurface, backgroundColor: colors.surface },
+                  ]}
                   selectable
                 >
                   {JSON.stringify(tableRecords, null, 2)}
@@ -392,7 +417,10 @@ export default function SqliteInspectorModal({
                 keyExtractor={(item, index) => String(item.id || item.key || index)}
                 contentContainerStyle={styles.recordsList}
                 renderItem={({ item, index }) => (
-                  <Card style={[styles.recordCard, { backgroundColor: colors.surface }]} mode="outlined">
+                  <Card
+                    style={[styles.recordCard, { backgroundColor: colors.surface }]}
+                    mode="outlined"
+                  >
                     <Card.Content style={styles.recordContent}>
                       <View style={styles.recordHeader}>
                         <Chip compact textStyle={{ fontSize: 10, fontWeight: '700' }}>
@@ -400,7 +428,12 @@ export default function SqliteInspectorModal({
                         </Chip>
                         <Text
                           variant="labelMedium"
-                          style={{ flex: 1, marginLeft: 8, fontWeight: '700', color: colors.primary }}
+                          style={{
+                            flex: 1,
+                            marginLeft: 8,
+                            fontWeight: '700',
+                            color: colors.primary,
+                          }}
                           numberOfLines={1}
                         >
                           {item.id ? `ID: ${item.id}` : `Row ${index + 1}`}
@@ -421,20 +454,32 @@ export default function SqliteInspectorModal({
                           const displayVal = isNull
                             ? 'NULL'
                             : typeof v === 'object'
-                            ? JSON.stringify(v)
-                            : String(v);
+                              ? JSON.stringify(v)
+                              : String(v);
 
                           return (
                             <View key={k} style={styles.fieldRow}>
-                              <Text variant="labelSmall" style={[styles.fieldKey, { color: colors.onSurfaceVariant }]}>
+                              <Text
+                                variant="labelSmall"
+                                style={[
+                                  styles.fieldKey,
+                                  { color: colors.onSurfaceVariant },
+                                ]}
+                              >
                                 {k}:
                               </Text>
                               <Text
                                 variant="bodySmall"
                                 style={[
                                   styles.fieldValue,
-                                  isNull && { color: colors.outline, fontStyle: 'italic' },
-                                  typeof v === 'boolean' && { color: colors.tertiary, fontWeight: '700' },
+                                  isNull && {
+                                    color: colors.outline,
+                                    fontStyle: 'italic',
+                                  },
+                                  typeof v === 'boolean' && {
+                                    color: colors.tertiary,
+                                    fontWeight: '700',
+                                  },
                                 ]}
                                 numberOfLines={2}
                                 selectable
@@ -472,8 +517,16 @@ export default function SqliteInspectorModal({
                 density="small"
                 style={{ flex: 1 }}
                 buttons={[
-                  { value: 'tables', icon: 'table', label: `Tables (${filteredTables.length})` },
-                  { value: 'all', icon: 'format-list-bulleted-type', label: '10 Rows Preview Feed' },
+                  {
+                    value: 'tables',
+                    icon: 'table',
+                    label: `Tables (${filteredTables.length})`,
+                  },
+                  {
+                    value: 'all',
+                    icon: 'format-list-bulleted-type',
+                    label: '10 Rows Preview Feed',
+                  },
                 ]}
               />
             </View>
@@ -504,10 +557,10 @@ export default function SqliteInspectorModal({
                             item.name.startsWith('sync_')
                               ? 'sync'
                               : item.name === 'businesses'
-                              ? 'domain'
-                              : item.name === 'tenants'
-                              ? 'account-group'
-                              : 'table-large'
+                                ? 'domain'
+                                : item.name === 'tenants'
+                                  ? 'account-group'
+                                  : 'table-large'
                           }
                           size={24}
                           color={hasData ? colors.primary : colors.outline}
@@ -515,7 +568,9 @@ export default function SqliteInspectorModal({
                         />
 
                         <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                          >
                             <Text variant="titleSmall" style={{ fontWeight: '700' }}>
                               {item.name}
                             </Text>
@@ -525,9 +580,15 @@ export default function SqliteInspectorModal({
                               </Chip>
                             )}
                           </View>
-                          <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant, marginTop: 2 }}>
+                          <Text
+                            variant="bodySmall"
+                            style={{ color: colors.onSurfaceVariant, marginTop: 2 }}
+                          >
                             {item.columns.length > 0
-                              ? `${item.columns.length} cols · ${item.columns.map(c => c.name).slice(0, 3).join(', ')}${item.columns.length > 3 ? '...' : ''}`
+                              ? `${item.columns.length} cols · ${item.columns
+                                  .map(c => c.name)
+                                  .slice(0, 3)
+                                  .join(', ')}${item.columns.length > 3 ? '...' : ''}`
                               : `${item.rowCount} record${item.rowCount === 1 ? '' : 's'} in SQLite`}
                           </Text>
                         </View>
@@ -536,8 +597,12 @@ export default function SqliteInspectorModal({
                           style={[
                             styles.countBadge,
                             {
-                              backgroundColor: hasData ? colors.primaryContainer : colors.surfaceVariant,
-                              color: hasData ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                              backgroundColor: hasData
+                                ? colors.primaryContainer
+                                : colors.surfaceVariant,
+                              color: hasData
+                                ? colors.onPrimaryContainer
+                                : colors.onSurfaceVariant,
                             },
                           ]}
                           size={24}
@@ -567,7 +632,10 @@ export default function SqliteInspectorModal({
                   const sampleRows = item.sampleRows || [];
 
                   return (
-                    <Card style={[styles.accordionCard, { backgroundColor: colors.surface }]} mode="outlined">
+                    <Card
+                      style={[styles.accordionCard, { backgroundColor: colors.surface }]}
+                      mode="outlined"
+                    >
                       <TouchableOpacity
                         style={styles.accordionHeader}
                         onPress={() => toggleTableExpand(item.name)}
@@ -578,7 +646,10 @@ export default function SqliteInspectorModal({
                           size={22}
                           color={colors.primary}
                         />
-                        <Text variant="titleSmall" style={{ flex: 1, fontWeight: '700', marginLeft: 6 }}>
+                        <Text
+                          variant="titleSmall"
+                          style={{ flex: 1, fontWeight: '700', marginLeft: 6 }}
+                        >
                           {item.name}
                         </Text>
                         <Chip compact textStyle={{ fontSize: 10, fontWeight: '600' }}>
@@ -597,19 +668,42 @@ export default function SqliteInspectorModal({
                       {isExpanded && (
                         <View style={styles.accordionBody}>
                           {item.rowCount === 0 ? (
-                            <Text variant="bodySmall" style={{ color: colors.outline, fontStyle: 'italic', padding: 8 }}>
+                            <Text
+                              variant="bodySmall"
+                              style={{
+                                color: colors.outline,
+                                fontStyle: 'italic',
+                                padding: 8,
+                              }}
+                            >
                               No records found in {item.name}.
                             </Text>
                           ) : sampleRows.length === 0 ? (
-                            <ActivityIndicator size="small" color={colors.primary} style={{ padding: 12 }} />
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.primary}
+                              style={{ padding: 12 }}
+                            />
                           ) : (
                             sampleRows.slice(0, 10).map((row, idx) => (
                               <View
                                 key={row.id || idx}
-                                style={[styles.feedRow, { backgroundColor: colors.surfaceVariant }]}
+                                style={[
+                                  styles.feedRow,
+                                  { backgroundColor: colors.surfaceVariant },
+                                ]}
                               >
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text variant="labelSmall" style={{ fontWeight: '700', color: colors.primary }}>
+                                <View
+                                  style={{
+                                    flexDirection: 'row',
+                                    justifyContent: 'space-between',
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  <Text
+                                    variant="labelSmall"
+                                    style={{ fontWeight: '700', color: colors.primary }}
+                                  >
                                     Record #{idx + 1} {row.id ? `(${row.id})` : ''}
                                   </Text>
                                   <IconButton
@@ -621,7 +715,11 @@ export default function SqliteInspectorModal({
                                 </View>
                                 <Text
                                   variant="bodySmall"
-                                  style={{ fontFamily: 'monospace', fontSize: 11, color: colors.onSurface }}
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    color: colors.onSurface,
+                                  }}
                                   numberOfLines={5}
                                 >
                                   {JSON.stringify(row, null, 1)}

@@ -35,9 +35,9 @@ import {
   useCoreMutations,
   useHouses,
   useHousesByPropertyId,
+  useIsInitialSyncing,
   useProperties,
   useStoreRefresh,
-  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatDateForDB, formatWithCurrency } from '@/shared/utils/formatters';

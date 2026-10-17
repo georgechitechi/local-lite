@@ -7,9 +7,9 @@ import { useAuth } from '@/providers/AuthProvider';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
 import EmailSelector from '@/shared/components/EmailSelector';
-import { useCoreMutations } from '@/shared/hooks/useStore';
 import { useLocalSync } from '@/shared/hooks/useLocalSync';
 import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
+import { useCoreMutations } from '@/shared/hooks/useStore';
 import { createCronJobManager } from '@/shared/services/cronJobManager';
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase } from '@/shared/services/supabase';
@@ -136,10 +136,14 @@ export default function BackupScheduleModal({
           let hasActive = false;
           const client = getSyncClientSync();
           if (client) {
-            const rows = await client.findMany('schedules', {
-              where: { schedule_type: 'system_backup', status: 'active' },
-            }).catch(() => []);
-            hasActive = (rows || []).some((r: any) => !r.deleted && r.id !== backupSchedule?.id);
+            const rows = await client
+              .findMany('schedules', {
+                where: { schedule_type: 'system_backup', status: 'active' },
+              })
+              .catch(() => []);
+            hasActive = (rows || []).some(
+              (r: any) => !r.deleted && r.id !== backupSchedule?.id,
+            );
           } else if (supabase) {
             const { data: enabledSchedules } = await supabase
               .from('schedules')

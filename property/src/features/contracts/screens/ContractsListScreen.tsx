@@ -34,12 +34,12 @@ import {
   useContracts,
   useCoreMutations,
   useHousesById,
+  useIsInitialSyncing,
   usePropertiesById,
   useReceipts,
   useSettings,
   useStoreRefresh,
   useTenantsById,
-  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendContractEmail } from '@/shared/services/emailService';

@@ -1,4 +1,5 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
+import type { BatchMutation } from 'local-lite';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, ScrollView, Share, StyleSheet, View } from 'react-native';
 import {
@@ -22,7 +23,6 @@ import { useAuth } from '@/providers/AuthProvider';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
 import EmptyState from '@/shared/components/EmptyState';
-import type { BatchMutation } from 'local-lite';
 import {
   type Promotion,
   useContracts,
@@ -42,7 +42,6 @@ import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatDateForDB, formatDateRange } from '@/shared/utils/formatters';
 import {
   addOpacity,
-  EMPTY_ARRAY,
   generateUUID,
   safeParseJSON,
   snakeCaseToTitleCase,

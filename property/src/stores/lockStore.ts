@@ -2,7 +2,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
 
-let isAutoLockPausedState = false;
+let _isAutoLockPausedState = false;
 let isLockedState = false;
 let resumeTimeoutRef: ReturnType<typeof setTimeout> | null = null;
 
@@ -11,7 +11,7 @@ export const pauseAutoLock = async () => {
     clearTimeout(resumeTimeoutRef);
     resumeTimeoutRef = null;
   }
-  isAutoLockPausedState = true;
+  _isAutoLockPausedState = true;
   try {
     await activateKeepAwakeAsync();
   } catch (error) {
@@ -24,7 +24,7 @@ export const resumeAutoLock = () => {
     clearTimeout(resumeTimeoutRef);
   }
   resumeTimeoutRef = setTimeout(() => {
-    isAutoLockPausedState = false;
+    _isAutoLockPausedState = false;
     resumeTimeoutRef = null;
     try {
       deactivateKeepAwake();

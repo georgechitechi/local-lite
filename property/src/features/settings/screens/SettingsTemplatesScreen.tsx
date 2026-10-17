@@ -23,7 +23,6 @@ import LoadingCard from '@/shared/components/LoadingCard';
 import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
 import { useCoreMutations, useMessageTemplates } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
-import { supabase } from '@/shared/services/supabase';
 import {
   DEFAULT_TEMPLATES,
   getDefaultTemplate,
@@ -32,7 +31,7 @@ import {
   PLACEHOLDERS,
   replacePlaceholders,
 } from '@/shared/services/templateService';
-import { EMPTY_ARRAY, generateUUID } from '@/shared/utils/helper';
+import { generateUUID } from '@/shared/utils/helper';
 
 type Channel = 'sms' | 'email' | 'whatsapp';
 
@@ -580,8 +579,6 @@ export default function MessageTemplatesManager() {
         recordsToUpsert.push(recordData);
         count++;
       }
-
-
 
       if (showToast) {
         showSnackbar(

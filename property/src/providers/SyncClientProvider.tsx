@@ -1,7 +1,10 @@
 import type { LocalFirstClient } from 'local-lite';
 import type React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { getAuthStateSyncSnapshot, subscribeAuthStateSync } from '@/shared/services/supabase';
+import {
+  getAuthStateSyncSnapshot,
+  subscribeAuthStateSync,
+} from '@/shared/services/supabase';
 import { getSyncClient } from '@/shared/services/sync/client';
 
 interface SyncClientContextValue {

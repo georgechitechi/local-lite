@@ -25,10 +25,10 @@ import {
   useCoreMutations,
   useExpensesById,
   useHousesById,
+  useIsInitialSyncing,
   useMaintenanceRequests,
   usePropertiesById,
   useStoreRefresh,
-  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendNotification } from '@/shared/services/notifications';

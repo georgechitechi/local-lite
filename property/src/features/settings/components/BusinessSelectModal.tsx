@@ -11,8 +11,8 @@ import EmptyState from '@/shared/components/EmptyState';
 import {
   type Business,
   useBusinesses,
-  useCachedBusinesses,
   useBusinessShares,
+  useCachedBusinesses,
   useCoreMutations,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
@@ -81,7 +81,12 @@ export default function BusinessSelectModal({
     if (!user) return [];
 
     return rawShares
-      .filter(s => !!user.email && normalizeIdentity(s.shared_with) === normalizeIdentity(user.email) && s.status === 'pending')
+      .filter(
+        s =>
+          !!user.email &&
+          normalizeIdentity(s.shared_with) === normalizeIdentity(user.email) &&
+          s.status === 'pending',
+      )
       .map(s => {
         const business = rawBusinesses.find(b => b.id === s.business_id);
         return {
@@ -96,22 +101,23 @@ export default function BusinessSelectModal({
     if (!user) return [];
 
     const myShares = rawShares.filter(
-      s => !!user.email && normalizeIdentity(s.shared_with) === normalizeIdentity(user.email) && isActiveBusinessShare(s),
+      s =>
+        !!user.email &&
+        normalizeIdentity(s.shared_with) === normalizeIdentity(user.email) &&
+        isActiveBusinessShare(s),
     );
 
     return accessibleBusinesses
       .map(b => {
         const isOffline = user.id === OFFLINE_USER_ID;
         const isOwned =
-          isOffline ||
-          b.user_id === user.id ||
-          b.user_id === OFFLINE_USER_ID;
+          isOffline || b.user_id === user.id || b.user_id === OFFLINE_USER_ID;
         const myShare = myShares.find(s => s.business_id === b.id);
         const isSharedWithMe = !isOwned && !!myShare;
 
         const memberCount =
-          rawShares.filter(s => s.business_id === b.id && isActiveBusinessShare(s)).length +
-          1; // +1 for owner
+          rawShares.filter(s => s.business_id === b.id && isActiveBusinessShare(s))
+            .length + 1; // +1 for owner
 
         return {
           ...b,

@@ -111,26 +111,32 @@ export default function ReceiptsScreen() {
   const isTenant = hasAccess(['tenant']);
 
   // Core Table Live Queries & Mutations (local-lite)
-  const { data: rawReceipts, loading: receiptsLoading } =
-    useReceiptsWithLoading(selectedBusiness?.id);
-  const { data: tenants, loading: tenantsLoading } =
-    useTenantsWithLoading(selectedBusiness?.id);
-  const { data: contracts, loading: contractsLoading } =
-    useContractsWithLoading(selectedBusiness?.id);
-  const { data: houses, loading: housesLoading } =
-    useHousesWithLoading(selectedBusiness?.id);
-  const { data: properties, loading: propertiesLoading } =
-    usePropertiesWithLoading(selectedBusiness?.id);
+  const { data: rawReceipts, loading: receiptsLoading } = useReceiptsWithLoading(
+    selectedBusiness?.id,
+  );
+  const { data: tenants, loading: tenantsLoading } = useTenantsWithLoading(
+    selectedBusiness?.id,
+  );
+  const { data: contracts, loading: contractsLoading } = useContractsWithLoading(
+    selectedBusiness?.id,
+  );
+  const { data: houses, loading: housesLoading } = useHousesWithLoading(
+    selectedBusiness?.id,
+  );
+  const { data: properties, loading: propertiesLoading } = usePropertiesWithLoading(
+    selectedBusiness?.id,
+  );
   const { delete: deleteRecord, update } = useCoreMutations();
 
-  const { data: paymentMessages } =
-    usePaymentMessagesWithLoading(selectedBusiness?.id);
-  const { data: paymentMessageReceipts } =
-    usePaymentMessageReceiptsWithLoading(selectedBusiness?.id);
+  const { data: paymentMessages } = usePaymentMessagesWithLoading(selectedBusiness?.id);
+  const { data: paymentMessageReceipts } = usePaymentMessageReceiptsWithLoading(
+    selectedBusiness?.id,
+  );
 
   // Core refunds query
-  const { data: receiptRefunds, loading: refundsLoading } =
-    useReceiptRefundsWithLoading(selectedBusiness?.id);
+  const { data: receiptRefunds, loading: refundsLoading } = useReceiptRefundsWithLoading(
+    selectedBusiness?.id,
+  );
   const { refreshing, onRefresh } = useStoreRefresh();
   const isInitialSyncing = useIsInitialSyncing();
 
@@ -201,9 +207,13 @@ export default function ReceiptsScreen() {
     return filteredReceipts.map(receipt => {
       // Join Related Data via O(1) index maps
       const tenant = receipt.tenant_id ? tenantsById.get(receipt.tenant_id) : undefined;
-      const contract = receipt.contract_id ? contractsById.get(receipt.contract_id) : undefined;
+      const contract = receipt.contract_id
+        ? contractsById.get(receipt.contract_id)
+        : undefined;
       const house = contract?.house_id ? housesById.get(contract.house_id) : undefined;
-      const property = house?.property_id ? propertiesById.get(house.property_id) : undefined;
+      const property = house?.property_id
+        ? propertiesById.get(house.property_id)
+        : undefined;
 
       const houseNumber = house?.house_number || 'Unknown';
       const propertyName = property?.name || 'Unknown';
@@ -524,7 +534,7 @@ export default function ReceiptsScreen() {
   const groupReceiptsByPeriod = useCallback(
     (receipts: Receipt[]): ReceiptSection[] => {
       const groups = receipts.reduce((acc: Record<string, ReceiptSection>, receipt) => {
-        if (!receipt.payment_period || !receipt.payment_period.month || !receipt.payment_period.year) return acc;
+        if (!receipt.payment_period?.month || !receipt.payment_period.year) return acc;
         const period = formatPeriod(receipt.payment_period);
         if (!acc[period]) {
           acc[period] = {
@@ -532,10 +542,7 @@ export default function ReceiptsScreen() {
             data: [],
             total: 0,
             stats: {},
-            date: new Date(
-              receipt.payment_period.year,
-              receipt.payment_period.month - 1,
-            ),
+            date: new Date(receipt.payment_period.year, receipt.payment_period.month - 1),
           };
         }
         acc[period].data.push(receipt);
@@ -691,7 +698,10 @@ export default function ReceiptsScreen() {
                   { color: colors.onSurfaceVariant, flexShrink: 1 },
                 ]}
               >
-                Period: {item.payment_period && item.payment_period.month > 0 ? formatPeriod(item.payment_period) : 'N/A'}
+                Period:{' '}
+                {item.payment_period && item.payment_period.month > 0
+                  ? formatPeriod(item.payment_period)
+                  : 'N/A'}
                 {hasRefund && (
                   <Text style={{ color: colors.error, fontStyle: 'italic' }}>
                     {' '}
@@ -879,7 +889,7 @@ export default function ReceiptsScreen() {
   const totalFilteredMonths = useMemo(() => {
     const filtered = filterAndSortReceipts(formattedReceipts);
     const groups = filtered.reduce((acc: Record<string, any>, receipt) => {
-      if (!receipt.payment_period || !receipt.payment_period.month || !receipt.payment_period.year) return acc;
+      if (!receipt.payment_period?.month || !receipt.payment_period.year) return acc;
       const period = formatPeriod(receipt.payment_period);
       acc[period] = true;
       return acc;
@@ -965,7 +975,9 @@ export default function ReceiptsScreen() {
           ) : (
             <EmptyState
               icon="receipt"
-              title={isTenant ? 'No receipts found for your account' : 'No receipts found'}
+              title={
+                isTenant ? 'No receipts found for your account' : 'No receipts found'
+              }
             />
           )
         }

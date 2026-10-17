@@ -38,9 +38,9 @@ import BusinessSelectModal from '@/features/settings/components/BusinessSelectMo
 import DashboardCustomizationModal from '@/features/settings/components/DashboardCustomizationModal';
 import HelpModal from '@/features/settings/components/HelpModal';
 import ResetDataModal from '@/features/settings/components/ResetDataModal';
+import SqliteInspectorModal from '@/features/settings/components/SqliteInspectorModal';
 import SupportModal from '@/features/settings/components/SupportModal';
 import ThemeModal from '@/features/settings/components/ThemeModal';
-import SqliteInspectorModal from '@/features/settings/components/SqliteInspectorModal';
 import { useSettingsModals } from '@/features/settings/hooks/useSettingsModals';
 import UtilityManagementModal from '@/features/utilities/components/UtilityManagementModal';
 import { useAuth } from '@/providers/AuthProvider';

@@ -1,10 +1,10 @@
+import { getSyncClient } from '@/shared/services/sync/client';
 import {
   getMessageTemplate,
   htmlToPlain,
   plainToHtml,
   replacePlaceholders,
 } from '@/shared/services/templateService';
-import { getSyncClient } from '@/shared/services/sync/client';
 
 jest.mock('@/shared/services/sync/client', () => ({
   getSyncClient: jest.fn(),

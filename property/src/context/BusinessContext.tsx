@@ -1,5 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Storage from 'expo-sqlite/kv-store';
+import type React from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useAuth } from '@/providers/AuthProvider';
 import { preCacheGallery } from '@/shared/components/CachedImage';
 import { useBusinesses } from '@/shared/hooks/useStore';
@@ -49,7 +57,9 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
       const isOffline = user.id === OFFLINE_USER_ID;
       // 1. Prioritize a business owned by the user or created offline
       const owned = bList.find(
-        b => !b.deleted && (isOffline || b.user_id === user.id || b.user_id === OFFLINE_USER_ID),
+        b =>
+          !b.deleted &&
+          (isOffline || b.user_id === user.id || b.user_id === OFFLINE_USER_ID),
       );
       if (owned) return owned;
 
@@ -85,7 +95,9 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   useEffect(() => {
     const client = getSyncClientSync();
     if (client && typeof client.setSyncScope === 'function') {
-      client.setSyncScope(selectedBusiness ? { business_id: selectedBusiness.id } : undefined);
+      client.setSyncScope(
+        selectedBusiness ? { business_id: selectedBusiness.id } : undefined,
+      );
     }
     if (selectedBusiness && client) {
       client
@@ -106,21 +118,32 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   // Offline businesses remain claimable, but only after selection passed the
   // same reactive ownership/share/tenant checks as every other business.
   useEffect(() => {
-    if (authLoading || !user || !selectedBusiness ||
-        user.id === OFFLINE_USER_ID || selectedBusiness.user_id !== OFFLINE_USER_ID) return;
+    if (
+      authLoading ||
+      !user ||
+      !selectedBusiness ||
+      user.id === OFFLINE_USER_ID ||
+      selectedBusiness.user_id !== OFFLINE_USER_ID
+    )
+      return;
     getSyncClient()
-      .then(client => client.update('businesses', selectedBusiness.id, { user_id: user.id }))
+      .then(client =>
+        client.update('businesses', selectedBusiness.id, { user_id: user.id }),
+      )
       .catch(error => console.error('Failed to claim offline business:', error));
   }, [authLoading, user, selectedBusiness]);
 
-  const selectBusiness = useCallback((business: Business) => {
-    if (!isValidBusiness(business)) throw new Error('Invalid business data');
-    if (!businesses.some(candidate => candidate.id === business.id)) {
-      throw new Error('You do not have access to this business');
-    }
-    setSelectedBusinessId(business.id);
-    Storage.setItem('selectedBusinessId', business.id).catch(() => {});
-  }, [businesses]);
+  const selectBusiness = useCallback(
+    (business: Business) => {
+      if (!isValidBusiness(business)) throw new Error('Invalid business data');
+      if (!businesses.some(candidate => candidate.id === business.id)) {
+        throw new Error('You do not have access to this business');
+      }
+      setSelectedBusinessId(business.id);
+      Storage.setItem('selectedBusinessId', business.id).catch(() => {});
+    },
+    [businesses],
+  );
 
   const clearSelectedBusiness = useCallback(() => {
     setSelectedBusinessId('');
@@ -158,13 +181,11 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
       refreshBusiness,
       authLoading,
       user,
-    ]
+    ],
   );
 
   return (
-    <BusinessContext.Provider value={contextValue}>
-      {children}
-    </BusinessContext.Provider>
+    <BusinessContext.Provider value={contextValue}>{children}</BusinessContext.Provider>
   );
 }
 

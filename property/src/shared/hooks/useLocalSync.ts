@@ -12,8 +12,14 @@ import {
 
 export function useLocalSync() {
   const localClient = useLocalClient();
-  const cloudSync = useSyncExternalStore(subscribeCloudSyncState, getCloudSyncStateSnapshot);
-  const authState = useSyncExternalStore(subscribeAuthStateSync, getAuthStateSyncSnapshot);
+  const cloudSync = useSyncExternalStore(
+    subscribeCloudSyncState,
+    getCloudSyncStateSnapshot,
+  );
+  const authState = useSyncExternalStore(
+    subscribeAuthStateSync,
+    getAuthStateSyncSnapshot,
+  );
 
   const isCloudSyncEnabled = cloudSync.isEnabled;
   const isLoggedIn = authState.isLoggedIn;

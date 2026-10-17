@@ -122,7 +122,14 @@ export default function EmailSelector({
     } finally {
       setLoadingEmails(false);
     }
-  }, [selectedBusiness, allShares, showBusinessEmail, showSnackbar, orderEmails]);
+  }, [
+    selectedBusiness,
+    allShares,
+    showBusinessEmail,
+    showSnackbar,
+    orderEmails,
+    businessOwner?.email,
+  ]);
 
   // Fetch emails when modal opens or business changes
   useEffect(() => {

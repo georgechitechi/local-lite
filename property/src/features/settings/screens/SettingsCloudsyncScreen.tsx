@@ -25,6 +25,7 @@ import {
   StepOneModal,
 } from '@/features/settings/components/cloudsync';
 import { BACKUP_PROJECT_STORAGE_KEY } from '@/features/settings/components/cloudsync/types';
+import SqliteInspectorModal from '@/features/settings/components/SqliteInspectorModal';
 import { useAuth } from '@/providers/AuthProvider';
 import { useIdleLock } from '@/providers/LockScreenProvider';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
@@ -52,7 +53,6 @@ import {
   testSupabaseConnection,
 } from '@/shared/services/supabase';
 import { safeReloadApp } from '@/shared/utils/safeReload';
-import SqliteInspectorModal from '@/features/settings/components/SqliteInspectorModal';
 import { clearAllPersistence } from '@/stores/syncHelper';
 
 const SUPABASE_PAT_KEY = 'supabase_mgmt_pat';

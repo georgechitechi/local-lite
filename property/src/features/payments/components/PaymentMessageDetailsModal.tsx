@@ -7,9 +7,6 @@ import BaseModal from '@/shared/components/BaseModal';
 import EmptyState from '@/shared/components/EmptyState';
 import { useCurrency } from '@/shared/hooks/useCurrency';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
-import { formatDate, formatPeriod } from '@/shared/utils/formatters';
-import { addOpacity } from '@/shared/utils/helper';
-import { extractMessageMetadata } from '@/shared/utils/parsers';
 import type {
   Contract,
   House,
@@ -19,6 +16,9 @@ import type {
   Receipt,
   Tenant,
 } from '@/shared/types/types';
+import { formatDate, formatPeriod } from '@/shared/utils/formatters';
+import { addOpacity } from '@/shared/utils/helper';
+import { extractMessageMetadata } from '@/shared/utils/parsers';
 
 interface PaymentMessageDetailsModalProps {
   visible: boolean;

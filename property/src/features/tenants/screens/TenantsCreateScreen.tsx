@@ -12,7 +12,6 @@ import TenantForm, {
 import { useAuth } from '@/providers/AuthProvider';
 import AccessGuard from '@/shared/components/AccessGuard';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
-import LoadingCard from '@/shared/components/LoadingCard';
 import { useCoreMutations, useTenants } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendNotification } from '@/shared/services/notifications';
@@ -198,7 +197,7 @@ export default function CreateTenantScreen() {
         'New Tenant Added',
         `${tenantData.name} has been successfully added as a tenant.`,
         { type: 'tenant', tenantId: id },
-      ).catch(() => { });
+      ).catch(() => {});
 
       showSnackbar('Tenant created successfully', 'success');
       resetForm();

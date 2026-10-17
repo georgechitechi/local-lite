@@ -16,13 +16,11 @@ jest.mock('@/shared/hooks/useLocalSync', () => ({
 }));
 
 jest.mock('@/shared/services/sync/client', () => ({
-  getSyncClient: jest
-    .fn()
-    .mockResolvedValue({
-      syncWorker: { pullRemoteChanges: jest.fn().mockResolvedValue(undefined) },
-      findMany: jest.fn().mockResolvedValue([]),
-      batch: jest.fn().mockResolvedValue(undefined),
-    }),
+  getSyncClient: jest.fn().mockResolvedValue({
+    syncWorker: { pullRemoteChanges: jest.fn().mockResolvedValue(undefined) },
+    findMany: jest.fn().mockResolvedValue([]),
+    batch: jest.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 jest.mock('@/stores/syncHelper', () => ({

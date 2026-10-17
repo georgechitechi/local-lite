@@ -66,9 +66,7 @@ export default function CurrencySettingsScreen() {
 
   // Compute currencies from settings in store
   const currencies = useMemo<Currency[]>(() => {
-    const currencySetting = allSettings.find(
-      s => s?.setting_key === 'currency_settings',
-    );
+    const currencySetting = allSettings.find(s => s?.setting_key === 'currency_settings');
 
     if (currencySetting?.setting_value) {
       let val = currencySetting.setting_value;

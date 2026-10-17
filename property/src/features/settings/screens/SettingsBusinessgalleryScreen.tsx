@@ -18,7 +18,6 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { deleteImage, uploadImage } from '@/shared/services/fileUpload';
-import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
 const { width } = Dimensions.get('window');
 

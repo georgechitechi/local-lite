@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
-import React from 'react';
+import type React from 'react';
 import { BusinessProvider, useBusiness } from '@/context/BusinessContext';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useHouses, useProperties, useReceipts } from '@/shared/hooks/useStore';
@@ -51,37 +51,57 @@ beforeEach(() => {
   mockRows.business_shares = [];
   mockRows.tenants = [];
   mockRows.properties = [
-    { id: 'pa', business_id: 'a' }, { id: 'pb', business_id: 'b' },
-    { id: 'unassigned' }, { id: 'private-property', business_id: 'private' },
+    { id: 'pa', business_id: 'a' },
+    { id: 'pb', business_id: 'b' },
+    { id: 'unassigned' },
+    { id: 'private-property', business_id: 'private' },
   ];
-  mockRows.houses = [{ id: 'ha', business_id: 'a' }, { id: 'hb', business_id: 'b' }];
-  mockRows.receipts = [{ id: 'ra', business_id: 'a', amount: 100 }, { id: 'rb', business_id: 'b', amount: 900 }];
+  mockRows.houses = [
+    { id: 'ha', business_id: 'a' },
+    { id: 'hb', business_id: 'b' },
+  ];
+  mockRows.receipts = [
+    { id: 'ra', business_id: 'a', amount: 100 },
+    { id: 'rb', business_id: 'b', amount: 900 },
+  ];
 });
 
 it('scopes mounted pages and dashboard inputs on selection, switching, and account changes', async () => {
-  const { result, rerender } = await renderHook(() => {
-    const selection = useBusiness();
-    return {
-      ...selection,
-      properties: useProperties(selection.selectedBusiness?.id),
-      houses: useHouses(selection.selectedBusiness?.id),
-      receipts: useReceipts(selection.selectedBusiness?.id),
-    };
-  }, { wrapper });
+  const { result, rerender } = await renderHook(
+    () => {
+      const selection = useBusiness();
+      return {
+        ...selection,
+        properties: useProperties(selection.selectedBusiness?.id),
+        houses: useHouses(selection.selectedBusiness?.id),
+        receipts: useReceipts(selection.selectedBusiness?.id),
+      };
+    },
+    { wrapper },
+  );
 
   // A persisted selection belonging to another user must not become active.
   await waitFor(() => expect(result.current.selectedBusiness?.id).toBe('a'));
-  await waitFor(() => expect(result.current.properties.map(row => row.id)).toEqual(['pa']));
+  await waitFor(() =>
+    expect(result.current.properties.map(row => row.id)).toEqual(['pa']),
+  );
   expect(result.current.houses.map(row => row.id)).toEqual(['ha']);
-  expect(result.current.receipts.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(100);
+  expect(result.current.receipts.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(
+    100,
+  );
 
   await act(() => result.current.selectBusiness(mockRows.businesses[1]));
   expect(result.current.properties.map(row => row.id)).toEqual(['pb']);
   expect(result.current.houses.map(row => row.id)).toEqual(['hb']);
-  expect(result.current.receipts.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(900);
+  expect(result.current.receipts.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(
+    900,
+  );
   expect(() => result.current.selectBusiness(mockRows.businesses[2])).toThrow('access');
 
-  mockAuth = { user: { id: 'unrelated', email: 'unrelated@example.com' }, loading: false };
+  mockAuth = {
+    user: { id: 'unrelated', email: 'unrelated@example.com' },
+    loading: false,
+  };
   await rerender({});
   expect(result.current.selectedBusiness).toBeNull();
   expect(result.current.properties).toEqual([]);
@@ -91,11 +111,32 @@ it('scopes mounted pages and dashboard inputs on selection, switching, and accou
 it('decodes shared roles and never borrows permissions from another business', async () => {
   mockAuth.user.id = 'shared-user';
   mockRows.business_shares = [
-    { id: 'sa', business_id: 'a', shared_with: ' PERSON@example.com ', status: 'active', roles: '["staff"]' },
-    { id: 'sb', business_id: 'b', shared_with: 'person@example.com', status: 'active', roles: '["tenant"]' },
-    { id: 'old', business_id: 'b', shared_with: 'person@example.com', status: 'inactive', roles: '["admin"]' },
+    {
+      id: 'sa',
+      business_id: 'a',
+      shared_with: ' PERSON@example.com ',
+      status: 'active',
+      roles: '["staff"]',
+    },
+    {
+      id: 'sb',
+      business_id: 'b',
+      shared_with: 'person@example.com',
+      status: 'active',
+      roles: '["tenant"]',
+    },
+    {
+      id: 'old',
+      business_id: 'b',
+      shared_with: 'person@example.com',
+      status: 'inactive',
+      roles: '["admin"]',
+    },
   ];
-  const { result } = await renderHook(() => ({ selection: useBusiness(), access: useAccessControl() }), { wrapper });
+  const { result } = await renderHook(
+    () => ({ selection: useBusiness(), access: useAccessControl() }),
+    { wrapper },
+  );
   await waitFor(() => expect(result.current.access.userRoles).toEqual(['staff']));
   expect(result.current.access.hasAccess(['admin', 'staff'])).toBe(true);
   await act(() => result.current.selection.selectBusiness(mockRows.businesses[1]));
@@ -106,7 +147,13 @@ it('decodes shared roles and never borrows permissions from another business', a
 it('revokes a selected business when its share becomes inactive', async () => {
   mockAuth.user.id = 'shared-user';
   mockRows.business_shares = [
-    { id: 'sa', business_id: 'a', shared_with: 'person@example.com', status: 'active', roles: ['staff'] },
+    {
+      id: 'sa',
+      business_id: 'a',
+      shared_with: 'person@example.com',
+      status: 'active',
+      roles: ['staff'],
+    },
   ];
   const { result } = await renderHook(() => useBusiness(), { wrapper });
   await waitFor(() => expect(result.current.selectedBusiness?.id).toBe('a'));

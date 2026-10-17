@@ -42,7 +42,7 @@ import {
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase } from '@/shared/services/supabase';
 import { formatDateTime } from '@/shared/utils/formatters';
-import { EMPTY_ARRAY, properCase, snakeCaseToTitleCase } from '@/shared/utils/helper';
+import { properCase, snakeCaseToTitleCase } from '@/shared/utils/helper';
 import { isActiveScheduleStatus } from '@/shared/utils/statusHelper';
 import type { Schedule } from '@/stores/types';
 

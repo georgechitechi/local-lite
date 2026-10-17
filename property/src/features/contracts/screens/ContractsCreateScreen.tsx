@@ -230,7 +230,7 @@ export default function CreateContractScreen() {
         'New Contract Created',
         `A new contract has been created for House ${form.house_number}.`,
         { type: 'contract', contractId },
-      ).catch(() => { });
+      ).catch(() => {});
 
       showSnackbar('Contract created successfully!', 'success');
       router.replace('/(tabs)/contracts');

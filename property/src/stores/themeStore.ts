@@ -59,7 +59,10 @@ export const loadStoredThemeMode = async (): Promise<ThemeMode> => {
   }
 };
 
-export const persistThemeMode = async (mode: ThemeMode, isDark: boolean): Promise<void> => {
+export const persistThemeMode = async (
+  mode: ThemeMode,
+  isDark: boolean,
+): Promise<void> => {
   try {
     await Storage.setItem('themeMode', mode);
     sendDarkModeNotification(isDark);

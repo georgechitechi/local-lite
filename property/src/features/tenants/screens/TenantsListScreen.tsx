@@ -38,6 +38,7 @@ import {
   useCoreMutations,
   useHouses,
   useHousesById,
+  useIsInitialSyncing,
   usePaymentMessageReceipts,
   usePaymentMessages,
   useProperties,
@@ -45,7 +46,6 @@ import {
   useReceipts,
   useStoreRefresh,
   useTenants,
-  useIsInitialSyncing,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendBookingApprovalNotification } from '@/shared/services/emailService';

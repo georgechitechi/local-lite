@@ -25,6 +25,12 @@ import {
   useTenantsById,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
+import type {
+  Contract as StoreContract,
+  House as StoreHouse,
+  Receipt as StoreReceipt,
+  Tenant as StoreTenant,
+} from '@/shared/types/types';
 import {
   type Currency,
   formatDate,
@@ -33,12 +39,6 @@ import {
 } from '@/shared/utils/formatters';
 import { addOpacity, getPrimaryNextOfKin, properCase } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
-import type {
-  Contract as StoreContract,
-  House as StoreHouse,
-  Receipt as StoreReceipt,
-  Tenant as StoreTenant,
-} from '@/shared/types/types';
 import { generateUserData } from '@/templates/basicDataTemplate';
 
 interface NextOfKin {

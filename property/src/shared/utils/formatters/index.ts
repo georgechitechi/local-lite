@@ -183,7 +183,7 @@ export const parsePeriod = (period: any): { month: number; year: number } => {
       obj = JSON.parse(period);
     } catch {
       const date = new Date(period);
-      if (!isNaN(date.getTime())) {
+      if (!Number.isNaN(date.getTime())) {
         return { month: date.getMonth() + 1, year: date.getFullYear() };
       }
       return { month: 0, year: 0 };
@@ -193,7 +193,13 @@ export const parsePeriod = (period: any): { month: number; year: number } => {
   const month = Number(obj?.month ?? obj?.Month);
   const year = Number(obj?.year ?? obj?.Year);
 
-  if (!isNaN(month) && !isNaN(year) && month >= 1 && month <= 12 && year > 0) {
+  if (
+    !Number.isNaN(month) &&
+    !Number.isNaN(year) &&
+    month >= 1 &&
+    month <= 12 &&
+    year > 0
+  ) {
     return { month, year };
   }
 

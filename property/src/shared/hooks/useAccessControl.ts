@@ -2,10 +2,14 @@ import type { User } from '@supabase/supabase-js';
 import { useCallback, useMemo } from 'react';
 import { useBusiness } from '@/context/BusinessContext';
 import { useAuth } from '@/providers/AuthProvider';
-import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import { useBusinessShares, useTenants } from '@/shared/hooks/useStore';
+import { OFFLINE_USER_ID } from '@/shared/services/auth';
+import {
+  isActiveBusinessShare,
+  normalizeIdentity,
+  parseShareRoles,
+} from '@/shared/utils/businessAccess';
 import { ac, mapActionToCrud } from '@/shared/utils/permissions';
-import { isActiveBusinessShare, normalizeIdentity, parseShareRoles } from '@/shared/utils/businessAccess';
 
 export type Resource =
   | 'tenant'

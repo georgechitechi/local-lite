@@ -32,9 +32,10 @@ export function useReminderState(settingsOrStore?: any) {
       (s: any) => s.setting_key === 'house_types' && !s.deleted,
     );
     if (setting?.setting_value) {
-      const val = typeof setting.setting_value === 'string'
-        ? JSON.parse(setting.setting_value)
-        : setting.setting_value;
+      const val =
+        typeof setting.setting_value === 'string'
+          ? JSON.parse(setting.setting_value)
+          : setting.setting_value;
       if (Array.isArray(val)) {
         types = val
           .filter((type: any) => type.active)

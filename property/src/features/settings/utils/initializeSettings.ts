@@ -105,9 +105,10 @@ const checkMissingSettings = async (): Promise<MissingSettingsResult> => {
     }[] = [];
 
     for (const business of userBusinesses) {
-      const allSettings = (await client.findMany('settings', {
-        where: { business_id: business.id },
-      })) || [];
+      const allSettings =
+        (await client.findMany('settings', {
+          where: { business_id: business.id },
+        })) || [];
       const settings = allSettings.filter((s: any) => !s.deleted);
 
       let foundEssential = 0;

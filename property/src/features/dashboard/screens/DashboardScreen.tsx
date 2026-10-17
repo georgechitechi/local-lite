@@ -136,7 +136,7 @@ const Dashboard = function Dashboard() {
   const client = useLocalClient();
   const { isSyncing: isSyncingStore } = useSyncStatus(client);
 
-  const propertiesPersistLoaded = properties !== undefined;
+  const _propertiesPersistLoaded = properties !== undefined;
 
   const isInitialSyncing = useIsInitialSyncing();
   const [isWaitingForInitialSync, setIsWaitingForInitialSync] = useState(true);
@@ -540,10 +540,7 @@ const Dashboard = function Dashboard() {
     isInitialSyncing
   ) {
     return (
-      <LoadingCard
-        iconName="view-dashboard-variant"
-        text="Loading workspace data..."
-      />
+      <LoadingCard iconName="view-dashboard-variant" text="Loading workspace data..." />
     );
   }
 

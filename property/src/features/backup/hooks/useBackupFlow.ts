@@ -38,7 +38,6 @@ import {
   listStorageFiles as listStorageFilesService,
 } from '@/shared/services/storageService';
 import { supabase } from '@/shared/services/supabase';
-import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
 export function useBackupFlow() {
   const colors = useThemeColors();

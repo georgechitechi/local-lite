@@ -33,7 +33,6 @@ jest.mock('expo-sqlite', () => ({
   })),
 }));
 
-
 jest.mock('expo-sqlite/kv-store', () => ({}));
 
 jest.mock('expo-notifications', () => ({

@@ -1,6 +1,15 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as LocalAuthentication from 'expo-local-authentication';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { useAuth } from './AuthProvider';
 import { useBiometric } from './BiometricAuthProvider';
@@ -139,10 +148,12 @@ export function LockScreenProvider({ children }: LockScreenProviderProps) {
       pauseAutoLock,
       resumeAutoLock,
     }),
-    [isLocked, lockApp, unlockApp, pauseAutoLock, resumeAutoLock]
+    [isLocked, lockApp, unlockApp, pauseAutoLock, resumeAutoLock],
   );
 
-  return <LockScreenContext.Provider value={value}>{children}</LockScreenContext.Provider>;
+  return (
+    <LockScreenContext.Provider value={value}>{children}</LockScreenContext.Provider>
+  );
 }
 
 export const useIdleLock = (): LockScreenContextValue => {

@@ -23,7 +23,6 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { pickDocument, uploadImage } from '@/shared/services/fileUpload';
-import { EMPTY_ARRAY } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 
 export default function EditMaintenanceScreen() {

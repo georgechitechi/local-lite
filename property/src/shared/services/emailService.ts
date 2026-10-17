@@ -1,5 +1,5 @@
-import { getSyncClient, getSyncClientSync } from '@/shared/services/sync/client';
 import { supabase } from '@/shared/services/supabase';
+import { getSyncClient, getSyncClientSync } from '@/shared/services/sync/client';
 import { formatDate } from '@/shared/utils/formatters';
 import { properCase, snakeCaseToTitleCase } from '@/shared/utils/helper';
 import { getAuthStateSnapshot } from '@/stores/authStore';
@@ -49,9 +49,11 @@ const getBusinessWebsiteLink = async (
   try {
     const client = getSyncClientSync() || (await getSyncClient().catch(() => null));
     if (client) {
-      const rows = await client.findMany('settings', {
-        where: { business_id: businessId, setting_key: 'links' },
-      }).catch(() => []);
+      const rows = await client
+        .findMany('settings', {
+          where: { business_id: businessId, setting_key: 'links' },
+        })
+        .catch(() => []);
       const found = (rows || []).find((r: any) => !r.deleted);
       if (found?.setting_value) {
         try {
@@ -437,10 +439,14 @@ export const sendReceiptEmail = async (
     let settings: any = null;
 
     if (client) {
-      business = await client.findById('businesses', receipt.business_id).catch(() => null);
-      const settingsRows = await client.findMany('settings', {
-        where: { business_id: receipt.business_id, setting_key: 'currency_settings' },
-      }).catch(() => []);
+      business = await client
+        .findById('businesses', receipt.business_id)
+        .catch(() => null);
+      const settingsRows = await client
+        .findMany('settings', {
+          where: { business_id: receipt.business_id, setting_key: 'currency_settings' },
+        })
+        .catch(() => []);
       settings = (settingsRows || []).find((r: any) => !r.deleted);
     }
 

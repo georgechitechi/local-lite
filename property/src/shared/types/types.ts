@@ -176,7 +176,6 @@ export interface Booking extends SyncedRow<DBBooking> {
   };
 }
 
-
 // Payment Methods
 export interface PaymentMethodField {
   key: string;

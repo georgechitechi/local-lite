@@ -71,7 +71,12 @@ export default function BookingsListModal({
   const tenants = useTenants(selectedBusiness?.id);
   const houses = useHouses(selectedBusiness?.id);
   const contracts = useContracts(selectedBusiness?.id);
-  const { batch: coreBatch, insert: coreInsert, update: coreUpdate, delete: coreDelete } = useCoreMutations();
+  const {
+    batch: coreBatch,
+    insert: coreInsert,
+    update: coreUpdate,
+    delete: coreDelete,
+  } = useCoreMutations();
   const { refreshing, onRefresh } = useStoreRefresh();
 
   const [searchQuery, setSearchQuery] = useState('');

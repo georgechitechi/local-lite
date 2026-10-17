@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { useRouter } from 'expo-router';
+import type { BatchMutation } from 'local-lite';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
@@ -14,14 +15,9 @@ import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import { useAuth } from '@/providers/AuthProvider';
 import { useIdleLock } from '@/providers/LockScreenProvider';
-import type { BatchMutation } from 'local-lite';
 import BaseModal from '@/shared/components/BaseModal';
 import LoadingOverlay from '@/shared/components/LoadingOverlay';
-import {
-  useCoreMutations,
-  useExpenses,
-  useSettings,
-} from '@/shared/hooks/useStore';
+import { useCoreMutations, useExpenses, useSettings } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatCompactDateTime, formatDateForDB } from '@/shared/utils/formatters';
 import { generateUUID } from '@/shared/utils/helper';
@@ -94,7 +90,9 @@ export default function UtilityImportModal({
     );
     let val: any = utilityMeters?.setting_value;
     if (typeof val === 'string') {
-      try { val = JSON.parse(val); } catch {}
+      try {
+        val = JSON.parse(val);
+      } catch {}
     }
     const meters: any[] = Array.isArray(val) ? val : [];
     const activeMeter: any = meters.find(
@@ -199,7 +197,7 @@ export default function UtilityImportModal({
         }
       }
     },
-    [expenses, showSnackbar, pauseAutoLock, resumeAutoLock, selectedBusiness?.id],
+    [expenses, showSnackbar, pauseAutoLock, resumeAutoLock, activeMeterNumber],
   );
 
   const [initializedKey, setInitializedKey] = useState<string | null>(null);

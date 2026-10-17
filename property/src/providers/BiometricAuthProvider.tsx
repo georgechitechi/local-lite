@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   authenticateWithBiometric as authenticateWithBiometricService,
   checkBiometricSupport,
@@ -114,7 +122,7 @@ export function BiometricAuthProvider({ children }: BiometricAuthProviderProps) 
       enableBiometric,
       disableBiometric,
       authenticateWithBiometric,
-    ]
+    ],
   );
 
   return (
@@ -132,8 +140,14 @@ export const useBiometric = (): BiometricContextValue => {
       isBiometricEnabled: false,
       biometricType: null,
       isAuthenticating: false,
-      enableBiometric: async () => ({ success: false, error: 'BiometricAuthProvider missing' }),
-      disableBiometric: async () => ({ success: false, error: 'BiometricAuthProvider missing' }),
+      enableBiometric: async () => ({
+        success: false,
+        error: 'BiometricAuthProvider missing',
+      }),
+      disableBiometric: async () => ({
+        success: false,
+        error: 'BiometricAuthProvider missing',
+      }),
       authenticateWithBiometric: async () => ({
         success: false,
         error: 'BiometricAuthProvider missing',

@@ -21,11 +21,7 @@ import LoadingCard from '@/shared/components/LoadingCard';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCoreMutations, useSettings } from '@/shared/hooks/useStore';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
-import {
-  generateUUID,
-  properCase,
-  toLowerCase,
-} from '@/shared/utils/helper';
+import { generateUUID, properCase, toLowerCase } from '@/shared/utils/helper';
 
 interface HouseType {
   id: string;

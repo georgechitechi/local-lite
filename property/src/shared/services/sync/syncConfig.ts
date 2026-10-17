@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { defineSyncConfig } from 'local-lite/config';
 import { supabase } from '@/shared/services/supabase';
-import { CORE_TABLES, BUSINESS_COLLECTIONS, type CoreTableName } from './tables';
+import { BUSINESS_COLLECTIONS, CORE_TABLES, type CoreTableName } from './tables';
 
 /**
  * Opens SQLite with performance-tuned PRAGMAs for mobile local-first persistence.

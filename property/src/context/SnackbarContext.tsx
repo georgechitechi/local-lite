@@ -7,10 +7,9 @@ import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import {
   getSnackbarSnapshot,
   hideSnackbar,
+  type SnackbarState,
   showSnackbar,
   subscribeSnackbar,
-  type SnackbarAction,
-  type SnackbarState,
 } from '@/stores/snackbarStore';
 
 export const SnackbarProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

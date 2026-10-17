@@ -1,11 +1,7 @@
 /**
  * Global / user-level tables that are not scoped to a specific business.
  */
-export const GLOBAL_TABLES = [
-  'businesses',
-  'business_shares',
-  'profiles',
-] as const;
+export const GLOBAL_TABLES = ['businesses', 'business_shares', 'profiles'] as const;
 
 /**
  * Business-scoped tables that belong to a specific business partition.

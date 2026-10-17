@@ -66,9 +66,10 @@ export const initializeAllMissingSettings = async (
     let initializedCount = 0;
 
     for (const business of userBusinesses) {
-      const allSettings = (await client.findMany('settings', {
-        where: { business_id: business.id },
-      })) || [];
+      const allSettings =
+        (await client.findMany('settings', {
+          where: { business_id: business.id },
+        })) || [];
       const settings = allSettings.filter((s: any) => !s.deleted);
 
       const hasHouseTypes = settings.some((s: any) => s.setting_key === 'house_types');

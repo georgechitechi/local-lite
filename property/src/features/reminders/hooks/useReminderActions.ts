@@ -5,6 +5,7 @@ import {
   getMessageForCategory,
   type Tenant,
 } from '@/features/reminders/utils/reminderUtils';
+import { useCoreMutations } from '@/shared/hooks/useStore';
 import {
   getActiveSimFilter,
   getAvailableSimCards,
@@ -13,7 +14,6 @@ import {
   sendBulkDeviceSms,
   sendSingleDeviceSms,
 } from '@/shared/services/deviceSmsGateway';
-import { useCoreMutations } from '@/shared/hooks/useStore';
 import { supabase } from '@/shared/services/supabase';
 import { generateUUID } from '@/shared/utils/helper';
 

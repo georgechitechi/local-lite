@@ -23,7 +23,7 @@ import {
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { pickDocument, uploadImage } from '@/shared/services/fileUpload';
 import { sendNotification } from '@/shared/services/notifications';
-import { EMPTY_ARRAY, generateUUID } from '@/shared/utils/helper';
+import { generateUUID } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 
 export default function CreateMaintenanceScreen() {
@@ -209,7 +209,7 @@ export default function CreateMaintenanceScreen() {
         'Maintenance Request Submitted',
         `Your ${form.priority} priority request has been submitted successfully.`,
         { type: 'maintenance', maintenanceId: id, status: 'pending' },
-      ).catch(() => { });
+      ).catch(() => {});
 
       // Clear fields
       setForm({

@@ -1,9 +1,17 @@
+import {
+  SyncInspector,
+  useLiveInfiniteQuery,
+  useLiveQuery,
+  useLiveRow,
+  useMutations,
+  useSyncMetrics,
+  useSyncStatus,
+} from 'local-lite/react';
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useLocalClient } from '@/providers/SyncClientProvider';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import { BUSINESS_COLLECTIONS, type CoreTableName } from '@/shared/services/sync/tables';
-import { accessibleBusinesses, isDeletedRecord, normalizeIdentity } from '@/shared/utils/businessAccess';
 import type {
   ApiKey,
   BackupLog,
@@ -29,33 +37,27 @@ import type {
   Tenant,
   Transaction,
 } from '@/shared/types/types';
+import {
+  accessibleBusinesses,
+  isDeletedRecord,
+  normalizeIdentity,
+} from '@/shared/utils/businessAccess';
 import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
-import {
-  useLiveQuery,
-  useLiveRow,
-  useLiveInfiniteQuery,
-  useMutations,
-  useSyncStatus,
-  useSyncMetrics,
-  SyncInspector,
-} from 'local-lite/react';
-
 export {
-  useLiveQuery,
-  useLiveRow,
-  useLiveInfiniteQuery,
-  useMutations,
-  useSyncStatus,
-  useSyncMetrics,
-  SyncInspector,
-};
-
-export {
+  useIsInitialSyncing,
   useLocalClient,
   useSyncClientContext,
-  useIsInitialSyncing,
 } from '@/providers/SyncClientProvider';
+export {
+  SyncInspector,
+  useLiveInfiniteQuery,
+  useLiveQuery,
+  useLiveRow,
+  useMutations,
+  useSyncMetrics,
+  useSyncStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Core Table Live Queries (Powered directly by local-lite SQLite)
@@ -67,7 +69,7 @@ export {
  */
 export function useCoreRow<T = any>(
   tableName: CoreTableName,
-  id: string | undefined | null
+  id: string | undefined | null,
 ): { data: T | null; loading: boolean; refetch: () => Promise<void> } {
   const client = useLocalClient();
   return useLiveRow<T>(client, tableName, id);
@@ -91,9 +93,11 @@ export function useCoreTableWithLoading<
     const scoped = (BUSINESS_COLLECTIONS as readonly string[]).includes(tableName);
     const targetId = normalizeIdentity(businessId);
     if (!client || (scoped && !targetId)) return EMPTY_ARRAY as T[];
-    return (data ?? []).filter(row => !isDeletedRecord(row) && (
-      !scoped || normalizeIdentity(row.business_id) === targetId
-    ));
+    return (data ?? []).filter(
+      row =>
+        !isDeletedRecord(row) &&
+        (!scoped || normalizeIdentity(row.business_id) === targetId),
+    );
   }, [client, data, tableName, businessId]);
 
   return {
@@ -111,7 +115,6 @@ function useCoreTable<
 >(tableName: CoreTableName, businessId?: string): T[] {
   return useCoreTableWithLoading<T>(tableName, businessId).data;
 }
-
 
 export const useProperties = (businessId?: string) =>
   useCoreTable<Property>('properties', businessId);
@@ -205,9 +208,13 @@ export function useBusinesses(): Business[] {
   const client = useLocalClient();
   const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants');
   const { user, loading } = useAuth();
-  return useMemo(() => loading ? [] : accessibleBusinesses(
-    businesses, shares, tenants ?? [], user, OFFLINE_USER_ID,
-  ), [businesses, shares, tenants, user, loading]);
+  return useMemo(
+    () =>
+      loading
+        ? []
+        : accessibleBusinesses(businesses, shares, tenants ?? [], user, OFFLINE_USER_ID),
+    [businesses, shares, tenants, user, loading],
+  );
 }
 
 /** Get a single business by ID (Powered by local-lite) */

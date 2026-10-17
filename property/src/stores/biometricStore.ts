@@ -113,7 +113,7 @@ export interface BiometricAuthCallbacks {
 }
 
 export const authenticateWithBiometric = async (
-  callbacks?: BiometricAuthCallbacks
+  callbacks?: BiometricAuthCallbacks,
 ): Promise<{
   success: boolean;
   error?: string;

@@ -7,11 +7,7 @@ import BaseModal from '@/shared/components/BaseModal';
 import CachedImage from '@/shared/components/CachedImage';
 import HistoryModal from '@/shared/components/HistoryModal';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
-import {
-  useBookings,
-  useCoreMutations,
-  useTenantsById,
-} from '@/shared/hooks/useStore';
+import { useBookings, useCoreMutations, useTenantsById } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { properCase } from '@/shared/utils/helper';
 

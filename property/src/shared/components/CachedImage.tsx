@@ -1,7 +1,8 @@
 import { fetch } from 'expo/fetch';
 import { Directory, File, Paths } from 'expo-file-system';
 import Storage from 'expo-sqlite/kv-store';
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import type React from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Image,
   type ImageProps,
@@ -64,7 +65,8 @@ export const subscribeUploads = (cb: () => void) => {
   };
 };
 
-export const getPendingUploadsByUrl = (): Record<string, PendingUpload> => pendingUploadsByUrl;
+export const getPendingUploadsByUrl = (): Record<string, PendingUpload> =>
+  pendingUploadsByUrl;
 
 let isProcessing = false;
 let imagesDirCache: any = null;

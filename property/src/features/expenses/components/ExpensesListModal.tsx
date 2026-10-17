@@ -23,7 +23,12 @@ import EmptyState from '@/shared/components/EmptyState';
 import FilterButtons from '@/shared/components/FilterButtons';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCurrency } from '@/shared/hooks/useCurrency';
-import { useCoreMutations, useExpenses, useMaintenanceRequests, useStoreRefresh } from '@/shared/hooks/useStore';
+import {
+  useCoreMutations,
+  useExpenses,
+  useMaintenanceRequests,
+  useStoreRefresh,
+} from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatWithCurrency } from '@/shared/utils/formatters';
 import ExpenseDetailsModal from './ExpenseDetailsModal';

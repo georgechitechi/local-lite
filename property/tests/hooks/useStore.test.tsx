@@ -24,10 +24,10 @@ import {
   useProperties,
   usePropertiesById,
   useReceipts,
-  useReceiptsWithLoading,
   useReceiptsByContractId,
   useReceiptsById,
   useReceiptsByTenantId,
+  useReceiptsWithLoading,
   useReminderLogs,
   useSettings,
   useStoreRefresh,
@@ -84,21 +84,29 @@ describe('useStore hooks', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth = { user: { id: 'user-1', email: 'test@example.com' }, loading: false };
-    mockData.businesses = [{ id: 'biz-1', name: 'Business 1', user_id: 'user-1', deleted: false }];
+    mockData.businesses = [
+      { id: 'biz-1', name: 'Business 1', user_id: 'user-1', deleted: false },
+    ];
     mockData.business_shares = [];
     mockData.tenants = [];
     mockData.properties = [{ id: 'prop-1', business_id: 'biz-1' }];
-
   });
 
   it('useBusinesses filters out deleted items', async () => {
     const { result } = await renderHook(() => useBusinesses());
-    expect(result.current).toEqual([{ id: 'biz-1', name: 'Business 1', user_id: 'user-1', deleted: false }]);
+    expect(result.current).toEqual([
+      { id: 'biz-1', name: 'Business 1', user_id: 'user-1', deleted: false },
+    ]);
   });
 
   it('useBusiness retrieves a specific business', async () => {
     const { result } = await renderHook(() => useBusiness('biz-1'));
-    expect(result.current).toEqual({ id: 'biz-1', name: 'Business 1', user_id: 'user-1', deleted: false });
+    expect(result.current).toEqual({
+      id: 'biz-1',
+      name: 'Business 1',
+      user_id: 'user-1',
+      deleted: false,
+    });
   });
 
   it('useBusiness returns undefined for missing or deleted business', async () => {
@@ -124,14 +132,16 @@ describe('useStore hooks', () => {
     expect(result.current).toEqual([{ id: 'user-1', email: 'test@example.com' }]);
   });
 
-
   it('re-scopes mounted pages immediately when a business is selected or switched', async () => {
     mockData.properties = [
-      { id: 'a', business_id: 'biz-1' }, { id: 'b', business_id: 'biz-2' },
-      { id: 'orphan' }, { id: 'deleted', business_id: 'biz-1', deleted: 'true' },
+      { id: 'a', business_id: 'biz-1' },
+      { id: 'b', business_id: 'biz-2' },
+      { id: 'orphan' },
+      { id: 'deleted', business_id: 'biz-1', deleted: 'true' },
     ];
     const { result, rerender } = await renderHook(
-      ({ id }: { id?: string }) => useProperties(id), { initialProps: { id: undefined } },
+      ({ id }: { id?: string }) => useProperties(id),
+      { initialProps: { id: undefined } },
     );
     expect(result.current).toEqual([]);
     await rerender({ id: 'biz-1' });
@@ -144,17 +154,35 @@ describe('useStore hooks', () => {
 
   it('restricts businesses to the current owner, active shares, and tenant membership', async () => {
     mockData.businesses = [
-      { id: 'owned', user_id: 'user-1' }, { id: 'shared', user_id: 'other' },
-      { id: 'rented', user_id: 'other' }, { id: 'private', user_id: 'other' },
-      { id: 'invited', user_id: 'other' }, { id: 'offline', user_id: 'offline' },
+      { id: 'owned', user_id: 'user-1' },
+      { id: 'shared', user_id: 'other' },
+      { id: 'rented', user_id: 'other' },
+      { id: 'private', user_id: 'other' },
+      { id: 'invited', user_id: 'other' },
+      { id: 'offline', user_id: 'offline' },
     ];
     mockData.business_shares = [
-      { id: 's', business_id: 'shared', shared_with: ' TEST@example.com ', status: 'active' },
-      { id: 'p', business_id: 'invited', shared_with: 'test@example.com', status: 'pending' },
+      {
+        id: 's',
+        business_id: 'shared',
+        shared_with: ' TEST@example.com ',
+        status: 'active',
+      },
+      {
+        id: 'p',
+        business_id: 'invited',
+        shared_with: 'test@example.com',
+        status: 'pending',
+      },
     ];
     mockData.tenants = [{ id: 't', business_id: 'rented', email: 'test@example.com' }];
     const { result, rerender } = await renderHook(() => useBusinesses());
-    expect(result.current.map(b => b.id)).toEqual(['owned', 'shared', 'rented', 'offline']);
+    expect(result.current.map(b => b.id)).toEqual([
+      'owned',
+      'shared',
+      'rented',
+      'offline',
+    ]);
     mockAuth = { user: { id: 'offline' }, loading: false };
     await rerender({});
     expect(result.current.map(b => b.id)).toEqual(['offline']);
@@ -166,8 +194,14 @@ describe('useStore hooks', () => {
   describe('Collection hooks', () => {
     const collectionHooks = [
       { hook: useBusinessShares, expected: [] },
-      { hook: () => useProperties('biz-1'), expected: [{ id: 'prop-1', business_id: 'biz-1' }] },
-      { hook: () => useHouses('biz-1'), expected: [{ id: 'house-1', business_id: 'biz-1' }] },
+      {
+        hook: () => useProperties('biz-1'),
+        expected: [{ id: 'prop-1', business_id: 'biz-1' }],
+      },
+      {
+        hook: () => useHouses('biz-1'),
+        expected: [{ id: 'house-1', business_id: 'biz-1' }],
+      },
       { hook: () => useTenants('biz-1'), expected: [] },
       { hook: () => useContracts('biz-1'), expected: [] },
       { hook: () => useReceipts('biz-1'), expected: [] },
@@ -222,7 +256,9 @@ describe('useStore hooks', () => {
         mockData.receipts = [{ id: 'rcpt-1', business_id: 'biz-1', amount: 100 }];
         const { result } = await renderHook(() => useReceiptsWithLoading('biz-1'));
         expect(result.current.loading).toBe(false);
-        expect(result.current.data).toEqual([{ id: 'rcpt-1', business_id: 'biz-1', amount: 100 }]);
+        expect(result.current.data).toEqual([
+          { id: 'rcpt-1', business_id: 'biz-1', amount: 100 },
+        ]);
       });
     });
   });

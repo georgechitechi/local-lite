@@ -171,7 +171,9 @@ export default function BusinessView() {
           if (active && data && !data.deleted) {
             setDirectBusiness(data);
             if (client) {
-              await client.insert('businesses', data, { skipOutbox: true }).catch(() => {});
+              await client
+                .insert('businesses', data, { skipOutbox: true })
+                .catch(() => {});
             }
           }
         }
@@ -993,8 +995,15 @@ export default function BusinessView() {
       ) : (
         <Card style={styles.card}>
           <Card.Content style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <IconButton icon="office-building-marker-outline" size={48} iconColor={colors.onSurfaceVariant} />
-            <Text variant="titleMedium" style={{ color: colors.onSurface, marginTop: 8, fontWeight: 'bold' }}>
+            <IconButton
+              icon="office-building-marker-outline"
+              size={48}
+              iconColor={colors.onSurfaceVariant}
+            />
+            <Text
+              variant="titleMedium"
+              style={{ color: colors.onSurface, marginTop: 8, fontWeight: 'bold' }}
+            >
               Business Not Found
             </Text>
             <Text
@@ -1006,7 +1015,8 @@ export default function BusinessView() {
                 marginBottom: 20,
               }}
             >
-              The business you are looking for may have been removed or you do not have permission to view it.
+              The business you are looking for may have been removed or you do not have
+              permission to view it.
             </Text>
             <Button mode="contained" onPress={() => router.back()} icon="arrow-left">
               Go Back

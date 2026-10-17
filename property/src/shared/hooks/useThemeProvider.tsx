@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useColorScheme } from 'react-native';
 import type { CustomTheme, ThemeColors, ThemeMode } from '@/stores/themeStore';
 import {
@@ -33,7 +41,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
 
   useEffect(() => {
     let mounted = true;
-    loadStoredThemeMode().then((storedMode) => {
+    loadStoredThemeMode().then(storedMode => {
       if (mounted) {
         setThemeModeState(storedMode);
         setIsLoading(false);
@@ -56,10 +64,11 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   const setThemeMode = useCallback(
     (mode: ThemeMode) => {
       setThemeModeState(mode);
-      const computedIsDark = mode === 'auto' ? systemColorScheme === 'dark' : mode === 'dark';
+      const computedIsDark =
+        mode === 'auto' ? systemColorScheme === 'dark' : mode === 'dark';
       persistThemeMode(mode, computedIsDark);
     },
-    [systemColorScheme]
+    [systemColorScheme],
   );
 
   const setDarkMode = useCallback(
@@ -67,7 +76,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
       const mode: ThemeMode = isDark ? 'dark' : 'light';
       setThemeMode(mode);
     },
-    [setThemeMode]
+    [setThemeMode],
   );
 
   const toggleDarkMode = useCallback(() => {
@@ -85,7 +94,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
       colors: theme.colors,
       isLoading,
     }),
-    [isDarkMode, themeMode, setThemeMode, toggleDarkMode, setDarkMode, theme, isLoading]
+    [isDarkMode, themeMode, setThemeMode, toggleDarkMode, setDarkMode, theme, isLoading],
   );
 
   return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;

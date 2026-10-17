@@ -138,7 +138,6 @@ export default function PaymentMessagesListModal({
 
   // Joined data for View Details
   const handleUnlinkMessage = async (message: StorePaymentMessage): Promise<void> => {
-
     const messageReceiptIds = paymentMessageReceipts.filter(
       pmr => pmr.payment_message_id === message.id,
     );

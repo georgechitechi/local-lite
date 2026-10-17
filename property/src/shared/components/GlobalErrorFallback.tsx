@@ -1,9 +1,8 @@
+import Storage from 'expo-sqlite/kv-store';
 import type { FallbackProps } from 'react-error-boundary';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import Storage from 'expo-sqlite/kv-store';
-import { safeReloadApp } from '@/shared/utils/safeReload';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
-
+import { safeReloadApp } from '@/shared/utils/safeReload';
 
 export const GlobalErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
   const { colors } = useTheme();

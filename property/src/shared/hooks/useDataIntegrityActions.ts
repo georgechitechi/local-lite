@@ -445,10 +445,7 @@ export function useDataIntegrityActions({
           const houseId = item?.house?.id || item?.id;
           if (!houseId) return;
           const existing = item?.house || item;
-          const currentMeta = safeParseJSON<Record<string, any>>(
-            existing?.metadata,
-            {},
-          );
+          const currentMeta = safeParseJSON<Record<string, any>>(existing?.metadata, {});
           const updatedMeta = { ...currentMeta, ignore_occupied_before_built: true };
           mutations.push({
             tableName: 'houses',
@@ -567,10 +564,7 @@ export function useDataIntegrityActions({
 
         items.forEach((item: any) => {
           const existing = item;
-          const currentMeta = safeParseJSON<Record<string, any>>(
-            existing?.metadata,
-            {},
-          );
+          const currentMeta = safeParseJSON<Record<string, any>>(existing?.metadata, {});
           const updatedMeta = { ...currentMeta, ignore_date_mismatch: true };
           mutations.push({
             tableName: 'receipts',
