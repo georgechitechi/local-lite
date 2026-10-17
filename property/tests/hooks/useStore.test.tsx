@@ -24,6 +24,7 @@ import {
   useProperties,
   usePropertiesById,
   useReceipts,
+  useReceiptsWithLoading,
   useReceiptsByContractId,
   useReceiptsById,
   useReceiptsByTenantId,
@@ -215,6 +216,13 @@ describe('useStore hooks', () => {
         expect(current.get('test-id')).toBeUndefined();
         expect(current.has('test-id')).toBe(false);
         expect(Array.isArray(current.values())).toBe(true);
+      });
+
+      it('useReceiptsWithLoading returns scoped data and loading status', async () => {
+        mockData.receipts = [{ id: 'rcpt-1', business_id: 'biz-1', amount: 100 }];
+        const { result } = await renderHook(() => useReceiptsWithLoading('biz-1'));
+        expect(result.current.loading).toBe(false);
+        expect(result.current.data).toEqual([{ id: 'rcpt-1', business_id: 'biz-1', amount: 100 }]);
       });
     });
   });

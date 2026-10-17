@@ -33,6 +33,7 @@ import {
   useTenants,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
+import type { PaymentMessage, Contract as StoreContract } from '@/shared/types/types';
 import {
   formatDateForDB,
   formatWithCurrency,
@@ -42,7 +43,6 @@ import {
 } from '@/shared/utils/formatters';
 import { generateUUID } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
-import type { PaymentMessage, Contract as StoreContract } from '@/shared/types/types';
 
 interface ExtendedContract extends StoreContract {
   tenant?: {

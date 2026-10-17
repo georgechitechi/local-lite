@@ -43,18 +43,21 @@ export {
 // Core Table Live Queries (Powered directly by local-lite SQLite)
 // ---------------------------------------------------------------------------
 
-function useCoreTable<
+export interface CoreTableResult<T> {
+  data: T[];
+  loading: boolean;
+}
+
+export function useCoreTableWithLoading<
   T extends {
     id: string;
     deleted?: boolean | number | null;
     business_id?: string | null;
   },
->(tableName: CoreTableName, businessId?: string): T[] {
+>(tableName: CoreTableName, businessId?: string): CoreTableResult<T> {
   const client = useLocalClient();
-  // local-lite 0.0.3 does not refetch when query options change. Subscribe to
-  // table rows once and derive the current scope synchronously on every switch.
-  const { data } = useLiveQuery<T>(client, tableName);
-  return useMemo(() => {
+  const { data, loading } = useLiveQuery<T>(client, tableName);
+  const filtered = useMemo(() => {
     const scoped = (BUSINESS_COLLECTIONS as readonly string[]).includes(tableName);
     const targetId = normalizeIdentity(businessId);
     if (!client || (scoped && !targetId)) return EMPTY_ARRAY as T[];
@@ -62,55 +65,103 @@ function useCoreTable<
       !scoped || normalizeIdentity(row.business_id) === targetId
     ));
   }, [client, data, tableName, businessId]);
+
+  return {
+    data: filtered,
+    loading: !client || loading,
+  };
 }
+
+function useCoreTable<
+  T extends {
+    id: string;
+    deleted?: boolean | number | null;
+    business_id?: string | null;
+  },
+>(tableName: CoreTableName, businessId?: string): T[] {
+  return useCoreTableWithLoading<T>(tableName, businessId).data;
+}
+
 
 export const useProperties = (businessId?: string) =>
   useCoreTable<Property>('properties', businessId);
+export const usePropertiesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Property>('properties', businessId);
 
 export const useHouses = (businessId?: string) =>
   useCoreTable<House>('houses', businessId);
+export const useHousesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<House>('houses', businessId);
 
 export const useTenants = (businessId?: string) =>
   useCoreTable<Tenant>('tenants', businessId);
+export const useTenantsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Tenant>('tenants', businessId);
 
 export const useContracts = (businessId?: string) =>
   useCoreTable<Contract>('contracts', businessId);
+export const useContractsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Contract>('contracts', businessId);
 
 export const useReceipts = (businessId?: string) =>
   useCoreTable<Receipt>('receipts', businessId);
+export const useReceiptsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Receipt>('receipts', businessId);
 
 export const useExpenses = (businessId?: string) =>
   useCoreTable<Expense>('expenses', businessId);
+export const useExpensesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Expense>('expenses', businessId);
 
 export const useSettings = (businessId?: string) =>
   useCoreTable<Setting>('settings', businessId);
+export const useSettingsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Setting>('settings', businessId);
 
 export const useMaintenanceRequests = (businessId?: string) =>
   useCoreTable<MaintenanceRequest>('maintenance_requests', businessId);
+export const useMaintenanceRequestsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<MaintenanceRequest>('maintenance_requests', businessId);
 
 export const usePaymentMessages = (businessId?: string) =>
   useCoreTable<PaymentMessage>('payment_messages', businessId);
+export const usePaymentMessagesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<PaymentMessage>('payment_messages', businessId);
 
 export const usePaymentMessageReceipts = (businessId?: string) =>
   useCoreTable<PaymentMessageReceipt>('payment_message_receipts', businessId);
+export const usePaymentMessageReceiptsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<PaymentMessageReceipt>('payment_message_receipts', businessId);
 
 export const useBookings = (businessId?: string) =>
   useCoreTable<Booking>('bookings', businessId);
+export const useBookingsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Booking>('bookings', businessId);
 
 export const usePromotions = (businessId?: string) =>
   useCoreTable<Promotion>('promotions', businessId);
+export const usePromotionsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Promotion>('promotions', businessId);
 
 export const useMessageTemplates = (businessId?: string) =>
   useCoreTable<MessageTemplate>('message_templates', businessId);
+export const useMessageTemplatesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<MessageTemplate>('message_templates', businessId);
 
 export const useSchedules = (businessId?: string) =>
   useCoreTable<Schedule>('schedules', businessId);
+export const useSchedulesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Schedule>('schedules', businessId);
 
 export const useReminderLogs = (businessId?: string) =>
   useCoreTable<ReminderLog>('reminder_logs', businessId);
+export const useReminderLogsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<ReminderLog>('reminder_logs', businessId);
 
 export const useReceiptRefunds = (businessId?: string) =>
   useCoreTable<ReceiptRefund>('receipt_refunds', businessId);
+export const useReceiptRefundsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<ReceiptRefund>('receipt_refunds', businessId);
 
 export const useBackupLogs = (businessId?: string) =>
   useCoreTable<BackupLog>('backup_logs', businessId);
@@ -123,6 +174,8 @@ export const useGalleryImages = (businessId?: string) =>
 
 export const useTransactions = (businessId?: string) =>
   useCoreTable<Transaction>('transactions', businessId);
+export const useTransactionsWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Transaction>('transactions', businessId);
 
 // ---------------------------------------------------------------------------
 // Top-level (non-business) selectors

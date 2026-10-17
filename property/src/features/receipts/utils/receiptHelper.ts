@@ -1,4 +1,8 @@
-import { type Currency, formatWithCurrency } from '@/shared/utils/formatters';
+import {
+  type Currency,
+  formatWithCurrency,
+  parsePeriod,
+} from '@/shared/utils/formatters';
 import { calculateEffectiveRent, parseMetadata } from '@/shared/utils/helper';
 import type { ThemeColors } from '@/stores/themeStore';
 
@@ -80,9 +84,9 @@ export function resolveReceiptWaiverAndRent(options: {
   if (contract) {
     const metadata = parseMetadata(contract.metadata);
     const breaks = metadata.breaks || [];
-    const period = receipt.payment_period;
+    const period = parsePeriod(receipt.payment_period);
 
-    if (period?.month && period?.year) {
+    if (period.month > 0 && period.year > 0) {
       const calculated = calculateEffectiveRent(
         contractRent,
         period.month,
@@ -105,19 +109,17 @@ export function resolveReceiptWaiverAndRent(options: {
 
     // If full contract amount is paid, do not show Partial Waiver Applied
     if (contractRent > 0 && waiverType === 'partial') {
-      const period = receipt.payment_period;
+      const period = parsePeriod(receipt.payment_period);
       let totalPaidForPeriod = totalAmount;
 
-      if (period?.month && period?.year && receipt.contract_id && rawReceipts) {
+      if (period.month > 0 && period.year > 0 && receipt.contract_id && rawReceipts) {
         totalPaidForPeriod = rawReceipts
-          .filter(
-            r =>
-              r.contract_id === receipt.contract_id &&
-              (r.payment_period as any)?.month === period.month &&
-              (r.payment_period as any)?.year === period.year &&
-              !r.deleted &&
-              !r.is_refunded,
-          )
+          .filter(r => {
+            if (r.contract_id !== receipt.contract_id || r.deleted || r.is_refunded)
+              return false;
+            const rPeriod = parsePeriod(r.payment_period);
+            return rPeriod.month === period.month && rPeriod.year === period.year;
+          })
           .reduce(
             (sum, r) =>
               sum +

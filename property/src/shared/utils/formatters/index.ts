@@ -175,20 +175,34 @@ export const formatDateRange = (
   return fallback;
 };
 
-export const parsePeriod = (period: any) => {
+export const parsePeriod = (period: any): { month: number; year: number } => {
   if (!period) return { month: 0, year: 0 };
+  let obj = period;
   if (typeof period === 'string') {
     try {
-      return JSON.parse(period);
+      obj = JSON.parse(period);
     } catch {
+      const date = new Date(period);
+      if (!isNaN(date.getTime())) {
+        return { month: date.getMonth() + 1, year: date.getFullYear() };
+      }
       return { month: 0, year: 0 };
     }
   }
-  return period;
+
+  const month = Number(obj?.month ?? obj?.Month);
+  const year = Number(obj?.year ?? obj?.Year);
+
+  if (!isNaN(month) && !isNaN(year) && month >= 1 && month <= 12 && year > 0) {
+    return { month, year };
+  }
+
+  return { month: 0, year: 0 };
 };
 
-export const formatPeriod = (period: Period | null | undefined): string => {
-  if (!period?.month || !period.year) return 'No period set';
+export const formatPeriod = (period: Period | string | null | undefined): string => {
+  const parsed = parsePeriod(period);
+  if (!parsed?.month || !parsed.year) return 'No period set';
 
   const months = [
     'Jan',
@@ -205,7 +219,7 @@ export const formatPeriod = (period: Period | null | undefined): string => {
     'Dec',
   ];
 
-  return `${months[period.month - 1]} ${period.year}`;
+  return `${months[parsed.month - 1]} ${parsed.year}`;
 };
 
 export const MONTHS: MonthOption[] = [

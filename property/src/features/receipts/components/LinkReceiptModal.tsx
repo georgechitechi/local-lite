@@ -15,10 +15,10 @@ import {
   useTenants,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
+import type { PaymentMessage } from '@/shared/types/types';
 import { formatDate } from '@/shared/utils/formatters';
 import { addOpacity } from '@/shared/utils/helper';
 import { extractMessageMetadata } from '@/shared/utils/parsers';
-import type { PaymentMessage } from '@/shared/types/types';
 
 interface LinkReceiptModalProps {
   visible: boolean;

@@ -24,7 +24,6 @@ import {
   formatRefundText,
   getPaymentTypeStyle,
   getReceiptStatusStyle,
-  type PaymentPeriod,
   resolveReceiptWaiverAndRent,
 } from '@/features/receipts/utils/receiptHelper';
 import { useAuth } from '@/providers/AuthProvider';
@@ -47,14 +46,15 @@ import {
   useTenantsById,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
+import type { PaymentMessage as StorePaymentMessage } from '@/shared/types/types';
 import {
   defaultCurrencies,
   formatDate,
   formatPeriod,
   formatWithCurrency,
+  parsePeriod,
 } from '@/shared/utils/formatters';
 import { addOpacity, generateUUID, maskPhoneNumber } from '@/shared/utils/helper';
-import type { PaymentMessage as StorePaymentMessage } from '@/shared/types/types';
 import { generateAndShareRefundVoucher } from '@/templates/refundVoucherTemplate';
 
 export default function ViewReceiptScreen() {
@@ -123,7 +123,17 @@ export default function ViewReceiptScreen() {
       amount: Number(r.amount),
       target_rent: targetRent,
       refunded_amount: Number(r.refunded_amount || 0),
-      payment_period: r.payment_period as unknown as PaymentPeriod,
+      payment_period: (() => {
+        const parsed = parsePeriod(r.payment_period);
+        return parsed.month > 0 && parsed.year > 0
+          ? parsed
+          : r.payment_date
+            ? {
+                month: new Date(r.payment_date).getMonth() + 1,
+                year: new Date(r.payment_date).getFullYear(),
+              }
+            : { month: 0, year: 0 };
+      })(),
       contract: contract
         ? {
             ...contract,
@@ -536,10 +546,9 @@ export default function ViewReceiptScreen() {
                 </Text>
               </View>
               <Text variant="bodyMedium" style={styles.infoValue}>
-                {formatPeriod({
-                  month: receipt.payment_period.month,
-                  year: receipt.payment_period.year,
-                })}
+                {receipt.payment_period && receipt.payment_period.month > 0
+                  ? formatPeriod(receipt.payment_period)
+                  : 'N/A'}
               </Text>
             </View>
 

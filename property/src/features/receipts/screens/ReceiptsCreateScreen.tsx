@@ -48,6 +48,10 @@ import {
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendReceiptEmail } from '@/shared/services/emailService';
 import { sendNotification } from '@/shared/services/notifications';
+import type {
+  Contract as StoreContract,
+  PaymentMessage as StorePaymentMessage,
+} from '@/shared/types/types';
 import {
   formatDateForDB,
   formatWithCurrency,
@@ -63,10 +67,6 @@ import { formatImportedNote } from '@/shared/utils/messageFormatter';
 import { extractMessageMetadata } from '@/shared/utils/parsers';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 import { validateFields, validations } from '@/shared/utils/validations';
-import type {
-  Contract as StoreContract,
-  PaymentMessage as StorePaymentMessage,
-} from '@/shared/types/types';
 import { generateReceiptHTML } from '@/templates/receiptTemplate';
 
 interface ReceiptForm {
@@ -188,9 +188,9 @@ export default function CreateReceiptScreen() {
             : undefined,
           house: house
             ? {
-              house_number: house.house_number,
-              property: property ? { name: property.name } : undefined,
-            }
+                house_number: house.house_number,
+                property: property ? { name: property.name } : undefined,
+              }
             : undefined,
         } as ExtendedContract;
       });
@@ -355,7 +355,7 @@ export default function CreateReceiptScreen() {
       form.type === 'others'
         ? 'paid'
         : (effectiveRentAmount > 0 || isRentWaived) &&
-          amount >= effectiveRentAmount - 0.01
+            amount >= effectiveRentAmount - 0.01
           ? 'paid'
           : 'partial';
     setForm(prev => ({ ...prev, amount: text, status }));
@@ -553,7 +553,7 @@ export default function CreateReceiptScreen() {
         'Payment Received',
         `A payment of ${form.amount} has been successfully recorded.`,
         { type: 'payment', paymentId: receiptId },
-      ).catch(() => { });
+      ).catch(() => {});
 
       // Link payment messages
       if (selectedBankMessages.length > 0) {
