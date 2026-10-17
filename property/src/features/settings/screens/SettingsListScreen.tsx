@@ -34,6 +34,7 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
+import BenchmarkModal from '@/features/settings/components/BenchmarkModal';
 import BusinessSelectModal from '@/features/settings/components/BusinessSelectModal';
 import DashboardCustomizationModal from '@/features/settings/components/DashboardCustomizationModal';
 import HelpModal from '@/features/settings/components/HelpModal';
@@ -224,6 +225,7 @@ export default function SettingsManager() {
   } = useSettingsModals();
 
   const [showSqliteInspector, setShowSqliteInspector] = useState(false);
+  const [showBenchmarkModal, setShowBenchmarkModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncCompleted, setSyncCompleted] = useState(false);
@@ -1140,6 +1142,14 @@ export default function SettingsManager() {
             right={props => <IconButton {...props} icon="chevron-right" />}
             onPress={() => setShowHelpModal(true)}
           />
+
+          <List.Item
+            title="Performance Benchmark"
+            description="Test SQLite read/write throughput, storage speed, and latency"
+            left={props => <List.Icon {...props} icon="speedometer" />}
+            right={props => <IconButton {...props} icon="chevron-right" />}
+            onPress={() => setShowBenchmarkModal(true)}
+          />
         </List.Section>
       </ScrollView>
       {renderModal()}
@@ -1179,6 +1189,11 @@ export default function SettingsManager() {
       <SqliteInspectorModal
         visible={showSqliteInspector}
         onDismiss={() => setShowSqliteInspector(false)}
+      />
+      {/* Benchmark Modal */}
+      <BenchmarkModal
+        visible={showBenchmarkModal}
+        onDismiss={() => setShowBenchmarkModal(false)}
       />
       <Portal>
         {/* Links Modal */}
