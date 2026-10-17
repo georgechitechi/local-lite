@@ -203,7 +203,7 @@ export function SyncInspector({
   // Web / DOM renderer fallback
   const isTop = position.startsWith('top') || position === 'top';
   const isLeft = position.includes('left');
-  const isCenter = position.includes('center') || position === 'top' || position === 'bottom';
+  const isCenter = position === 'top' || position === 'bottom';
   return (
     <div
       style={{
