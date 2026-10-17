@@ -11,7 +11,15 @@ try {
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
-  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'top' | 'bottom';
+  position?:
+    | 'bottom-right'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'top-right'
+    | 'top-left'
+    | 'top-center'
+    | 'top'
+    | 'bottom';
   initialOpen?: boolean;
   fullWidth?: boolean;
 }
@@ -96,6 +104,7 @@ export function SyncInspector({
 
     const isTop = position.startsWith('top') || position === 'top';
     const isLeft = position.includes('left');
+    const isCenter = position.includes('center') || position === 'top' || position === 'bottom';
 
     const containerPosStyle = {
       left: 12,
@@ -106,7 +115,15 @@ export function SyncInspector({
     return (
       <View style={[rnStyles.container, containerPosStyle]} pointerEvents="box-none">
         {isOpen ? (
-          <View style={rnStyles.panel}>
+          <View
+            style={[
+              rnStyles.panel,
+              {
+                alignSelf: isCenter ? 'center' : isLeft ? 'flex-start' : 'flex-end',
+                maxWidth: isFullWidth ? '100%' : 480,
+              },
+            ]}
+          >
             <View style={rnStyles.panelHeader}>
               <View style={rnStyles.row}>
                 <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
@@ -173,13 +190,13 @@ export function SyncInspector({
               rnStyles.pill,
               {
                 borderColor: statusColor,
-                alignSelf: isLeft ? 'flex-start' : 'flex-end',
+                alignSelf: isCenter ? 'center' : isLeft ? 'flex-start' : 'flex-end',
               },
             ]}
             activeOpacity={0.8}
           >
             <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
-            <Text style={rnStyles.pillText}>local-lite</Text>
+            <Text style={rnStyles.pillText}>Local-Lite</Text>
             {status.pendingCount > 0 && (
               <View style={rnStyles.badge}>
                 <Text style={rnStyles.badgeText}>{status.pendingCount}</Text>
@@ -194,6 +211,7 @@ export function SyncInspector({
   // Web / DOM renderer fallback
   const isTop = position.startsWith('top') || position === 'top';
   const isLeft = position.includes('left');
+  const isCenter = position.includes('center') || position === 'top' || position === 'bottom';
   return (
     <div
       style={{
@@ -208,13 +226,13 @@ export function SyncInspector({
         pointerEvents: 'none',
         display: 'flex',
         flexDirection: isTop ? 'column' : 'column-reverse',
-        alignItems: isLeft ? 'flex-start' : 'flex-end',
+        alignItems: isCenter ? 'center' : isLeft ? 'flex-start' : 'flex-end',
       }}
     >
       {isOpen ? (
         <div
           style={{
-            width: '100%',
+            width: isFullWidth ? '100%' : 'min(480px, 100%)',
             background: '#1F2937',
             color: '#F9FAFB',
             borderRadius: 12,

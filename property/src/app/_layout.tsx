@@ -8,7 +8,6 @@ import { Linking, LogBox, Platform, Text, TouchableOpacity, View } from 'react-n
 import 'react-native-get-random-values';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-url-polyfill/auto';
-import { SyncInspector } from 'local-lite/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { PaperProvider, Portal } from 'react-native-paper';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +16,7 @@ import { SnackbarProvider } from '@/context/SnackbarContext';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { BiometricAuthProvider } from '@/providers/BiometricAuthProvider';
 import { LockScreenProvider, useIdleLock } from '@/providers/LockScreenProvider';
-import { SyncClientProvider, useLocalClient } from '@/providers/SyncClientProvider';
+import { SyncClientProvider } from '@/providers/SyncClientProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
 import DeletionBlocker from '@/shared/components/DeletionBlocker';
 import DemoModeBanner from '@/shared/components/DemoModeBanner';
@@ -29,6 +28,8 @@ import { UpdatePrompt } from '@/shared/components/UpdatePrompt';
 import { useLocalSync } from '@/shared/hooks/useLocalSync';
 import { ThemeProvider, useTheme } from '@/shared/hooks/useThemeProvider';
 import { useVersionCheck } from '@/shared/hooks/useVersionCheck';
+import { useLocalClient } from '@/providers/SyncClientProvider';
+import { SyncInspector } from 'local-lite/react';
 
 // Ignore React Native deprecation warnings coming from third-party libraries
 LogBox.ignoreLogs([
@@ -104,7 +105,7 @@ function RootLayoutNav() {
       )}
       {isLocked && <LockScreen />}
       <UpdatePrompt visible={showPrompt} onUpdate={onUpdate} onDismiss={onDismiss} />
-      {__DEV__ && <SyncInspector client={client} position="top-right" />}
+      {__DEV__ && <SyncInspector client={client} position="top" />}
     </Portal.Host>
   );
 }
