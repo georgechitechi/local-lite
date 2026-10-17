@@ -17,7 +17,7 @@ try {
 
 export interface BuiltinBenchmarkResult {
   name: string;
-  category: 'Local-Lite Client' | 'ACID / Transactions' | 'Outbox / Sync' | 'Memory / JSON' | 'SQLite' | 'Storage';
+  category: 'Local-Lite Client' | 'ACID / Transactions' | 'Outbox / Sync' | 'Memory / JSON';
   description: string;
   operations: number;
   durationMs: number;
