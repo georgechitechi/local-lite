@@ -20,20 +20,48 @@ async function openPropertyDatabase() {
 }
 
 /**
- * Columns automatically serialized to JSON strings on disk and parsed into objects in memory.
+ * Additional non-metadata JSON columns per table.
  */
-const JSON_COLUMNS: Partial<Record<CoreTableName, string[]>> = {
-  tenants: ['next_of_kin'],
-  contracts: ['period', 'terms'],
-  receipts: ['meta', 'period'],
+const EXTRA_JSON_COLUMNS: Partial<Record<CoreTableName, string[]>> = {
+  api_keys: ['scopes'],
+  backup_logs: ['error_details'],
+  bookings: ['documents', 'next_of_kin', 'payment_details'],
+  houses: ['amenities'],
+  receipts: ['payment_period'],
+  schedules: ['emails', 'schedule'],
   settings: ['setting_value'],
-  bookings: ['next_of_kin', 'documents', 'metadata'],
-  business_shares: ['roles'],
-  payment_messages: ['metadata'],
-  houses: ['metadata'],
-  properties: ['metadata'],
-  api_keys: ['metadata', 'scopes'],
+  tenants: ['next_of_kin'],
+  transactions: ['raw_payload'],
 };
+
+/**
+ * Tables that do not contain a 'metadata' JSON column in Supabase schema.
+ */
+const TABLES_WITHOUT_METADATA = new Set<CoreTableName>([
+  'payment_message_receipts',
+  'backup_logs',
+  'gallery_images',
+  'transactions',
+]);
+
+/**
+ * Automatically builds the JSON columns map:
+ * - Every table that has a `metadata` column automatically includes 'metadata'.
+ * - Any table with extra JSON columns merges them in.
+ */
+const JSON_COLUMNS: Partial<Record<CoreTableName, string[]>> = Object.fromEntries(
+  CORE_TABLES.map(table => {
+    const cols: string[] = [];
+    if (!TABLES_WITHOUT_METADATA.has(table)) {
+      cols.push('metadata');
+    }
+    const extra = EXTRA_JSON_COLUMNS[table];
+    if (extra) {
+      cols.push(...extra);
+    }
+    return [table, cols];
+  }).filter(([, cols]) => cols.length > 0),
+);
 
 export const syncConfig = defineSyncConfig({
   database: openPropertyDatabase,
