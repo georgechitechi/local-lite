@@ -104,7 +104,7 @@ function RootLayoutNav() {
       )}
       {isLocked && <LockScreen />}
       <UpdatePrompt visible={showPrompt} onUpdate={onUpdate} onDismiss={onDismiss} />
-      {__DEV__ && <SyncInspector client={client} position="top" />}
+      {__DEV__ && <SyncInspector client={client} position="top" enableBenchmark={true} />}
     </Portal.Host>
   );
 }

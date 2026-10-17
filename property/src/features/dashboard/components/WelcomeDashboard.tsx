@@ -2,7 +2,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, TouchableOpacity, View } from 'react-native';
-import { Avatar, Button, IconButton, Surface, Text } from 'react-native-paper';
+import { Avatar, Button, Surface, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import ManageBusinessModal from '@/features/settings/components/ManageBusinessModal';
 import { useAuth } from '@/providers/AuthProvider';
@@ -70,6 +70,18 @@ export const WelcomeDashboard = () => {
   const rawShares = useBusinessShares();
   const { isSyncActive } = useLocalSync();
   const { refreshing, onRefresh } = useStoreRefresh();
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+
+  const handlePullRefresh = async () => {
+    setIsPullRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  };
+
+  const isLoading = refreshing || isPullRefreshing;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [processingShareId, setProcessingShareId] = useState<string | null>(null);
@@ -162,39 +174,47 @@ export const WelcomeDashboard = () => {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: 40 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={isPullRefreshing}
+          onRefresh={handlePullRefresh}
+          colors={[colors.primary]}
+          tintColor={colors.primary}
+          progressBackgroundColor={colors.surface}
+        />
+      }
     >
       {/* Header section */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 24,
-          paddingBottom: 16,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <View style={{ flex: 1, paddingRight: 8 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 4,
+          }}
+        >
           <Text
             variant="headlineMedium"
-            style={{ fontWeight: '700', color: colors.onBackground, marginBottom: 4 }}
+            style={{ fontWeight: '700', color: colors.onBackground }}
           >
             Your Businesses
           </Text>
-          <Text variant="bodyMedium" style={{ color: colors.onSurfaceVariant }}>
-            Choose a business to open and manage, or create a new one.
-          </Text>
+          <Button
+            mode="text"
+            compact
+            icon="refresh"
+            onPress={onRefresh}
+            loading={isLoading}
+            disabled={isLoading}
+            textColor={colors.primary}
+          >
+            Refresh
+          </Button>
         </View>
-        <IconButton
-          icon="refresh"
-          mode="contained-tonal"
-          size={22}
-          onPress={onRefresh}
-          loading={refreshing}
-          disabled={refreshing}
-          accessibilityLabel="Refresh businesses"
-        />
+        <Text variant="bodyMedium" style={{ color: colors.onSurfaceVariant }}>
+          Choose a business to open and manage, or create a new one.
+        </Text>
       </View>
 
       {/* Pending Invites */}
@@ -250,7 +270,7 @@ export const WelcomeDashboard = () => {
                 <Button
                   mode="outlined"
                   onPress={() => handleDeclineShare(invite.id)}
-                  disabled={processingShareId === invite.id}
+                  disabled={processingShareId === invite.id || isLoading}
                   compact
                   textColor={colors.error}
                   style={{ borderColor: colors.error }}
@@ -261,7 +281,7 @@ export const WelcomeDashboard = () => {
                   mode="contained"
                   onPress={() => handleAcceptShare(invite.id)}
                   loading={processingShareId === invite.id}
-                  disabled={processingShareId === invite.id}
+                  disabled={processingShareId === invite.id || isLoading}
                   compact
                   buttonColor={colors.primary}
                 >
@@ -285,6 +305,7 @@ export const WelcomeDashboard = () => {
             <Button
               mode="contained"
               onPress={() => setShowAddModal(true)}
+              disabled={isLoading}
               style={{ width: '100%', marginTop: 8 }}
               icon="plus"
             >
@@ -301,6 +322,7 @@ export const WelcomeDashboard = () => {
                   key={b.id}
                   activeOpacity={0.7}
                   onPress={() => handleSelect(b)}
+                  disabled={isLoading}
                 >
                   <Surface
                     elevation={1}
@@ -312,47 +334,21 @@ export const WelcomeDashboard = () => {
                       borderColor: colors.outlineVariant,
                       flexDirection: 'row',
                       alignItems: 'center',
+                      opacity: isLoading ? 0.6 : 1,
                     }}
                   >
                     <BusinessLogo logoUrl={b.logo_url} size={48} colors={colors} />
                     <View style={{ flex: 1, marginLeft: 14 }}>
-                      <View
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                      <Text
+                        variant="titleMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: colors.onSurface,
+                        }}
+                        numberOfLines={1}
                       >
-                        <Text
-                          variant="titleMedium"
-                          style={{
-                            fontWeight: '700',
-                            color: colors.onSurface,
-                            flexShrink: 1,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {b.name}
-                        </Text>
-                        <View
-                          style={{
-                            backgroundColor: isOwner
-                              ? colors.primaryContainer
-                              : colors.secondaryContainer,
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                            borderRadius: 12,
-                          }}
-                        >
-                          <Text
-                            variant="labelSmall"
-                            style={{
-                              color: isOwner
-                                ? colors.onPrimaryContainer
-                                : colors.onSecondaryContainer,
-                              fontWeight: '600',
-                            }}
-                          >
-                            {role}
-                          </Text>
-                        </View>
-                      </View>
+                        {b.name}
+                      </Text>
                       <Text
                         variant="bodySmall"
                         style={{ color: colors.onSurfaceVariant, marginTop: 2 }}
@@ -361,12 +357,43 @@ export const WelcomeDashboard = () => {
                         {b.address || b.email || b.phone || 'Tap to open workspace'}
                       </Text>
                     </View>
-                    <MaterialCommunityIcons
-                      name="chevron-right"
-                      size={24}
-                      color={colors.onSurfaceVariant}
-                      style={{ marginLeft: 8 }}
-                    />
+                    <View
+                      style={{
+                        alignItems: 'flex-end',
+                        justifyContent: 'space-between',
+                        alignSelf: 'stretch',
+                        marginLeft: 10,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: isOwner
+                            ? colors.primaryContainer
+                            : colors.secondaryContainer,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 12,
+                        }}
+                      >
+                        <Text
+                          variant="labelSmall"
+                          style={{
+                            color: isOwner
+                              ? colors.onPrimaryContainer
+                              : colors.onSecondaryContainer,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {role}
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={20}
+                        color={colors.onSurfaceVariant}
+                      />
+                    </View>
                   </Surface>
                 </TouchableOpacity>
               );
@@ -375,6 +402,7 @@ export const WelcomeDashboard = () => {
             <Button
               mode="outlined"
               onPress={() => setShowAddModal(true)}
+              disabled={isLoading}
               icon="plus"
               style={{
                 marginTop: 6,
@@ -473,6 +501,7 @@ export const WelcomeDashboard = () => {
           <Button
             mode="contained"
             onPress={() => router.push('/settings/cloud-sync')}
+            disabled={isLoading}
             style={{ borderRadius: 8 }}
             buttonColor={colors.primary}
             icon={'cloud-sync'}
