@@ -11,15 +11,7 @@ try {
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
-  position?:
-    | 'bottom-right'
-    | 'bottom-left'
-    | 'bottom-center'
-    | 'top-right'
-    | 'top-left'
-    | 'top-center'
-    | 'top'
-    | 'bottom';
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'top' | 'bottom';
   initialOpen?: boolean;
   fullWidth?: boolean;
 }
@@ -104,7 +96,7 @@ export function SyncInspector({
 
     const isTop = position.startsWith('top') || position === 'top';
     const isLeft = position.includes('left');
-    const isCenter = position.includes('center') || position === 'top' || position === 'bottom';
+    const isCenter = position === 'top' || position === 'bottom';
 
     const containerPosStyle = {
       left: 12,
