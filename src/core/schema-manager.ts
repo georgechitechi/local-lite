@@ -197,6 +197,27 @@ export class SchemaManager {
       }
     }
 
+    // Auto-create high performance composite index for multi-tenant soft-deleted queries
+    if (
+      this.knownColumns.has(`${tableName}:business_id`) &&
+      this.knownColumns.has(`${tableName}:deleted`)
+    ) {
+      const compositeKey = `${tableName}:business_id_deleted`;
+      if (!this.knownIndexes.has(compositeKey)) {
+        this.knownIndexes.add(compositeKey);
+        try {
+          const idxName = escapeIdentifier(`idx_${tableName}_biz_del`);
+          const safeBiz = escapeIdentifier('business_id');
+          const safeDel = escapeIdentifier('deleted');
+          await db.execute(
+            `CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeBiz}, ${safeDel});`
+          );
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
     // Format all values for SQLite storage
     const formatted: Record<string, any> = {};
     for (const key of keys) {

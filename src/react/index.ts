@@ -5,6 +5,65 @@ import { useCoalescedRunner } from './runner.js';
 
 export type LiveQueryFn<T> = (client: LocalFirstClient) => Promise<T[]> | T[];
 
+function areRowsEqual<T>(a: T, b: T): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+
+  const aObj = a as Record<string, any>;
+  const bObj = b as Record<string, any>;
+
+  if (aObj.id !== undefined && bObj.id !== undefined && aObj.id !== bObj.id) {
+    return false;
+  }
+  if (
+    aObj.updated_at !== undefined &&
+    bObj.updated_at !== undefined &&
+    aObj.updated_at !== bObj.updated_at
+  ) {
+    return false;
+  }
+
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+
+  for (let i = 0; i < aKeys.length; i++) {
+    const k = aKeys[i];
+    const aVal = aObj[k];
+    const bVal = bObj[k];
+    if (aVal === bVal) continue;
+
+    if (
+      aVal &&
+      bVal &&
+      typeof aVal === 'object' &&
+      typeof bVal === 'object'
+    ) {
+      if (Array.isArray(aVal) !== Array.isArray(bVal)) return false;
+      if (JSON.stringify(aVal) !== JSON.stringify(bVal)) return false;
+      continue;
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
+function areRowArraysEqual<T>(a: T[] | undefined | null, b: T[] | undefined | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    if (!areRowsEqual(a[i], b[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // In-memory query result cache to eliminate initial render latency and flickering
 const queryCache = new Map<string, any[]>();
 const inFlightQueries = new Map<string, Promise<any[]>>();
@@ -76,14 +135,14 @@ export function useLiveQuery<T = any>(
         });
       }
 
-      const res: T[] = await inFlight;
-      queryCache.set(cacheKey, res || []);
-      setData(res || []);
+      const res: T[] = (await inFlight) || [];
+      queryCache.set(cacheKey, res);
+      setData((prev) => (areRowArraysEqual(prev, res) ? prev : res));
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such column') || msg.includes('no such table')) {
         // Table or columns have not been populated yet on fresh database; default to empty list
-        setData([]);
+        setData((prev) => (prev.length === 0 ? prev : []));
       } else {
         console.error(`Error in useLiveQuery("${tableName}"):`, err);
       }
@@ -148,7 +207,7 @@ export function useLiveRow<T = any>(
       } else {
         queryCache.delete(cacheKey);
       }
-      setData(row);
+      setData((prev) => (areRowsEqual(prev, row) ? prev : row));
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such column') || msg.includes('no such table')) {

@@ -16,6 +16,18 @@ async function openPropertyDatabase() {
     PRAGMA temp_store = MEMORY;
     PRAGMA mmap_size = 268435456;
   `);
+
+  // Ensure composite indexes exist on business tables for zero-latency filtered queries
+  for (const table of BUSINESS_COLLECTIONS) {
+    try {
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS "idx_${table}_biz_del" ON "${table}" ("business_id", "deleted");`,
+      );
+    } catch {
+      // Ignore if table has not been created yet on fresh install
+    }
+  }
+
   return db;
 }
 
