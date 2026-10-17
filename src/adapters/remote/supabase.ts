@@ -23,6 +23,13 @@ export interface SupabaseAdapterOptions {
   updatedAtColumn?: string;
 
   /**
+   * Optional subset of tables to which dynamic `syncScope` filters should apply.
+   * If provided, scope filters (like `business_id`) will only be attached to queries for these tables.
+   * Tables not in this list (e.g. 'businesses', 'profiles') will be fetched without the scope filter.
+   */
+  scopedTables?: string[];
+
+  /**
    * Primary key column name on Postgres tables.
    * Default: 'id'
    */
@@ -91,6 +98,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private clientResolver?: SupabaseClientResolver;
   private activeLiveCallback?: (changes: DeltaChanges) => void;
   private tables: string[];
+  private scopedTables?: string[];
   private updatedAtColumn: string;
   private primaryKey: string;
   private deletedColumn: string;
@@ -126,6 +134,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
     this.clientResolver = client;
     this.tables = options.tables ?? [];
+    this.scopedTables = options.scopedTables;
     this.updatedAtColumn = options.updatedAtColumn ?? 'updated_at';
     this.primaryKey = options.primaryKey ?? 'id';
     this.deletedColumn = options.deletedColumn ?? options.deletedAtColumn ?? 'deleted';
@@ -425,6 +434,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     let maxServerTimestamp = sinceTimestamp;
 
     for (const table of this.tables) {
+      const isTableScoped = !this.scopedTables || this.scopedTables.includes(table);
       try {
         let hasMore = true;
         let currentSinceIso = sinceIso;
@@ -434,7 +444,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             .from(table)
             .select('*');
 
-          if (scope && typeof scope === 'object') {
+          if (isTableScoped && scope && typeof scope === 'object') {
             for (const [col, val] of Object.entries(scope)) {
               if (val !== undefined && val !== null && typeof query.eq === 'function') {
                 query = query.eq(col, val);
@@ -454,7 +464,27 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             query = query.limit(this.fetchLimit);
           }
 
-          const { data, error } = await query;
+          let { data, error } = await query;
+
+          // If PostgreSQL returns 42703 (undefined column) because a scoped column does not exist on this table,
+          // gracefully fallback to querying without the scope filter so synchronization doesn't halt.
+          if (error && (error.code === '42703' || String(error.message || '').includes('does not exist')) && isTableScoped) {
+            this.logger.debug(`[local-lite] Column in scope does not exist on table "${table}". Retrying without scope filter.`);
+            let fallbackQuery = client.from(table).select('*');
+            if (currentSinceIso) {
+              fallbackQuery = fallbackQuery.gt(this.updatedAtColumn, currentSinceIso);
+            }
+            if (typeof fallbackQuery.order === 'function') {
+              fallbackQuery = fallbackQuery.order(this.updatedAtColumn, { ascending: true });
+            }
+            if (typeof fallbackQuery.limit === 'function') {
+              fallbackQuery = fallbackQuery.limit(this.fetchLimit);
+            }
+            const fallbackResult = await fallbackQuery;
+            data = fallbackResult.data;
+            error = fallbackResult.error;
+          }
+
           if (error) {
             throw error;
           }

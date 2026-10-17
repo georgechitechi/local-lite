@@ -48,6 +48,7 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
     deletedAtColumn: config.supabase?.deletedAtColumn,
     pushRpcName: config.supabase?.pushRpcName,
     channelName: config.supabase?.channelName,
+    scopedTables: config.supabase?.scopedTables,
   });
 
   // 4. Supabase with pre-configured client

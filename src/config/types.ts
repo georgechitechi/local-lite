@@ -14,6 +14,7 @@ export interface SupabaseConfigOptions {
   deletedAtColumn?: string;
   pushRpcName?: string;
   channelName?: string;
+  scopedTables?: string[];
 }
 
 export interface ConvexConfigOptions {
