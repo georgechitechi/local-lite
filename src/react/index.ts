@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { LocalFirstClient } from '../core/client.js';
-import { QueryOptions, SyncMetrics, SyncStatusEvent } from '../core/types.js';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { LocalFirstClient, TransactionalClient } from '../core/client.js';
+import { BatchMutation, MutateOptions, QueryOptions, SyncMetrics, SyncStatusEvent } from '../core/types.js';
 
 export type LiveQueryFn<T> = (client: LocalFirstClient) => Promise<T[]> | T[];
 
@@ -319,6 +319,59 @@ export function useLiveInfiniteQuery<T = any>(
     fetchNextPage,
     refetch,
   };
+}
+
+export interface UseMutationsResult<TTable extends string = string> {
+  client: LocalFirstClient | null | undefined;
+  insert: <T extends Record<string, any> = Record<string, any>>(
+    tableName: TTable | (string & {}),
+    payload: T,
+    options?: MutateOptions
+  ) => Promise<string | undefined>;
+  insertMany: <T extends Record<string, any> = Record<string, any>>(
+    tableName: TTable | (string & {}),
+    records: T[],
+    options?: MutateOptions
+  ) => Promise<string[] | undefined>;
+  update: <T extends Record<string, any> = Record<string, any>>(
+    tableName: TTable | (string & {}),
+    rowId: string,
+    payload: Partial<T>,
+    options?: MutateOptions
+  ) => Promise<void>;
+  delete: (
+    tableName: TTable | (string & {}),
+    rowId: string,
+    options?: MutateOptions
+  ) => Promise<void>;
+  batch: (mutations: BatchMutation[]) => Promise<string[] | undefined>;
+  transaction: <T>(action: (txClient: TransactionalClient) => Promise<T>) => Promise<T | undefined>;
+}
+
+/**
+ * Universal mutations hook providing memoized, null-safe helpers for database operations.
+ */
+export function useMutations<TTable extends string = string>(
+  client: LocalFirstClient | null | undefined
+): UseMutationsResult<TTable> {
+  return useMemo(
+    () => ({
+      client,
+      insert: (table, payload, opts) =>
+        client ? client.insert(table, payload, opts) : Promise.resolve(undefined),
+      insertMany: (table, records, opts) =>
+        client ? client.insertMany(table, records, opts) : Promise.resolve(undefined),
+      update: (table, id, payload, opts) =>
+        client ? client.update(table, id, payload, opts) : Promise.resolve(),
+      delete: (table, id, opts) =>
+        client ? client.delete(table, id, opts) : Promise.resolve(),
+      batch: (mutations) =>
+        client ? client.batch(mutations) : Promise.resolve(undefined),
+      transaction: (action) =>
+        client ? client.transaction(action) : Promise.resolve(undefined),
+    }),
+    [client]
+  );
 }
 
 export interface UseSyncStatusResult {

@@ -36,6 +36,7 @@ import {
   useLiveQuery,
   useLiveRow,
   useLiveInfiniteQuery,
+  useMutations,
   useSyncStatus,
   useSyncMetrics,
   SyncInspector,
@@ -45,6 +46,7 @@ export {
   useLiveQuery,
   useLiveRow,
   useLiveInfiniteQuery,
+  useMutations,
   useSyncStatus,
   useSyncMetrics,
   SyncInspector,
@@ -482,28 +484,7 @@ export function usePaymentMessageReceiptsByReceiptId(
 // Direct Mutation API for Core Tables (Simple insert, update, delete)
 // ---------------------------------------------------------------------------
 
-export function useCoreMutations() {
-  const client = useLocalClient();
-  return {
-    client,
-    insert: <T extends Record<string, any>>(
-      table: CoreTableName | (string & {}),
-      payload: T,
-    ) => client?.insert(table, payload),
-    insertMany: (table: CoreTableName | (string & {}), records: any[]) =>
-      client?.insertMany(table, records),
-    update: <T extends Record<string, any>>(
-      table: CoreTableName | (string & {}),
-      id: string,
-      payload: Partial<T>,
-    ) => client?.update(table, id, payload),
-    delete: (table: CoreTableName | (string & {}), id: string) =>
-      client?.delete(table, id),
-    batch: (mutations: BatchMutation[]) => client?.batch(mutations),
-    transaction: <T>(action: (txClient: TransactionalClient) => Promise<T>) =>
-      client?.transaction(action),
-  };
-}
+export const useCoreMutations = () => useMutations<CoreTableName>(useLocalClient());
 
 // ---------------------------------------------------------------------------
 // Profile selectors

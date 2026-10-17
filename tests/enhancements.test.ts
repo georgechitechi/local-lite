@@ -4,7 +4,7 @@ import { OutboxStore } from '../src/core/outbox-store.js';
 import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { MockDB } from './helpers/mock-db.js';
-import { useLiveRow, useLiveInfiniteQuery, SyncInspector } from '../src/react/index.js';
+import { useLiveRow, useLiveInfiniteQuery, useMutations, SyncInspector } from '../src/react/index.js';
 
 describe('local-lite Architectural Enhancements', () => {
   let db: MockDB;
@@ -122,9 +122,10 @@ describe('local-lite Architectural Enhancements', () => {
   });
 
   describe('React Exports & Component Availability', () => {
-    it('exports useLiveRow, useLiveInfiniteQuery, and SyncInspector', () => {
+    it('exports useLiveRow, useLiveInfiniteQuery, useMutations, and SyncInspector', () => {
       expect(typeof useLiveRow).toBe('function');
       expect(typeof useLiveInfiniteQuery).toBe('function');
+      expect(typeof useMutations).toBe('function');
       expect(typeof SyncInspector).toBe('function');
     });
   });
