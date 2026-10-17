@@ -44,7 +44,8 @@ describe('Performance Benchmark & Stress Test Suite', () => {
       level1: {
         title: 'Tenant Contract 🏢 #1234',
         emoji: '🔑 🇰🇪 💰',
-        specialChars: '<script>alert("xss")</script> & "quotes" \'single\' \\backslashes\\',
+        specialChars:
+          '<script>alert("xss")</script> & "quotes" \'single\' \\backslashes\\',
         level2: {
           contacts: Array.from({ length: 20 }, (_, idx) => ({
             id: `c-${idx}`,

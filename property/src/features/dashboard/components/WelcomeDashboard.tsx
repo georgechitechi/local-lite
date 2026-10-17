@@ -2,7 +2,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, TouchableOpacity, View } from 'react-native';
-import { Avatar, Button, Surface, Text } from 'react-native-paper';
+import { Avatar, Button, IconButton, Surface, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import ManageBusinessModal from '@/features/settings/components/ManageBusinessModal';
 import { useAuth } from '@/providers/AuthProvider';
@@ -165,16 +165,36 @@ export const WelcomeDashboard = () => {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {/* Header section */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16 }}>
-        <Text
-          variant="headlineMedium"
-          style={{ fontWeight: '700', color: colors.onBackground, marginBottom: 4 }}
-        >
-          Your Businesses
-        </Text>
-        <Text variant="bodyMedium" style={{ color: colors.onSurfaceVariant }}>
-          Choose a business to open and manage, or create a new one.
-        </Text>
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 24,
+          paddingBottom: 16,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text
+            variant="headlineMedium"
+            style={{ fontWeight: '700', color: colors.onBackground, marginBottom: 4 }}
+          >
+            Your Businesses
+          </Text>
+          <Text variant="bodyMedium" style={{ color: colors.onSurfaceVariant }}>
+            Choose a business to open and manage, or create a new one.
+          </Text>
+        </View>
+        <IconButton
+          icon="refresh"
+          mode="contained-tonal"
+          size={22}
+          onPress={onRefresh}
+          loading={refreshing}
+          disabled={refreshing}
+          accessibilityLabel="Refresh businesses"
+        />
       </View>
 
       {/* Pending Invites */}
