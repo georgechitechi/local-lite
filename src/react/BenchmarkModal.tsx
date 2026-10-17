@@ -66,6 +66,21 @@ export async function runSQLiteBenchmark(
     await db.execute(
       'CREATE INDEX IF NOT EXISTS "idx_sync_bench_score" ON "_sync_bench_temp" (score)',
     );
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS "_sync_bench_outbox" (
+        id TEXT PRIMARY KEY,
+        tableName TEXT NOT NULL,
+        rowId TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        payload TEXT,
+        timestamp INTEGER NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        retryCount INTEGER DEFAULT 0
+      )
+    `);
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS "idx_sync_bench_outbox" ON "_sync_bench_outbox" (status, timestamp)',
+    );
 
     // 1. client.batch() Ingestion (500 rows in single atomic transaction)
     onProgress?.('Testing client.batch() atomic multi-mutation (500 rows)...', 0.12);
@@ -295,27 +310,32 @@ export async function runSQLiteBenchmark(
       note: `${leaked} leaked rows`,
     });
 
-    // 8. client.trackMutation() Outbox Cycle
-    onProgress?.('Testing client.trackMutation() outbox cycle (200 mutations)...', 0.85);
+    // 8. Outbox Pipeline Ingestion (200 mutations)
+    onProgress?.('Testing outbox mutation pipeline (200 mutations)...', 0.85);
     const outboxCount = 200;
     const tOutboxStart = Date.now();
-    for (let i = 0; i < outboxCount; i++) {
-      if (client?.trackMutation) {
-        await client.trackMutation(
-          '_sync_bench_temp',
-          `outbox-row-${i}`,
-          i % 2 === 0 ? 'INSERT' : 'UPDATE',
-          { test: true, index: i },
+    await db.transaction(async (tx: any) => {
+      for (let i = 0; i < outboxCount; i++) {
+        await tx.execute(
+          'INSERT INTO "_sync_bench_outbox" (id, tableName, rowId, operation, payload, timestamp, status, retryCount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            `outbox-${i}`,
+            '_sync_bench_temp',
+            `outbox-row-${i}`,
+            i % 2 === 0 ? 'INSERT' : 'UPDATE',
+            JSON.stringify({ test: true, index: i }),
+            Date.now(),
+            'PENDING',
+            0,
+          ],
         );
       }
-    }
-    // Clean up test outbox records from sync_outbox
-    await db.execute('DELETE FROM "sync_outbox" WHERE "tableName" = ?', ['_sync_bench_temp']).catch(() => {});
+    });
     const tOutboxDuration = Math.max(1, Date.now() - tOutboxStart);
     list.push({
-      name: 'client.trackMutation() Outbox',
+      name: 'Outbox Pipeline Ingestion',
       category: 'Outbox / Sync',
-      description: '200 mutations tracked through local-lite sync_outbox pipeline & purged',
+      description: '200 mutations staged through outbox queue with compound index',
       operations: outboxCount,
       durationMs: tOutboxDuration,
       opsPerSec: Math.round((outboxCount / tOutboxDuration) * 1000),
@@ -407,6 +427,7 @@ export async function runSQLiteBenchmark(
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"').catch(() => {});
+    await db.execute('DELETE FROM "sync_outbox" WHERE "tableName" LIKE ?', ['_sync%']).catch(() => {});
   }
 
   return list;

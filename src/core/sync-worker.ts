@@ -301,7 +301,21 @@ export class SyncWorker {
         return;
       }
 
-      const operations: SyncOperation[] = pendingRecords.map((r) => ({
+      // Filter out internal/ephemeral tables (e.g. starting with '_') so they are never sent to remote backends
+      const internalRecords = pendingRecords.filter((r) => r.tableName.startsWith('_'));
+      if (internalRecords.length > 0) {
+        await OutboxStore.deleteCompleted(
+          this.db,
+          internalRecords.map((r) => r.id),
+        ).catch(() => {});
+      }
+
+      const validRecords = pendingRecords.filter((r) => !r.tableName.startsWith('_'));
+      if (validRecords.length === 0) {
+        return;
+      }
+
+      const operations: SyncOperation[] = validRecords.map((r) => ({
         id: r.id,
         tableName: r.tableName,
         rowId: r.rowId,
