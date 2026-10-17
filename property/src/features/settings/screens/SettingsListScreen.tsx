@@ -1034,13 +1034,6 @@ export default function SettingsManager() {
                   onPress={() => router.push('/settings/data-integrity' as any)}
                   right={props => <IconButton {...props} icon="chevron-right" />}
                 />
-                <List.Item
-                  title="SQLite Database Inspector"
-                  description="View all local SQLite tables and data records"
-                  left={props => <List.Icon {...props} icon="database-search" />}
-                  onPress={() => setShowSqliteInspector(true)}
-                  right={props => <IconButton {...props} icon="chevron-right" />}
-                />
               </>
             )}
           </List.Section>
@@ -1142,15 +1135,30 @@ export default function SettingsManager() {
             right={props => <IconButton {...props} icon="chevron-right" />}
             onPress={() => setShowHelpModal(true)}
           />
-
-          <List.Item
-            title="Performance Benchmark"
-            description="Test SQLite read/write throughput, storage speed, and latency"
-            left={props => <List.Icon {...props} icon="speedometer" />}
-            right={props => <IconButton {...props} icon="chevron-right" />}
-            onPress={() => setShowBenchmarkModal(true)}
-          />
         </List.Section>
+
+        {__DEV__ && (
+          <>
+            <Divider />
+            <List.Section>
+              <List.Subheader>Developer Tools</List.Subheader>
+              <List.Item
+                title="SQLite Database Inspector"
+                description="View all local SQLite tables and data records"
+                left={props => <List.Icon {...props} icon="database-search" />}
+                onPress={() => setShowSqliteInspector(true)}
+                right={props => <IconButton {...props} icon="chevron-right" />}
+              />
+              <List.Item
+                title="Performance Benchmark"
+                description="Test SQLite read/write throughput, storage speed, and latency"
+                left={props => <List.Icon {...props} icon="speedometer" />}
+                right={props => <IconButton {...props} icon="chevron-right" />}
+                onPress={() => setShowBenchmarkModal(true)}
+              />
+            </List.Section>
+          </>
+        )}
       </ScrollView>
       {renderModal()}
 
@@ -1185,16 +1193,19 @@ export default function SettingsManager() {
         processing={processingReset}
         colors={colors}
       />
-      {/* SQLite Database Inspector Modal */}
-      <SqliteInspectorModal
-        visible={showSqliteInspector}
-        onDismiss={() => setShowSqliteInspector(false)}
-      />
-      {/* Benchmark Modal */}
-      <BenchmarkModal
-        visible={showBenchmarkModal}
-        onDismiss={() => setShowBenchmarkModal(false)}
-      />
+      {/* Developer Modals */}
+      {__DEV__ && (
+        <>
+          <SqliteInspectorModal
+            visible={showSqliteInspector}
+            onDismiss={() => setShowSqliteInspector(false)}
+          />
+          <BenchmarkModal
+            visible={showBenchmarkModal}
+            onDismiss={() => setShowBenchmarkModal(false)}
+          />
+        </>
+      )}
       <Portal>
         {/* Links Modal */}
         <BaseModal
