@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LocalFirstClient } from '../core/client.js';
-import { useSyncStatus } from './index.js';
+import { useSyncStatus } from './status.js';
 
 let RN: any;
 try {
@@ -11,8 +11,9 @@ try {
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
-  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'top' | 'bottom';
   initialOpen?: boolean;
+  fullWidth?: boolean;
 }
 
 /**
@@ -25,6 +26,7 @@ export function SyncInspector({
   client,
   position = 'bottom-right',
   initialOpen = false,
+  fullWidth = false,
 }: SyncInspectorProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const status = useSyncStatus(client);
@@ -86,26 +88,23 @@ export function SyncInspector({
   const statusColor = !status.isOnline ? '#EF4444' : status.isSyncing ? '#F59E0B' : '#10B981';
   const statusLabel = !status.isOnline ? 'Offline' : status.isSyncing ? 'Syncing' : 'Online';
 
+  const isFullWidth = Boolean(fullWidth || position === 'top' || position === 'bottom');
+
   // React Native renderer
   if (RN && RN.View) {
     const { View, Text, TouchableOpacity, ScrollView } = RN;
 
-    const getPosStyle = () => {
-      switch (position) {
-        case 'bottom-left':
-          return { bottom: 20, left: 16 };
-        case 'top-left':
-          return { top: 40, left: 16 };
-        case 'top-right':
-          return { top: 40, right: 16 };
-        case 'bottom-right':
-        default:
-          return { bottom: 20, right: 16 };
-      }
+    const isTop = position.startsWith('top') || position === 'top';
+    const isLeft = position.includes('left');
+
+    const containerPosStyle = {
+      left: 12,
+      right: 12,
+      ...(isTop ? { top: 40 } : { bottom: 20 }),
     };
 
     return (
-      <View style={[rnStyles.container, getPosStyle()]} pointerEvents="box-none">
+      <View style={[rnStyles.container, containerPosStyle]} pointerEvents="box-none">
         {isOpen && (
           <View style={rnStyles.panel}>
             <View style={rnStyles.panelHeader}>
@@ -171,7 +170,13 @@ export function SyncInspector({
 
         <TouchableOpacity
           onPress={() => setIsOpen(!isOpen)}
-          style={[rnStyles.pill, { borderColor: statusColor }]}
+          style={[
+            rnStyles.pill,
+            {
+              borderColor: statusColor,
+              alignSelf: isLeft ? 'flex-start' : 'flex-end',
+            },
+          ]}
           activeOpacity={0.8}
         >
           <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
@@ -187,6 +192,8 @@ export function SyncInspector({
   }
 
   // Web / DOM renderer fallback
+  const isTop = position.startsWith('top') || position === 'top';
+  const isLeft = position.includes('left');
   return (
     <div
       style={{
@@ -194,16 +201,20 @@ export function SyncInspector({
         zIndex: 99999,
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontSize: 13,
-        ...(position === 'bottom-left' ? { bottom: 20, left: 16 } : {}),
-        ...(position === 'bottom-right' ? { bottom: 20, right: 16 } : {}),
-        ...(position === 'top-left' ? { top: 20, left: 16 } : {}),
-        ...(position === 'top-right' ? { top: 20, right: 16 } : {}),
+        left: 16,
+        right: 16,
+        width: 'calc(100% - 32px)',
+        ...(isTop ? { top: 20 } : { bottom: 20 }),
+        pointerEvents: 'none',
+        display: 'flex',
+        flexDirection: isTop ? 'column' : 'column-reverse',
+        alignItems: isLeft ? 'flex-start' : 'flex-end',
       }}
     >
       {isOpen && (
         <div
           style={{
-            width: 320,
+            width: '100%',
             background: '#1F2937',
             color: '#F9FAFB',
             borderRadius: 12,
@@ -211,6 +222,7 @@ export function SyncInspector({
             marginBottom: 10,
             overflow: 'hidden',
             border: '1px solid #374151',
+            pointerEvents: 'auto',
           }}
         >
           <div
@@ -289,7 +301,7 @@ export function SyncInspector({
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
           gap: 8,
           background: '#1F2937',
@@ -299,6 +311,7 @@ export function SyncInspector({
           borderRadius: 20,
           cursor: 'pointer',
           boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+          pointerEvents: 'auto',
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor }} />
@@ -365,7 +378,7 @@ const rnStyles = RN && RN.StyleSheet ? RN.StyleSheet.create({
     fontWeight: '700',
   },
   panel: {
-    width: 300,
+    width: '100%',
     backgroundColor: '#1F2937',
     borderRadius: 14,
     marginBottom: 10,
