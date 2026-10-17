@@ -1,5 +1,4 @@
 import type { BatchMutation, TransactionalClient } from 'local-lite';
-import { useLiveQuery } from 'local-lite/react';
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useLocalClient } from '@/providers/SyncClientProvider';
@@ -33,6 +32,24 @@ import type {
 } from '@/shared/types/types';
 import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
+import {
+  useLiveQuery,
+  useLiveRow,
+  useLiveInfiniteQuery,
+  useSyncStatus,
+  useSyncMetrics,
+  SyncInspector,
+} from 'local-lite/react';
+
+export {
+  useLiveQuery,
+  useLiveRow,
+  useLiveInfiniteQuery,
+  useSyncStatus,
+  useSyncMetrics,
+  SyncInspector,
+};
+
 export {
   useLocalClient,
   useSyncClientContext,
@@ -42,6 +59,18 @@ export {
 // ---------------------------------------------------------------------------
 // Core Table Live Queries (Powered directly by local-lite SQLite)
 // ---------------------------------------------------------------------------
+
+/**
+ * Reactively subscribes to a single record in a core table using local-lite's useLiveRow hook.
+ * Precise row-level invalidation prevents superfluous re-renders when other rows in the table change.
+ */
+export function useCoreRow<T = any>(
+  tableName: CoreTableName,
+  id: string | undefined | null
+): { data: T | null; loading: boolean; refetch: () => Promise<void> } {
+  const client = useLocalClient();
+  return useLiveRow<T>(client, tableName, id);
+}
 
 export interface CoreTableResult<T> {
   data: T[];

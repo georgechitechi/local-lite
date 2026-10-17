@@ -20,6 +20,8 @@ jest.mock('@/shared/services/sync/client', () => ({
     .fn()
     .mockResolvedValue({
       syncWorker: { pullRemoteChanges: jest.fn().mockResolvedValue(undefined) },
+      findMany: jest.fn().mockResolvedValue([]),
+      batch: jest.fn().mockResolvedValue(undefined),
     }),
 }));
 

@@ -63,6 +63,9 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
     tables: config.tables ?? [],
     migrations: config.migrations,
     autoStart: config.autoStart,
+    jsonColumns: config.jsonColumns,
+    autoHydrateJSON: config.autoHydrateJSON,
+    syncScope: config.syncScope,
   });
 
   // 5. Execute Migrations & Auto-initialize

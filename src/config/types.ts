@@ -195,4 +195,19 @@ export interface LocalLiteConfig {
    * Call client.syncWorker.start() to enable automatic sync, or push/pull manually.
    */
   autoStart?: boolean;
+
+  /**
+   * Explicitly configured JSON column map per table name.
+   */
+  jsonColumns?: Record<string, string[]>;
+
+  /**
+   * Automatically detect and hydrate stringified JSON objects and arrays across all columns.
+   */
+  autoHydrateJSON?: boolean;
+
+  /**
+   * Scoped synchronization filter (e.g. { business_id: '...' } or dynamic resolver callback).
+   */
+  syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
 }

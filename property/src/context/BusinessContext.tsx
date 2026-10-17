@@ -81,24 +81,25 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
     }
   }, [selectedBusinessId, businesses, findDefaultBusiness]);
 
-  // Pre-cache gallery images when business changes
+  // Pre-cache gallery images and update syncScope when business changes
   useEffect(() => {
-    if (selectedBusiness) {
-      const client = getSyncClientSync();
-      if (client) {
-        client
-          .findMany('gallery_images', {
-            where: { business_id: selectedBusiness.id },
-          })
-          .then(images => {
-            if (images && images.length > 0) {
-              preCacheGallery(images).catch(e =>
-                console.log('Pre-cache initial failed:', e.message),
-              );
-            }
-          })
-          .catch(() => {});
-      }
+    const client = getSyncClientSync();
+    if (client && typeof client.setSyncScope === 'function') {
+      client.setSyncScope(selectedBusiness ? { business_id: selectedBusiness.id } : undefined);
+    }
+    if (selectedBusiness && client) {
+      client
+        .findMany('gallery_images', {
+          where: { business_id: selectedBusiness.id },
+        })
+        .then(images => {
+          if (images && images.length > 0) {
+            preCacheGallery(images).catch(e =>
+              console.log('Pre-cache initial failed:', e.message),
+            );
+          }
+        })
+        .catch(() => {});
     }
   }, [selectedBusiness]);
 

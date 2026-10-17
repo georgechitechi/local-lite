@@ -28,6 +28,8 @@ import { UpdatePrompt } from '@/shared/components/UpdatePrompt';
 import { useLocalSync } from '@/shared/hooks/useLocalSync';
 import { ThemeProvider, useTheme } from '@/shared/hooks/useThemeProvider';
 import { useVersionCheck } from '@/shared/hooks/useVersionCheck';
+import { useLocalClient } from '@/providers/SyncClientProvider';
+import { SyncInspector } from 'local-lite/react';
 
 // Ignore React Native deprecation warnings coming from third-party libraries
 LogBox.ignoreLogs([
@@ -45,6 +47,7 @@ function RootLayoutNav() {
   const { showPrompt, onUpdate, onDismiss } = useVersionCheck();
   const { markInteractive } = useObserve();
   const insets = useSafeAreaInsets();
+  const client = useLocalClient();
 
   // Process offline image uploads when network is restored
   useOfflineImageSync();
@@ -102,6 +105,7 @@ function RootLayoutNav() {
       )}
       {isLocked && <LockScreen />}
       <UpdatePrompt visible={showPrompt} onUpdate={onUpdate} onDismiss={onDismiss} />
+      {__DEV__ && <SyncInspector client={client} position="bottom-right" />}
     </Portal.Host>
   );
 }
