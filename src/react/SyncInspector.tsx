@@ -362,8 +362,8 @@ const rnStyles = RN && RN.StyleSheet ? RN.StyleSheet.create({
     marginLeft: 8,
   },
   dot: {
-    width: 8,
-    height: 8,
+    width: 10,
+    height: 10,
     borderRadius: 4,
   },
   badge: {
