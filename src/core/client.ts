@@ -128,12 +128,53 @@ export class TransactionalClient {
     await this.mutate(tableName, rowId, 'UPDATE', payload, options);
   }
 
+  async updateMany(
+    tableName: string,
+    updates: Array<{ id: string; payload: Record<string, any> }>,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    for (const u of updates) {
+      await this.update(tableName, u.id, u.payload, options);
+    }
+  }
+
   async delete(
     tableName: string,
     rowId: string,
     options: MutateOptions = {}
   ): Promise<void> {
     await this.mutate(tableName, rowId, 'DELETE', null, options);
+  }
+
+  async findById<T = any>(tableName: string, id: string): Promise<T | null> {
+    const safeTable = escapeIdentifier(tableName);
+    const safePk = escapeIdentifier(this.parent.getPrimaryKey());
+    try {
+      const rows = await this.tx.execute(
+        `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
+        [id]
+      );
+      return rows && rows.length > 0 ? this.parent.hydrateRow<T>(tableName, rows[0]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async findByIds<T = any>(tableName: string, ids: string[]): Promise<T[]> {
+    if (!ids || ids.length === 0) return [];
+    const safeTable = escapeIdentifier(tableName);
+    const safePk = escapeIdentifier(this.parent.getPrimaryKey());
+    const placeholders = ids.map(() => '?').join(', ');
+    try {
+      const rows = await this.tx.execute(
+        `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
+        ids
+      );
+      if (!rows || rows.length === 0) return [];
+      return rows.map((r) => this.parent.hydrateRow<T>(tableName, r));
+    } catch {
+      return [];
+    }
   }
 
   get rawTx(): LocalTransaction {
@@ -552,6 +593,31 @@ export class LocalFirstClient {
   }
 
   /**
+   * Updates multiple records atomically in a single database transaction.
+   * Emits reactive change events and queues outbox entries together.
+   *
+   * Example:
+   * await client.updateMany('todos', [
+   *   { id: 'todo-1', payload: { completed: 1 } },
+   *   { id: 'todo-2', payload: { completed: 1 } },
+   * ]);
+   */
+  async updateMany(
+    tableName: string,
+    updates: Array<{ id: string; payload: Record<string, any> }>,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    if (!updates || updates.length === 0) return;
+    const mutations: BatchMutation[] = updates.map((u) => ({
+      tableName,
+      rowId: u.id,
+      operation: 'UPDATE',
+      payload: u.payload,
+    }));
+    await this.batch(mutations, options);
+  }
+
+  /**
    * Convenience helper to delete a record by ID.
    * 
    * Example:
@@ -714,6 +780,35 @@ export class LocalFirstClient {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {
         return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Finds multiple records by primary keys in a single batched SQL query.
+   * Eliminates the N-roundtrip bridge overhead of multiple findById calls.
+   *
+   * Example:
+   * const tenants = await client.findByIds('tenants', ['ten-1', 'ten-2', 'ten-3']);
+   */
+  async findByIds<T = any>(tableName: string, ids: string[]): Promise<T[]> {
+    if (!ids || ids.length === 0) return [];
+    const safeTable = escapeIdentifier(tableName);
+    const safePk = escapeIdentifier(this.primaryKey);
+    const placeholders = ids.map(() => '?').join(', ');
+    try {
+      const rows = await this.db.execute(
+        `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
+        ids
+      );
+      if (!rows || rows.length === 0) return [];
+      const hasJsonConfig = Boolean(this.jsonColumns[tableName] || this.autoHydrateJSON);
+      return hasJsonConfig ? rows.map((r) => this.hydrateRow<T>(tableName, r)) : (rows as T[]);
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('no such table') || msg.includes('no such column')) {
+        return [];
       }
       throw err;
     }

@@ -52,30 +52,30 @@ export class TableManager {
       ? await sm.ensureColumns(tx, tableName, payload, primaryKey)
       : formatPayload(payload);
     const rowData: Record<string, any> = { ...formatted, [primaryKey]: rowId };
-
     const keys = Object.keys(rowData);
     if (keys.length === 0) return;
 
-    const existing = await tx.execute(
-      `SELECT 1 FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-      [rowId]
-    );
+    // Use atomic SQLite UPSERT (INSERT ... ON CONFLICT DO UPDATE) for both INSERT and UPDATE.
+    // Handles missing rows, existing rows, and partial updates in a single SQL round-trip,
+    // completely eliminating the redundant SELECT 1 pre-check on every mutation!
+    const updateKeys = keys.filter((k) => k !== primaryKey);
+    const cols = keys.map((k) => escapeIdentifier(k)).join(', ');
+    const placeholders = keys.map(() => '?').join(', ');
+    const values = keys.map((k) => rowData[k]);
 
-    if (existing && existing.length > 0) {
-      // Row exists -> perform UPDATE
-      const updateKeys = keys.filter((k) => k !== primaryKey);
-      if (updateKeys.length > 0) {
-        const setClause = updateKeys.map((k) => `${escapeIdentifier(k)} = ?`).join(', ');
-        const values = updateKeys.map((k) => rowData[k]);
-        values.push(rowId);
-        await tx.execute(`UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`, values);
-      }
+    if (updateKeys.length > 0) {
+      const updateClause = updateKeys
+        .map((k) => `${escapeIdentifier(k)} = excluded.${escapeIdentifier(k)}`)
+        .join(', ');
+      await tx.execute(
+        `INSERT INTO ${safeTable} (${cols}) VALUES (${placeholders}) ON CONFLICT (${safePk}) DO UPDATE SET ${updateClause}`,
+        values
+      );
     } else {
-      // Row does not exist -> perform INSERT
-      const cols = keys.map((k) => escapeIdentifier(k)).join(', ');
-      const placeholders = keys.map(() => '?').join(', ');
-      const values = keys.map((k) => rowData[k]);
-      await tx.execute(`INSERT INTO ${safeTable} (${cols}) VALUES (${placeholders})`, values);
+      await tx.execute(
+        `INSERT OR IGNORE INTO ${safeTable} (${cols}) VALUES (${placeholders})`,
+        values
+      );
     }
   }
 
