@@ -37,7 +37,6 @@ interface ImportMessagesModalProps {
   allMessages: PaymentMessage[];
   paymentMessageReceipts: any[];
   receipts: any[];
-  store?: any;
 }
 
 export default function ImportMessagesModal({
@@ -49,7 +48,6 @@ export default function ImportMessagesModal({
   allMessages,
   paymentMessageReceipts,
   receipts,
-  store,
 }: ImportMessagesModalProps) {
   const { user } = useAuth();
 

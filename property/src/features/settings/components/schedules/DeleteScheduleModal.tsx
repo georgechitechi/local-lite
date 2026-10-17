@@ -10,7 +10,6 @@ interface DeleteScheduleModalProps {
   visible: boolean;
   onDismiss: () => void;
   deletingSchedule: Schedule | null;
-  store?: any;
   onSuccess?: () => void;
 }
 
@@ -18,7 +17,6 @@ export default function DeleteScheduleModal({
   visible,
   onDismiss,
   deletingSchedule,
-  store,
   onSuccess,
 }: DeleteScheduleModalProps) {
   const { colors } = useTheme();

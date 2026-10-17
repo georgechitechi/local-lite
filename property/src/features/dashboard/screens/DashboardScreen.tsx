@@ -136,8 +136,6 @@ const Dashboard = function Dashboard() {
   const client = useLocalClient();
   const { isSyncing: isSyncingStore } = useSyncStatus(client);
 
-  const _propertiesPersistLoaded = properties !== undefined;
-
   const isInitialSyncing = useIsInitialSyncing();
   const [isWaitingForInitialSync, setIsWaitingForInitialSync] = useState(true);
 

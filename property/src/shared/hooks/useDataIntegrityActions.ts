@@ -32,7 +32,7 @@ export function useDataIntegrityActions({
   allProperties,
   allHouses = [],
   allReceipts = [],
-  allBookings = [],
+  allBookings: _allBookings = [],
   allPaymentMessages,
   allPaymentMessageReceipts,
   contractsById,
