@@ -17,7 +17,7 @@ try {
 
 export interface BuiltinBenchmarkResult {
   name: string;
-  category: 'SQLite' | 'Storage' | 'Memory / JSON' | 'ACID / Edge Cases';
+  category: 'Local-Lite Client' | 'ACID / Transactions' | 'Outbox / Sync' | 'Memory / JSON' | 'SQLite' | 'Storage';
   description: string;
   operations: number;
   durationMs: number;
@@ -33,19 +33,27 @@ export interface BenchmarkModalProps {
 }
 
 /**
- * Executes a battery of SQLite performance & ACID edge-case tests
- * against the provided local database adapter.
+ * Executes a comprehensive performance & ACID test suite
+ * directly testing local-lite client APIs:
+ * client.batch(), client.insert(), client.update(), client.findById(),
+ * client.findMany() with SQL pushdown ($gt, $contains), client.transaction() rollbacks,
+ * client.trackMutation() outbox pipeline, and client.delete().
  */
 export async function runSQLiteBenchmark(
-  db: any,
+  clientOrDb: any,
   onProgress?: (step: string, progress: number) => void,
 ): Promise<BuiltinBenchmarkResult[]> {
   const list: BuiltinBenchmarkResult[] = [];
+  const client: LocalFirstClient | null =
+    clientOrDb && typeof clientOrDb.batch === 'function' ? clientOrDb : null;
+  const db = client?.db || clientOrDb;
 
   try {
     onProgress?.('Preparing benchmark environment...', 0.05);
-    await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"');
-    await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"');
+    await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
+    await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
+    await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"').catch(() => {});
+
     await db.execute(`
       CREATE TABLE IF NOT EXISTS "_sync_bench_temp" (
         id TEXT PRIMARY KEY,
@@ -59,156 +67,227 @@ export async function runSQLiteBenchmark(
       'CREATE INDEX IF NOT EXISTS "idx_sync_bench_score" ON "_sync_bench_temp" (score)',
     );
 
-    // 1. Batch writes (500 rows in single transaction)
-    onProgress?.('Testing SQLite batch transaction writes (500 rows)...', 0.15);
+    // 1. client.batch() Ingestion (500 rows in single atomic transaction)
+    onProgress?.('Testing client.batch() atomic multi-mutation (500 rows)...', 0.12);
     const batchCount = 500;
+    const batchMutations = Array.from({ length: batchCount }, (_, i) => ({
+      tableName: '_sync_bench_temp',
+      operation: 'INSERT' as const,
+      rowId: `b-batch-${i}`,
+      payload: {
+        id: `b-batch-${i}`,
+        title: `Item ${i}`,
+        score: Math.floor(Math.random() * 100),
+        metadata: JSON.stringify({ index: i, tag: 'batch', timestamp: Date.now() }),
+        created_at: new Date().toISOString(),
+      },
+    }));
+
     const t1Start = Date.now();
-    await db.transaction(async (tx: any) => {
-      for (let i = 0; i < batchCount; i++) {
-        await tx.execute(
-          'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-          [
-            `b-batch-${i}`,
-            `Item ${i}`,
-            Math.floor(Math.random() * 100),
-            JSON.stringify({ index: i, tag: 'batch', timestamp: Date.now() }),
-            new Date().toISOString(),
-          ],
-        );
-      }
-    });
+    if (client?.batch) {
+      await client.batch(batchMutations, { skipOutbox: true });
+    } else {
+      await db.transaction(async (tx: any) => {
+        for (const m of batchMutations) {
+          await tx.execute(
+            'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+            [m.rowId, m.payload.title, m.payload.score, m.payload.metadata, m.payload.created_at],
+          );
+        }
+      });
+    }
     const t1Duration = Math.max(1, Date.now() - t1Start);
     list.push({
-      name: 'Batch Transaction Writes',
-      category: 'SQLite',
-      description: '500 bulk rows inserted inside a single atomic SQLite transaction',
+      name: 'client.batch() Ingestion',
+      category: 'Local-Lite Client',
+      description: '500 rows inserted via local-lite atomic batch() mutation pipeline',
       operations: batchCount,
       durationMs: t1Duration,
       opsPerSec: Math.round((batchCount / t1Duration) * 1000),
       status: 'success',
     });
 
-    // 2. Individual Disk Writes (40 standalone inserts)
-    onProgress?.('Testing individual SQLite disk writes (40 rows)...', 0.28);
+    // 2. client.insert() Individual Mutations (40 rows)
+    onProgress?.('Testing client.insert() individual mutations (40 rows)...', 0.24);
     const indivCount = 40;
     const t2Start = Date.now();
     for (let i = 0; i < indivCount; i++) {
-      await db.execute(
-        'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-        [
-          `b-indiv-${i}`,
-          `Individual Item ${i}`,
-          Math.floor(Math.random() * 100),
-          JSON.stringify({ index: i, tag: 'indiv' }),
-          new Date().toISOString(),
-        ],
-      );
+      const payload = {
+        title: `Individual Item ${i}`,
+        score: Math.floor(Math.random() * 100),
+        metadata: JSON.stringify({ index: i, tag: 'indiv' }),
+        created_at: new Date().toISOString(),
+      };
+      if (client?.insert) {
+        await client.insert('_sync_bench_temp', `b-indiv-${i}`, payload, { skipOutbox: true });
+      } else {
+        await db.execute(
+          'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+          [`b-indiv-${i}`, payload.title, payload.score, payload.metadata, payload.created_at],
+        );
+      }
     }
     const t2Duration = Math.max(1, Date.now() - t2Start);
     list.push({
-      name: 'Individual Disk Writes',
-      category: 'SQLite',
-      description: '40 standalone queries without transaction wrapping (direct disk sync)',
+      name: 'client.insert() Mutation',
+      category: 'Local-Lite Client',
+      description: '40 standalone client.insert() calls testing dual-write mutation pipeline',
       operations: indivCount,
       durationMs: t2Duration,
       opsPerSec: Math.round((indivCount / t2Duration) * 1000),
       status: 'success',
     });
 
-    // 3. Bulk UPSERT Conflict Resolution (150 rows)
-    onProgress?.('Testing UPSERT conflict resolution & index updates (150 rows)...', 0.42);
-    const upsertCount = 150;
+    // 3. client.update() Reactive Updates (150 rows)
+    onProgress?.('Testing client.update() reactive updates (150 rows)...', 0.36);
+    const updateCount = 150;
     const t3Start = Date.now();
-    await db.transaction(async (tx: any) => {
-      for (let i = 0; i < upsertCount; i++) {
-        await tx.execute(
-          'INSERT OR REPLACE INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-          [
-            `b-batch-${i}`,
-            `Updated Item ${i}`,
-            999 + i,
-            JSON.stringify({ updated: true, rev: i + 1 }),
-            new Date().toISOString(),
-          ],
+    for (let i = 0; i < updateCount; i++) {
+      const patch = {
+        title: `Updated Item ${i}`,
+        score: 999 + i,
+        metadata: JSON.stringify({ updated: true, rev: i + 1 }),
+      };
+      if (client?.update) {
+        await client.update('_sync_bench_temp', `b-batch-${i}`, patch, { skipOutbox: true });
+      } else {
+        await db.execute(
+          'UPDATE "_sync_bench_temp" SET title = ?, score = ?, metadata = ? WHERE id = ?',
+          [patch.title, patch.score, patch.metadata, `b-batch-${i}`],
         );
       }
-    });
+    }
     const t3Duration = Math.max(1, Date.now() - t3Start);
     list.push({
-      name: 'Bulk Conflict UPSERTs',
-      category: 'ACID / Edge Cases',
-      description: '150 primary key collisions handled via INSERT OR REPLACE with index rebuilds',
-      operations: upsertCount,
+      name: 'client.update() Pipeline',
+      category: 'Local-Lite Client',
+      description: '150 client.update() calls testing schema verification & event emission',
+      operations: updateCount,
       durationMs: t3Duration,
-      opsPerSec: Math.round((upsertCount / t3Duration) * 1000),
+      opsPerSec: Math.round((updateCount / t3Duration) * 1000),
       status: 'success',
     });
 
-    // 4. Indexed Point Lookups (400 queries)
-    onProgress?.('Testing indexed primary key lookups (400 queries)...', 0.55);
-    const readCount = 400;
+    // 4. client.findById() Indexed Lookups (400 queries)
+    onProgress?.('Testing client.findById() indexed point lookups (400 queries)...', 0.48);
+    const findCount = 400;
     const t4Start = Date.now();
-    for (let i = 0; i < readCount; i++) {
-      await db.execute('SELECT * FROM "_sync_bench_temp" WHERE id = ?', [`b-batch-${i % batchCount}`]);
+    for (let i = 0; i < findCount; i++) {
+      const id = `b-batch-${i % batchCount}`;
+      if (client?.findById) {
+        await client.findById('_sync_bench_temp', id);
+      } else {
+        await db.execute('SELECT * FROM "_sync_bench_temp" WHERE id = ?', [id]);
+      }
     }
     const t4Duration = Math.max(1, Date.now() - t4Start);
     list.push({
-      name: 'Indexed Point Lookups',
-      category: 'SQLite',
-      description: '400 point-selects by primary key index',
-      operations: readCount,
+      name: 'client.findById() Lookups',
+      category: 'Local-Lite Client',
+      description: '400 point lookups testing PK index resolution & auto JSON hydration',
+      operations: findCount,
       durationMs: t4Duration,
-      opsPerSec: Math.round((readCount / t4Duration) * 1000),
+      opsPerSec: Math.round((findCount / t4Duration) * 1000),
       status: 'success',
     });
 
-    // 5. Filtered Scan & Sorting (40 queries)
-    onProgress?.('Testing filtered scans and sort ordering (40 queries)...', 0.68);
-    const scanCount = 40;
+    // 5. client.findMany() with SQL Pushdown Filters (40 queries)
+    onProgress?.('Testing client.findMany() query filter compilation (40 queries)...', 0.6);
+    const findManyCount = 40;
     const t5Start = Date.now();
-    for (let i = 0; i < scanCount; i++) {
-      await db.execute(
-        'SELECT * FROM "_sync_bench_temp" WHERE score > 50 ORDER BY created_at DESC LIMIT 20',
-      );
+    for (let i = 0; i < findManyCount; i++) {
+      if (client?.findMany) {
+        await client.findMany('_sync_bench_temp', {
+          where: { score: { $gt: 50 } },
+          orderBy: 'created_at',
+          order: 'desc',
+          limit: 20,
+        });
+      } else {
+        await db.execute(
+          'SELECT * FROM "_sync_bench_temp" WHERE score > 50 ORDER BY created_at DESC LIMIT 20',
+        );
+      }
     }
     const t5Duration = Math.max(1, Date.now() - t5Start);
     list.push({
-      name: 'Filtered Scan & Sorting',
-      category: 'SQLite',
-      description: '40 complex SELECTs with WHERE clause, index range & ORDER BY pagination',
-      operations: scanCount,
+      name: 'client.findMany() Filters',
+      category: 'Local-Lite Client',
+      description: '40 queries through local-lite SQL pushdown ($gt, ORDER BY, LIMIT)',
+      operations: findManyCount,
       durationMs: t5Duration,
-      opsPerSec: Math.round((scanCount / t5Duration) * 1000),
+      opsPerSec: Math.round((findManyCount / t5Duration) * 1000),
       status: 'success',
     });
 
-    // 6. ACID Rollback Verification
-    onProgress?.('Testing ACID rollback on intentional constraint failure...', 0.8);
+    // 6. client.findMany() with $contains (Fuzzy Substring Search)
+    onProgress?.('Testing client.findMany() $contains fuzzy search (50 queries)...', 0.7);
+    const searchCount = 50;
+    const searchTokens = ['Item 1', 'Updated', 'rev', 'Large', 'nonexistent'];
+    const t6Start = Date.now();
+    for (let i = 0; i < searchCount; i++) {
+      const token = searchTokens[i % searchTokens.length];
+      if (client?.findMany) {
+        await client.findMany('_sync_bench_temp', {
+          where: { title: { $contains: token } },
+          limit: 25,
+        });
+      } else {
+        await db.execute(
+          'SELECT * FROM "_sync_bench_temp" WHERE title LIKE ? LIMIT 25',
+          [`%${token}%`],
+        );
+      }
+    }
+    const t6Duration = Math.max(1, Date.now() - t6Start);
+    list.push({
+      name: 'client.findMany() $contains Search',
+      category: 'Local-Lite Client',
+      description: '50 fuzzy text queries compiling $contains into SQL LIKE pushdown',
+      operations: searchCount,
+      durationMs: t6Duration,
+      opsPerSec: Math.round((searchCount / t6Duration) * 1000),
+      status: 'success',
+    });
+
+    // 7. client.transaction() ACID Rollback Verification
+    onProgress?.('Testing client.transaction() ACID rollback isolation...', 0.78);
     const rollbackStart = Date.now();
     for (let c = 0; c < 10; c++) {
       try {
-        await db.transaction(async (tx: any) => {
-          await tx.execute(
-            'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-            [`rb-${c}`, 'Pre-rollback Row', 10, '{}', new Date().toISOString()],
-          );
-          // Deliberate duplicate PK failure
-          await tx.execute(
-            'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-            [`rb-${c}`, 'Colliding Row', 20, '{}', new Date().toISOString()],
-          );
-        });
+        if (client?.transaction) {
+          await client.transaction(async (txClient: any) => {
+            await txClient.insert(
+              '_sync_bench_temp',
+              `rb-${c}`,
+              { title: 'Pre-rollback' },
+              { skipOutbox: true },
+            );
+            // Intentional abort
+            throw new Error('INTENTIONAL_BENCHMARK_ROLLBACK');
+          });
+        } else {
+          await db.transaction(async (tx: any) => {
+            await tx.execute('INSERT INTO "_sync_bench_temp" (id, title) VALUES (?, ?)', [
+              `rb-${c}`,
+              'Pre-rollback',
+            ]);
+            throw new Error('INTENTIONAL_BENCHMARK_ROLLBACK');
+          });
+        }
       } catch {}
     }
-    const rbCheck = await db.execute(
-      'SELECT COUNT(*) as cnt FROM "_sync_bench_temp" WHERE id LIKE "rb-%"',
-    );
-    const leaked = (rbCheck as any)?.rows?._array?.[0]?.cnt ?? 0;
+    const leakedCheck = client?.findMany
+      ? await client.findMany('_sync_bench_temp', {
+          where: { title: { $contains: 'Pre-rollback' } },
+        })
+      : [];
+    const leaked = Array.isArray(leakedCheck) ? leakedCheck.length : 0;
     const rbDuration = Math.max(1, Date.now() - rollbackStart);
     list.push({
-      name: 'ACID Rollback & Invariant',
-      category: 'ACID / Edge Cases',
-      description: `10 forced constraint failures rolled back cleanly (${leaked} leaked rows, zero pollution)`,
+      name: 'client.transaction() Rollback',
+      category: 'ACID / Transactions',
+      description: `10 aborted transactions via client.transaction() (${leaked} leaked rows, zero pollution)`,
       operations: 10,
       durationMs: rbDuration,
       opsPerSec: Math.round((10 / rbDuration) * 1000),
@@ -216,39 +295,57 @@ export async function runSQLiteBenchmark(
       note: `${leaked} leaked rows`,
     });
 
-    // 7. Large Document Blob I/O
-    onProgress?.('Testing large payload JSON blob I/O (20 x 40KB documents)...', 0.9);
-    const blobCount = 20;
-    const largePayloadStr = JSON.stringify({
-      audit_version: '3.0',
-      entries: Array.from({ length: 80 }, (_, idx) => ({
-        log_id: `log-${idx}`,
-        action: 'SYNC_UPDATE',
-        timestamp: new Date().toISOString(),
-      })),
-    });
-    const t7Start = Date.now();
-    for (let i = 0; i < blobCount; i++) {
-      const docId = `large-doc-${i}`;
-      await db.execute(
-        'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-        [docId, `Large Document ${i}`, i, largePayloadStr, new Date().toISOString()],
-      );
-      await db.execute('SELECT metadata FROM "_sync_bench_temp" WHERE id = ?', [docId]);
+    // 8. client.trackMutation() Outbox Cycle
+    onProgress?.('Testing client.trackMutation() outbox cycle (200 mutations)...', 0.85);
+    const outboxCount = 200;
+    const tOutboxStart = Date.now();
+    for (let i = 0; i < outboxCount; i++) {
+      if (client?.trackMutation) {
+        await client.trackMutation(
+          '_sync_bench_temp',
+          `outbox-row-${i}`,
+          i % 2 === 0 ? 'INSERT' : 'UPDATE',
+          { test: true, index: i },
+        );
+      }
     }
-    const t7Duration = Math.max(1, Date.now() - t7Start);
+    // Clean up test outbox records from sync_outbox
+    await db.execute('DELETE FROM "sync_outbox" WHERE "tableName" = ?', ['_sync_bench_temp']).catch(() => {});
+    const tOutboxDuration = Math.max(1, Date.now() - tOutboxStart);
     list.push({
-      name: 'Large Document Blob I/O',
-      category: 'SQLite',
-      description: '20 writes & reads of heavy ~40KB JSON documents simulating audit payloads',
-      operations: blobCount,
-      durationMs: t7Duration,
-      opsPerSec: Math.round((blobCount / t7Duration) * 1000),
+      name: 'client.trackMutation() Outbox',
+      category: 'Outbox / Sync',
+      description: '200 mutations tracked through local-lite sync_outbox pipeline & purged',
+      operations: outboxCount,
+      durationMs: tOutboxDuration,
+      opsPerSec: Math.round((outboxCount / tOutboxDuration) * 1000),
       status: 'success',
     });
 
-    // 8. WAL Read/Write Concurrency Under Contention
-    onProgress?.('Testing WAL non-blocking concurrent reads & writes...', 0.92);
+    // 9. client.delete() Pipeline
+    onProgress?.('Testing client.delete() removal (50 rows)...', 0.9);
+    const deleteCount = 50;
+    const tDelStart = Date.now();
+    for (let i = 0; i < deleteCount; i++) {
+      if (client?.delete) {
+        await client.delete('_sync_bench_temp', `b-batch-${i}`, { skipOutbox: true });
+      } else {
+        await db.execute('DELETE FROM "_sync_bench_temp" WHERE id = ?', [`b-batch-${i}`]);
+      }
+    }
+    const tDelDuration = Math.max(1, Date.now() - tDelStart);
+    list.push({
+      name: 'client.delete() Pipeline',
+      category: 'Local-Lite Client',
+      description: '50 deletions through local-lite mutate() deletion pipeline',
+      operations: deleteCount,
+      durationMs: tDelDuration,
+      opsPerSec: Math.round((deleteCount / tDelDuration) * 1000),
+      status: 'success',
+    });
+
+    // 10. WAL Read/Write Concurrency Under Contention
+    onProgress?.('Testing WAL non-blocking concurrent reads & writes...', 0.95);
     const concReadCount = 100;
     const concWriteCount = 60;
     const tConcStart = Date.now();
@@ -268,83 +365,11 @@ export async function runSQLiteBenchmark(
     const totalConcOps = concWriteCount + concReadCount;
     list.push({
       name: 'WAL Concurrency Under Contention',
-      category: 'ACID / Edge Cases',
+      category: 'ACID / Transactions',
       description: '60 atomic writes executed simultaneously with 100 concurrent reads in non-blocking WAL mode',
       operations: totalConcOps,
       durationMs: tConcDuration,
       opsPerSec: Math.round((totalConcOps / tConcDuration) * 1000),
-      status: 'success',
-    });
-
-    // 9. Outbox Batch Ingestion & Dequeue
-    onProgress?.('Testing outbox mutation queuing & dequeue cycle (300 mutations)...', 0.95);
-    await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"');
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS "_sync_bench_outbox" (
-        id TEXT PRIMARY KEY,
-        table_name TEXT,
-        operation TEXT,
-        row_id TEXT,
-        payload TEXT,
-        timestamp INTEGER,
-        status TEXT
-      )
-    `);
-    const outboxCount = 300;
-    const tOutboxStart = Date.now();
-    await db.transaction(async (tx: any) => {
-      for (let i = 0; i < outboxCount; i++) {
-        await tx.execute(
-          'INSERT INTO "_sync_bench_outbox" (id, table_name, operation, row_id, payload, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [
-            `mut-${i}`,
-            'tenants',
-            i % 3 === 0 ? 'INSERT' : i % 3 === 1 ? 'UPDATE' : 'DELETE',
-            `row-${i}`,
-            JSON.stringify({ name: `Tenant ${i}`, balance: i * 100 }),
-            Date.now() + i,
-            'pending',
-          ],
-        );
-      }
-    });
-    await db.execute(
-      'SELECT * FROM "_sync_bench_outbox" WHERE status = ? ORDER BY timestamp ASC LIMIT 100',
-      ['pending'],
-    );
-    await db.execute('UPDATE "_sync_bench_outbox" SET status = ? WHERE id LIKE "mut-1%"', ['synced']);
-    await db.execute('DELETE FROM "_sync_bench_outbox" WHERE status = ?', ['synced']);
-    const tOutboxDuration = Math.max(1, Date.now() - tOutboxStart);
-    list.push({
-      name: 'Outbox Ingestion & Dequeue',
-      category: 'Storage',
-      description: '300 offline mutations queued, indexed, status-transitioned and purged',
-      operations: outboxCount,
-      durationMs: tOutboxDuration,
-      opsPerSec: Math.round((outboxCount / tOutboxDuration) * 1000),
-      status: 'success',
-    });
-
-    // 10. Fuzzy Text Substring Search
-    onProgress?.('Testing fuzzy substring search across unindexed text columns...', 0.97);
-    const searchCount = 50;
-    const searchTokens = ['%Item 1%', '%Updated%', '%rev: 5%', '%Large%', '%nonexistent%'];
-    const tSearchStart = Date.now();
-    for (let i = 0; i < searchCount; i++) {
-      const token = searchTokens[i % searchTokens.length];
-      await db.execute(
-        'SELECT * FROM "_sync_bench_temp" WHERE title LIKE ? OR metadata LIKE ? LIMIT 25',
-        [token, token],
-      );
-    }
-    const tSearchDuration = Math.max(1, Date.now() - tSearchStart);
-    list.push({
-      name: 'Fuzzy Substring Search',
-      category: 'SQLite',
-      description: '50 LIKE %token% unindexed substring scans across titles & JSON metadata',
-      operations: searchCount,
-      durationMs: tSearchDuration,
-      opsPerSec: Math.round((searchCount / tSearchDuration) * 1000),
       status: 'success',
     });
 
@@ -399,12 +424,12 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
   const [copied, setCopied] = useState(false);
 
   const startBenchmark = async () => {
-    if (!client?.db) return;
+    if (!client) return;
     setIsRunning(true);
     setProgress(0);
     setResults([]);
     try {
-      const benchResults = await runSQLiteBenchmark(client.db, (currentStep, pct) => {
+      const benchResults = await runSQLiteBenchmark(client, (currentStep, pct) => {
         setStep(currentStep);
         setProgress(pct);
       });

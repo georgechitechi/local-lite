@@ -274,7 +274,13 @@ describe('Performance Benchmark & Stress Test Suite', () => {
       notes: `Payment reference #TXN-${i * 997} received on 2026-10-18. Status: ${i % 2 === 0 ? 'Verified' : 'Pending Review'}`,
     }));
 
-    const searchQueries = ['Apartment 12', 'random@domain-3', 'TXN-4985', 'Pending Review', 'xyz-nonexistent'];
+    const searchQueries = [
+      'Apartment 12',
+      'random@domain-3',
+      'TXN-4985',
+      'Pending Review',
+      'xyz-nonexistent',
+    ];
     const iterations = 500;
     const start = performance.now();
     let totalMatches = 0;
