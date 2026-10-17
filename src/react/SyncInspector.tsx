@@ -105,7 +105,7 @@ export function SyncInspector({
 
     return (
       <View style={[rnStyles.container, containerPosStyle]} pointerEvents="box-none">
-        {isOpen && (
+        {isOpen ? (
           <View style={rnStyles.panel}>
             <View style={rnStyles.panelHeader}>
               <View style={rnStyles.row}>
@@ -121,7 +121,7 @@ export function SyncInspector({
               <View style={rnStyles.statGrid}>
                 <View style={rnStyles.statBox}>
                   <Text style={rnStyles.statNum}>{status.pendingCount}</Text>
-                  <Text style={rnStyles.statLabel}>Pending Outbox</Text>
+                  <Text style={rnStyles.statLabel}>Pending</Text>
                 </View>
                 <View style={rnStyles.statBox}>
                   <Text style={[rnStyles.statNum, { color: metrics?.outboxFailedCount ? '#EF4444' : '#10B981' }]}>
@@ -166,27 +166,27 @@ export function SyncInspector({
               </View>
             </ScrollView>
           </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setIsOpen(true)}
+            style={[
+              rnStyles.pill,
+              {
+                borderColor: statusColor,
+                alignSelf: isLeft ? 'flex-start' : 'flex-end',
+              },
+            ]}
+            activeOpacity={0.8}
+          >
+            <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
+            <Text style={rnStyles.pillText}>local-lite</Text>
+            {status.pendingCount > 0 && (
+              <View style={rnStyles.badge}>
+                <Text style={rnStyles.badgeText}>{status.pendingCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         )}
-
-        <TouchableOpacity
-          onPress={() => setIsOpen(!isOpen)}
-          style={[
-            rnStyles.pill,
-            {
-              borderColor: statusColor,
-              alignSelf: isLeft ? 'flex-start' : 'flex-end',
-            },
-          ]}
-          activeOpacity={0.8}
-        >
-          <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
-          <Text style={rnStyles.pillText}>local-lite</Text>
-          {status.pendingCount > 0 && (
-            <View style={rnStyles.badge}>
-              <Text style={rnStyles.badgeText}>{status.pendingCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
       </View>
     );
   }
@@ -211,7 +211,7 @@ export function SyncInspector({
         alignItems: isLeft ? 'flex-start' : 'flex-end',
       }}
     >
-      {isOpen && (
+      {isOpen ? (
         <div
           style={{
             width: '100%',
@@ -297,40 +297,41 @@ export function SyncInspector({
             </div>
           </div>
         </div>
+      ) : (
+        <button
+          onClick={() => setIsOpen(true)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            background: '#1F2937',
+            color: '#F9FAFB',
+            border: `1px solid ${statusColor}`,
+            padding: '8px 14px',
+            borderRadius: 20,
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+            pointerEvents: 'auto',
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor }} />
+          <span style={{ fontWeight: 600 }}>local-lite</span>
+          {status.pendingCount > 0 && (
+            <span
+              style={{
+                background: '#EF4444',
+                color: '#fff',
+                fontSize: 10,
+                padding: '2px 6px',
+                borderRadius: 10,
+                fontWeight: 'bold',
+              }}
+            >
+              {status.pendingCount}
+            </span>
+          )}
+        </button>
       )}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          background: '#1F2937',
-          color: '#F9FAFB',
-          border: `1px solid ${statusColor}`,
-          padding: '8px 14px',
-          borderRadius: 20,
-          cursor: 'pointer',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-          pointerEvents: 'auto',
-        }}
-      >
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor }} />
-        <span style={{ fontWeight: 600 }}>local-lite</span>
-        {status.pendingCount > 0 && (
-          <span
-            style={{
-              background: '#EF4444',
-              color: '#fff',
-              fontSize: 10,
-              padding: '2px 6px',
-              borderRadius: 10,
-              fontWeight: 'bold',
-            }}
-          >
-            {status.pendingCount}
-          </span>
-        )}
-      </button>
     </div>
   );
 }
