@@ -52,7 +52,7 @@ export default function PropertyFormModal({
 
   const isEdit = !!propertyId;
 
-  const { selectedBusiness, requireBusiness } = useBusiness();
+  const { selectedBusiness } = useBusiness();
   const { insert, update } = useCoreMutations();
   const propertiesList = useProperties(selectedBusiness?.id);
   const { showSnackbar } = useSnackbar();

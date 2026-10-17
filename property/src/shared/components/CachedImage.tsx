@@ -45,7 +45,9 @@ Storage.getItem('pendingUploads').then(data => {
     try {
       pendingUploads = JSON.parse(data);
       rebuildUrlIndex();
-      uploadListeners.forEach(cb => cb());
+      uploadListeners.forEach(cb => {
+        cb();
+      });
     } catch {
       // ignore
     }
@@ -55,7 +57,9 @@ Storage.getItem('pendingUploads').then(data => {
 const savePendingUploads = () => {
   rebuildUrlIndex();
   Storage.setItem('pendingUploads', JSON.stringify(pendingUploads)).catch(() => {});
-  uploadListeners.forEach(cb => cb());
+  uploadListeners.forEach(cb => {
+    cb();
+  });
 };
 
 export const subscribeUploads = (cb: () => void) => {
