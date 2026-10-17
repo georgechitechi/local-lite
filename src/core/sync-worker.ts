@@ -22,7 +22,7 @@ import { OutboxStore } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
 import { TableManager } from './table-manager.js';
 import { SchemaManager } from './schema-manager.js';
-import { SyncLogger, CustomLogger, LogLevel, defaultLogger } from '../utils/logger.js';
+import { SyncLogger, CustomLogger, LogLevel, createSyncLogger } from '../utils/logger.js';
 
 /** Maximum outbox records sent per push cycle. */
 const PUSH_BATCH_SIZE = 50;
@@ -107,16 +107,7 @@ export class SyncWorker {
     this.pushIntervalMs = options.pushIntervalMs ?? 5000;
     this.pullIntervalMs = options.pullIntervalMs ?? 10000;
 
-    // Configure logger
-    if (options.logger instanceof SyncLogger) {
-      this.logger = options.logger;
-    } else if (typeof options.logger === 'boolean') {
-      this.logger = new SyncLogger({ enabled: options.logger, level: options.logLevel });
-    } else if (options.logger && typeof options.logger === 'object') {
-      this.logger = new SyncLogger({ customLogger: options.logger, level: options.logLevel });
-    } else {
-      this.logger = options.logLevel ? new SyncLogger({ level: options.logLevel }) : defaultLogger;
-    }
+    this.logger = createSyncLogger(options.logger, options.logLevel);
 
     // Configure retries & backoff
     const r = options.retry;

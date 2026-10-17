@@ -4,7 +4,7 @@ import {
   SyncLogger,
   CustomLogger,
   LogLevel,
-  defaultLogger,
+  createSyncLogger,
   formatConvexError,
 } from '../../utils/logger.js';
 
@@ -75,15 +75,7 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
     this.deletedColumn = options.deletedColumn ?? 'deleted';
     this.updatedAtColumn = options.updatedAtColumn ?? 'updatedAt';
 
-    if (options.logger instanceof SyncLogger) {
-      this.logger = options.logger;
-    } else if (typeof options.logger === 'boolean') {
-      this.logger = new SyncLogger({ enabled: options.logger, level: options.logLevel });
-    } else if (options.logger && typeof options.logger === 'object') {
-      this.logger = new SyncLogger({ customLogger: options.logger, level: options.logLevel });
-    } else {
-      this.logger = options.logLevel ? new SyncLogger({ level: options.logLevel }) : defaultLogger;
-    }
+    this.logger = createSyncLogger(options.logger, options.logLevel);
   }
 
   /**

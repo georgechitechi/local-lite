@@ -60,7 +60,6 @@ export class TransactionalClient {
     options: MutateOptions = {}
   ): Promise<void> {
     const pk = options.primaryKey ?? this.parent.getPrimaryKey();
-    const outboxId = generateUUID();
     const timestamp = options.customTimestamp ?? Date.now();
 
     await TableManager.applyMutation(this.tx, tableName, rowId, operation, payload, pk, {
@@ -283,7 +282,6 @@ export class LocalFirstClient {
     options: MutateOptions = {}
   ): Promise<void> {
     const pk = options.primaryKey ?? this.primaryKey;
-    const outboxId = generateUUID();
     const timestamp = options.customTimestamp ?? Date.now();
 
     let affectedOutboxId: string | undefined;
@@ -584,6 +582,18 @@ export class LocalFirstClient {
           }
           if (ops.$null !== undefined) {
             whereClauses.push(ops.$null ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
+          }
+          if (ops.$contains !== undefined) {
+            whereClauses.push(`${safeCol} LIKE ?`);
+            params.push(`%${ops.$contains}%`);
+          }
+          if (ops.$startsWith !== undefined) {
+            whereClauses.push(`${safeCol} LIKE ?`);
+            params.push(`${ops.$startsWith}%`);
+          }
+          if (ops.$endsWith !== undefined) {
+            whereClauses.push(`${safeCol} LIKE ?`);
+            params.push(`%${ops.$endsWith}`);
           }
         }
       }

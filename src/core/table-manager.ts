@@ -10,6 +10,16 @@ export interface TableMutationOptions {
 
 const defaultSchemaManager = new SchemaManager();
 
+function formatPayload(payload: Record<string, any> | null): Record<string, any> {
+  const formatted: Record<string, any> = {};
+  if (payload && typeof payload === 'object') {
+    for (const [k, v] of Object.entries(payload)) {
+      formatted[k] = formatValueForStorage(v);
+    }
+  }
+  return formatted;
+}
+
 export class TableManager {
   /**
    * Applies an insert, update, or delete mutation on a local data table.
@@ -38,19 +48,10 @@ export class TableManager {
       return;
     }
 
-    let rowData: Record<string, any>;
-    if (options?.autoSchema) {
-      const formatted = await sm.ensureColumns(tx, tableName, payload, primaryKey);
-      rowData = { ...formatted, [primaryKey]: rowId };
-    } else {
-      const formatted: Record<string, any> = {};
-      if (payload && typeof payload === 'object') {
-        for (const k of Object.keys(payload)) {
-          formatted[k] = formatValueForStorage(payload[k]);
-        }
-      }
-      rowData = { ...formatted, [primaryKey]: rowId };
-    }
+    const formatted = options?.autoSchema
+      ? await sm.ensureColumns(tx, tableName, payload, primaryKey)
+      : formatPayload(payload);
+    const rowData: Record<string, any> = { ...formatted, [primaryKey]: rowId };
 
     const keys = Object.keys(rowData);
     if (keys.length === 0) return;

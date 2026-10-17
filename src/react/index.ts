@@ -172,7 +172,7 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
     try {
       const [metrics, records, lastSynced] = await Promise.all([
         client.getMetrics().catch(() => null),
-        client.getOutboxRecords().catch(() => []),
+        client.getOutboxRecords({ limit: 50 }).catch(() => []),
         client.getLastSyncedAt().catch(() => null),
       ]);
 

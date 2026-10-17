@@ -5,7 +5,7 @@ import {
   SyncLogger,
   CustomLogger,
   LogLevel,
-  defaultLogger,
+  createSyncLogger,
   formatSupabaseError,
 } from '../../utils/logger.js';
 
@@ -134,16 +134,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.schema = options.schema ?? 'public';
     this.channelName = options.channelName ?? 'local_first_sync';
     this.fetchLimit = options.fetchLimit ?? 1000;
-
-    if (options.logger instanceof SyncLogger) {
-      this.logger = options.logger;
-    } else if (typeof options.logger === 'boolean') {
-      this.logger = new SyncLogger({ enabled: options.logger, level: options.logLevel });
-    } else if (options.logger && typeof options.logger === 'object') {
-      this.logger = new SyncLogger({ customLogger: options.logger, level: options.logLevel });
-    } else {
-      this.logger = options.logLevel ? new SyncLogger({ level: options.logLevel }) : defaultLogger;
-    }
+    this.logger = createSyncLogger(options.logger, options.logLevel);
   }
 
   /**
@@ -282,33 +273,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           }
         } else {
           // Bulk upsert for multiple consecutive inserts
-          try {
-            const rows = batch.map(buildRowData);
-            const { error } = await client.from(op.tableName).upsert(rows);
-            if (!error) {
-              for (const item of batch) successfulIds.push(item.id);
-            } else {
-              // On bulk failure, retry individually to isolate only the failing records
-              for (const item of batch) {
-                try {
-                  const singleRow = buildRowData(item);
-                  const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
-                  if (singleErr) {
-                    const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
-                    failedIds.push(item.id);
-                    errors[item.id] = msg;
-                  } else {
-                    successfulIds.push(item.id);
-                  }
-                } catch (singleErr: any) {
-                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
-                  failedIds.push(item.id);
-                  errors[item.id] = msg;
-                }
-              }
-            }
-          } catch {
-            // Retry individually if bulk threw
+          const retryIndividually = async () => {
             for (const item of batch) {
               try {
                 const singleRow = buildRowData(item);
@@ -326,6 +291,18 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
                 errors[item.id] = msg;
               }
             }
+          };
+
+          try {
+            const rows = batch.map(buildRowData);
+            const { error } = await client.from(op.tableName).upsert(rows);
+            if (!error) {
+              for (const item of batch) successfulIds.push(item.id);
+            } else {
+              await retryIndividually();
+            }
+          } catch {
+            await retryIndividually();
           }
         }
         continue;

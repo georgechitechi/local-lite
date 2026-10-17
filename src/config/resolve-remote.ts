@@ -38,19 +38,21 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
     });
   }
 
+  const getSupabaseOptions = () => ({
+    tables: config.tables,
+    primaryKey: config.primaryKey,
+    schema: config.supabase?.schema,
+    updatedAtColumn: config.supabase?.updatedAtColumn,
+    deletedColumn: config.supabase?.deletedColumn,
+    deletedValue: config.supabase?.deletedValue,
+    deletedAtColumn: config.supabase?.deletedAtColumn,
+    pushRpcName: config.supabase?.pushRpcName,
+    channelName: config.supabase?.channelName,
+  });
+
   // 4. Supabase with pre-configured client
   if (config.supabase?.client) {
-    return new SupabaseRemoteAdapter(config.supabase.client, {
-      tables: config.tables,
-      primaryKey: config.primaryKey,
-      schema: config.supabase.schema,
-      updatedAtColumn: config.supabase.updatedAtColumn,
-      deletedColumn: config.supabase.deletedColumn,
-      deletedValue: config.supabase.deletedValue,
-      deletedAtColumn: config.supabase.deletedAtColumn,
-      pushRpcName: config.supabase.pushRpcName,
-      channelName: config.supabase.channelName,
-    });
+    return new SupabaseRemoteAdapter(config.supabase.client, getSupabaseOptions());
   }
 
   // 5. Supabase with URL + anonKey (lazy dynamic import)
@@ -81,17 +83,7 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
     }
     const createClientFn = supabaseModule.createClient || supabaseModule.default?.createClient;
     const supabaseClient = createClientFn(config.supabase.url, config.supabase.anonKey);
-    return new SupabaseRemoteAdapter(supabaseClient, {
-      tables: config.tables,
-      primaryKey: config.primaryKey,
-      schema: config.supabase.schema,
-      updatedAtColumn: config.supabase.updatedAtColumn,
-      deletedColumn: config.supabase.deletedColumn,
-      deletedValue: config.supabase.deletedValue,
-      deletedAtColumn: config.supabase.deletedAtColumn,
-      pushRpcName: config.supabase.pushRpcName,
-      channelName: config.supabase.channelName,
-    });
+    return new SupabaseRemoteAdapter(supabaseClient, getSupabaseOptions());
   }
 
   // 6. Explicitly selected demo backend only; never acknowledge writes into a temporary backend implicitly.

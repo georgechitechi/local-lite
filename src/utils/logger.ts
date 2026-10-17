@@ -96,6 +96,25 @@ export class SyncLogger {
 export const defaultLogger = new SyncLogger();
 
 /**
+ * Factory to create or resolve a SyncLogger from boolean, config, or existing logger.
+ */
+export function createSyncLogger(
+  logger?: SyncLogger | CustomLogger | boolean,
+  logLevel?: LogLevel
+): SyncLogger {
+  if (logger instanceof SyncLogger) {
+    return logger;
+  }
+  if (typeof logger === 'boolean') {
+    return new SyncLogger({ enabled: logger, level: logLevel });
+  }
+  if (logger && typeof logger === 'object') {
+    return new SyncLogger({ customLogger: logger, level: logLevel });
+  }
+  return logLevel ? new SyncLogger({ level: logLevel }) : defaultLogger;
+}
+
+/**
  * Translates PostgreSQL / Supabase PostgREST error codes into actionable, human-readable explanations.
  */
 export function formatSupabaseError(
