@@ -34,12 +34,10 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
-import BenchmarkModal from '@/features/settings/components/BenchmarkModal';
 import BusinessSelectModal from '@/features/settings/components/BusinessSelectModal';
 import DashboardCustomizationModal from '@/features/settings/components/DashboardCustomizationModal';
 import HelpModal from '@/features/settings/components/HelpModal';
 import ResetDataModal from '@/features/settings/components/ResetDataModal';
-import SqliteInspectorModal from '@/features/settings/components/SqliteInspectorModal';
 import SupportModal from '@/features/settings/components/SupportModal';
 import ThemeModal from '@/features/settings/components/ThemeModal';
 import { useSettingsModals } from '@/features/settings/hooks/useSettingsModals';
@@ -224,8 +222,6 @@ export default function SettingsManager() {
     setPermissionModalVisible,
   } = useSettingsModals();
 
-  const [showSqliteInspector, setShowSqliteInspector] = useState(false);
-  const [showBenchmarkModal, setShowBenchmarkModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncCompleted, setSyncCompleted] = useState(false);
@@ -1136,29 +1132,6 @@ export default function SettingsManager() {
             onPress={() => setShowHelpModal(true)}
           />
         </List.Section>
-
-        {__DEV__ && (
-          <>
-            <Divider />
-            <List.Section>
-              <List.Subheader>Developer Tools</List.Subheader>
-              <List.Item
-                title="SQLite Database Inspector"
-                description="View all local SQLite tables and data records"
-                left={props => <List.Icon {...props} icon="database-search" />}
-                onPress={() => setShowSqliteInspector(true)}
-                right={props => <IconButton {...props} icon="chevron-right" />}
-              />
-              <List.Item
-                title="Performance Benchmark"
-                description="Test SQLite read/write throughput, storage speed, and latency"
-                left={props => <List.Icon {...props} icon="speedometer" />}
-                right={props => <IconButton {...props} icon="chevron-right" />}
-                onPress={() => setShowBenchmarkModal(true)}
-              />
-            </List.Section>
-          </>
-        )}
       </ScrollView>
       {renderModal()}
 
@@ -1193,19 +1166,6 @@ export default function SettingsManager() {
         processing={processingReset}
         colors={colors}
       />
-      {/* Developer Modals */}
-      {__DEV__ && (
-        <>
-          <SqliteInspectorModal
-            visible={showSqliteInspector}
-            onDismiss={() => setShowSqliteInspector(false)}
-          />
-          <BenchmarkModal
-            visible={showBenchmarkModal}
-            onDismiss={() => setShowBenchmarkModal(false)}
-          />
-        </>
-      )}
       <Portal>
         {/* Links Modal */}
         <BaseModal
