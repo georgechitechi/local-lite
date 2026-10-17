@@ -8,6 +8,13 @@ try {
   // Web / DOM environment
 }
 
+let RNSafeArea: any;
+try {
+  RNSafeArea = require('react-native-safe-area-context');
+} catch {
+  // Web / DOM environment or not installed
+}
+
 export interface BuiltinBenchmarkResult {
   name: string;
   category: 'SQLite' | 'Storage' | 'Memory / JSON' | 'ACID / Edge Cases';
@@ -343,18 +350,30 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
 
   // React Native renderer (Full-height modal)
   if (RN && RN.View) {
-    const { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator, SafeAreaView } = RN;
+    const { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Platform, StatusBar } = RN;
+    const SafeComp = RNSafeArea?.SafeAreaView || RN.SafeAreaView || View;
+    const isAndroid = Platform?.OS === 'android';
+    const statusBarHeight = isAndroid ? (StatusBar?.currentHeight || 24) : 0;
 
     return (
       <Modal
         visible={visible}
         animationType="slide"
         presentationStyle="fullScreen"
+        statusBarTranslucent={true}
         onRequestClose={onDismiss}
       >
-        <SafeAreaView style={styles.fullScreenSafe}>
+        <SafeComp
+          style={styles.fullScreenSafe}
+          edges={['top', 'bottom', 'left', 'right']}
+        >
           {/* Top Navigation Bar */}
-          <View style={styles.topBar}>
+          <View
+            style={[
+              styles.topBar,
+              !RNSafeArea?.SafeAreaView && isAndroid && { paddingTop: statusBarHeight + 10 },
+            ]}
+          >
             <View style={{ flex: 1 }}>
               <Text style={styles.topBarTitle}>⚡ SQLite Benchmark</Text>
               <Text style={styles.topBarSub}>Inbuilt local-lite throughput & ACID test suite</Text>
@@ -442,7 +461,12 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
           </ScrollView>
 
           {/* Bottom Action Bar */}
-          <View style={styles.bottomBar}>
+          <View
+            style={[
+              styles.bottomBar,
+              !RNSafeArea?.SafeAreaView && isAndroid && { paddingBottom: 32 },
+            ]}
+          >
             <TouchableOpacity
               onPress={startBenchmark}
               disabled={isRunning}
@@ -469,7 +493,7 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
               </TouchableOpacity>
             )}
           </View>
-        </SafeAreaView>
+        </SafeComp>
       </Modal>
     );
   }
