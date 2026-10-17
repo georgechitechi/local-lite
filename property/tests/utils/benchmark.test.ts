@@ -262,4 +262,80 @@ describe('Performance Benchmark & Stress Test Suite', () => {
     );
     expect(opsPerSec).toBeGreaterThan(1000);
   });
+
+  // ---------------------------------------------------------------------------
+  // 7. Tough Edge Case: High-Throughput Fuzzy Substring Text Filtering
+  // ---------------------------------------------------------------------------
+  it('benchmarks multi-field fuzzy substring search throughput across 1,000 records', () => {
+    const dataset = Array.from({ length: 1000 }, (_, i) => ({
+      id: `item-${i}`,
+      name: `Tenant ${i} - Apartment ${i % 50} Block ${String.fromCharCode(65 + (i % 26))}`,
+      email: `user.${i}.random@domain-${i % 10}.co.ke`,
+      notes: `Payment reference #TXN-${i * 997} received on 2026-10-18. Status: ${i % 2 === 0 ? 'Verified' : 'Pending Review'}`,
+    }));
+
+    const searchQueries = ['Apartment 12', 'random@domain-3', 'TXN-4985', 'Pending Review', 'xyz-nonexistent'];
+    const iterations = 500;
+    const start = performance.now();
+    let totalMatches = 0;
+
+    for (let i = 0; i < iterations; i++) {
+      const query = searchQueries[i % searchQueries.length].toLowerCase();
+      const matches = dataset.filter(
+        item =>
+          item.name.toLowerCase().includes(query) ||
+          item.email.toLowerCase().includes(query) ||
+          item.notes.toLowerCase().includes(query),
+      );
+      totalMatches += matches.length;
+    }
+
+    const durationMs = Math.max(1, performance.now() - start);
+    const opsPerSec = Math.round((iterations / durationMs) * 1000);
+
+    console.log(
+      `[BENCHMARK] Multi-Field Fuzzy Search: ${iterations.toLocaleString()} full-dataset scans in ${durationMs.toFixed(2)}ms (${opsPerSec.toLocaleString()} scans/sec, ${totalMatches.toLocaleString()} matches)`,
+    );
+    expect(opsPerSec).toBeGreaterThan(50);
+    expect(totalMatches).toBeGreaterThan(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. Local-First Outbox State Queue Cycle
+  // ---------------------------------------------------------------------------
+  it('benchmarks local-first outbox mutation state queuing and purge cycle', () => {
+    const batchSize = 1000;
+    const start = performance.now();
+
+    // 1. Ingest mutations
+    const queue = Array.from({ length: batchSize }, (_, i) => ({
+      id: `mut-${i}`,
+      table_name: 'tenants',
+      operation: i % 3 === 0 ? 'INSERT' : i % 3 === 1 ? 'UPDATE' : 'DELETE',
+      row_id: `row-${i}`,
+      payload: { name: `Tenant ${i}`, balance: i * 50 },
+      timestamp: Date.now() + i,
+      status: 'pending' as 'pending' | 'syncing' | 'synced',
+    }));
+
+    // 2. Sort pending by timestamp
+    const sorted = [...queue].sort((a, b) => a.timestamp - b.timestamp);
+
+    // 3. Mark batch as syncing then synced
+    for (const item of sorted) {
+      item.status = 'synced';
+    }
+
+    // 4. Purge committed items
+    const remaining = sorted.filter(item => item.status !== 'synced');
+
+    const durationMs = Math.max(1, performance.now() - start);
+    const opsPerSec = Math.round((batchSize / durationMs) * 1000);
+
+    console.log(
+      `[BENCHMARK] Outbox Queue State Cycle: ${batchSize.toLocaleString()} mutation lifecycle transitions in ${durationMs.toFixed(2)}ms (${opsPerSec.toLocaleString()} ops/sec)\n`,
+    );
+    expect(remaining.length).toBe(0);
+    expect(opsPerSec).toBeGreaterThan(500);
+  });
 });

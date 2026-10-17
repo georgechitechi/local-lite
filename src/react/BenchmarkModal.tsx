@@ -247,8 +247,109 @@ export async function runSQLiteBenchmark(
       status: 'success',
     });
 
-    // 8. Resilient JSON Fuzz Parsing
-    onProgress?.('Testing resilient JSON fuzz hydration (1,000 cycles)...', 0.98);
+    // 8. WAL Read/Write Concurrency Under Contention
+    onProgress?.('Testing WAL non-blocking concurrent reads & writes...', 0.92);
+    const concReadCount = 100;
+    const concWriteCount = 60;
+    const tConcStart = Date.now();
+    const writePromise = db.transaction(async (tx: any) => {
+      for (let i = 0; i < concWriteCount; i++) {
+        await tx.execute(
+          'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+          [`wal-w-${i}`, `WAL Item ${i}`, i, '{"wal":true}', new Date().toISOString()],
+        );
+      }
+    });
+    const readPromises = Array.from({ length: concReadCount }, (_, idx) =>
+      db.execute('SELECT COUNT(*) as c FROM "_sync_bench_temp" WHERE score >= ?', [idx % 50]),
+    );
+    await Promise.all([writePromise, ...readPromises]);
+    const tConcDuration = Math.max(1, Date.now() - tConcStart);
+    const totalConcOps = concWriteCount + concReadCount;
+    list.push({
+      name: 'WAL Concurrency Under Contention',
+      category: 'ACID / Edge Cases',
+      description: '60 atomic writes executed simultaneously with 100 concurrent reads in non-blocking WAL mode',
+      operations: totalConcOps,
+      durationMs: tConcDuration,
+      opsPerSec: Math.round((totalConcOps / tConcDuration) * 1000),
+      status: 'success',
+    });
+
+    // 9. Outbox Batch Ingestion & Dequeue
+    onProgress?.('Testing outbox mutation queuing & dequeue cycle (300 mutations)...', 0.95);
+    await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"');
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS "_sync_bench_outbox" (
+        id TEXT PRIMARY KEY,
+        table_name TEXT,
+        operation TEXT,
+        row_id TEXT,
+        payload TEXT,
+        timestamp INTEGER,
+        status TEXT
+      )
+    `);
+    const outboxCount = 300;
+    const tOutboxStart = Date.now();
+    await db.transaction(async (tx: any) => {
+      for (let i = 0; i < outboxCount; i++) {
+        await tx.execute(
+          'INSERT INTO "_sync_bench_outbox" (id, table_name, operation, row_id, payload, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            `mut-${i}`,
+            'tenants',
+            i % 3 === 0 ? 'INSERT' : i % 3 === 1 ? 'UPDATE' : 'DELETE',
+            `row-${i}`,
+            JSON.stringify({ name: `Tenant ${i}`, balance: i * 100 }),
+            Date.now() + i,
+            'pending',
+          ],
+        );
+      }
+    });
+    await db.execute(
+      'SELECT * FROM "_sync_bench_outbox" WHERE status = ? ORDER BY timestamp ASC LIMIT 100',
+      ['pending'],
+    );
+    await db.execute('UPDATE "_sync_bench_outbox" SET status = ? WHERE id LIKE "mut-1%"', ['synced']);
+    await db.execute('DELETE FROM "_sync_bench_outbox" WHERE status = ?', ['synced']);
+    const tOutboxDuration = Math.max(1, Date.now() - tOutboxStart);
+    list.push({
+      name: 'Outbox Ingestion & Dequeue',
+      category: 'Storage',
+      description: '300 offline mutations queued, indexed, status-transitioned and purged',
+      operations: outboxCount,
+      durationMs: tOutboxDuration,
+      opsPerSec: Math.round((outboxCount / tOutboxDuration) * 1000),
+      status: 'success',
+    });
+
+    // 10. Fuzzy Text Substring Search
+    onProgress?.('Testing fuzzy substring search across unindexed text columns...', 0.97);
+    const searchCount = 50;
+    const searchTokens = ['%Item 1%', '%Updated%', '%rev: 5%', '%Large%', '%nonexistent%'];
+    const tSearchStart = Date.now();
+    for (let i = 0; i < searchCount; i++) {
+      const token = searchTokens[i % searchTokens.length];
+      await db.execute(
+        'SELECT * FROM "_sync_bench_temp" WHERE title LIKE ? OR metadata LIKE ? LIMIT 25',
+        [token, token],
+      );
+    }
+    const tSearchDuration = Math.max(1, Date.now() - tSearchStart);
+    list.push({
+      name: 'Fuzzy Substring Search',
+      category: 'SQLite',
+      description: '50 LIKE %token% unindexed substring scans across titles & JSON metadata',
+      operations: searchCount,
+      durationMs: tSearchDuration,
+      opsPerSec: Math.round((searchCount / tSearchDuration) * 1000),
+      status: 'success',
+    });
+
+    // 11. Resilient JSON Fuzz Parsing
+    onProgress?.('Testing resilient JSON fuzz hydration (1,000 cycles)...', 0.99);
     const fuzzCount = 1000;
     const fuzzPayloads = [
       JSON.stringify({ nested: { title: 'Document 🏢', val: 42, tags: ['sync', 'offline'] } }),
@@ -280,6 +381,7 @@ export async function runSQLiteBenchmark(
   } finally {
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
+    await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"').catch(() => {});
   }
 
   return list;
