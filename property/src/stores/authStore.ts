@@ -188,6 +188,12 @@ export const signOut = async (options?: { clearLocalData?: boolean }) => {
   try {
     updateAuthState({ isSigningOut: true });
 
+    // 1. Immediately stop any active synchronization
+    try {
+      const client = await getSyncClient();
+      client.syncWorker.stop();
+    } catch {}
+
     let biometricEnabled = false;
     try {
       biometricEnabled = (await secureStorage.getItem('biometricEnabled')) === true;
@@ -196,13 +202,17 @@ export const signOut = async (options?: { clearLocalData?: boolean }) => {
     }
 
     if (supabase) {
-      const { error } = await supabase.auth.signOut({
-        scope: biometricEnabled ? 'local' : 'global',
-      });
-      if (error && !biometricEnabled) {
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      try {
+        await supabase.auth.signOut({
+          scope: biometricEnabled ? 'local' : 'global',
+        });
+      } catch (err) {
+        console.warn('Supabase signOut error:', err);
       }
       if (!biometricEnabled) {
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {}
         try {
           await SupabaseStorage.removeItem('supabase.auth.token');
         } catch (e) {
@@ -221,16 +231,25 @@ export const signOut = async (options?: { clearLocalData?: boolean }) => {
       }
     }
 
-    setOfflineSession();
+    // Set auth state to logged out: null user & session
+    updateAuthState({
+      user: null,
+      session: null,
+      isOfflineAuthoritative: false,
+    });
+    updateAuthStateSync({ isLoggedIn: false });
 
     if (clearLocalData) {
-      await clearAllPersistence();
+      await clearAllPersistence({ reload: false });
     }
-
-    setOfflineUser(getOfflineUser());
   } catch (error) {
     console.error('Error signing out:', error);
-    setOfflineUser(getOfflineUser());
+    updateAuthState({
+      user: null,
+      session: null,
+      isOfflineAuthoritative: false,
+    });
+    updateAuthStateSync({ isLoggedIn: false });
   } finally {
     updateAuthState({ isSigningOut: false });
   }

@@ -1,24 +1,29 @@
 import Storage from 'expo-sqlite/kv-store';
+import { getAuthStateSyncSnapshot } from '@/shared/services/supabase';
 import { getSyncClient } from '@/shared/services/sync/client';
 import { safeReloadApp } from '@/shared/utils/safeReload';
 
 /**
- * Wipes all local SQLite persistence and forces a full JS runtime reload.
+ * Wipes all local SQLite persistence, clears KV-storage, and prevents unauthorized sync loops.
  */
 export async function clearAllPersistence(
   options: { reload?: boolean } = {},
 ): Promise<void> {
   const client = await getSyncClient();
   try {
+    // Immediately stop syncWorker so no in-flight or background pulls/pushes occur during or after wipe
+    client.syncWorker.stop();
     await client.reset({ dropTables: false });
     await Storage.clearAsync();
   } catch (error) {
     console.error('clearAllPersistence failed:', error);
-    client.syncWorker.start();
     throw error;
   }
   if (options.reload !== false) {
     await safeReloadApp();
   }
-  client.syncWorker.start();
+  // Only restart syncWorker if the user is actively authenticated online
+  if (getAuthStateSyncSnapshot().isLoggedIn) {
+    client.syncWorker.start();
+  }
 }

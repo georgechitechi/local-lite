@@ -14,7 +14,7 @@ import { AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 import BaseModal from '@/shared/components/BaseModal';
 import LoadingCard from '@/shared/components/LoadingCard';
 import { useLocalSync } from '@/shared/hooks/useLocalSync';
-import { ensureUserProfile, getOfflineUser } from '@/shared/services/auth';
+import { ensureUserProfile } from '@/shared/services/auth';
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase, updateAuthStateSync } from '@/shared/services/supabase';
 import {
@@ -92,10 +92,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             updateAuthStateSync({ isLoggedIn: true });
             updateAuthState({ isOfflineAuthoritative: false });
           } else if (!isStillInitializing || isExplicitEvent) {
-            updateAuthState({ user: getOfflineUser() });
+            updateAuthState({ user: null });
             updateAuthState({ session: null });
             updateAuthStateSync({ isLoggedIn: false });
-            updateAuthState({ isOfflineAuthoritative: true });
+            updateAuthState({ isOfflineAuthoritative: false });
           }
         }
 
@@ -168,9 +168,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => subscription.remove();
   }, []);
 
-  const handleSignOutConfirm = () => {
+  const handleSignOutConfirm = async () => {
     hideSignOutDialog();
-    signOut().then(() => router.replace('/'));
+    await signOut();
+    router.replace('/(auth)/login');
   };
 
   const contextValue = useMemo<AuthContextValue>(

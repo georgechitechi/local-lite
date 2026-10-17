@@ -170,6 +170,10 @@ export const WelcomeDashboard = () => {
     return 'Tenant';
   };
 
+  if (!user) {
+    return null;
+  }
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}

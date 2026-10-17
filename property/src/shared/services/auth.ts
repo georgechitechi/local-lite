@@ -62,6 +62,7 @@ const inFlightEnsureProfile = new Map<
 >();
 
 const saveProfileToLocalLite = async (profile: any) => {
+  if (!getAuthStateSyncSnapshot().isLoggedIn) return;
   const client = await getSyncClient();
   const existing = await client.findById('profiles', profile.id);
   if (existing) {
@@ -77,7 +78,8 @@ const saveProfileToLocalLite = async (profile: any) => {
 export const ensureUserProfile = async (
   user: User,
 ): Promise<{ profile: any; isOfflineFallback?: boolean } | null> => {
-  if (!user?.id) return null;
+  if (!user?.id || user.id === OFFLINE_USER_ID) return null;
+  if (!getAuthStateSyncSnapshot().isLoggedIn) return null;
 
   const userId = user.id;
   const inFlight = inFlightEnsureProfile.get(userId);
