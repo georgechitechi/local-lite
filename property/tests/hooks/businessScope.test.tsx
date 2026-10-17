@@ -81,7 +81,9 @@ it('scopes mounted pages and dashboard inputs on selection, switching, and accou
   );
 
   // A persisted selection belonging to another user must not become active.
-  await waitFor(() => expect(result.current.selectedBusiness?.id).toBe('a'));
+  await waitFor(() => expect(result.current.selectedBusiness).toBeNull());
+  await act(() => result.current.selectBusiness(mockRows.businesses[0]));
+  expect(result.current.selectedBusiness?.id).toBe('a');
   await waitFor(() =>
     expect(result.current.properties.map(row => row.id)).toEqual(['pa']),
   );
@@ -137,6 +139,7 @@ it('decodes shared roles and never borrows permissions from another business', a
     () => ({ selection: useBusiness(), access: useAccessControl() }),
     { wrapper },
   );
+  await act(() => result.current.selection.selectBusiness(mockRows.businesses[0]));
   await waitFor(() => expect(result.current.access.userRoles).toEqual(['staff']));
   expect(result.current.access.hasAccess(['admin', 'staff'])).toBe(true);
   await act(() => result.current.selection.selectBusiness(mockRows.businesses[1]));
@@ -156,6 +159,7 @@ it('revokes a selected business when its share becomes inactive', async () => {
     },
   ];
   const { result } = await renderHook(() => useBusiness(), { wrapper });
+  await act(() => result.current.selectBusiness(mockRows.businesses[0]));
   await waitFor(() => expect(result.current.selectedBusiness?.id).toBe('a'));
   await act(async () => {
     mockRows.business_shares = [{ ...mockRows.business_shares[0], status: 'inactive' }];

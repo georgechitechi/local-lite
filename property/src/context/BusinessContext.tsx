@@ -40,56 +40,22 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   const businesses = useBusinesses();
   const { user, loading: authLoading } = useAuth();
 
-  // Load persisted selectedBusinessId from Storage on mount
-  useEffect(() => {
-    Storage.getItem('selectedBusinessId').then(storedId => {
-      if (storedId) {
-        setSelectedBusinessId(storedId);
-      }
-    });
-  }, []);
-
-  const findDefaultBusiness = useCallback(
-    (bList: Business[]) => {
-      if (!bList || bList.length === 0) return null;
-      if (!user) return null;
-
-      const isOffline = user.id === OFFLINE_USER_ID;
-      // 1. Prioritize a business owned by the user or created offline
-      const owned = bList.find(
-        b =>
-          !b.deleted &&
-          (isOffline || b.user_id === user.id || b.user_id === OFFLINE_USER_ID),
-      );
-      if (owned) return owned;
-
-      // 2. useBusinesses already restricts this list to active user access.
-      return bList.find(b => !b.deleted) ?? null;
-    },
-    [user],
-  );
-
   const selectedBusiness = useMemo(() => {
-    if (!selectedBusinessId) {
-      return findDefaultBusiness(businesses);
-    }
+    if (!selectedBusinessId) return null;
     const found = businesses.find(b => b.id === selectedBusinessId);
     if (found && !found.deleted) return found;
-    return findDefaultBusiness(businesses);
-  }, [businesses, selectedBusinessId, findDefaultBusiness]);
+    return null;
+  }, [businesses, selectedBusinessId]);
 
   useEffect(() => {
-    if (businesses.length > 0) {
+    if (selectedBusinessId && businesses.length > 0) {
       const exists = businesses.some(b => b.id === selectedBusinessId && !b.deleted);
       if (!exists) {
-        const defaultBiz = findDefaultBusiness(businesses);
-        if (defaultBiz) {
-          setSelectedBusinessId(defaultBiz.id);
-          Storage.setItem('selectedBusinessId', defaultBiz.id).catch(() => {});
-        }
+        setSelectedBusinessId('');
+        Storage.removeItem('selectedBusinessId').catch(() => {});
       }
     }
-  }, [selectedBusinessId, businesses, findDefaultBusiness]);
+  }, [selectedBusinessId, businesses]);
 
   // Pre-cache gallery images and update syncScope when business changes
   useEffect(() => {

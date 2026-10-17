@@ -177,12 +177,7 @@ describe('useStore hooks', () => {
     ];
     mockData.tenants = [{ id: 't', business_id: 'rented', email: 'test@example.com' }];
     const { result, rerender } = await renderHook(() => useBusinesses());
-    expect(result.current.map(b => b.id)).toEqual([
-      'owned',
-      'shared',
-      'rented',
-      'offline',
-    ]);
+    expect(result.current.map(b => b.id)).toEqual(['owned', 'shared', 'rented']);
     mockAuth = { user: { id: 'offline' }, loading: false };
     await rerender({});
     expect(result.current.map(b => b.id)).toEqual(['offline']);

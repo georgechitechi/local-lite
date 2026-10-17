@@ -35,6 +35,7 @@ export function accessibleBusinesses(
 ): Business[] {
   if (!user) return [];
   const email = normalizeIdentity(user.email);
+  const isOffline = user.id === offlineUserId;
   const sharedIds = new Set(
     shares
       .filter(
@@ -58,7 +59,7 @@ export function accessibleBusinesses(
     business =>
       !isDeletedRecord(business) &&
       (business.user_id === user.id ||
-        business.user_id === offlineUserId ||
+        (isOffline && business.user_id === offlineUserId) ||
         sharedIds.has(normalizeIdentity(business.id)) ||
         tenantBusinessIds.has(normalizeIdentity(business.id))),
   );
