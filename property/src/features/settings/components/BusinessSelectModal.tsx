@@ -18,7 +18,11 @@ import {
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import { sendAcceptanceEmail } from '@/shared/services/emailService';
-import { isActiveBusinessShare, normalizeIdentity } from '@/shared/utils/businessScope';
+import {
+  isActiveBusinessShare,
+  isBusinessOwner,
+  normalizeIdentity,
+} from '@/shared/utils/businessScope';
 import ManageBusinessModal from './ManageBusinessModal';
 
 interface BusinessSelectModalProps {
@@ -109,17 +113,7 @@ export default function BusinessSelectModal({
 
     return accessibleBusinesses
       .map(b => {
-        const isOffline = user.id === OFFLINE_USER_ID;
-        const bizUserId = normalizeIdentity(b.user_id);
-        const userId = normalizeIdentity(user.id);
-        const offlineId = normalizeIdentity(OFFLINE_USER_ID);
-        const userEmail = normalizeIdentity(user.email);
-        const bizEmail = normalizeIdentity(b.email);
-        const isOwned =
-          isOffline ||
-          bizUserId === userId ||
-          bizUserId === offlineId ||
-          Boolean(userEmail && bizEmail && bizEmail === userEmail);
+        const isOwned = isBusinessOwner(b, user, OFFLINE_USER_ID);
         const myShare = myShares.find(s => s.business_id === b.id);
         const isSharedWithMe = !isOwned && !!myShare;
 
@@ -176,7 +170,7 @@ export default function BusinessSelectModal({
       if (business && user?.email) {
         sendAcceptanceEmail(business as any, {
           email: user.email,
-        }).catch(err => console.warn('Acceptance email failed:', err));
+        }).catch((err: any) => console.warn('Acceptance email failed:', err));
       }
     } catch (error) {
       console.error('Error accepting share:', error);

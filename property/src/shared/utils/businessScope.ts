@@ -25,17 +25,21 @@ export function isBusinessOwner(
   user: { id?: string | null; email?: string | null } | null | undefined,
   offlineUserId: string = OFFLINE_USER_ID,
 ): boolean {
-  if (!business || !user) return false;
+  if (!business || !user || !user.id) return false;
   const bizUserId = normalizeIdentity(business.user_id);
   const userId = normalizeIdentity(user.id);
   const offlineId = normalizeIdentity(offlineUserId);
   const userEmail = normalizeIdentity(user.email);
   const bizEmail = normalizeIdentity(business.email);
 
+  // Offline user only owns businesses created offline (not online synced businesses)
+  if (userId === offlineId) {
+    return bizUserId === offlineId;
+  }
+
+  // Authenticated user owns businesses with matching user_id or matching business owner email
   return (
-    userId === offlineId ||
     (bizUserId !== '' && bizUserId === userId) ||
-    (bizUserId !== '' && bizUserId === offlineId) ||
     Boolean(userEmail && bizEmail && bizEmail === userEmail)
   );
 }
@@ -59,9 +63,15 @@ export function accessibleBusinesses(
   user: { id: string; email?: string } | null,
   offlineUserId: string = OFFLINE_USER_ID,
 ): Business[] {
-  if (!user) return [];
+  if (!user || !user.id) return [];
   const email = normalizeIdentity(user.email);
   const normalizedUserId = normalizeIdentity(user.id);
+  const offlineId = normalizeIdentity(offlineUserId);
+
+  // If in offline mode, only businesses created offline are accessible
+  if (normalizedUserId === offlineId) {
+    return businesses.filter(b => normalizeIdentity(b.user_id) === offlineId);
+  }
 
   const sharedIds = new Set(
     shares

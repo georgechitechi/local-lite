@@ -64,11 +64,11 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   }, []);
 
   const selectedBusiness = useMemo(() => {
-    if (!selectedBusinessId) return null;
+    if (!user || !selectedBusinessId) return null;
     const found = businesses.find(b => b.id === selectedBusinessId);
     if (found) return found;
     return null;
-  }, [businesses, selectedBusinessId]);
+  }, [businesses, selectedBusinessId, user]);
 
   useEffect(() => {
     if (!authLoading && !storageLoading && selectedBusinessId && businesses.length > 0) {

@@ -284,7 +284,12 @@ export const refreshUser = async () => {
           refreshError.message?.includes('invalid') ||
           refreshError.status === 400
         ) {
-          if (!authState.isOfflineAuthoritative) setOfflineSession();
+          updateAuthState({
+            user: null,
+            session: null,
+            isOfflineAuthoritative: false,
+          });
+          updateAuthStateSync({ isLoggedIn: false });
           return;
         }
       }
@@ -296,17 +301,32 @@ export const refreshUser = async () => {
     } = await supabase.auth.getSession();
 
     if (error) {
-      if (!authState.isOfflineAuthoritative) setOfflineSession();
+      updateAuthState({
+        user: null,
+        session: null,
+        isOfflineAuthoritative: false,
+      });
+      updateAuthStateSync({ isLoggedIn: false });
       return;
     }
 
     if (localSession?.user) {
       await setOnlineSession(localSession.user, localSession, false);
-    } else if (!authState.isOfflineAuthoritative) {
-      setOfflineSession();
+    } else {
+      updateAuthState({
+        user: null,
+        session: null,
+        isOfflineAuthoritative: false,
+      });
+      updateAuthStateSync({ isLoggedIn: false });
     }
   } catch {
-    if (!authState.isOfflineAuthoritative) setOfflineSession();
+    updateAuthState({
+      user: null,
+      session: null,
+      isOfflineAuthoritative: false,
+    });
+    updateAuthStateSync({ isLoggedIn: false });
   }
 };
 
@@ -362,7 +382,12 @@ export const initializeAuth = async (mountedCheck: () => boolean) => {
       const finalUser = nextSession?.user ?? storedUser ?? null;
 
       if (!finalUser) {
-        setOfflineSession();
+        updateAuthState({
+          user: null,
+          session: null,
+          isOfflineAuthoritative: false,
+        });
+        updateAuthStateSync({ isLoggedIn: false });
       } else {
         await setOnlineSession(finalUser, nextSession, false);
         migrateOfflineData(finalUser.id).catch(console.error);
@@ -383,8 +408,13 @@ export const initializeAuth = async (mountedCheck: () => boolean) => {
     await SplashScreen.hideAsync();
   } catch {
     if (mountedCheck()) {
-      setOfflineSession();
-      updateAuthState({ loading: false });
+      updateAuthState({
+        user: null,
+        session: null,
+        isOfflineAuthoritative: false,
+        loading: false,
+      });
+      updateAuthStateSync({ isLoggedIn: false });
     }
     await SplashScreen.hideAsync();
   }

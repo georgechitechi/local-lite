@@ -214,7 +214,7 @@ export function useBusinesses(): Business[] {
   const { user, loading } = useAuth();
   return useMemo(
     () =>
-      loading
+      loading || !user
         ? []
         : accessibleBusinesses(businesses, shares, tenants ?? [], user, OFFLINE_USER_ID),
     [businesses, shares, tenants, user, loading],

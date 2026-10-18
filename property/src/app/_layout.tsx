@@ -60,16 +60,14 @@ function RootLayoutNav() {
       (segments as string[])[1] === 'new-password' ||
       (segments as string[])[1] === 'reset-password';
 
+    const isAuthenticated = !!user && !isOfflineAuthoritative;
+
     // Only navigate if conditions are met and we're not already on the target route
-    if (!user && !inAuthGroup) {
+    if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (user) {
+    } else if (isAuthenticated) {
       if (inAuthGroup && !isPasswordResetScreen) {
-        if (inAuthGroup && isOfflineAuthoritative) {
-          // Allow offline fallback users to stay on auth screens to log in
-        } else {
-          router.replace('/(tabs)');
-        }
+        router.replace('/(tabs)');
       }
     }
   }, [user, loading, businessLoading, segments, router, isOfflineAuthoritative]);

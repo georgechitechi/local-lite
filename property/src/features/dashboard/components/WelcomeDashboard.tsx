@@ -22,6 +22,7 @@ import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import { sendAcceptanceEmail } from '@/shared/services/emailService';
 import {
   isActiveBusinessShare,
+  isBusinessOwner,
   normalizeIdentity,
   parseShareRoles,
 } from '@/shared/utils/businessScope';
@@ -155,19 +156,7 @@ export const WelcomeDashboard = () => {
   };
 
   const getRoleLabel = (b: Business): string => {
-    const bizUserId = normalizeIdentity(b.user_id);
-    const userId = normalizeIdentity(user?.id);
-    const offlineId = normalizeIdentity(OFFLINE_USER_ID);
-    const userEmail = normalizeIdentity(user?.email);
-    const bizEmail = normalizeIdentity(b.email);
-
-    if (
-      user &&
-      (userId === offlineId ||
-        bizUserId === userId ||
-        bizUserId === offlineId ||
-        Boolean(userEmail && bizEmail && bizEmail === userEmail))
-    ) {
+    if (isBusinessOwner(b, user, OFFLINE_USER_ID)) {
       return 'Owner';
     }
     const share = myShares.find(s => s.business_id === b.id);
