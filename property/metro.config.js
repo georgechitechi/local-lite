@@ -3,11 +3,13 @@ const path = require('path');
 
 const projectRoot = __dirname;
 const monorepoRoot = path.resolve(projectRoot, '..');
+const packagesRoot = path.resolve(projectRoot, '../..');
+const nativeAccessControlRoot = path.resolve(packagesRoot, 'native-access-control');
 
 const config = getDefaultConfig(projectRoot);
 
-// 1. Watch root package directory for live updates
-config.watchFolders = [monorepoRoot];
+// 1. Watch root package directory and sibling packages for live updates
+config.watchFolders = [monorepoRoot, nativeAccessControlRoot];
 
 // 2. Force Metro to resolve a single copy of React and core modules from the property app
 config.resolver.extraNodeModules = {
@@ -18,6 +20,7 @@ config.resolver.extraNodeModules = {
   'react-native-screens': path.resolve(projectRoot, 'node_modules/react-native-screens'),
   'react-native-reanimated': path.resolve(projectRoot, 'node_modules/react-native-reanimated'),
   'expo-router': path.resolve(projectRoot, 'node_modules/expo-router'),
+  'native-access-control': nativeAccessControlRoot,
 };
 
 // 3. Prioritize local node_modules and disable lookup in parent directories
