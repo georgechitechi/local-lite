@@ -89,7 +89,7 @@ export const syncConfig = defineSyncConfig({
   },
   conflictResolver: 'last-write-wins',
   pushIntervalMs: 10000,
-  pullIntervalMs: 60000,
+  pullIntervalMs: 120000, // 2 minutes fallback reconciliation (realtime WebSocket handles instantaneous deltas)
   retry: {
     maxRetries: 5,
     initialDelayMs: 1000,
