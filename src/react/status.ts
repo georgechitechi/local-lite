@@ -42,7 +42,10 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
       }
       if (records) {
         setPendingRecords(records);
-        setPendingCount(records.filter((r) => r.status === 'PENDING').length);
+        const activeCount = metrics
+          ? metrics.outboxPendingCount + metrics.outboxProcessingCount + metrics.outboxFailedCount
+          : records.length;
+        setPendingCount(activeCount);
       }
       if (lastSynced !== null && lastSynced !== undefined) {
         setLastSyncedAt(lastSynced > 0 ? lastSynced : null);

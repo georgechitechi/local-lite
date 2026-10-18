@@ -8,6 +8,38 @@ export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
   constructor(initialOnline: boolean = true) {
     this._isOnline = initialOnline;
 
+    // 1. Try React Native NetInfo if available in environment
+    try {
+      const NetInfo = require('@react-native-community/netinfo');
+      const netInfoInstance = NetInfo?.default || NetInfo;
+      if (netInfoInstance && typeof netInfoInstance.addEventListener === 'function') {
+        netInfoInstance
+          .fetch()
+          .then((state: any) => {
+            const online = state.isConnected === true && state.isInternetReachable !== false;
+            this.setOnline(online);
+          })
+          .catch(() => {});
+
+        const unsub = netInfoInstance.addEventListener((state: any) => {
+          const online = state.isConnected === true && state.isInternetReachable !== false;
+          this.setOnline(online);
+        });
+
+        this.cleanupBrowserListeners = () => {
+          if (typeof unsub === 'function') {
+            unsub();
+          } else if (unsub && typeof unsub.remove === 'function') {
+            unsub.remove();
+          }
+        };
+        return;
+      }
+    } catch {
+      // NetInfo not installed or running in node/web
+    }
+
+    // 2. Web DOM environment fallback
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
         this._isOnline = navigator.onLine;

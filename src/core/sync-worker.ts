@@ -264,7 +264,7 @@ export class SyncWorker {
             isOnline: online,
             isPushing: this.isPushing,
             isPulling: this.isPulling,
-            pendingCount: counts.pending,
+            pendingCount: counts.total,
           };
           this.events.emit('sync:status', statusEvent);
         } catch {

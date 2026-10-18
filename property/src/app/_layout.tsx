@@ -35,6 +35,7 @@ LogBox.ignoreLogs([
   'SafeAreaView has been deprecated',
   'InteractionManager has been deprecated',
   '[Reanimated]',
+  '[local-lite] 📡 Network Offline',
 ]);
 
 function RootLayoutNav() {

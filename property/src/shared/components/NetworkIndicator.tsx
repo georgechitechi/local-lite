@@ -6,6 +6,7 @@ import { Text, useTheme } from 'react-native-paper';
 import { useLocalClient } from '@/providers/SyncClientProvider';
 import SPressable from '@/shared/components/SlightPressable';
 import { useLocalSync } from '@/shared/hooks/useLocalSync';
+import { useNetworkStatus } from '@/shared/hooks/useNetworkStatus';
 
 export interface NetworkIndicatorProps extends Partial<SyncIndicatorProps> {
   alwaysVisible?: boolean;
@@ -31,12 +32,13 @@ export const NetworkIndicator = ({
   const client = useLocalClient();
   const theme = useTheme();
   const { isSyncActive: isCloudSyncEnabled, isDemoMode } = useLocalSync();
+  const isNetworkOnline = useNetworkStatus();
 
   const customRenderTrigger = useMemo(() => {
     if (renderTrigger) return renderTrigger;
     if (variant === 'icon') {
       return ({ open, status }: { open: () => void; status: any }) => {
-        const isOnline = status?.isOnline ?? true;
+        const isOnline = isNetworkOnline && (status?.isOnline ?? true);
         const isSyncing = status?.isSyncing ?? false;
         const pendingCount = status?.pendingCount ?? 0;
         const isFullyOnline = isOnline && isCloudSyncEnabled;
@@ -87,8 +89,14 @@ export const NetworkIndicator = ({
         );
       };
     }
-    return undefined;
-  }, [renderTrigger, variant, isCloudSyncEnabled, isDemoMode, theme.colors]);
+  }, [
+    renderTrigger,
+    variant,
+    isCloudSyncEnabled,
+    isDemoMode,
+    theme.colors,
+    isNetworkOnline,
+  ]);
 
   return (
     <SyncIndicator

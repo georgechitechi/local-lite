@@ -82,6 +82,10 @@ export class SyncLogger {
 
   error(message: string, ...args: any[]): void {
     if (!this.shouldLog('error')) return;
+    if (message.includes('Network Offline') || message.includes('Failed to reach')) {
+      this.warn(message, ...args);
+      return;
+    }
     if (this.customLogger?.error) {
       this.customLogger.error(message, ...args);
     } else {
