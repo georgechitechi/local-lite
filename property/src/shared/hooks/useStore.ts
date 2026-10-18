@@ -220,6 +220,8 @@ export function useBusinesses(): Business[] {
   const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants', {
     select: ['id', 'email', 'business_id', 'deleted'],
   });
+
+  console.log('tenants', tenants);
   const { user, loading } = useAuth();
   return useMemo(
     () =>
