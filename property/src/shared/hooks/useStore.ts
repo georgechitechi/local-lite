@@ -37,11 +37,7 @@ import type {
   Tenant,
   Transaction,
 } from '@/shared/types/types';
-import {
-  accessibleBusinesses,
-  isDeletedRecord,
-  normalizeIdentity,
-} from '@/shared/utils/businessAccess';
+import { accessibleBusinesses, normalizeIdentity } from '@/shared/utils/businessAccess';
 import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
 export {
@@ -106,7 +102,10 @@ export function useCoreTableWithLoading<
   );
 
   return {
-    data: !client || (scoped && !targetId) ? (EMPTY_ARRAY as T[]) : (data ?? (EMPTY_ARRAY as T[])),
+    data:
+      !client || (scoped && !targetId)
+        ? (EMPTY_ARRAY as T[])
+        : (data ?? (EMPTY_ARRAY as T[])),
     loading: !client || loading,
   };
 }
