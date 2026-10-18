@@ -24,7 +24,7 @@ import {
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier } from '../utils/sql.js';
-import { applyQueryOptions, isDeletedRecord, hasExplicitDeletedFilter } from './query.js';
+import { isDeletedRecord, applyQueryOptions } from './query.js';
 import { QueryBuilder, AggregateSpec, AggregateResult } from './query-builder.js';
 
 export interface LocalFirstClientConfig {
@@ -198,7 +198,8 @@ export class TransactionalClient {
   }
 
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    return this.parent.findManyInternal<T>(this.tx, tableName, options);
+    const rows = await this.from<T>(tableName).applyOptions(options).execute();
+    return applyQueryOptions<T>(rows, options);
   }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -807,147 +808,8 @@ export class LocalFirstClient {
   }
 
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    return this.findManyInternal<T>(this.db, tableName, options);
-  }
-
-  /**
-   * Internal findMany implementation shared between LocalFirstClient and TransactionalClient.
-   */
-  async findManyInternal<T = any>(
-    db: DBExecutable,
-    tableName: string,
-    options?: QueryOptions
-  ): Promise<T[]> {
-    await this.schemaManager.ensureTableIntrospected(db, tableName);
-
-    const safeTable = escapeIdentifier(tableName);
-    let rows: any[];
-    const projection =
-      options?.select && Array.isArray(options.select) && options.select.length > 0
-        ? options.select.map(escapeIdentifier).join(', ')
-        : '*';
-    let sql = `SELECT ${projection} FROM ${safeTable}`;
-    const params: any[] = [];
-    const whereClauses: string[] = [];
-
-    // Push down where conditions to SQLite first (e.g. equality / foreign key filters) so B-Tree index lookups are prioritized
-    if (options?.where && typeof options.where === 'object' && !Array.isArray(options.where)) {
-      for (const [col, filter] of Object.entries(options.where)) {
-        if (col === '$or' || col === '$and') continue;
-        const safeCol = escapeIdentifier(col);
-
-        if (filter === null) {
-          whereClauses.push(`${safeCol} IS NULL`);
-        } else if (typeof filter === 'boolean') {
-          whereClauses.push(`${safeCol} = ?`);
-          params.push(filter ? 1 : 0);
-        } else if (typeof filter === 'string' || typeof filter === 'number') {
-          whereClauses.push(`${safeCol} = ?`);
-          params.push(filter);
-        } else if (typeof filter === 'object' && !Array.isArray(filter)) {
-          const ops = filter as any;
-          if (ops.$eq !== undefined) {
-            whereClauses.push(`${safeCol} = ?`);
-            params.push(typeof ops.$eq === 'boolean' ? (ops.$eq ? 1 : 0) : ops.$eq);
-          }
-          if (ops.$ne !== undefined) {
-            whereClauses.push(`${safeCol} != ?`);
-            params.push(typeof ops.$ne === 'boolean' ? (ops.$ne ? 1 : 0) : ops.$ne);
-          }
-          if (ops.$gt !== undefined) {
-            whereClauses.push(`${safeCol} > ?`);
-            params.push(ops.$gt);
-          }
-          if (ops.$gte !== undefined) {
-            whereClauses.push(`${safeCol} >= ?`);
-            params.push(ops.$gte);
-          }
-          if (ops.$lt !== undefined) {
-            whereClauses.push(`${safeCol} < ?`);
-            params.push(ops.$lt);
-          }
-          if (ops.$lte !== undefined) {
-            whereClauses.push(`${safeCol} <= ?`);
-            params.push(ops.$lte);
-          }
-          if (Array.isArray(ops.$in) && ops.$in.length > 0) {
-            const placeholders = ops.$in.map(() => '?').join(', ');
-            whereClauses.push(`${safeCol} IN (${placeholders})`);
-            params.push(...ops.$in.map((v: any) => (typeof v === 'boolean' ? (v ? 1 : 0) : v)));
-          }
-          if (Array.isArray(ops.$nin) && ops.$nin.length > 0) {
-            const placeholders = ops.$nin.map(() => '?').join(', ');
-            whereClauses.push(`${safeCol} NOT IN (${placeholders})`);
-            params.push(...ops.$nin.map((v: any) => (typeof v === 'boolean' ? (v ? 1 : 0) : v)));
-          }
-          if (ops.$null !== undefined) {
-            whereClauses.push(ops.$null ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
-          }
-          if (ops.$contains !== undefined) {
-            whereClauses.push(`${safeCol} LIKE ?`);
-            params.push(`%${ops.$contains}%`);
-          }
-          if (ops.$startsWith !== undefined) {
-            whereClauses.push(`${safeCol} LIKE ?`);
-            params.push(`${ops.$startsWith}%`);
-          }
-          if (ops.$endsWith !== undefined) {
-            whereClauses.push(`${safeCol} LIKE ?`);
-            params.push(`%${ops.$endsWith}`);
-          }
-        }
-      }
-    }
-
-    // Automatically push down soft-delete filter if table has deleted column and not explicitly overridden
-    const hasDeletedClause = options?.where && typeof options.where === 'object' && hasExplicitDeletedFilter(options.where);
-    if (!options?.includeDeleted && !hasDeletedClause && this.schemaManager.hasColumn(tableName, 'deleted')) {
-      const safeDel = escapeIdentifier('deleted');
-      whereClauses.push(`(${safeDel} IS NULL OR (${safeDel} != 1 AND ${safeDel} != 'true'))`);
-    }
-
-    if (whereClauses.length > 0) {
-      sql += ` WHERE ${whereClauses.join(' AND ')}`;
-    }
-
-    // Push down ORDER BY
-    if (options?.orderBy && typeof options.orderBy === 'string') {
-      const safeCol = escapeIdentifier(options.orderBy);
-      const dir = options.order && String(options.order).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-      sql += ` ORDER BY ${safeCol} ${dir}`;
-    }
-
-    // Push down LIMIT & OFFSET
-    if (typeof options?.limit === 'number' && options.limit > 0) {
-      sql += ` LIMIT ?`;
-      params.push(options.limit);
-      if (typeof options.offset === 'number' && options.offset > 0) {
-        sql += ` OFFSET ?`;
-        params.push(options.offset);
-      }
-    }
-
-    try {
-      rows = await db.execute(sql, params);
-    } catch (err: any) {
-      const msg = String(err?.message || err || '');
-      if (msg.includes('no such table') || msg.includes('no such column')) {
-        return [];
-      }
-      // Fallback to select * if pushdown syntax differs
-      try {
-        rows = await db.execute(`SELECT * FROM ${safeTable}`);
-      } catch {
-        return [];
-      }
-    }
-
-    const hasJsonConfig = Boolean(this.jsonColumns[tableName] || this.autoHydrateJSON);
-    const hydratedRows = hasJsonConfig
-      ? rows.map((r) => this.hydrateRow(tableName, r))
-      : rows;
-
-    return applyQueryOptions<T>(hydratedRows, options);
+    const rows = await this.from<T>(tableName).applyOptions(options).execute();
+    return applyQueryOptions<T>(rows, options);
   }
 
   /**

@@ -196,6 +196,20 @@ export class QueryBuilder<T = any> {
   }
 
   /**
+   * Applies standard QueryOptions (select, where, orderBy, limit, offset, includeDeleted) to this query.
+   */
+  applyOptions(options?: QueryOptions): this {
+    if (!options) return this;
+    if (options.select) this.select(options.select);
+    if (options.where && typeof options.where === 'object') this.where(options.where);
+    if (options.orderBy) this.orderBy(options.orderBy, options.order || 'ASC');
+    if (typeof options.limit === 'number') this.limit(options.limit);
+    if (typeof options.offset === 'number') this.offset(options.offset);
+    if (options.includeDeleted) this.withDeleted(true);
+    return this;
+  }
+
+  /**
    * Compiles the current builder state into an executable SQL string and parameter list.
    */
   toSQL(): { sql: string; params: any[] } {
@@ -343,7 +357,15 @@ export class QueryBuilder<T = any> {
 
     const { sql, params } = this.toSQL();
     try {
-      return await this.client.query<T>(sql, params);
+      const rawRows = await this.client.query<T>(sql, params);
+      const hydrator =
+        'hydrateRow' in this.client
+          ? (this.client as any).hydrateRow.bind(this.client)
+          : (this.client as any).parent?.hydrateRow?.bind((this.client as any).parent);
+      if (hydrator && rawRows && rawRows.length > 0) {
+        return rawRows.map((r: any) => hydrator(this.tableName, r));
+      }
+      return rawRows;
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {

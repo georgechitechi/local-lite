@@ -92,28 +92,26 @@ export async function fetchDashboardStatsFromDB(
   const todayStr = now.toISOString().split('T')[0];
 
   const [
-    [housesCount],
-    [occupiedCount],
-    [maintenanceCount],
-    [activeTenantsCount],
-    [monthlyRevRow],
-    [lastMonthRevRow],
-    [annualRevRow],
-    [totalRevRow],
-    [monthlyExpRow],
-    [lastMonthExpRow],
-    [annualExpRow],
-    [totalExpRow],
-    [expiringCount],
-    [projectedRevRow],
+    [housesRow],
+    [contractsRow],
+    [expiringRow],
+    [receiptsRow],
+    [expensesRow],
   ] = await Promise.all([
-    client.query<{ total: number }>(
-      'SELECT COUNT(*) AS total FROM "houses" WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);',
+    client.query<{ total_rooms: number; maintenance_rooms: number }>(
+      `SELECT 
+         COUNT(*) AS total_rooms,
+         COALESCE(SUM(CASE WHEN "status" = 'maintenance' THEN 1 ELSE 0 END), 0) AS maintenance_rooms
+       FROM "houses"
+       WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);`,
       [businessId],
     ),
-    client.query<{ total: number }>(
-      `SELECT COUNT(DISTINCT "house_id") AS total 
-       FROM "contracts" 
+    client.query<{ occupied_rooms: number; active_tenants: number; projected_revenue: number }>(
+      `SELECT 
+         COUNT(DISTINCT "house_id") AS occupied_rooms,
+         COUNT(DISTINCT "tenant_id") AS active_tenants,
+         COALESCE(SUM("rent_amount"), 0) AS projected_revenue
+       FROM "contracts"
        WHERE "business_id" = ? 
          AND "status" = 'ACTIVE' 
          AND "start_date" <= ? 
@@ -121,126 +119,67 @@ export async function fetchDashboardStatsFromDB(
          AND ("deleted" IS NULL OR "deleted" != 1);`,
       [businessId, todayStr, currentMonthStart],
     ),
-    client.query<{ total: number }>(
-      'SELECT COUNT(*) AS total FROM "houses" WHERE "business_id" = ? AND "status" = \'maintenance\' AND ("deleted" IS NULL OR "deleted" != 1);',
-      [businessId],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COUNT(DISTINCT "tenant_id") AS total 
-       FROM "contracts" 
-       WHERE "business_id" = ? 
-         AND "status" = 'ACTIVE' 
-         AND "start_date" <= ? 
-         AND ("end_date" IS NULL OR "end_date" >= ?)
-         AND "tenant_id" IS NOT NULL
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, todayStr, currentMonthStart],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
-       FROM "receipts" 
-       WHERE "business_id" = ? 
-         AND "payment_date" >= ? AND "payment_date" <= ?
-         AND "payment_method" != 'promo' AND "type" != 'promo'
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, currentMonthStart, currentMonthEnd],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
-       FROM "receipts" 
-       WHERE "business_id" = ? 
-         AND "payment_date" >= ? AND "payment_date" <= ?
-         AND "payment_method" != 'promo' AND "type" != 'promo'
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, lastMonthStart, lastMonthEnd],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
-       FROM "receipts" 
-       WHERE "business_id" = ? 
-         AND "payment_date" >= ? AND "payment_date" <= ?
-         AND "payment_method" != 'promo' AND "type" != 'promo'
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, yearStart, yearEnd],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
-       FROM "receipts" 
-       WHERE "business_id" = ? 
-         AND "payment_method" != 'promo' AND "type" != 'promo'
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount"), 0) AS total 
-       FROM "expenses" 
-       WHERE "business_id" = ? 
-         AND "date" >= ? AND "date" <= ?
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, currentMonthStart, currentMonthEnd],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount"), 0) AS total 
-       FROM "expenses" 
-       WHERE "business_id" = ? 
-         AND "date" >= ? AND "date" <= ?
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, lastMonthStart, lastMonthEnd],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount"), 0) AS total 
-       FROM "expenses" 
-       WHERE "business_id" = ? 
-         AND "date" >= ? AND "date" <= ?
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, yearStart, yearEnd],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("amount"), 0) AS total 
-       FROM "expenses" 
-       WHERE "business_id" = ? 
-         AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId],
-    ),
-    client.query<{ total: number }>(
-      `SELECT COUNT(*) AS total 
-       FROM "contracts" 
-       WHERE "business_id" = ? 
+    client.query<{ expiring_contracts: number }>(
+      `SELECT COUNT(*) AS expiring_contracts
+       FROM "contracts"
+       WHERE "business_id" = ?
          AND ("status" = 'ACTIVE' OR "status" = 'expiring_soon')
          AND "end_date" >= ? AND "end_date" <= ?
          AND ("deleted" IS NULL OR "deleted" != 1);`,
       [businessId, todayStr, thirtyDaysStr],
     ),
-    client.query<{ total: number }>(
-      `SELECT COALESCE(SUM("rent_amount"), 0) AS total 
-       FROM "contracts" 
+    client.query<{
+      monthly_revenue: number;
+      last_month_revenue: number;
+      annual_revenue: number;
+      total_revenue: number;
+    }>(
+      `SELECT 
+         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS monthly_revenue,
+         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS last_month_revenue,
+         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS annual_revenue,
+         COALESCE(SUM("amount" - "refunded_amount"), 0) AS total_revenue
+       FROM "receipts"
        WHERE "business_id" = ? 
-         AND "status" = 'ACTIVE' 
-         AND "start_date" <= ? 
-         AND ("end_date" IS NULL OR "end_date" >= ?)
+         AND "payment_method" != 'promo' AND "type" != 'promo'
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, todayStr, currentMonthStart],
+      [currentMonthStart, currentMonthEnd, lastMonthStart, lastMonthEnd, yearStart, yearEnd, businessId],
+    ),
+    client.query<{
+      monthly_expenses: number;
+      last_month_expenses: number;
+      annual_expenses: number;
+      total_expenses: number;
+    }>(
+      `SELECT 
+         COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS monthly_expenses,
+         COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS last_month_expenses,
+         COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS annual_expenses,
+         COALESCE(SUM("amount"), 0) AS total_expenses
+       FROM "expenses"
+       WHERE "business_id" = ? 
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [currentMonthStart, currentMonthEnd, lastMonthStart, lastMonthEnd, yearStart, yearEnd, businessId],
     ),
   ]);
 
-  const totalRooms = Number(housesCount?.total) || 0;
-  const occupiedRooms = Number(occupiedCount?.total) || 0;
-  const maintenanceRooms = Number(maintenanceCount?.total) || 0;
+  const totalRooms = Number(housesRow?.total_rooms) || 0;
+  const maintenanceRooms = Number(housesRow?.maintenance_rooms) || 0;
+  const occupiedRooms = Number(contractsRow?.occupied_rooms) || 0;
   const vacantRooms = Math.max(0, totalRooms - occupiedRooms);
-  const activeTenants = Number(activeTenantsCount?.total) || 0;
+  const activeTenants = Number(contractsRow?.active_tenants) || 0;
+  const projectedRevenue = Number(contractsRow?.projected_revenue) || 0;
+  const expiringContracts = Number(expiringRow?.expiring_contracts) || 0;
 
-  const monthlyRevenue = Number(monthlyRevRow?.total) || 0;
-  const lastMonthRevenue = Number(lastMonthRevRow?.total) || 0;
-  const annualRevenue = Number(annualRevRow?.total) || 0;
-  const totalRevenue = Number(totalRevRow?.total) || 0;
+  const monthlyRevenue = Number(receiptsRow?.monthly_revenue) || 0;
+  const lastMonthRevenue = Number(receiptsRow?.last_month_revenue) || 0;
+  const annualRevenue = Number(receiptsRow?.annual_revenue) || 0;
+  const totalRevenue = Number(receiptsRow?.total_revenue) || 0;
 
-  const monthlyExpenses = Number(monthlyExpRow?.total) || 0;
-  const lastMonthExpenses = Number(lastMonthExpRow?.total) || 0;
-  const annualExpenses = Number(annualExpRow?.total) || 0;
-  const totalExpenses = Number(totalExpRow?.total) || 0;
-
-  const expiringContracts = Number(expiringCount?.total) || 0;
-  const projectedRevenue = Number(projectedRevRow?.total) || 0;
+  const monthlyExpenses = Number(expensesRow?.monthly_expenses) || 0;
+  const lastMonthExpenses = Number(expensesRow?.last_month_expenses) || 0;
+  const annualExpenses = Number(expensesRow?.annual_expenses) || 0;
+  const totalExpenses = Number(expensesRow?.total_expenses) || 0;
 
   const revenueGrowth = lastMonthRevenue
     ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
@@ -392,180 +331,6 @@ export function useLiveExpiringContracts(
 
   return { contracts, loading };
 }
-
-export const calculateDashboardStats = (data: BusinessData): DashboardStats => {
-  const { houses: rawHouses, tenants, contracts, receipts, expenses, properties } = data;
-  const currentDate = new Date();
-
-  const houses = rawHouses.filter(h => {
-    const property = properties.find(p => p.id === h.property_id);
-    return isCommissionedAsOf({ ...h, property }, currentDate);
-  });
-
-  const currentMonth = currentDate.getMonth() + 1;
-  const currentYear = currentDate.getFullYear();
-  const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-  const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
-
-  // Basic Stats
-  const totalRooms = houses.length;
-
-  // Active Tenants
-  const monthStart = new Date(currentYear, currentMonth - 1, 1);
-  const monthEnd = new Date(currentYear, currentMonth, 0);
-
-  // Pre-process contracts in a single O(C) loop to build indices & stats
-  const activeContractsByHouse = new Map<string, (typeof contracts)[0]>();
-  const activeTenantIds = new Set<string>();
-  let projectedRevenue = 0;
-
-  contracts.forEach(c => {
-    // 1. Build occupancy index for houses (using current local time)
-    const isCurrentlyActive =
-      isActiveContractStatus(c.status) && new Date(c.start_date) <= currentDate;
-    if (isCurrentlyActive) {
-      activeContractsByHouse.set(c.house_id, c);
-    }
-
-    // 2. Check active state and breaks for the target month
-    const isActiveForMonth =
-      isActiveContractStatus(c.status) &&
-      new Date(c.start_date) <= currentDate &&
-      (!c.end_date || new Date(c.end_date) >= monthStart);
-    if (!isActiveForMonth) return;
-
-    const { breaks } = parseMetadata(c.metadata);
-    const isOnBreak = breaks.some((b: any) => {
-      const bStart = new Date(b.start_date);
-      const bEnd =
-        !b.end_date || String(b.end_date).includes('2099')
-          ? new Date(2099, 11, 31)
-          : new Date(b.end_date);
-      return bStart <= monthEnd && bEnd >= monthStart;
-    });
-
-    if (!isOnBreak) {
-      projectedRevenue += parseFloat(String(c.rent_amount)) || 0;
-      if (c.tenant_id) {
-        activeTenantIds.add(c.tenant_id);
-      }
-    }
-  });
-
-  const getHouseStatus = (houseId: string) => {
-    return activeContractsByHouse.has(houseId) ? 'occupied' : 'vacant';
-  };
-
-  const occupiedRooms = houses.filter(h => getHouseStatus(h.id) === 'occupied').length;
-  const maintenanceRooms = houses.filter(h => h.status === 'maintenance').length;
-  const activeTenantsList = tenants.filter(t => activeTenantIds.has(t.id));
-  const activeTenants = activeTenantsList.length;
-
-  const currentMonthReceipts = receipts.filter(r => {
-    const { month, year } = safeParseJSON(r.payment_period, { month: 0, year: 0 });
-    return (
-      month === currentMonth &&
-      year === currentYear &&
-      r.payment_method !== 'promo' &&
-      r.type !== 'promo'
-    );
-  });
-
-  const lastMonthReceipts = receipts.filter(r => {
-    const { month, year } = safeParseJSON(r.payment_period, { month: 0, year: 0 });
-    return (
-      month === lastMonth &&
-      year === lastMonthYear &&
-      r.payment_method !== 'promo' &&
-      r.type !== 'promo'
-    );
-  });
-
-  const annualReceipts = receipts.filter(r => {
-    const { year } = safeParseJSON(r.payment_period, { month: 0, year: 0 });
-    return year === currentYear && r.payment_method !== 'promo' && r.type !== 'promo';
-  });
-
-  const monthlyRevenue = currentMonthReceipts.reduce((sum, r) => sum + computeNet(r), 0);
-  const lastMonthRevenue = lastMonthReceipts.reduce((sum, r) => sum + computeNet(r), 0);
-  const revenueGrowth = lastMonthRevenue
-    ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
-    : 0;
-  const annualRevenue = annualReceipts.reduce((sum, r) => sum + computeNet(r), 0);
-
-  const occupancyRate =
-    totalRooms - maintenanceRooms > 0
-      ? (occupiedRooms / (totalRooms - maintenanceRooms)) * 100
-      : 0;
-
-  const expectedPayments = activeTenants;
-  const actualPayments = new Set(
-    currentMonthReceipts.map(r => r.contract_id || r.tenant_id).filter(Boolean),
-  ).size;
-  const rentCollectionRate = expectedPayments
-    ? (actualPayments / expectedPayments) * 100
-    : 0;
-
-  const currentMonthExpenses = expenses.filter(e => {
-    const d = new Date(e.date);
-    return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
-  });
-  const lastMonthExpensesTotal = expenses
-    .filter(e => {
-      const d = new Date(e.date);
-      return d.getMonth() + 1 === lastMonth && d.getFullYear() === lastMonthYear;
-    })
-    .reduce((sum, e) => sum + parseFloat(String(e.amount || 0)), 0);
-
-  const monthlyExpenses = currentMonthExpenses.reduce(
-    (sum, e) => sum + parseFloat(String(e.amount || 0)),
-    0,
-  );
-  const expenseGrowth = lastMonthExpensesTotal
-    ? ((monthlyExpenses - lastMonthExpensesTotal) / lastMonthExpensesTotal) * 100
-    : 0;
-  const annualExpensesRecords = expenses.filter(e => {
-    const d = new Date(e.date);
-    return d.getFullYear() === currentYear;
-  });
-  const annualExpenses = annualExpensesRecords.reduce(
-    (sum, e) => sum + parseFloat(String(e.amount || 0)),
-    0,
-  );
-
-  const thirtyDaysFromNow = new Date();
-  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-  const expiringContracts = contracts.filter(c => {
-    if (c.status !== 'active' && c.status !== 'expiring_soon') return false;
-    if (!c.end_date) return false;
-    const endDate = new Date(c.end_date);
-    return endDate <= thirtyDaysFromNow && endDate >= new Date();
-  }).length;
-
-  return {
-    totalRooms,
-    occupiedRooms,
-    vacantRooms: houses.filter(
-      h => getHouseStatus(h.id) === 'vacant' && h.status !== 'maintenance',
-    ).length,
-    totalTenants: tenants.length,
-    activeTenants,
-    totalRevenue: annualRevenue,
-    monthlyRevenue,
-    lastMonthRevenue,
-    revenueGrowth,
-    annualRevenue,
-    occupancyRate,
-    projectedRevenue,
-    rentCollectionRate,
-    totalExpenses: annualExpenses,
-    monthlyExpenses,
-    lastMonthExpenses: lastMonthExpensesTotal,
-    expenseGrowth,
-    annualExpenses,
-    expiringContracts,
-  };
-};
 
 export const calculateBusinessOverview = (
   data: BusinessData,
