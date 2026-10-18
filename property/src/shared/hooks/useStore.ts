@@ -1,6 +1,7 @@
 import {
   SyncInspector,
   useLiveInfiniteQuery,
+  useLiveQueries,
   useLiveQuery,
   useLiveRow,
   useMutations,
@@ -48,6 +49,7 @@ export {
 export {
   SyncInspector,
   useLiveInfiniteQuery,
+  useLiveQueries,
   useLiveQuery,
   useLiveRow,
   useMutations,
@@ -145,6 +147,8 @@ export const useReceiptsWithLoading = (businessId?: string) =>
 
 export const useExpenses = (businessId?: string) =>
   useCoreTable<Expense>('expenses', businessId);
+export const useExpensesWithLoading = (businessId?: string) =>
+  useCoreTableWithLoading<Expense>('expenses', businessId);
 
 export const useSettings = (businessId?: string) =>
   useCoreTable<Setting>('settings', businessId);

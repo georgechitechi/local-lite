@@ -35,26 +35,18 @@ import { useCurrency } from '@/shared/hooks/useCurrency';
 import { useInsights } from '@/shared/hooks/useInsights';
 import {
   useBusinesses,
-  useContracts,
   useCoreGroupMap,
   useCoreIndexMap,
-  useExpenses,
-  useHouses,
   useIsInitialSyncing,
-  useMaintenanceRequests,
-  usePaymentMessageReceipts,
-  usePaymentMessages,
+  useLiveQueries,
   useProfile,
-  useProperties,
-  useReceipts,
-  useSettings,
   useStoreRefresh,
-  useTenants,
 } from '@/shared/hooks/useStore';
 import { useTheme, useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatWithCurrency, parseLocalDate } from '@/shared/utils/formatters';
 import {
   calculateEffectiveRent,
+  EMPTY_ARRAY,
   parseMetadata,
   safeParseJSON,
 } from '@/shared/utils/helper';
@@ -113,17 +105,39 @@ const Dashboard = function Dashboard() {
   const selectedBusinessId = selectedBusiness?.id;
   const allBusinesses = useBusinesses();
   const { refreshing, onRefresh } = useStoreRefresh();
+  const client = useLocalClient();
 
-  const properties = useProperties(selectedBusiness?.id);
-  const houses = useHouses(selectedBusiness?.id);
-  const receipts = useReceipts(selectedBusiness?.id);
-  const expenses = useExpenses(selectedBusiness?.id);
-  const tenants = useTenants(selectedBusiness?.id);
-  const contracts = useContracts(selectedBusiness?.id);
-  const paymentMessages = usePaymentMessages(selectedBusiness?.id);
-  const paymentMessageReceipts = usePaymentMessageReceipts(selectedBusiness?.id);
-  const maintenanceRequests = useMaintenanceRequests(selectedBusiness?.id);
-  const settings = useSettings(selectedBusiness?.id);
+  const querySpecs = useMemo(() => {
+    const where = selectedBusinessId
+      ? { business_id: selectedBusinessId }
+      : { id: '__none__' };
+    return {
+      properties: { table: 'properties', where },
+      houses: { table: 'houses', where },
+      receipts: { table: 'receipts', where },
+      expenses: { table: 'expenses', where },
+      tenants: { table: 'tenants', where },
+      contracts: { table: 'contracts', where },
+      paymentMessages: { table: 'payment_messages', where },
+      paymentMessageReceipts: { table: 'payment_message_receipts', where },
+      maintenanceRequests: { table: 'maintenance_requests', where },
+      settings: { table: 'settings', where },
+    };
+  }, [selectedBusinessId]);
+
+  const { data: dashboardData, loading: isDashboardDataLoading } =
+    useLiveQueries(client, querySpecs);
+
+  const properties = dashboardData.properties || EMPTY_ARRAY;
+  const houses = dashboardData.houses || EMPTY_ARRAY;
+  const receipts = dashboardData.receipts || EMPTY_ARRAY;
+  const expenses = dashboardData.expenses || EMPTY_ARRAY;
+  const tenants = dashboardData.tenants || EMPTY_ARRAY;
+  const contracts = dashboardData.contracts || EMPTY_ARRAY;
+  const paymentMessages = dashboardData.paymentMessages || EMPTY_ARRAY;
+  const paymentMessageReceipts = dashboardData.paymentMessageReceipts || EMPTY_ARRAY;
+  const maintenanceRequests = dashboardData.maintenanceRequests || EMPTY_ARRAY;
+  const settings = dashboardData.settings || EMPTY_ARRAY;
 
   const receiptsByContractId = useCoreGroupMap(receipts, 'contract_id');
   const housesById = useCoreIndexMap(houses);
@@ -134,7 +148,6 @@ const Dashboard = function Dashboard() {
   const isHydratingSelection =
     !!selectedBusinessId && !selectedBusiness && allBusinesses.length === 0;
 
-  const client = useLocalClient();
   const { isSyncing: isSyncingStore } = useSyncStatus(client);
 
   const isInitialSyncing = useIsInitialSyncing();
@@ -536,7 +549,8 @@ const Dashboard = function Dashboard() {
     accessLoading ||
     isHydratingSelection ||
     isWaitingForInitialSync ||
-    isInitialSyncing
+    isInitialSyncing ||
+    isDashboardDataLoading
   ) {
     return (
       <LoadingCard iconName="view-dashboard-variant" text="Loading workspace data..." />

@@ -15,12 +15,17 @@ function areRowsEqual<T>(a: T, b: T): boolean {
   if (aObj.id !== undefined && bObj.id !== undefined && aObj.id !== bObj.id) {
     return false;
   }
+
+  // Fast path: if both records have an identical updated_at timestamp, they are equal.
+  // This bypasses expensive Object.keys loops and JSON.stringify on large metadata columns.
   if (
+    aObj.id !== undefined &&
+    bObj.id !== undefined &&
+    aObj.id === bObj.id &&
     aObj.updated_at !== undefined &&
-    bObj.updated_at !== undefined &&
-    aObj.updated_at !== bObj.updated_at
+    bObj.updated_at !== undefined
   ) {
-    return false;
+    return aObj.updated_at === bObj.updated_at;
   }
 
   const aKeys = Object.keys(aObj);
@@ -168,6 +173,221 @@ export function useLiveQuery<T = any>(
   }, [client, tableName, queryKey, refetch, scheduleRefetch]);
 
   return { data, refetch, loading };
+}
+
+export type MultiQuerySpec<T = any> =
+  | string
+  | (QueryOptions & { table?: string })
+  | LiveQueryFn<T>;
+
+export type MultiQueryInput =
+  | Array<string | (QueryOptions & { table: string })>
+  | Record<string, MultiQuerySpec>;
+
+export interface UseLiveQueriesResult<T extends Record<string, any[]>> {
+  data: T;
+  loading: boolean;
+  refetch: () => Promise<void>;
+}
+
+interface NormalizedQueryItem {
+  key: string;
+  table: string;
+  queryKey: string;
+  cacheKey: string;
+  options?: QueryOptions;
+  fn?: LiveQueryFn<any>;
+}
+
+function normalizeMultiQueries(input: MultiQueryInput): NormalizedQueryItem[] {
+  const items: NormalizedQueryItem[] = [];
+
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (typeof item === 'string') {
+        items.push({
+          key: item,
+          table: item,
+          queryKey: 'all',
+          cacheKey: `${item}:all`,
+        });
+      } else if (typeof item === 'object' && item !== null && item.table) {
+        const { table, ...options } = item;
+        const qKey = JSON.stringify(options);
+        items.push({
+          key: table,
+          table,
+          queryKey: qKey,
+          cacheKey: `${table}:${qKey}`,
+          options,
+        });
+      }
+    }
+  } else if (typeof input === 'object' && input !== null) {
+    for (const [key, spec] of Object.entries(input)) {
+      if (typeof spec === 'string') {
+        items.push({
+          key,
+          table: spec,
+          queryKey: 'all',
+          cacheKey: `${spec}:all`,
+        });
+      } else if (typeof spec === 'function') {
+        items.push({
+          key,
+          table: key,
+          queryKey: 'custom',
+          cacheKey: `${key}:custom`,
+          fn: spec,
+        });
+      } else if (typeof spec === 'object' && spec !== null) {
+        const table = (spec as any).table || key;
+        const options: QueryOptions = { ...(spec as any) };
+        delete (options as any).table;
+        const qKey = JSON.stringify(options);
+        items.push({
+          key,
+          table,
+          queryKey: qKey,
+          cacheKey: `${table}:${qKey}`,
+          options,
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Reactive multi-table live query hook that loads data from multiple tables concurrently.
+ *
+ * Benefits:
+ * - Parallel fetching: queries SQLite tables concurrently via Promise.all.
+ * - Single atomic React commit: coalesces multiple table results into a single state update,
+ *   preventing cascading re-renders and UI freezing.
+ * - Multi-table event coordination: listens to mutations across all requested tables,
+ *   coalescing updates so downstream calculations only run once.
+ * - Zero-latency cache read-through: returns instant cached rows on mount.
+ *
+ * Usage with dictionary:
+ * ```ts
+ * const { data, loading } = useLiveQueries(client, {
+ *   projects: 'projects',
+ *   tasks: { where: { project_id: '123' }, orderBy: 'created_at' },
+ *   tags: { table: 'labels' }
+ * });
+ * // data.projects, data.tasks, data.tags
+ * ```
+ *
+ * Usage with array:
+ * ```ts
+ * const { data, loading } = useLiveQueries(client, ['projects', 'tasks', 'tags']);
+ * // data.projects, data.tasks, data.tags
+ * ```
+ */
+export function useLiveQueries<T extends Record<string, any[]> = Record<string, any[]>>(
+  client: LocalFirstClient | null | undefined,
+  queries: MultiQueryInput
+): UseLiveQueriesResult<T> {
+  const signature = useMemo(() => {
+    return JSON.stringify(queries, (_, val) => (typeof val === 'function' ? 'fn' : val));
+  }, [queries]);
+
+  const items = useMemo(() => normalizeMultiQueries(queries), [signature]);
+
+  const [data, setData] = useState<T>(() => {
+    const initial: Record<string, any[]> = {};
+    for (const item of items) {
+      const cached = queryCache.get(item.cacheKey);
+      initial[item.key] = cached ? cached : [];
+    }
+    return initial as T;
+  });
+
+  const [loading, setLoading] = useState(() => {
+    if (items.length === 0) return false;
+    for (const item of items) {
+      if (!queryCache.has(item.cacheKey)) return true;
+    }
+    return false;
+  });
+
+  const refetch = useCallback(async () => {
+    if (!client || !client.db || items.length === 0) return;
+    try {
+      const results = await Promise.all(
+        items.map(async (item) => {
+          let inFlight = inFlightQueries.get(item.cacheKey);
+          if (!inFlight) {
+            inFlight = (async () => {
+              if (item.fn) {
+                return (await item.fn(client)) || [];
+              } else if (item.options) {
+                return await client.findMany(item.table, item.options);
+              } else {
+                return await client.findMany(item.table);
+              }
+            })();
+            inFlightQueries.set(item.cacheKey, inFlight);
+            inFlight.finally(() => {
+              inFlightQueries.delete(item.cacheKey);
+            });
+          }
+
+          try {
+            const rows = (await inFlight) || [];
+            queryCache.set(item.cacheKey, rows);
+            return { key: item.key, rows };
+          } catch (err: any) {
+            const msg = String(err?.message || err || '');
+            if (msg.includes('no such column') || msg.includes('no such table')) {
+              return { key: item.key, rows: [] };
+            }
+            console.error(`Error in useLiveQueries("${item.table}"):`, err);
+            return { key: item.key, rows: [] };
+          }
+        })
+      );
+
+      setData((prev) => {
+        let changed = false;
+        const next = { ...prev } as Record<string, any[]>;
+        for (const res of results) {
+          if (!areRowArraysEqual(prev[res.key], res.rows)) {
+            next[res.key] = res.rows;
+            changed = true;
+          }
+        }
+        return changed ? (next as T) : prev;
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [client, items]);
+
+  const scheduleRefetch = useCoalescedRunner(refetch);
+
+  useEffect(() => {
+    if (!client || !client.db || items.length === 0) return;
+
+    refetch();
+
+    const tables = Array.from(new Set(items.map((i) => i.table).filter(Boolean)));
+    const unsubs = tables.map((tbl) =>
+      client.events.on(tbl, () => {
+        scheduleRefetch();
+      })
+    );
+
+    return () => {
+      for (const unsub of unsubs) {
+        unsub();
+      }
+    };
+  }, [client, signature, refetch, scheduleRefetch]);
+
+  return { data, loading, refetch };
 }
 
 /**

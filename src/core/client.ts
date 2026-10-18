@@ -199,6 +199,10 @@ export class TransactionalClient {
     return this.parent.findManyInternal<T>(this.tx, tableName, options);
   }
 
+  async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+    return (await this.tx.execute(sql, params)) as T[];
+  }
+
   get rawTx(): LocalTransaction {
     return this.tx;
   }
@@ -660,10 +664,14 @@ export class LocalFirstClient {
    * Pushes simple equality where clauses down to SQLite for high performance, with memory fallback.
    * Gracefully returns [] if table or columns have not been populated yet on empty schemas.
    *
-   * Example:
-   * const tenants = await client.findMany('tenants', { where: { status: 'ACTIVE' }, orderBy: 'name' });
-   * const expensive = await client.findMany('properties', { where: { rent: { $gte: 2000 } } });
+  /**
+   * Executes a raw relational SQL query with parameters directly against SQLite.
+   * Enables complex multi-table JOINs, GROUP BY aggregations (COUNT, SUM, AVG), CTEs, and window functions.
    */
+  async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+    return (await this.db.execute(sql, params)) as T[];
+  }
+
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
     return this.findManyInternal<T>(this.db, tableName, options);
   }
@@ -688,14 +696,7 @@ export class LocalFirstClient {
     const params: any[] = [];
     const whereClauses: string[] = [];
 
-    // Automatically push down soft-delete filter if table has deleted column and not explicitly overridden
-    const hasDeletedClause = options?.where && typeof options.where === 'object' && hasExplicitDeletedFilter(options.where);
-    if (!options?.includeDeleted && !hasDeletedClause && this.schemaManager.hasColumn(tableName, 'deleted')) {
-      const safeDel = escapeIdentifier('deleted');
-      whereClauses.push(`(${safeDel} IS NULL OR (${safeDel} != 1 AND ${safeDel} != 'true'))`);
-    }
-
-    // Push down where conditions to SQLite
+    // Push down where conditions to SQLite first (e.g. equality / foreign key filters) so B-Tree index lookups are prioritized
     if (options?.where && typeof options.where === 'object' && !Array.isArray(options.where)) {
       for (const [col, filter] of Object.entries(options.where)) {
         if (col === '$or' || col === '$and') continue;
@@ -762,9 +763,17 @@ export class LocalFirstClient {
           }
         }
       }
-      if (whereClauses.length > 0) {
-        sql += ` WHERE ${whereClauses.join(' AND ')}`;
-      }
+    }
+
+    // Automatically push down soft-delete filter if table has deleted column and not explicitly overridden
+    const hasDeletedClause = options?.where && typeof options.where === 'object' && hasExplicitDeletedFilter(options.where);
+    if (!options?.includeDeleted && !hasDeletedClause && this.schemaManager.hasColumn(tableName, 'deleted')) {
+      const safeDel = escapeIdentifier('deleted');
+      whereClauses.push(`(${safeDel} IS NULL OR (${safeDel} != 1 AND ${safeDel} != 'true'))`);
+    }
+
+    if (whereClauses.length > 0) {
+      sql += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     // Push down ORDER BY

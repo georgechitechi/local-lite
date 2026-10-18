@@ -24,8 +24,8 @@ export interface SupabaseAdapterOptions {
 
   /**
    * Optional subset of tables to which dynamic `syncScope` filters should apply.
-   * If provided, scope filters (like `business_id`) will only be attached to queries for these tables.
-   * Tables not in this list (e.g. 'businesses', 'profiles') will be fetched without the scope filter.
+   * If provided, scope filters (like `tenant_id` or `org_id`) will only be attached to queries for these tables.
+   * Tables not in this list (e.g. global tables, user profiles) will be fetched without the scope filter.
    */
   scopedTables?: string[];
 

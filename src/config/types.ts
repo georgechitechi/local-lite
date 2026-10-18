@@ -215,7 +215,7 @@ export interface LocalLiteConfig {
   autoHydrateJSON?: boolean;
 
   /**
-   * Scoped synchronization filter (e.g. { business_id: '...' } or dynamic resolver callback).
+   * Scoped synchronization filter (e.g. { org_id: '...' } or dynamic resolver callback).
    */
   syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
 }
