@@ -73,7 +73,7 @@ export function SyncInspector({
 
   useEffect(() => {
     if (!client || !isOpen) return;
-    client.getMetrics().then(setMetrics).catch(() => {});
+    client.getMetrics().then(setMetrics).catch(() => { });
   }, [client, isOpen, status.isSyncing, status.pendingCount]);
 
   const runAction = useCallback(
@@ -211,12 +211,12 @@ export function SyncInspector({
     const pillPosStyle = isInline
       ? { position: 'relative' as const }
       : {
-          position: 'absolute' as const,
-          zIndex: 99999,
-          left: isCenter ? 16 : isLeft ? 16 : undefined,
-          right: isCenter ? 16 : !isLeft ? 16 : undefined,
-          ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
-        };
+        position: 'absolute' as const,
+        zIndex: 99999,
+        left: isCenter ? 16 : isLeft ? 16 : undefined,
+        right: isCenter ? 16 : !isLeft ? 16 : undefined,
+        ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
+      };
 
     return (
       <>
@@ -915,15 +915,15 @@ export function SyncInspector({
             isInline
               ? { position: 'relative', display: 'inline-flex', ...style }
               : {
-                  position: 'fixed',
-                  zIndex: 99999,
-                  left: isCenter ? '50%' : isLeft ? 16 : undefined,
-                  right: !isCenter && !isLeft ? 16 : undefined,
-                  transform: isCenter ? 'translateX(-50%)' : undefined,
-                  ...(isTop ? { top: 20 } : { bottom: 20 }),
-                  pointerEvents: 'auto',
-                  ...style,
-                }
+                position: 'fixed',
+                zIndex: 99999,
+                left: isCenter ? '50%' : isLeft ? 16 : undefined,
+                right: !isCenter && !isLeft ? 16 : undefined,
+                transform: isCenter ? 'translateX(-50%)' : undefined,
+                ...(isTop ? { top: 20 } : { bottom: 20 }),
+                pointerEvents: 'auto',
+                ...style,
+              }
           }
         >
           {renderTrigger ? (
@@ -996,207 +996,207 @@ export function SyncInspector({
 const rnStyles =
   RN && RN.StyleSheet
     ? RN.StyleSheet.create({
-        fullScreenSafe: {
-          flex: 1,
-          height: '100%',
-        },
-        topBar: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 18,
-          paddingVertical: 14,
-          borderBottomWidth: 1,
-        },
-        topBarTitle: {
-          fontSize: 17,
-          fontWeight: '700',
-        },
-        topBarSub: {
-          fontSize: 11,
-          marginTop: 2,
-        },
-        statusBadge: {
-          paddingHorizontal: 8,
-          paddingVertical: 3,
-          borderRadius: 12,
-          borderWidth: 1,
-          marginRight: 10,
-        },
-        statusBadgeText: {
-          fontSize: 11,
-          fontWeight: '700',
-        },
-        closeCircle: {
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        closeCircleText: {
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        scrollBody: {
-          flex: 1,
-        },
-        scrollContent: {
-          padding: 16,
-          paddingBottom: 24,
-        },
-        actionMsgBox: {
-          backgroundColor: '#1E3A8A',
-          borderWidth: 1,
-          borderColor: '#3B82F6',
-          padding: 10,
-          borderRadius: 8,
-          marginBottom: 14,
-        },
-        actionMsgText: {
-          color: '#93C5FD',
-          fontSize: 13,
-          fontWeight: '600',
-          textAlign: 'center',
-        },
-        statGrid: {
-          flexDirection: 'row',
-          width: '100%',
-          gap: 10,
-          marginBottom: 14,
-        },
-        statCard: {
-          flex: 1,
-          minWidth: '45%',
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 14,
-        },
-        statNum: {
-          fontSize: 24,
-          fontWeight: '800',
-        },
-        statLabel: {
-          fontSize: 12,
-          fontWeight: '600',
-          marginTop: 4,
-        },
-        statSub: {
-          fontSize: 11,
-          marginTop: 2,
-        },
-        infoCard: {
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 14,
-        },
-        infoCardTitle: {
-          fontSize: 11,
-          fontWeight: '700',
-          letterSpacing: 0.8,
-          marginBottom: 10,
-        },
-        infoRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingVertical: 9,
-          borderBottomWidth: 1,
-        },
-        infoKey: {
-          fontSize: 13,
-        },
-        infoVal: {
-          fontSize: 13,
-          fontWeight: '600',
-        },
-        btnRow: {
-          flexDirection: 'row',
-          width: '100%',
-          gap: 8,
-        },
-        actionBtn: {
-          flex: 1,
-          paddingVertical: 10,
-          paddingHorizontal: 12,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        actionBtnText: {
-          fontSize: 13,
-          fontWeight: '600',
-        },
-        dotSmall: {
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-        },
-        bottomBar: {
-          paddingHorizontal: 18,
-          paddingVertical: 12,
-          borderTopWidth: 1,
-        },
-        doneBtn: {
-          paddingVertical: 12,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        doneBtnText: {
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        pill: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 8,
-          paddingHorizontal: 14,
-          borderRadius: 20,
-          borderWidth: 1.5,
-          elevation: 6,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
-        },
-        inlinePill: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 5,
-          paddingHorizontal: 10,
-          borderRadius: 16,
-          borderWidth: 1.5,
-        },
-        pillText: {
-          fontWeight: '600',
-          fontSize: 13,
-          marginLeft: 8,
-        },
-        inlinePillText: {
-          fontWeight: '600',
-          fontSize: 12,
-          marginLeft: 6,
-        },
-        dot: {
-          width: 10,
-          height: 10,
-          borderRadius: 5,
-        },
-        badge: {
-          backgroundColor: '#EF4444',
-          paddingHorizontal: 6,
-          paddingVertical: 1,
-          borderRadius: 10,
-          marginLeft: 8,
-        },
-        badgeText: {
-          color: '#FFF',
-          fontSize: 11,
-          fontWeight: '700',
-        },
-      })
+      fullScreenSafe: {
+        flex: 1,
+        height: '100%',
+      },
+      topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+      },
+      topBarTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+      },
+      topBarSub: {
+        fontSize: 11,
+        marginTop: 2,
+      },
+      statusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginRight: 10,
+      },
+      statusBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+      },
+      closeCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      closeCircleText: {
+        fontSize: 14,
+        fontWeight: '700',
+      },
+      scrollBody: {
+        flex: 1,
+      },
+      scrollContent: {
+        padding: 16,
+        paddingBottom: 24,
+      },
+      actionMsgBox: {
+        backgroundColor: '#1E3A8A',
+        borderWidth: 1,
+        borderColor: '#3B82F6',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 14,
+      },
+      actionMsgText: {
+        color: '#93C5FD',
+        fontSize: 13,
+        fontWeight: '600',
+        textAlign: 'center',
+      },
+      statGrid: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 10,
+        marginBottom: 14,
+      },
+      statCard: {
+        flex: 1,
+        minWidth: '45%',
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 14,
+      },
+      statNum: {
+        fontSize: 24,
+        fontWeight: '800',
+      },
+      statLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 4,
+      },
+      statSub: {
+        fontSize: 11,
+        marginTop: 2,
+      },
+      infoCard: {
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 14,
+      },
+      infoCardTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.8,
+        marginBottom: 10,
+      },
+      infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 9,
+        borderBottomWidth: 1,
+      },
+      infoKey: {
+        fontSize: 13,
+      },
+      infoVal: {
+        fontSize: 13,
+        fontWeight: '600',
+      },
+      btnRow: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 8,
+      },
+      actionBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      actionBtnText: {
+        fontSize: 13,
+        fontWeight: '600',
+      },
+      dotSmall: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+      },
+      bottomBar: {
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+      },
+      doneBtn: {
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      doneBtnText: {
+        fontSize: 14,
+        fontWeight: '700',
+      },
+      pill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+      inlinePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 16,
+        borderWidth: 1.5,
+      },
+      pillText: {
+        fontWeight: '600',
+        fontSize: 13,
+        marginLeft: 8,
+      },
+      inlinePillText: {
+        fontWeight: '600',
+        fontSize: 12,
+        marginLeft: 6,
+      },
+      dot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+      },
+      badge: {
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 10,
+        marginLeft: 8,
+      },
+      badgeText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '700',
+      },
+    })
     : {};
 
 export const SyncIndicator = SyncInspector;

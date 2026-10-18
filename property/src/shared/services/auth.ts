@@ -66,9 +66,9 @@ const saveProfileToLocalLite = async (profile: any) => {
   const client = await getSyncClient();
   const existing = await client.findById('profiles', profile.id);
   if (existing) {
-    await client.update('profiles', profile.id, profile);
+    await client.update('profiles', profile.id, profile, { skipOutbox: true });
   } else {
-    await client.insert('profiles', profile);
+    await client.insert('profiles', profile, { skipOutbox: true });
   }
 };
 
@@ -142,7 +142,7 @@ export const ensureUserProfile = async (
       let { data: existingProfile, error: profileError } = await fetchByUserId();
 
       if (!existingProfile && profileError && profileError.code !== 'PGRST116') {
-        console.error('Error checking profile:', profileError);
+        console.warn('Error checking profile:', profileError.message);
       }
 
       if (!existingProfile) {
@@ -155,34 +155,37 @@ export const ensureUserProfile = async (
         return { profile: existingProfile };
       }
 
-      // If server row is not created by auth trigger yet, upsert it directly to Supabase
-      if (typeof supabase.from('profiles').upsert === 'function') {
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .upsert(
-            {
-              user_id: userId,
-              email: user.email || '',
-              name:
-                user.user_metadata?.name ||
-                user.user_metadata?.full_name ||
-                user.email?.split('@')[0] ||
-                'User',
-              deleted: false,
-              metadata: {},
-            },
-            { onConflict: 'user_id' },
-          )
-          .select('*')
-          .maybeSingle();
+      // If server row is not created by auth trigger yet, verify session before upserting
+      if (typeof supabase?.from === 'function') {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          const { data: createdProfile, error: createError } = await supabase
+            .from('profiles')
+            .upsert(
+              {
+                user_id: userId,
+                email: user.email || '',
+                name:
+                  user.user_metadata?.name ||
+                  user.user_metadata?.full_name ||
+                  user.email?.split('@')[0] ||
+                  'User',
+                deleted: false,
+                metadata: {},
+              },
+              { onConflict: 'user_id' },
+            )
+            .select('*')
+            .maybeSingle();
 
-        if (createdProfile?.id) {
-          await saveProfileToLocalLite(createdProfile);
-          return { profile: createdProfile };
-        }
+          if (createdProfile?.id) {
+            await saveProfileToLocalLite(createdProfile);
+            return { profile: createdProfile };
+          }
 
-        if (createError) {
-          console.error('Error auto-creating user profile:', createError);
+          if (createError) {
+            console.warn('Profile upsert note:', createError.message);
+          }
         }
       }
 

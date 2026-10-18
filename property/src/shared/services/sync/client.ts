@@ -27,6 +27,15 @@ export async function getSyncClient(): Promise<LocalFirstClient> {
       // Clean up any unrecoverable unique constraint / duplicate key violations from the outbox queue
       await client.clearFailedMutations().catch(() => {});
 
+      // Purge any stuck profile insertion poison pills from outbox
+      try {
+        await client.transaction(async tx => {
+          await tx.rawTx.execute(
+            "DELETE FROM sync_outbox WHERE table_name = 'profiles' AND operation = 'INSERT';",
+          );
+        });
+      } catch {}
+
       clientInstance = client;
       return client;
     });
