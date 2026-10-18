@@ -75,11 +75,11 @@ export default ({ config }: ExpoConfig) => ({
   },
   web: {
     bundler: 'metro',
-    output: 'server',
+    output: 'static',
     favicon: './assets/favicon.png',
   },
   plugins: [
-    'expo-router',
+    ['expo-router', { apiRoutes: true }],
     'expo-font',
     'expo-sqlite',
     'expo-status-bar',
