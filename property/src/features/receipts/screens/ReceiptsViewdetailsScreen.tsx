@@ -62,7 +62,7 @@ export default function ViewReceiptScreen() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors() as any;
-  const { loading: accessLoading, hasAccess, isOwner, tenantId } = useAccessControl();
+  const { loading: accessLoading, isAdmin, isTenantOnly, tenantId, isOwner } = useAccessControl();
 
   const { selectedBusiness } = useBusiness();
   const { update, insert, insertMany } = useCoreMutations();
@@ -232,8 +232,8 @@ export default function ViewReceiptScreen() {
   const statusStyle = getPaymentStatusColor(displayStatus);
   const canRefund = useMemo(() => {
     if (receipt?.is_refunded) return false;
-    return isOwner || hasAccess(['admin']);
-  }, [hasAccess, isOwner, receipt?.is_refunded]);
+    return isAdmin;
+  }, [isAdmin, receipt?.is_refunded]);
 
   if (loading || accessLoading) {
     return <LoadingCard iconName="receipt" text="Loading receipt data..." />;
@@ -247,7 +247,6 @@ export default function ViewReceiptScreen() {
     );
   }
 
-  const isTenantOnly = hasAccess(['tenant']) && !hasAccess(['staff', 'admin']);
 
   if (!receipt || (isTenantOnly && receipt.tenant_id !== tenantId)) {
     return (

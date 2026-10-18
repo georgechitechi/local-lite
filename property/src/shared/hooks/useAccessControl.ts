@@ -6,6 +6,7 @@ import { useBusinessShares, useTenants } from '@/shared/hooks/useStore';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import {
   isActiveBusinessShare,
+  isBusinessOwner,
   normalizeIdentity,
   parseShareRoles,
 } from '@/shared/utils/businessAccess';
@@ -24,29 +25,49 @@ export type Resource =
   | 'transaction';
 export type Action = 'create' | 'view' | 'edit' | 'delete';
 
-interface UseAccessControlReturn {
+export interface UseAccessControlReturn {
   isOwner: boolean;
+  isAdmin: boolean;
+  isStaff: boolean;
+  isTenant: boolean;
+  isAdminOrStaff: boolean;
+  isTenantOnly: boolean;
   userRoles: string[];
   loading: boolean;
   hasAccess: (requiredRoles: string | string[]) => boolean;
   hasAllRoles: (requiredRoles: string | string[]) => boolean;
   hasOneRole: (role: string) => boolean;
+  hasRole: (role: string) => boolean;
   can: (action: Action, resource: Resource) => boolean;
   cannot: (action: Action, resource: Resource) => boolean;
+  canCreate: (resource: Resource) => boolean;
+  canView: (resource: Resource) => boolean;
+  canEdit: (resource: Resource) => boolean;
+  canDelete: (resource: Resource) => boolean;
   user: User | null;
   tenantId: string | null;
 }
 
 /** Stable fallback returned when auth is loading or there's no active business. */
-const NO_ACCESS = {
+const NO_ACCESS: UseAccessControlReturn = {
   isOwner: false,
+  isAdmin: false,
+  isStaff: false,
+  isTenant: false,
+  isAdminOrStaff: false,
+  isTenantOnly: false,
   userRoles: [] as string[],
   loading: false,
   hasAccess: () => false,
   hasAllRoles: () => false,
   hasOneRole: () => false,
+  hasRole: () => false,
   can: () => false,
   cannot: () => true,
+  canCreate: () => false,
+  canView: () => false,
+  canEdit: () => false,
+  canDelete: () => false,
   user: null,
   tenantId: null,
 };
@@ -83,18 +104,7 @@ export function useAccessControl(): UseAccessControlReturn {
 
   const isOwner = useMemo(() => {
     if (authLoading || !selectedBusiness || !user) return false;
-    const bizUserId = normalizeIdentity(selectedBusiness.user_id);
-    const userId = normalizeIdentity(user.id);
-    const offlineId = normalizeIdentity(OFFLINE_USER_ID);
-    const userEmail = normalizeIdentity(user.email);
-    const bizEmail = normalizeIdentity(selectedBusiness.email);
-
-    return (
-      userId === offlineId ||
-      bizUserId === userId ||
-      bizUserId === offlineId ||
-      Boolean(userEmail && bizEmail && bizEmail === userEmail)
-    );
+    return isBusinessOwner(selectedBusiness, user, OFFLINE_USER_ID);
   }, [authLoading, selectedBusiness, user]);
 
   const uniqueRoles = useMemo(() => {
@@ -111,6 +121,18 @@ export function useAccessControl(): UseAccessControlReturn {
     }
     return Array.from(new Set(roles));
   }, [authLoading, selectedBusiness, user, isOwner, shareRoles, tenantId]);
+
+  const isAdmin = useMemo(
+    () => isOwner || uniqueRoles.includes('admin'),
+    [isOwner, uniqueRoles],
+  );
+  const isStaff = useMemo(() => uniqueRoles.includes('staff'), [uniqueRoles]);
+  const isTenant = useMemo(() => uniqueRoles.includes('tenant'), [uniqueRoles]);
+  const isAdminOrStaff = useMemo(() => isAdmin || isStaff, [isAdmin, isStaff]);
+  const isTenantOnly = useMemo(
+    () => isTenant && !isAdmin && !isStaff,
+    [isTenant, isAdmin, isStaff],
+  );
 
   const hasAccess = useCallback(
     (requiredRoles: string | string[]): boolean => {
@@ -173,19 +195,56 @@ export function useAccessControl(): UseAccessControlReturn {
     [can],
   );
 
+  const hasRole = useCallback(
+    (role: string): boolean => {
+      return uniqueRoles.includes(role);
+    },
+    [uniqueRoles],
+  );
+
+  const canCreate = useCallback(
+    (resource: Resource): boolean => can('create', resource),
+    [can],
+  );
+
+  const canView = useCallback(
+    (resource: Resource): boolean => can('view', resource),
+    [can],
+  );
+
+  const canEdit = useCallback(
+    (resource: Resource): boolean => can('edit', resource),
+    [can],
+  );
+
+  const canDelete = useCallback(
+    (resource: Resource): boolean => can('delete', resource),
+    [can],
+  );
+
   return useMemo(() => {
     if (authLoading) return { ...NO_ACCESS, loading: true };
     if (!selectedBusiness || !user) return { ...NO_ACCESS, user: user || null };
 
     return {
       isOwner,
+      isAdmin,
+      isStaff,
+      isTenant,
+      isAdminOrStaff,
+      isTenantOnly,
       userRoles: uniqueRoles,
       loading: false,
       hasAccess,
       hasAllRoles,
       hasOneRole,
+      hasRole,
       can,
       cannot,
+      canCreate,
+      canView,
+      canEdit,
+      canDelete,
       user,
       tenantId,
     };
@@ -194,12 +253,22 @@ export function useAccessControl(): UseAccessControlReturn {
     selectedBusiness,
     user,
     isOwner,
+    isAdmin,
+    isStaff,
+    isTenant,
+    isAdminOrStaff,
+    isTenantOnly,
     uniqueRoles,
     hasAccess,
     hasAllRoles,
     hasOneRole,
+    hasRole,
     can,
     cannot,
+    canCreate,
+    canView,
+    canEdit,
+    canDelete,
     tenantId,
   ]);
 }

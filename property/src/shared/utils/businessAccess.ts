@@ -1,3 +1,4 @@
+import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import type { Business, BusinessShare, Tenant } from '@/shared/types/types';
 
 export const normalizeIdentity = (value: unknown): string =>
@@ -16,6 +17,29 @@ export const isActiveBusinessShare = (share: BusinessShare): boolean => {
   return status === 'active' || status === 'accepted';
 };
 
+/**
+ * Single source of truth for business ownership check across the app.
+ */
+export function isBusinessOwner(
+  business: { user_id?: string | null; email?: string | null } | null | undefined,
+  user: { id?: string | null; email?: string | null } | null | undefined,
+  offlineUserId: string = OFFLINE_USER_ID,
+): boolean {
+  if (!business || !user) return false;
+  const bizUserId = normalizeIdentity(business.user_id);
+  const userId = normalizeIdentity(user.id);
+  const offlineId = normalizeIdentity(offlineUserId);
+  const userEmail = normalizeIdentity(user.email);
+  const bizEmail = normalizeIdentity(business.email);
+
+  return (
+    userId === offlineId ||
+    (bizUserId !== '' && bizUserId === userId) ||
+    (bizUserId !== '' && bizUserId === offlineId) ||
+    Boolean(userEmail && bizEmail && bizEmail === userEmail)
+  );
+}
+
 /** SQLite stores array fields as JSON text. Never treat that text as a role list. */
 export function parseShareRoles(value: unknown): string[] {
   try {
@@ -33,7 +57,7 @@ export function accessibleBusinesses(
   shares: BusinessShare[],
   tenants: Tenant[],
   user: { id: string; email?: string } | null,
-  offlineUserId: string,
+  offlineUserId: string = OFFLINE_USER_ID,
 ): Business[] {
   if (!user) return [];
   const email = normalizeIdentity(user.email);
@@ -59,14 +83,9 @@ export function accessibleBusinesses(
   );
 
   return businesses.filter(business => {
-    const bizUserId = normalizeIdentity(business.user_id);
-    const bizEmail = normalizeIdentity(business.email);
     const bizId = normalizeIdentity(business.id);
-
     return (
-      (bizUserId && bizUserId === normalizedUserId) ||
-      (bizUserId && bizUserId === normalizedOfflineId) ||
-      (email && bizEmail && bizEmail === email) ||
+      isBusinessOwner(business, user, offlineUserId) ||
       sharedIds.has(bizId) ||
       tenantBusinessIds.has(bizId)
     );

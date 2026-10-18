@@ -22,7 +22,7 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
-import AccessGuard from '@/shared/components/AccessGuard';
+import AccessGuard, { Can } from '@/shared/components/AccessGuard';
 import BaseModal from '@/shared/components/BaseModal';
 import HistoryModal from '@/shared/components/HistoryModal';
 import StatusUpdateModal from '@/shared/components/StatusUpdateModal';
@@ -196,7 +196,7 @@ export default function HouseViewModal({
           />
         }
       >
-        <AccessGuard action="edit" resource="house" fallback={null}>
+        <Can action="edit" resource="house">
           <Menu.Item
             onPress={() => {
               setMenuVisible(false);
@@ -208,9 +208,9 @@ export default function HouseViewModal({
             title="Edit House"
             leadingIcon="pencil"
           />
-        </AccessGuard>
+        </Can>
         {(!house.contracts || house.contracts.length === 0) && (
-          <AccessGuard action="create" resource="contract" fallback={null}>
+          <Can action="create" resource="contract">
             <Menu.Item
               onPress={() => {
                 setMenuVisible(false);
@@ -228,9 +228,9 @@ export default function HouseViewModal({
               title="Create Contract"
               leadingIcon="file-document-edit"
             />
-          </AccessGuard>
+          </Can>
         )}
-        <AccessGuard action="edit" resource="house" fallback={null}>
+        <Can action="edit" resource="house">
           <Menu.Item
             onPress={() => {
               setMenuVisible(false);
@@ -239,8 +239,8 @@ export default function HouseViewModal({
             title="Update Status"
             leadingIcon="list-status"
           />
-        </AccessGuard>
-        <AccessGuard action="delete" resource="house" fallback={null}>
+        </Can>
+        <Can action="delete" resource="house">
           <Divider />
           <Menu.Item
             onPress={() => {
@@ -251,14 +251,14 @@ export default function HouseViewModal({
             leadingIcon="delete"
             titleStyle={{ color: colors.error }}
           />
-        </AccessGuard>
+        </Can>
       </Menu>
     ) : null;
 
   if (!visible) return null;
 
   return (
-    <AccessGuard action="view" resource="house" fallback={null}>
+    <Can action="view" resource="house">
       <Portal>
         <BaseModal
           visible={visible}
@@ -470,7 +470,7 @@ export default function HouseViewModal({
           />
         )}
       </Portal>
-    </AccessGuard>
+    </Can>
   );
 }
 
