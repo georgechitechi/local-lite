@@ -80,9 +80,14 @@ export default function HouseViewModal({
   const router = useRouter();
   const { selectedBusiness } = useBusiness();
   const { showSnackbar } = useSnackbar();
-  useAccessControl();
+  const { can, hasAccess } = useAccessControl();
   const colors = useThemeColors() as any;
   const historyTargets = useHistoryTargets('houses', houseId);
+
+  const canViewHouse = can('view', 'house') || hasAccess(['admin', 'staff']);
+  const canEditHouse = can('edit', 'house');
+  const canDeleteHouse = can('delete', 'house');
+  const canCreateContract = can('create', 'contract');
 
   const housesById = useHousesById(selectedBusiness?.id);
   const propertiesById = usePropertiesById(selectedBusiness?.id);
@@ -179,69 +184,81 @@ export default function HouseViewModal({
   const displayStatus = house ? getHouseDisplayStatus(house) : 'available';
   const statusStyle = getStatusColor(displayStatus);
 
-  const headerRight = house ? (
-    <Menu
-      visible={menuVisible}
-      onDismiss={() => setMenuVisible(false)}
-      anchor={
-        <IconButton
-          icon="dots-vertical"
-          size={20}
-          onPress={() => setMenuVisible(true)}
-          style={{ margin: -4 }}
-        />
-      }
-    >
-      <Menu.Item
-        onPress={() => {
-          setMenuVisible(false);
-          setHouseFormHouseId(house.id);
-          setHouseFormPropertyId(house.property_id);
-          setHouseFormPropertyName(house.property.name);
-          setHouseFormModalVisible(true);
-        }}
-        title="Edit House"
-        leadingIcon="pencil"
-      />
-      {(!house.contracts || house.contracts.length === 0) && (
-        <Menu.Item
-          onPress={() => {
-            setMenuVisible(false);
-            onDismiss();
-            router.push({
-              pathname: '/contracts/create',
-              params: {
-                houseId: house.id,
-                propertyId: house.property_id,
-                propertyName: house.property.name,
-                houseNumber: house.house_number,
-              },
-            });
-          }}
-          title="Create Contract"
-          leadingIcon="file-document-edit"
-        />
-      )}
-      <Menu.Item
-        onPress={() => {
-          setMenuVisible(false);
-          setStatusModalVisible(true);
-        }}
-        title="Update Status"
-        leadingIcon="list-status"
-      />
-      <Divider />
-      <Menu.Item
-        onPress={() => {
-          setMenuVisible(false);
-          setShowDeleteModal(true);
-        }}
-        title="Delete House"
-        leadingIcon="delete"
-        titleStyle={{ color: colors.error }}
-      />
-    </Menu>
-  ) : null;
+  const canShowMenu = canEditHouse || canDeleteHouse || canCreateContract;
+  const headerRight =
+    house && canShowMenu ? (
+      <Menu
+        visible={menuVisible}
+        onDismiss={() => setMenuVisible(false)}
+        anchor={
+          <IconButton
+            icon="dots-vertical"
+            size={20}
+            onPress={() => setMenuVisible(true)}
+            style={{ margin: -4 }}
+          />
+        }
+      >
+        {canEditHouse && (
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(false);
+              setHouseFormHouseId(house.id);
+              setHouseFormPropertyId(house.property_id);
+              setHouseFormPropertyName(house.property.name);
+              setHouseFormModalVisible(true);
+            }}
+            title="Edit House"
+            leadingIcon="pencil"
+          />
+        )}
+        {canCreateContract && (!house.contracts || house.contracts.length === 0) && (
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(false);
+              onDismiss();
+              router.push({
+                pathname: '/contracts/create',
+                params: {
+                  houseId: house.id,
+                  propertyId: house.property_id,
+                  propertyName: house.property.name,
+                  houseNumber: house.house_number,
+                },
+              });
+            }}
+            title="Create Contract"
+            leadingIcon="file-document-edit"
+          />
+        )}
+        {canEditHouse && (
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(false);
+              setStatusModalVisible(true);
+            }}
+            title="Update Status"
+            leadingIcon="list-status"
+          />
+        )}
+        {canDeleteHouse && (
+          <>
+            <Divider />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(false);
+                setShowDeleteModal(true);
+              }}
+              title="Delete House"
+              leadingIcon="delete"
+              titleStyle={{ color: colors.error }}
+            />
+          </>
+        )}
+      </Menu>
+    ) : null;
+
+  if (!visible || !canViewHouse) return null;
 
   return (
     <Portal>

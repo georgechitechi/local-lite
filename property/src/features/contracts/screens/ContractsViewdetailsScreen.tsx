@@ -406,6 +406,7 @@ export default function ViewContractScreen() {
       showSnackbar('Failed to remove holiday break', 'error');
     }
   };
+
   if (loading || !contract) {
     if (notFound) {
       return (

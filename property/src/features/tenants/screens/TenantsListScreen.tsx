@@ -20,6 +20,7 @@ import { generatePDFContent, processReportData } from '@/features/reports/utils'
 import { updateTenantStatus } from '@/features/tenants/utils/tenantStatus';
 import { useAuth } from '@/providers/AuthProvider';
 import { useIdleLock } from '@/providers/LockScreenProvider';
+import AccessGuard from '@/shared/components/AccessGuard';
 import BaseModal from '@/shared/components/BaseModal';
 import BaseSearch from '@/shared/components/BaseSearch';
 import DiffViewer from '@/shared/components/DiffViewer';
@@ -1109,390 +1110,406 @@ export default function TenantsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <BaseSearch
-        placeholder="Search tenants"
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        onClear={() => setSearchQuery('')}
-        leftIcon="magnify"
-        rightIcon="close-circle"
-      />
-
-      <View style={styles.filterContainer}>
-        <FilterButtons
-          options={[
-            { label: 'All', value: 'all', icon: 'layers-outline' },
-            { label: 'Active', value: 'active', icon: 'check-circle' },
-            { label: 'Former', value: 'former', icon: 'history' },
-            { label: 'Inactive', value: 'inactive', icon: 'cancel' },
-          ]}
-          selectedValue={selectedStatus}
-          onValueChange={val => {
-            const newStatus = (val || 'all') as string;
-            setSelectedStatus(newStatus);
-            if (newStatus === 'all') {
-              router.setParams({ filterIds: '' });
-            }
-          }}
-        />
-      </View>
-
-      <SectionList
-        style={{ flex: 1 }}
-        sections={sections}
-        keyExtractor={item => item.id}
-        contentContainerStyle={[
-          styles.listContent,
-          sections.length === 0 && styles.emptyContainer,
-        ]}
-        renderItem={({ item, section }) =>
-          expandedStatuses.has(section.title.toLowerCase())
-            ? renderTenant({ item })
-            : null
-        }
-        renderSectionHeader={renderStatusHeader}
-        stickySectionHeadersEnabled={false}
-        removeClippedSubviews={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        extraData={{
-          expandedStatuses,
-          rawTenants,
-          menuVisible,
-          ledgerLoading,
-          contractsByTenantId,
-          housesById,
-          propertiesById,
-          bookings,
-        }}
-        ListEmptyComponent={
-          refreshing || isInitialSyncing ? (
-            <LoadingCard iconName="account-group" text="Loading tenants..." />
-          ) : (
-            <EmptyState icon="account-group-outline" title="No tenants found" />
-          )
-        }
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      />
-
-      <Portal>
-        <BaseModal
-          mode="confirm"
-          visible={deleteDialogVisible}
-          onDismiss={() => setDeleteDialogVisible(false)}
-          onConfirm={handleDeleteTenant}
-          title="Delete Tenant"
-          message={`Are you sure you want to delete ${selectedTenant?.name}?\n\nThis will also terminate any active contracts and free up their houses.`}
-          confirmText="Delete"
-          cancelText="Cancel"
-          loading={deleteLoading}
-          destructive={true}
+    <AccessGuard roles={['admin', 'staff']}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <BaseSearch
+          placeholder="Search tenants"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          leftIcon="magnify"
+          rightIcon="close-circle"
         />
 
-        <BaseModal
-          mode="confirm"
-          visible={convertDialogVisible}
-          onDismiss={() => setConvertDialogVisible(false)}
-          onConfirm={handleConfirmConvertToBooking}
-          title="Convert to Booking"
-          message={`Create a booking record for ${selectedTenant?.name}?`}
-          confirmText="Convert"
-          cancelText="Cancel"
-          loading={convertLoading}
-        />
-
-        {/* Status Update Modal */}
-        <StatusUpdateModal
-          visible={statusUpdateVisible}
-          onDismiss={() => setStatusUpdateVisible(false)}
-          title="Update Tenant Status"
-          subtitle={selectedTenant ? `Tenant: ${selectedTenant.name}` : undefined}
-          items={tenantStatusItems}
-          onSelect={status => {
-            handleUpdateTenantStatus(status);
-          }}
-        ></StatusUpdateModal>
-
-        {duplicateTenantDialogVisible && updateComparison && (
-          <BaseModal
-            mode="modal"
-            visible={duplicateTenantDialogVisible}
-            loading={updatingTenant}
-            onDismiss={() => {
-              setDuplicateTenantDialogVisible(false);
-              setUpdateComparison(null);
-              setDuplicateTenants([]);
-              setPendingBookingData(null);
+        <View style={styles.filterContainer}>
+          <FilterButtons
+            options={[
+              { label: 'All', value: 'all', icon: 'layers-outline' },
+              { label: 'Active', value: 'active', icon: 'check-circle' },
+              { label: 'Former', value: 'former', icon: 'history' },
+              { label: 'Inactive', value: 'inactive', icon: 'cancel' },
+            ]}
+            selectedValue={selectedStatus}
+            onValueChange={val => {
+              const newStatus = (val || 'all') as string;
+              setSelectedStatus(newStatus);
+              if (newStatus === 'all') {
+                router.setParams({ filterIds: '' });
+              }
             }}
-            title={isSyncMode ? 'Sync with Booking' : 'Duplicate Booking Found'}
-            subtitle={
-              pendingBookingData
-                ? `Booking: ${pendingBookingData.name || 'Found'} (${duplicateTenants.length} matches)`
-                : 'Network and sync status'
-            }
-            actions={
-              updateComparison.differences.length === 0
-                ? [
-                    {
-                      label: 'Close',
-                      onPress: () => {
-                        setDuplicateTenantDialogVisible(false);
-                        setUpdateComparison(null);
-                        setDuplicateTenants([]);
-                        setPendingBookingData(null);
-                      },
-                      mode: 'contained',
-                      icon: 'close',
-                    },
-                  ]
-                : [
-                    {
-                      label: 'Update Tenant',
-                      onPress: () => handleSyncConfirm('to_tenant'),
-                      mode: 'contained',
-                      icon: 'arrow-right-bold',
-                    },
-                    {
-                      label: 'Update Booking',
-                      onPress: () => handleSyncConfirm('to_booking'),
-                      mode: 'outlined',
-                      icon: 'arrow-left-bold',
-                    },
-                  ]
-            }
-            scrollable={true}
-          >
-            {updateComparison.differences.length > 0 ? (
-              <>
-                <View style={{ marginBottom: 16 }}>
-                  <Text variant="bodyMedium">
-                    {isSyncMode
-                      ? 'Review changes from booking:'
-                      : 'A booking request already exists for this email. Review and merge changes?'}
-                  </Text>
-                </View>
-                <DiffViewer differences={updateComparison.differences} />
-              </>
-            ) : (
-              <EmptyState
-                icon="check-all"
-                title="In Sync"
-                description="No differences found between the tenant and the booking."
-              />
-            )}
-          </BaseModal>
-        )}
-        {/* Booking Details Modal */}
-        <BaseModal
-          visible={bookingModalVisible}
-          onDismiss={() => setBookingModalVisible(false)}
-          title="Original Booking Details"
-          subtitle="Manage your properties"
-          mode="info"
-        >
-          {selectedBooking && (
-            <View style={{ gap: 10 }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.primaryContainer,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 12,
-                  alignSelf: 'stretch',
-                  gap: 8,
-                }}
-              >
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={16}
-                  color={colors.primary}
-                />
-                <Text
-                  variant="labelLarge"
-                  style={{
-                    color: colors.onPrimaryContainer,
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {selectedBooking.status}
-                </Text>
-              </View>
+          />
+        </View>
 
+        <SectionList
+          style={{ flex: 1 }}
+          sections={sections}
+          keyExtractor={item => item.id}
+          contentContainerStyle={[
+            styles.listContent,
+            sections.length === 0 && styles.emptyContainer,
+          ]}
+          renderItem={({ item, section }) =>
+            expandedStatuses.has(section.title.toLowerCase())
+              ? renderTenant({ item })
+              : null
+          }
+          renderSectionHeader={renderStatusHeader}
+          stickySectionHeadersEnabled={false}
+          removeClippedSubviews={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          extraData={{
+            expandedStatuses,
+            rawTenants,
+            menuVisible,
+            ledgerLoading,
+            contractsByTenantId,
+            housesById,
+            propertiesById,
+            bookings,
+          }}
+          ListEmptyComponent={
+            refreshing || isInitialSyncing ? (
+              <LoadingCard iconName="account-group" text="Loading tenants..." />
+            ) : (
+              <EmptyState icon="account-group-outline" title="No tenants found" />
+            )
+          }
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        />
+
+        <Portal>
+          <BaseModal
+            mode="confirm"
+            visible={deleteDialogVisible}
+            onDismiss={() => setDeleteDialogVisible(false)}
+            onConfirm={handleDeleteTenant}
+            title="Delete Tenant"
+            message={`Are you sure you want to delete ${selectedTenant?.name}?\n\nThis will also terminate any active contracts and free up their houses.`}
+            confirmText="Delete"
+            cancelText="Cancel"
+            loading={deleteLoading}
+            destructive={true}
+          />
+
+          <BaseModal
+            mode="confirm"
+            visible={convertDialogVisible}
+            onDismiss={() => setConvertDialogVisible(false)}
+            onConfirm={handleConfirmConvertToBooking}
+            title="Convert to Booking"
+            message={`Create a booking record for ${selectedTenant?.name}?`}
+            confirmText="Convert"
+            cancelText="Cancel"
+            loading={convertLoading}
+          />
+
+          {/* Status Update Modal */}
+          <StatusUpdateModal
+            visible={statusUpdateVisible}
+            onDismiss={() => setStatusUpdateVisible(false)}
+            title="Update Tenant Status"
+            subtitle={selectedTenant ? `Tenant: ${selectedTenant.name}` : undefined}
+            items={tenantStatusItems}
+            onSelect={status => {
+              handleUpdateTenantStatus(status);
+            }}
+          ></StatusUpdateModal>
+
+          {duplicateTenantDialogVisible && updateComparison && (
+            <BaseModal
+              mode="modal"
+              visible={duplicateTenantDialogVisible}
+              loading={updatingTenant}
+              onDismiss={() => {
+                setDuplicateTenantDialogVisible(false);
+                setUpdateComparison(null);
+                setDuplicateTenants([]);
+                setPendingBookingData(null);
+              }}
+              title={isSyncMode ? 'Sync with Booking' : 'Duplicate Booking Found'}
+              subtitle={
+                pendingBookingData
+                  ? `Booking: ${pendingBookingData.name || 'Found'} (${duplicateTenants.length} matches)`
+                  : 'Network and sync status'
+              }
+              actions={
+                updateComparison.differences.length === 0
+                  ? [
+                      {
+                        label: 'Close',
+                        onPress: () => {
+                          setDuplicateTenantDialogVisible(false);
+                          setUpdateComparison(null);
+                          setDuplicateTenants([]);
+                          setPendingBookingData(null);
+                        },
+                        mode: 'contained',
+                        icon: 'close',
+                      },
+                    ]
+                  : [
+                      {
+                        label: 'Update Tenant',
+                        onPress: () => handleSyncConfirm('to_tenant'),
+                        mode: 'contained',
+                        icon: 'arrow-right-bold',
+                      },
+                      {
+                        label: 'Update Booking',
+                        onPress: () => handleSyncConfirm('to_booking'),
+                        mode: 'outlined',
+                        icon: 'arrow-left-bold',
+                      },
+                    ]
+              }
+              scrollable={true}
+            >
+              {updateComparison.differences.length > 0 ? (
+                <>
+                  <View style={{ marginBottom: 16 }}>
+                    <Text variant="bodyMedium">
+                      {isSyncMode
+                        ? 'Review changes from booking:'
+                        : 'A booking request already exists for this email. Review and merge changes?'}
+                    </Text>
+                  </View>
+                  <DiffViewer differences={updateComparison.differences} />
+                </>
+              ) : (
+                <EmptyState
+                  icon="check-all"
+                  title="In Sync"
+                  description="No differences found between the tenant and the booking."
+                />
+              )}
+            </BaseModal>
+          )}
+          {/* Booking Details Modal */}
+          <BaseModal
+            visible={bookingModalVisible}
+            onDismiss={() => setBookingModalVisible(false)}
+            title="Original Booking Details"
+            subtitle="Manage your properties"
+            mode="info"
+          >
+            {selectedBooking && (
               <View style={{ gap: 10 }}>
-                {/* Contact Info */}
                 <View
                   style={{
-                    backgroundColor: colors.surfaceVariant,
-                    padding: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.primaryContainer,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
                     borderRadius: 12,
-                    gap: 12,
+                    alignSelf: 'stretch',
+                    gap: 8,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <MaterialCommunityIcons
-                      name="account-outline"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <View>
-                      <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                        NAME
-                      </Text>
-                      <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
-                        {selectedBooking.name}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <MaterialCommunityIcons
-                      name="phone-outline"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <View>
-                      <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                        PHONE
-                      </Text>
-                      <Text variant="bodyLarge">{selectedBooking.phone || 'N/A'}</Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <MaterialCommunityIcons
-                      name="email-outline"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <View>
-                      <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                        EMAIL
-                      </Text>
-                      <Text variant="bodyLarge">{selectedBooking.email || 'N/A'}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text
+                    variant="labelLarge"
                     style={{
-                      flex: 1,
-                      backgroundColor: colors.surfaceVariant,
-                      padding: 12,
-                      borderRadius: 12,
+                      color: colors.onPrimaryContainer,
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
                     }}
                   >
-                    <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                      GENDER
-                    </Text>
-                    <Text variant="bodyMedium">
-                      {properCase(selectedBooking.gender || 'N/A')}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      flex: 1,
-                      backgroundColor: colors.surfaceVariant,
-                      padding: 12,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                      NATIONALITY
-                    </Text>
-                    <Text variant="bodyMedium">
-                      {properCase(selectedBooking.nationality || 'N/A')}
-                    </Text>
-                  </View>
+                    {selectedBooking.status}
+                  </Text>
                 </View>
 
-                {/* Next of Kin */}
-                {selectedBooking.next_of_kin &&
-                  ((selectedBooking.next_of_kin as any).name ||
-                    (selectedBooking.next_of_kin as any).phone) && (
+                <View style={{ gap: 10 }}>
+                  {/* Contact Info */}
+                  <View
+                    style={{
+                      backgroundColor: colors.surfaceVariant,
+                      padding: 16,
+                      borderRadius: 12,
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <MaterialCommunityIcons
+                        name="account-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <View>
+                        <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                          NAME
+                        </Text>
+                        <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
+                          {selectedBooking.name}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <MaterialCommunityIcons
+                        name="phone-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <View>
+                        <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                          PHONE
+                        </Text>
+                        <Text variant="bodyLarge">{selectedBooking.phone || 'N/A'}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <MaterialCommunityIcons
+                        name="email-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <View>
+                        <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                          EMAIL
+                        </Text>
+                        <Text variant="bodyLarge">{selectedBooking.email || 'N/A'}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
                     <View
                       style={{
+                        flex: 1,
                         backgroundColor: colors.surfaceVariant,
-                        padding: 16,
+                        padding: 12,
                         borderRadius: 12,
-                        gap: 12,
                       }}
                     >
-                      <Text variant="titleSmall" style={{ color: colors.primary }}>
-                        Next of Kin / Emergency Contact
+                      <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                        GENDER
                       </Text>
-
-                      {(selectedBooking.next_of_kin as any).name && (
-                        <View
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
-                        >
-                          <MaterialCommunityIcons
-                            name="account-group-outline"
-                            size={20}
-                            color={colors.primary}
-                          />
-                          <View>
-                            <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                              NAME
-                            </Text>
-                            <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
-                              {(selectedBooking.next_of_kin as any).name}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-
-                      {(selectedBooking.next_of_kin as any).phone && (
-                        <View
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
-                        >
-                          <MaterialCommunityIcons
-                            name="phone-outline"
-                            size={20}
-                            color={colors.primary}
-                          />
-                          <View>
-                            <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                              PHONE
-                            </Text>
-                            <Text variant="bodyLarge">
-                              {(selectedBooking.next_of_kin as any).phone}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-
-                      {(selectedBooking.next_of_kin as any).relationship && (
-                        <View
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
-                        >
-                          <MaterialCommunityIcons
-                            name="heart-outline"
-                            size={20}
-                            color={colors.primary}
-                          />
-                          <View>
-                            <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                              RELATIONSHIP
-                            </Text>
-                            <Text variant="bodyLarge">
-                              {(selectedBooking.next_of_kin as any).relationship}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
+                      <Text variant="bodyMedium">
+                        {properCase(selectedBooking.gender || 'N/A')}
+                      </Text>
                     </View>
-                  )}
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: colors.surfaceVariant,
+                        padding: 12,
+                        borderRadius: 12,
+                      }}
+                    >
+                      <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                        NATIONALITY
+                      </Text>
+                      <Text variant="bodyMedium">
+                        {properCase(selectedBooking.nationality || 'N/A')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Next of Kin */}
+                  {selectedBooking.next_of_kin &&
+                    ((selectedBooking.next_of_kin as any).name ||
+                      (selectedBooking.next_of_kin as any).phone) && (
+                      <View
+                        style={{
+                          backgroundColor: colors.surfaceVariant,
+                          padding: 16,
+                          borderRadius: 12,
+                          gap: 12,
+                        }}
+                      >
+                        <Text variant="titleSmall" style={{ color: colors.primary }}>
+                          Next of Kin / Emergency Contact
+                        </Text>
+
+                        {(selectedBooking.next_of_kin as any).name && (
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 12,
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="account-group-outline"
+                              size={20}
+                              color={colors.primary}
+                            />
+                            <View>
+                              <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                                NAME
+                              </Text>
+                              <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
+                                {(selectedBooking.next_of_kin as any).name}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {(selectedBooking.next_of_kin as any).phone && (
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 12,
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="phone-outline"
+                              size={20}
+                              color={colors.primary}
+                            />
+                            <View>
+                              <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                                PHONE
+                              </Text>
+                              <Text variant="bodyLarge">
+                                {(selectedBooking.next_of_kin as any).phone}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {(selectedBooking.next_of_kin as any).relationship && (
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 12,
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="heart-outline"
+                              size={20}
+                              color={colors.primary}
+                            />
+                            <View>
+                              <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                                RELATIONSHIP
+                              </Text>
+                              <Text variant="bodyLarge">
+                                {(selectedBooking.next_of_kin as any).relationship}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                </View>
               </View>
-            </View>
-          )}
-        </BaseModal>
-      </Portal>
-    </View>
+            )}
+          </BaseModal>
+        </Portal>
+      </View>
+    </AccessGuard>
   );
 }
 

@@ -8,6 +8,7 @@ import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import SwapHouseModal from '@/features/properties/components/SwapHouseModal';
 import TransferHouseModal from '@/features/properties/components/TransferHouseModal';
+import AccessGuard from '@/shared/components/AccessGuard';
 import HistoryModal from '@/shared/components/HistoryModal';
 import LoadingCard from '@/shared/components/LoadingCard';
 import SPressable from '@/shared/components/SlightPressable';
@@ -374,341 +375,346 @@ export default function ViewTenantScreen() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <Surface
-        style={[styles.unifiedSurface, { backgroundColor: colors.surface }]}
-        elevation={2}
+    <AccessGuard roles={['admin', 'staff']}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.unifiedContent}>
-          {/* Header Section */}
-          <View style={styles.headerSection}>
-            <View style={styles.headerTop}>
-              <View style={styles.titleSection}>
-                <Text variant="titleLarge" style={styles.tenantNameTitle}>
-                  {tenant.name}
-                </Text>
-                <View style={styles.chipRow}>
-                  <Chip
+        <Surface
+          style={[styles.unifiedSurface, { backgroundColor: colors.surface }]}
+          elevation={2}
+        >
+          <View style={styles.unifiedContent}>
+            {/* Header Section */}
+            <View style={styles.headerSection}>
+              <View style={styles.headerTop}>
+                <View style={styles.titleSection}>
+                  <Text variant="titleLarge" style={styles.tenantNameTitle}>
+                    {tenant.name}
+                  </Text>
+                  <View style={styles.chipRow}>
+                    <Chip
+                      icon="phone"
+                      style={{ backgroundColor: addOpacity(colors.primary, 0.1) }}
+                      textStyle={{ fontSize: 11, color: colors.primary }}
+                      compact
+                    >
+                      {tenant.phone || 'No phone'}
+                    </Chip>
+                  </View>
+                </View>
+
+                <View style={styles.actionRow}>
+                  <IconButton
                     icon="phone"
-                    style={{ backgroundColor: addOpacity(colors.primary, 0.1) }}
-                    textStyle={{ fontSize: 11, color: colors.primary }}
-                    compact
+                    mode="contained-tonal"
+                    onPress={makeCall}
+                    disabled={!tenant.phone}
+                    containerColor={colors.primaryContainer}
+                    iconColor={colors.primary}
+                  />
+                  <IconButton
+                    icon="whatsapp"
+                    mode="contained-tonal"
+                    onPress={sendWhatsApp}
+                    disabled={!tenant.phone}
+                    containerColor="#25D36620"
+                    iconColor="#25D366"
+                  />
+                  <IconButton
+                    icon="email"
+                    mode="contained-tonal"
+                    onPress={sendEmail}
+                    disabled={!tenant.email}
+                    containerColor={colors.secondaryContainer}
+                    iconColor={colors.secondary}
+                  />
+                  <Menu
+                    visible={tenantMenuVisible}
+                    onDismiss={() => setTenantMenuVisible(false)}
+                    anchor={
+                      <IconButton
+                        icon="dots-vertical"
+                        mode="contained-tonal"
+                        onPress={() => setTenantMenuVisible(true)}
+                      />
+                    }
                   >
-                    {tenant.phone || 'No phone'}
-                  </Chip>
+                    {can('edit', 'tenant') && (
+                      <Menu.Item
+                        onPress={() => {
+                          setTenantMenuVisible(false);
+                          router.push(`/(tabs)/tenants/edit/${tenant.id}`);
+                        }}
+                        title="Edit Profile"
+                        leadingIcon="pencil"
+                      />
+                    )}
+                    {can('create', 'contract') && (
+                      <Menu.Item
+                        onPress={() => {
+                          setTenantMenuVisible(false);
+                          router.push({
+                            pathname: '/contracts/create',
+                            params: { tenant_id: tenant.id },
+                          });
+                        }}
+                        title="New Contract"
+                        leadingIcon="file-plus"
+                      />
+                    )}
+                    <Menu.Item
+                      onPress={() => {
+                        setTenantMenuVisible(false);
+                        handleSharePersonalData();
+                      }}
+                      title="Export Profile PDF"
+                      leadingIcon="file-pdf-box"
+                    />
+                  </Menu>
                 </View>
               </View>
-
-              <View style={styles.actionRow}>
-                <IconButton
-                  icon="phone"
-                  mode="contained-tonal"
-                  onPress={makeCall}
-                  disabled={!tenant.phone}
-                  containerColor={colors.primaryContainer}
-                  iconColor={colors.primary}
-                />
-                <IconButton
-                  icon="whatsapp"
-                  mode="contained-tonal"
-                  onPress={sendWhatsApp}
-                  disabled={!tenant.phone}
-                  containerColor="#25D36620"
-                  iconColor="#25D366"
-                />
-                <IconButton
-                  icon="email"
-                  mode="contained-tonal"
-                  onPress={sendEmail}
-                  disabled={!tenant.email}
-                  containerColor={colors.secondaryContainer}
-                  iconColor={colors.secondary}
-                />
-                <Menu
-                  visible={tenantMenuVisible}
-                  onDismiss={() => setTenantMenuVisible(false)}
-                  anchor={
-                    <IconButton
-                      icon="dots-vertical"
-                      mode="contained-tonal"
-                      onPress={() => setTenantMenuVisible(true)}
-                    />
-                  }
-                >
-                  {can('edit', 'tenant') && (
-                    <Menu.Item
-                      onPress={() => {
-                        setTenantMenuVisible(false);
-                        router.push(`/(tabs)/tenants/edit/${tenant.id}`);
-                      }}
-                      title="Edit Profile"
-                      leadingIcon="pencil"
-                    />
-                  )}
-                  {can('create', 'contract') && (
-                    <Menu.Item
-                      onPress={() => {
-                        setTenantMenuVisible(false);
-                        router.push({
-                          pathname: '/contracts/create',
-                          params: { tenant_id: tenant.id },
-                        });
-                      }}
-                      title="New Contract"
-                      leadingIcon="file-plus"
-                    />
-                  )}
-                  <Menu.Item
-                    onPress={() => {
-                      setTenantMenuVisible(false);
-                      handleSharePersonalData();
-                    }}
-                    title="Export Profile PDF"
-                    leadingIcon="file-pdf-box"
-                  />
-                </Menu>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.receiptDividerContainer}>
-            <View
-              style={[
-                styles.receiptDivider,
-                { borderBottomColor: colors.outlineVariant },
-              ]}
-            />
-          </View>
-
-          {/* Basic Info */}
-          <View style={[styles.infoBlock, { borderLeftColor: colors.primary }]}>
-            <View style={styles.infoRow}>
-              <View style={styles.labelSection}>
-                <MaterialCommunityIcons
-                  name="email"
-                  size={14}
-                  color={colors.onSurfaceVariant}
-                />
-                <Text variant="labelSmall" style={styles.infoLabel}>
-                  EMAIL
-                </Text>
-              </View>
-              <Text variant="bodyMedium" style={styles.infoValue}>
-                {tenant.email || 'N/A'}
-              </Text>
             </View>
 
-            {tenant.address && (
+            <View style={styles.receiptDividerContainer}>
+              <View
+                style={[
+                  styles.receiptDivider,
+                  { borderBottomColor: colors.outlineVariant },
+                ]}
+              />
+            </View>
+
+            {/* Basic Info */}
+            <View style={[styles.infoBlock, { borderLeftColor: colors.primary }]}>
               <View style={styles.infoRow}>
                 <View style={styles.labelSection}>
                   <MaterialCommunityIcons
-                    name="map-marker"
+                    name="email"
                     size={14}
                     color={colors.onSurfaceVariant}
                   />
                   <Text variant="labelSmall" style={styles.infoLabel}>
-                    ADDRESS
+                    EMAIL
                   </Text>
                 </View>
                 <Text variant="bodyMedium" style={styles.infoValue}>
-                  {tenant.address || 'N/A'}
+                  {tenant.email || 'N/A'}
                 </Text>
               </View>
-            )}
 
-            <View style={styles.infoRow}>
-              <View style={styles.labelSection}>
-                <MaterialCommunityIcons
-                  name="account"
-                  size={14}
-                  color={colors.onSurfaceVariant}
-                />
-                <Text variant="labelSmall" style={styles.infoLabel}>
-                  METADATA
-                </Text>
-              </View>
-              <Text variant="bodyMedium" style={styles.infoValue}>
-                {properCase(tenant.gender || 'N/A')} •{' '}
-                {properCase(tenant.nationality || 'N/A')}
-              </Text>
-            </View>
-          </View>
-
-          {/* Next of Kin */}
-          <View style={styles.subSection}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons
-                name="account-group"
-                size={20}
-                color={colors.primary}
-              />
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Emergency Contacts
-              </Text>
-            </View>
-
-            {Array.isArray(tenant.next_of_kin) && tenant.next_of_kin.length > 0 ? (
-              (tenant.next_of_kin as any[]).map((kin, idx) => (
-                <Surface
-                  key={idx}
-                  style={[
-                    styles.kinCard,
-                    { backgroundColor: addOpacity(colors.surfaceVariant, 0.3) },
-                  ]}
-                  elevation={0}
-                >
-                  <View style={styles.kinHeader}>
-                    <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>
-                      {kin.name}
+              {tenant.address && (
+                <View style={styles.infoRow}>
+                  <View style={styles.labelSection}>
+                    <MaterialCommunityIcons
+                      name="map-marker"
+                      size={14}
+                      color={colors.onSurfaceVariant}
+                    />
+                    <Text variant="labelSmall" style={styles.infoLabel}>
+                      ADDRESS
                     </Text>
-                    {kin.is_primary && (
-                      <Chip
-                        style={{
-                          height: 24,
-                          backgroundColor: colors.primaryContainer,
-                          justifyContent: 'center',
-                        }}
-                        textStyle={{
-                          fontSize: 9,
-                          color: colors.primary,
-                          fontWeight: 'bold',
-                          lineHeight: 12,
-                        }}
-                      >
-                        PRIMARY
-                      </Chip>
-                    )}
                   </View>
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    {kin.relationship} • {kin.phone}
+                  <Text variant="bodyMedium" style={styles.infoValue}>
+                    {tenant.address || 'N/A'}
                   </Text>
-                  {kin.email && (
-                    <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                      {kin.email}
-                    </Text>
-                  )}
-                </Surface>
-              ))
-            ) : (
-              <Text
-                variant="bodySmall"
-                style={{ fontStyle: 'italic', color: colors.onSurfaceVariant }}
-              >
-                No emergency contacts provided
-              </Text>
-            )}
-          </View>
+                </View>
+              )}
 
-          {/* Contracts */}
-          <View style={styles.subSection}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons
-                name="file-document-multiple"
-                size={20}
-                color={colors.primary}
-              />
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Contract History
-              </Text>
+              <View style={styles.infoRow}>
+                <View style={styles.labelSection}>
+                  <MaterialCommunityIcons
+                    name="account"
+                    size={14}
+                    color={colors.onSurfaceVariant}
+                  />
+                  <Text variant="labelSmall" style={styles.infoLabel}>
+                    METADATA
+                  </Text>
+                </View>
+                <Text variant="bodyMedium" style={styles.infoValue}>
+                  {properCase(tenant.gender || 'N/A')} •{' '}
+                  {properCase(tenant.nationality || 'N/A')}
+                </Text>
+              </View>
             </View>
-            <View style={{ gap: 10 }}>
-              {contracts.length === 0 ? (
+
+            {/* Next of Kin */}
+            <View style={styles.subSection}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons
+                  name="account-group"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text variant="titleMedium" style={styles.sectionTitle}>
+                  Emergency Contacts
+                </Text>
+              </View>
+
+              {Array.isArray(tenant.next_of_kin) && tenant.next_of_kin.length > 0 ? (
+                (tenant.next_of_kin as any[]).map((kin, idx) => (
+                  <Surface
+                    key={idx}
+                    style={[
+                      styles.kinCard,
+                      { backgroundColor: addOpacity(colors.surfaceVariant, 0.3) },
+                    ]}
+                    elevation={0}
+                  >
+                    <View style={styles.kinHeader}>
+                      <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>
+                        {kin.name}
+                      </Text>
+                      {kin.is_primary && (
+                        <Chip
+                          style={{
+                            height: 24,
+                            backgroundColor: colors.primaryContainer,
+                            justifyContent: 'center',
+                          }}
+                          textStyle={{
+                            fontSize: 9,
+                            color: colors.primary,
+                            fontWeight: 'bold',
+                            lineHeight: 12,
+                          }}
+                        >
+                          PRIMARY
+                        </Chip>
+                      )}
+                    </View>
+                    <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
+                      {kin.relationship} • {kin.phone}
+                    </Text>
+                    {kin.email && (
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: colors.onSurfaceVariant }}
+                      >
+                        {kin.email}
+                      </Text>
+                    )}
+                  </Surface>
+                ))
+              ) : (
                 <Text
                   variant="bodySmall"
                   style={{ fontStyle: 'italic', color: colors.onSurfaceVariant }}
                 >
-                  No contracts found
+                  No emergency contacts provided
                 </Text>
-              ) : (
-                contracts.map((contract: Contract, index: number) =>
-                  renderContract(contract, index),
-                )
               )}
             </View>
-          </View>
 
-          {/* Recent Receipts */}
-          <View style={styles.subSection}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="receipt" size={20} color={colors.primary} />
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Recent Payments
-              </Text>
-            </View>
-            <View style={{ gap: 10 }}>
-              {receipts.length === 0 ? (
-                <Text
-                  variant="bodySmall"
-                  style={{ fontStyle: 'italic', color: colors.onSurfaceVariant }}
-                >
-                  No receipts found
+            {/* Contracts */}
+            <View style={styles.subSection}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons
+                  name="file-document-multiple"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text variant="titleMedium" style={styles.sectionTitle}>
+                  Contract History
                 </Text>
-              ) : (
-                receipts.slice(0, 5).map((receipt: Receipt) => (
-                  <SPressable
-                    key={receipt.id}
-                    onPress={() => router.push(`/receipts/view/${receipt.id}`)}
+              </View>
+              <View style={{ gap: 10 }}>
+                {contracts.length === 0 ? (
+                  <Text
+                    variant="bodySmall"
+                    style={{ fontStyle: 'italic', color: colors.onSurfaceVariant }}
                   >
-                    <Surface
-                      style={[
-                        styles.historyCardItem,
-                        { backgroundColor: addOpacity(colors.surfaceVariant, 0.2) },
-                      ]}
-                      elevation={0}
+                    No contracts found
+                  </Text>
+                ) : (
+                  contracts.map((contract: Contract, index: number) =>
+                    renderContract(contract, index),
+                  )
+                )}
+              </View>
+            </View>
+
+            {/* Recent Receipts */}
+            <View style={styles.subSection}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons name="receipt" size={20} color={colors.primary} />
+                <Text variant="titleMedium" style={styles.sectionTitle}>
+                  Recent Payments
+                </Text>
+              </View>
+              <View style={{ gap: 10 }}>
+                {receipts.length === 0 ? (
+                  <Text
+                    variant="bodySmall"
+                    style={{ fontStyle: 'italic', color: colors.onSurfaceVariant }}
+                  >
+                    No receipts found
+                  </Text>
+                ) : (
+                  receipts.slice(0, 5).map((receipt: Receipt) => (
+                    <SPressable
+                      key={receipt.id}
+                      onPress={() => router.push(`/receipts/view/${receipt.id}`)}
                     >
-                      <View style={styles.historyCardHeader}>
-                        <View style={styles.historyCardTitleGroup}>
-                          <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>
-                            #{receipt.id.slice(-6).toUpperCase()}
-                          </Text>
+                      <Surface
+                        style={[
+                          styles.historyCardItem,
+                          { backgroundColor: addOpacity(colors.surfaceVariant, 0.2) },
+                        ]}
+                        elevation={0}
+                      >
+                        <View style={styles.historyCardHeader}>
+                          <View style={styles.historyCardTitleGroup}>
+                            <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>
+                              #{receipt.id.slice(-6).toUpperCase()}
+                            </Text>
+                            <Text
+                              variant="bodySmall"
+                              style={{ color: colors.onSurfaceVariant }}
+                            >
+                              {formatDate(receipt.payment_date)}
+                            </Text>
+                          </View>
                           <Text
-                            variant="bodySmall"
-                            style={{ color: colors.onSurfaceVariant }}
+                            variant="labelMedium"
+                            style={{ fontWeight: '900', color: colors.primary }}
                           >
-                            {formatDate(receipt.payment_date)}
+                            {defaultCurrency
+                              ? formatWithCurrency(receipt.amount, defaultCurrency)
+                              : receipt.amount}
                           </Text>
                         </View>
-                        <Text
-                          variant="labelMedium"
-                          style={{ fontWeight: '900', color: colors.primary }}
-                        >
-                          {defaultCurrency
-                            ? formatWithCurrency(receipt.amount, defaultCurrency)
-                            : receipt.amount}
-                        </Text>
-                      </View>
-                    </Surface>
-                  </SPressable>
-                ))
-              )}
+                      </Surface>
+                    </SPressable>
+                  ))
+                )}
+              </View>
             </View>
+
+            {isOwner && (
+              <HistoryModal
+                entityType="tenants"
+                entityId={tenant.id}
+                targets={historyTargets}
+                containerStyle={{ marginHorizontal: 16, marginBottom: 32 }}
+              />
+            )}
           </View>
+        </Surface>
 
-          {isOwner && (
-            <HistoryModal
-              entityType="tenants"
-              entityId={tenant.id}
-              targets={historyTargets}
-              containerStyle={{ marginHorizontal: 16, marginBottom: 32 }}
-            />
-          )}
-        </View>
-      </Surface>
-
-      <TransferHouseModal
-        visible={!!transferContractId}
-        onDismiss={() => setTransferContractId(null)}
-        contractId={transferContractId}
-      />
-      <SwapHouseModal
-        visible={!!swapContractId}
-        onDismiss={() => setSwapContractId(null)}
-        contractId={swapContractId}
-      />
-    </ScrollView>
+        <TransferHouseModal
+          visible={!!transferContractId}
+          onDismiss={() => setTransferContractId(null)}
+          contractId={transferContractId}
+        />
+        <SwapHouseModal
+          visible={!!swapContractId}
+          onDismiss={() => setSwapContractId(null)}
+          contractId={swapContractId}
+        />
+      </ScrollView>
+    </AccessGuard>
   );
 }
 
