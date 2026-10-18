@@ -35,7 +35,8 @@ const TabLayout = function TabLayout() {
   const { selectedBusiness, loading: businessLoading } = useBusiness();
   const { confirmSignOut, loading: authLoading } = useAuth();
   const segments = useSegments();
-  const { hasAccess, can } = useAccessControl();
+  const { isAdmin, isAdminOrStaff, isTenant, isStaff, isTenantOnly, can } =
+    useAccessControl();
 
   // Show offline warning when authoritative offline
   const { localUri: businessLogoUri } = useOfflineImageSync(
@@ -187,7 +188,7 @@ const TabLayout = function TabLayout() {
           name="properties/index"
           options={{
             title: 'Properties',
-            href: hasAccess(['admin']) ? undefined : null,
+            href: isAdmin ? undefined : null,
             tabBarIcon: renderTabBarIcon('office-building'),
             header: () => (
               <ThemedHeader
@@ -216,7 +217,7 @@ const TabLayout = function TabLayout() {
           name="tenants/index"
           options={{
             title: 'Tenants',
-            href: hasAccess(['admin', 'staff']) ? undefined : null,
+            href: isAdminOrStaff ? undefined : null,
             tabBarIcon: renderTabBarIcon('account-group'),
             header: () => (
               <ThemedHeader
@@ -246,14 +247,14 @@ const TabLayout = function TabLayout() {
           name="contracts/index"
           options={{
             title: 'Contracts',
-            href: hasAccess(['admin']) ? undefined : null,
+            href: isAdmin ? undefined : null,
             tabBarIcon: renderTabBarIcon('file'),
             header: () => (
               <ThemedHeader
                 title="Contracts"
                 subtitle="Manage lease agreements and renewals"
                 actions={
-                  hasAccess(['admin'])
+                  isAdmin
                     ? [
                         {
                           icon: 'file-cog',
@@ -275,15 +276,15 @@ const TabLayout = function TabLayout() {
         <Tabs.Screen
           name="receipts/index"
           options={{
-            title: hasAccess(['admin', 'staff']) ? 'Receipts' : 'My Receipts',
-            href: hasAccess(['admin', 'staff', 'tenant']) ? undefined : null,
+            title: isAdminOrStaff ? 'Receipts' : 'My Receipts',
+            href: isAdminOrStaff || isTenant ? undefined : null,
             tabBarIcon: renderTabBarIcon('receipt-text-outline'),
             header: () => (
               <ThemedHeader
-                title={hasAccess(['admin', 'staff']) ? 'Receipts' : 'My Receipts'}
+                title={isAdminOrStaff ? 'Receipts' : 'My Receipts'}
                 subtitle="Track payments and transaction history"
                 actions={[
-                  ...(hasAccess(['admin'])
+                  ...(isAdmin
                     ? [
                         {
                           icon: 'bank-transfer',
@@ -300,7 +301,7 @@ const TabLayout = function TabLayout() {
                         },
                       ]
                     : []),
-                  ...(hasAccess(['tenant']) && !hasAccess(['admin', 'staff'])
+                  ...(isTenantOnly
                     ? [
                         {
                           icon: 'cash-multiple',
@@ -319,10 +320,7 @@ const TabLayout = function TabLayout() {
           name="maintenance/index"
           options={{
             title: 'Maintenance',
-            href:
-              (hasAccess(['tenant']) || hasAccess(['staff'])) && !hasAccess(['admin'])
-                ? undefined
-                : null,
+            href: !isAdmin && (isTenant || isStaff) ? undefined : null,
             tabBarIcon: renderTabBarIcon('hammer-wrench'),
             header: () => (
               <ThemedHeader

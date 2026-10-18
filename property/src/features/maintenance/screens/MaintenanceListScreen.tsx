@@ -66,11 +66,14 @@ export default function MaintenanceScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { selectedBusiness } = useBusiness();
-  const { userRoles, tenantId, loading: accessLoading, can } = useAccessControl();
+  const {
+    tenantId,
+    loading: accessLoading,
+    can,
+    isAdmin,
+    isTenantOnly: isTenant,
+  } = useAccessControl();
   const { showSnackbar } = useSnackbar();
-  const isAdmin = userRoles.includes('admin');
-  const isStaff = userRoles.includes('staff');
-  const isTenant = userRoles.includes('tenant') && !isStaff;
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
 
   const [searchQuery, setSearchQuery] = useState('');

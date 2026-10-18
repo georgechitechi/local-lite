@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { useCallback, useMemo } from 'react';
 import { useBusiness } from '@/context/BusinessContext';
 import { useAuth } from '@/providers/AuthProvider';
+import { type Action, evaluatePermission, type Resource } from '@/shared/access';
 import { useBusinessShares, useTenants } from '@/shared/hooks/useStore';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import {
@@ -10,20 +11,8 @@ import {
   normalizeIdentity,
   parseShareRoles,
 } from '@/shared/utils/businessAccess';
-import { ac, mapActionToCrud } from '@/shared/utils/permissions';
 
-export type Resource =
-  | 'tenant'
-  | 'property'
-  | 'house'
-  | 'contract'
-  | 'receipt'
-  | 'maintenance'
-  | 'expense'
-  | 'report'
-  | 'booking'
-  | 'transaction';
-export type Action = 'create' | 'view' | 'edit' | 'delete';
+export type { Action, Resource };
 
 export interface UseAccessControlReturn {
   isOwner: boolean;
@@ -161,29 +150,7 @@ export function useAccessControl(): UseAccessControlReturn {
 
   const can = useCallback(
     (action: Action, resource: Resource): boolean => {
-      if (isOwner) return true;
-
-      // Admin bypass if it happens to be explicitly in uniqueRoles but not isOwner
-      if (uniqueRoles.includes('admin')) return true;
-
-      const crudAction = mapActionToCrud(action);
-
-      return uniqueRoles.some(role => {
-        try {
-          const permission = ac.can(role);
-
-          // Check both 'Any' and 'Own' variations of the action
-          const anyMethod = `${crudAction}Any` as keyof typeof permission;
-          const ownMethod = `${crudAction}Own` as keyof typeof permission;
-
-          const hasAny = (permission[anyMethod] as any)(resource).granted;
-          const hasOwn = (permission[ownMethod] as any)(resource).granted;
-
-          return hasAny || hasOwn;
-        } catch (_error) {
-          return false;
-        }
-      });
+      return evaluatePermission(uniqueRoles, action, resource, isOwner);
     },
     [isOwner, uniqueRoles],
   );

@@ -88,6 +88,8 @@ export default function AccessGuard({
   return <>{children}</>;
 }
 
+export const Protect = AccessGuard;
+
 export interface CanProps {
   children: React.ReactNode;
   action?: Action;
@@ -140,7 +142,7 @@ export function Can({
     isAllowed = true;
   }
 
-  return isAllowed ? <>{children}</> : <>{fallback}</>;
+  return (isAllowed ? children : fallback) as React.ReactElement | null;
 }
 
 export interface RoleGuardProps {
@@ -152,21 +154,21 @@ export interface RoleGuardProps {
 export function AdminOnly({ children, fallback = null }: RoleGuardProps) {
   const { isAdmin, loading } = useAccessControl();
   if (loading) return null;
-  return isAdmin ? <>{children}</> : <>{fallback}</>;
+  return (isAdmin ? children : fallback) as React.ReactElement | null;
 }
 
 /** Renders children only if user is owner, admin, or staff. Defaults fallback to null. */
 export function StaffOrAdmin({ children, fallback = null }: RoleGuardProps) {
   const { isAdminOrStaff, loading } = useAccessControl();
   if (loading) return null;
-  return isAdminOrStaff ? <>{children}</> : <>{fallback}</>;
+  return (isAdminOrStaff ? children : fallback) as React.ReactElement | null;
 }
 
 /** Renders children only if user is exclusively a tenant (not admin/staff). Defaults fallback to null. */
 export function TenantOnly({ children, fallback = null }: RoleGuardProps) {
   const { isTenantOnly, loading } = useAccessControl();
   if (loading) return null;
-  return isTenantOnly ? <>{children}</> : <>{fallback}</>;
+  return (isTenantOnly ? children : fallback) as React.ReactElement | null;
 }
 
 const styles = StyleSheet.create({

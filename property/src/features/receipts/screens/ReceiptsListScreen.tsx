@@ -17,6 +17,7 @@ import {
   type PaymentPeriod,
   resolveReceiptWaiverAndRent,
 } from '@/features/receipts/utils/receiptHelper';
+import { scopeRecordsForTenant } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import BaseSearch from '@/shared/components/BaseSearch';
 import EmptyState from '@/shared/components/EmptyState';
@@ -106,9 +107,15 @@ interface ReceiptSection {
 export default function ReceiptsScreen() {
   const router = useRouter();
   const { selectedBusiness } = useBusiness();
-  const { hasAccess, tenantId, loading: accessLoading, can } = useAccessControl();
+  const {
+    tenantId,
+    loading: accessLoading,
+    can,
+    isAdmin,
+    isStaff,
+    isTenantOnly,
+  } = useAccessControl();
   const colors = useThemeColors() as any;
-  const isTenant = hasAccess(['tenant']);
 
   // Core Table Live Queries & Mutations (local-lite)
   const { data: rawReceipts, loading: receiptsLoading } = useReceiptsWithLoading(
@@ -187,14 +194,10 @@ export default function ReceiptsScreen() {
   // Aggregate Data
   const formattedReceipts = useMemo(() => {
     // 1. Filter by tenant permissions
-    let filteredReceipts = rawReceipts;
-    if (isTenant && !hasAccess(['staff', 'admin'])) {
-      if (tenantId) {
-        filteredReceipts = filteredReceipts.filter(r => r.tenant_id === tenantId);
-      } else {
-        filteredReceipts = [];
-      }
-    }
+    let filteredReceipts = scopeRecordsForTenant(rawReceipts, {
+      tenantId,
+      isTenantOnly,
+    });
 
     // 2. Filter by contract_id if provided in params
     const contractId = Array.isArray(params.contract_id)
@@ -300,9 +303,8 @@ export default function ReceiptsScreen() {
     propertiesById,
     paymentMessages,
     paymentMessageReceipts,
-    isTenant,
+    isTenantOnly,
     tenantId,
-    hasAccess,
     params.contract_id,
   ]);
 
@@ -492,7 +494,7 @@ export default function ReceiptsScreen() {
       });
 
       // If user is staff (not admin), show only receipts from the past two months (by payment_period)
-      if (hasAccess(['staff']) && !hasAccess(['admin'])) {
+      if (isStaff && !isAdmin) {
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
@@ -528,7 +530,7 @@ export default function ReceiptsScreen() {
         (a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime(),
       );
     },
-    [searchQuery, selectedStatus, hasAccess],
+    [searchQuery, selectedStatus, isStaff, isAdmin],
   );
 
   const groupReceiptsByPeriod = useCallback(
@@ -592,7 +594,7 @@ export default function ReceiptsScreen() {
       title={section.title}
       subtitle={
         <Text variant="bodySmall">
-          {hasAccess(['admin']) && (
+          {isAdmin && (
             <>
               Total:{' '}
               {defaultCurrency
@@ -903,12 +905,7 @@ export default function ReceiptsScreen() {
     return <LoadingCard iconName="receipt" text="Loading receipts..." />;
   }
 
-  if (
-    hasAccess(['tenant']) &&
-    !hasAccess(['staff']) &&
-    !hasAccess(['admin']) &&
-    !tenantId
-  ) {
+  if (isTenantOnly && !tenantId) {
     return (
       <EmptyState
         icon="account-lock-outline"
@@ -976,7 +973,7 @@ export default function ReceiptsScreen() {
             <EmptyState
               icon="receipt"
               title={
-                isTenant ? 'No receipts found for your account' : 'No receipts found'
+                isTenantOnly ? 'No receipts found for your account' : 'No receipts found'
               }
             />
           )
@@ -985,7 +982,7 @@ export default function ReceiptsScreen() {
       />
 
       {/* Load More Button */}
-      {hasAccess(['admin']) &&
+      {isAdmin &&
         !params.contract_id &&
         !searchQuery &&
         displayedMonths < totalMonths &&
