@@ -8,7 +8,6 @@ import { Linking, LogBox, Platform, Text, TouchableOpacity, View } from 'react-n
 import 'react-native-get-random-values';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-url-polyfill/auto';
-import { SyncInspector } from 'local-lite/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { PaperProvider, Portal } from 'react-native-paper';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +16,7 @@ import { SnackbarProvider } from '@/context/SnackbarContext';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { BiometricAuthProvider } from '@/providers/BiometricAuthProvider';
 import { LockScreenProvider, useIdleLock } from '@/providers/LockScreenProvider';
-import { SyncClientProvider, useLocalClient } from '@/providers/SyncClientProvider';
+import { SyncClientProvider } from '@/providers/SyncClientProvider';
 import { AppAccessProvider } from '@/shared/access/AppAccessProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
 import DeletionBlocker from '@/shared/components/DeletionBlocker';
@@ -47,7 +46,6 @@ function RootLayoutNav() {
   const { showPrompt, onUpdate, onDismiss } = useVersionCheck();
   const { markInteractive } = useObserve();
   const insets = useSafeAreaInsets();
-  const client = useLocalClient();
 
   // Process offline image uploads when network is restored
   useOfflineImageSync();
@@ -105,7 +103,6 @@ function RootLayoutNav() {
       )}
       {isLocked && <LockScreen />}
       <UpdatePrompt visible={showPrompt} onUpdate={onUpdate} onDismiss={onDismiss} />
-      {__DEV__ && <SyncInspector client={client} position="top" enableBenchmark={true} />}
     </Portal.Host>
   );
 }

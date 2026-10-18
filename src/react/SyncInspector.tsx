@@ -19,11 +19,21 @@ try {
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
-  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'top' | 'bottom';
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'top' | 'bottom' | 'inline';
+  variant?: 'pill' | 'compact' | 'icon' | 'minimal';
   initialOpen?: boolean;
   fullWidth?: boolean;
   enableBenchmark?: boolean;
   onOpenBenchmark?: () => void;
+  style?: any;
+  renderTrigger?: (props: {
+    isOpen: boolean;
+    open: () => void;
+    status: any;
+    metrics: any;
+    statusColor: string;
+    statusLabel: string;
+  }) => React.ReactNode;
 }
 
 /**
@@ -35,9 +45,12 @@ export interface SyncInspectorProps {
 export function SyncInspector({
   client,
   position = 'bottom-right',
+  variant = 'pill',
   initialOpen = false,
   enableBenchmark = true,
   onOpenBenchmark,
+  style,
+  renderTrigger,
 }: SyncInspectorProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isBenchmarkModalOpen, setIsBenchmarkModalOpen] = useState(false);
@@ -116,42 +129,64 @@ export function SyncInspector({
     const isAndroid = Platform?.OS === 'android';
     const statusBarHeight = isAndroid ? (StatusBar?.currentHeight || 24) : 0;
 
+    const isInline = position === 'inline';
     const isTop = position.startsWith('top') || position === 'top';
     const isLeft = position.includes('left');
     const isCenter = position === 'top' || position === 'bottom';
 
-    const pillPosStyle = {
-      position: 'absolute' as const,
-      zIndex: 99999,
-      left: isCenter ? 16 : isLeft ? 16 : undefined,
-      right: isCenter ? 16 : !isLeft ? 16 : undefined,
-      ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
-    };
+    const pillPosStyle = isInline
+      ? { position: 'relative' as const }
+      : {
+          position: 'absolute' as const,
+          zIndex: 99999,
+          left: isCenter ? 16 : isLeft ? 16 : undefined,
+          right: isCenter ? 16 : !isLeft ? 16 : undefined,
+          ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
+        };
 
     return (
       <>
-        {/* Floating Trigger Pill when closed */}
+        {/* Floating or Inline Trigger Pill when closed */}
         {!isOpen && (
-          <View style={pillPosStyle} pointerEvents="box-none">
-            <TouchableOpacity
-              onPress={() => setIsOpen(true)}
-              style={[
-                rnStyles.pill,
-                {
-                  borderColor: statusColor,
-                  alignSelf: isCenter ? 'center' : isLeft ? 'flex-start' : 'flex-end',
-                },
-              ]}
-              activeOpacity={0.8}
-            >
-              <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
-              <Text style={rnStyles.pillText}>local-lite</Text>
-              {status.pendingCount > 0 && (
-                <View style={rnStyles.badge}>
-                  <Text style={rnStyles.badgeText}>{status.pendingCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+          <View style={[pillPosStyle, style]} pointerEvents="box-none">
+            {renderTrigger ? (
+              renderTrigger({
+                isOpen,
+                open: () => setIsOpen(true),
+                status,
+                metrics,
+                statusColor,
+                statusLabel,
+              })
+            ) : (
+              <TouchableOpacity
+                onPress={() => setIsOpen(true)}
+                style={[
+                  isInline ? rnStyles.inlinePill : rnStyles.pill,
+                  {
+                    borderColor: statusColor,
+                    alignSelf: isInline ? 'auto' : isCenter ? 'center' : isLeft ? 'flex-start' : 'flex-end',
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
+                {variant !== 'icon' && variant !== 'minimal' && (
+                  <Text style={isInline ? rnStyles.inlinePillText : rnStyles.pillText}>
+                    {variant === 'compact'
+                      ? status.pendingCount > 0
+                        ? `${status.pendingCount} queued`
+                        : statusLabel
+                      : 'local-lite'}
+                  </Text>
+                )}
+                {status.pendingCount > 0 && variant !== 'compact' && (
+                  <View style={rnStyles.badge}>
+                    <Text style={rnStyles.badgeText}>{status.pendingCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -316,6 +351,62 @@ export function SyncInspector({
                 </View>
               </View>
 
+              {/* Sync Errors Diagnostics */}
+              {(metrics?.lastPushError || metrics?.lastPullError) && (
+                <View style={[rnStyles.infoCard, { borderColor: '#EF444480', backgroundColor: '#7F1D1D20' }]}>
+                  <Text style={[rnStyles.infoCardTitle, { color: '#F87171' }]}>SYNC ENGINE ERRORS</Text>
+                  {metrics?.lastPushError && (
+                    <View style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#FCA5A5', fontWeight: '700' }}>Last Push Error:</Text>
+                      <Text style={{ fontSize: 12, color: '#FECACA' }}>{String(metrics.lastPushError)}</Text>
+                    </View>
+                  )}
+                  {metrics?.lastPullError && (
+                    <View>
+                      <Text style={{ fontSize: 11, color: '#FCA5A5', fontWeight: '700' }}>Last Pull Error:</Text>
+                      <Text style={{ fontSize: 12, color: '#FECACA' }}>{String(metrics.lastPullError)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Queued Outbox Mutations */}
+              {status.pendingRecords && status.pendingRecords.length > 0 && (
+                <View style={rnStyles.infoCard}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={rnStyles.infoCardTitle}>QUEUED OUTBOX MUTATIONS ({status.pendingRecords.length})</Text>
+                    <Text style={{ fontSize: 10, color: '#9CA3AF' }}>Latest queued</Text>
+                  </View>
+                  {status.pendingRecords.slice(0, 8).map((rec: any, idx: number) => (
+                    <View key={rec.id || idx} style={[rnStyles.infoRow, idx === Math.min(status.pendingRecords.length, 8) - 1 && { borderBottomWidth: 0 }]}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={[rnStyles.dotSmall, { backgroundColor: rec.status === 'FAILED' ? '#EF4444' : '#F59E0B' }]} />
+                          <Text style={{ color: '#F9FAFB', fontSize: 13, fontWeight: '600' }}>{rec.tableName || 'record'}</Text>
+                          <View style={{ backgroundColor: '#374151', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            <Text style={{ color: '#D1D5DB', fontSize: 10, fontWeight: '700' }}>{rec.operation || 'MUTATE'}</Text>
+                          </View>
+                        </View>
+                        {rec.rowId && (
+                          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                            ID: {rec.rowId}
+                          </Text>
+                        )}
+                        {rec.errorMessage && (
+                          <Text style={{ color: '#EF4444', fontSize: 11, marginTop: 2 }}>{rec.errorMessage}</Text>
+                        )}
+                      </View>
+                      <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{rec.status || 'PENDING'}</Text>
+                    </View>
+                  ))}
+                  {status.pendingRecords.length > 8 && (
+                    <Text style={{ color: '#9CA3AF', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                      + {status.pendingRecords.length - 8} more mutations in outbox
+                    </Text>
+                  )}
+                </View>
+              )}
+
               {/* Benchmark Suite Card */}
               {enableBenchmark && (
                 <View
@@ -394,6 +485,7 @@ export function SyncInspector({
   }
 
   // Web / DOM renderer fallback
+  const isInline = position === 'inline';
   const isTop = position.startsWith('top') || position === 'top';
   const isLeft = position.includes('left');
   const isCenter = position === 'top' || position === 'bottom';
@@ -837,57 +929,81 @@ export function SyncInspector({
           </div>
         </div>
       ) : (
-        /* Floating Trigger Pill */
+        /* Floating or Inline Trigger Pill */
         <div
-          style={{
-            position: 'fixed',
-            zIndex: 99999,
-            left: isCenter ? '50%' : isLeft ? 16 : undefined,
-            right: !isCenter && !isLeft ? 16 : undefined,
-            transform: isCenter ? 'translateX(-50%)' : undefined,
-            ...(isTop ? { top: 20 } : { bottom: 20 }),
-            pointerEvents: 'auto',
-          }}
+          style={
+            isInline
+              ? { position: 'relative', display: 'inline-flex', ...style }
+              : {
+                  position: 'fixed',
+                  zIndex: 99999,
+                  left: isCenter ? '50%' : isLeft ? 16 : undefined,
+                  right: !isCenter && !isLeft ? 16 : undefined,
+                  transform: isCenter ? 'translateX(-50%)' : undefined,
+                  ...(isTop ? { top: 20 } : { bottom: 20 }),
+                  pointerEvents: 'auto',
+                  ...style,
+                }
+          }
         >
-          <button
-            onClick={() => setIsOpen(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              background: '#1F2937',
-              color: '#F9FAFB',
-              border: `1.5px solid ${statusColor}`,
-              padding: '8px 14px',
-              borderRadius: 20,
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            }}
-          >
-            <span
+          {renderTrigger ? (
+            renderTrigger({
+              isOpen,
+              open: () => setIsOpen(true),
+              status,
+              metrics,
+              statusColor,
+              statusLabel,
+            })
+          ) : (
+            <button
+              onClick={() => setIsOpen(true)}
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: statusColor,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                background: '#1F2937',
+                color: '#F9FAFB',
+                border: `1.5px solid ${statusColor}`,
+                padding: isInline ? '5px 10px' : '8px 14px',
+                borderRadius: 20,
+                cursor: 'pointer',
+                boxShadow: isInline ? undefined : '0 4px 12px rgba(0,0,0,0.3)',
               }}
-            />
-            <span style={{ fontWeight: 600, fontSize: 13 }}>local-lite</span>
-            {status.pendingCount > 0 && (
+            >
               <span
                 style={{
-                  background: '#EF4444',
-                  color: '#fff',
-                  fontSize: 11,
-                  padding: '1px 6px',
-                  borderRadius: 10,
-                  fontWeight: 700,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: statusColor,
                 }}
-              >
-                {status.pendingCount}
-              </span>
-            )}
-          </button>
+              />
+              {variant !== 'icon' && variant !== 'minimal' && (
+                <span style={{ fontWeight: 600, fontSize: isInline ? 12 : 13 }}>
+                  {variant === 'compact'
+                    ? status.pendingCount > 0
+                      ? `${status.pendingCount} queued`
+                      : statusLabel
+                    : 'local-lite'}
+                </span>
+              )}
+              {status.pendingCount > 0 && variant !== 'compact' && (
+                <span
+                  style={{
+                    background: '#EF4444',
+                    color: '#fff',
+                    fontSize: 11,
+                    padding: '1px 6px',
+                    borderRadius: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  {status.pendingCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -1101,11 +1217,26 @@ const rnStyles =
           shadowOpacity: 0.3,
           shadowRadius: 4,
         },
+        inlinePill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#1F2937',
+          paddingVertical: 5,
+          paddingHorizontal: 10,
+          borderRadius: 16,
+          borderWidth: 1.5,
+        },
         pillText: {
           color: '#F9FAFB',
           fontWeight: '600',
           fontSize: 13,
           marginLeft: 8,
+        },
+        inlinePillText: {
+          color: '#F9FAFB',
+          fontWeight: '600',
+          fontSize: 12,
+          marginLeft: 6,
         },
         dot: {
           width: 10,
@@ -1126,3 +1257,6 @@ const rnStyles =
         },
       })
     : {};
+
+export const SyncIndicator = SyncInspector;
+export type SyncIndicatorProps = SyncInspectorProps;
