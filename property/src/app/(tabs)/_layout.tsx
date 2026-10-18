@@ -30,6 +30,11 @@ import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { setUIField, type UIState } from '@/stores/uiStore';
 
+const HIDDEN_TAB_OPTIONS = {
+  tabBarItemStyle: { display: 'none' as const },
+  tabBarButton: () => null,
+};
+
 const TabLayout = function TabLayout() {
   const colors = useThemeColors();
   const { selectedBusiness, loading: businessLoading } = useBusiness();
@@ -54,7 +59,8 @@ const TabLayout = function TabLayout() {
         currentPath === '' ||
         currentPath === 'index' ||
         currentPath === '(tabs)' ||
-        currentPath.includes('cloud-sync');
+        currentPath.includes('cloud-sync') ||
+        currentPath.includes('settings');
       if (!isOnDashboard) {
         // Use a small delay to ensure navigation is ready
         const timer = setTimeout(() => {
@@ -71,7 +77,12 @@ const TabLayout = function TabLayout() {
       title={title || selectedBusiness?.name || 'Select Business'}
       actions={
         selectedBusiness
-          ? [{ icon: 'cogs', onPress: () => router.push('/settings') }]
+          ? [
+              {
+                icon: 'cogs',
+                onPress: () => router.navigate('/(tabs)/settings'),
+              },
+            ]
           : [{ icon: 'logout', onPress: confirmSignOut }]
       }
       onTitlePress={() => setBusinessSelectModalVisible(true)}
@@ -134,14 +145,16 @@ const TabLayout = function TabLayout() {
           name="settings/profile"
           options={{
             title: 'Profile',
-            href: null,
-            tabBarIcon: renderTabBarIcon('account'),
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Settings"
                 subtitle="Manage your account settings"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/settings') },
+                  {
+                    icon: 'arrow-left',
+                    onPress: () => router.navigate('/(tabs)/settings'),
+                  },
                 ]}
               />
             ),
@@ -152,14 +165,16 @@ const TabLayout = function TabLayout() {
           name="settings/cloud-sync"
           options={{
             title: 'Cloud Sync',
-            href: null,
-            tabBarIcon: renderTabBarIcon('cloud-sync'),
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Cloud Sync"
                 subtitle="Sync your data to the cloud"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/settings') },
+                  {
+                    icon: 'arrow-left',
+                    onPress: () => router.navigate('/(tabs)/settings'),
+                  },
                 ]}
               />
             ),
@@ -170,14 +185,16 @@ const TabLayout = function TabLayout() {
           name="settings/transactions"
           options={{
             title: 'Transactions',
-            href: null,
-            tabBarIcon: renderTabBarIcon('swap-horizontal'),
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Transactions"
                 subtitle="Track payments and transaction history"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/settings') },
+                  {
+                    icon: 'arrow-left',
+                    onPress: () => router.navigate('/(tabs)/settings'),
+                  },
                 ]}
               />
             ),
@@ -188,7 +205,8 @@ const TabLayout = function TabLayout() {
           name="properties/index"
           options={{
             title: 'Properties',
-            href: isAdmin ? undefined : null,
+            tabBarItemStyle: isAdmin ? undefined : { display: 'none' },
+            tabBarButton: isAdmin ? undefined : () => null,
             tabBarIcon: renderTabBarIcon('office-building'),
             header: () => (
               <ThemedHeader
@@ -198,7 +216,7 @@ const TabLayout = function TabLayout() {
                   {
                     icon: 'file-chart-outline',
                     size: 24,
-                    onPress: () => router.push('/reports'),
+                    onPress: () => router.navigate('/(tabs)/reports'),
                   },
                   {
                     icon: 'plus-circle',
@@ -217,7 +235,8 @@ const TabLayout = function TabLayout() {
           name="tenants/index"
           options={{
             title: 'Tenants',
-            href: isAdminOrStaff ? undefined : null,
+            tabBarItemStyle: isAdminOrStaff ? undefined : { display: 'none' },
+            tabBarButton: isAdminOrStaff ? undefined : () => null,
             tabBarIcon: renderTabBarIcon('account-group'),
             header: () => (
               <ThemedHeader
@@ -233,7 +252,7 @@ const TabLayout = function TabLayout() {
                     ? [
                         {
                           icon: 'plus-circle',
-                          onPress: () => router.push('/tenants/create'),
+                          onPress: () => router.navigate('/(tabs)/tenants/create'),
                         },
                       ]
                     : []),
@@ -247,7 +266,8 @@ const TabLayout = function TabLayout() {
           name="contracts/index"
           options={{
             title: 'Contracts',
-            href: isAdmin ? undefined : null,
+            tabBarItemStyle: isAdmin ? undefined : { display: 'none' },
+            tabBarButton: isAdmin ? undefined : () => null,
             tabBarIcon: renderTabBarIcon('file'),
             header: () => (
               <ThemedHeader
@@ -263,7 +283,7 @@ const TabLayout = function TabLayout() {
                         },
                         {
                           icon: 'plus-circle',
-                          onPress: () => router.push('/contracts/create'),
+                          onPress: () => router.navigate('/(tabs)/contracts/create'),
                         },
                       ]
                     : []
@@ -277,7 +297,8 @@ const TabLayout = function TabLayout() {
           name="receipts/index"
           options={{
             title: isAdminOrStaff ? 'Receipts' : 'My Receipts',
-            href: isAdminOrStaff || isTenant ? undefined : null,
+            tabBarItemStyle: isAdminOrStaff || isTenant ? undefined : { display: 'none' },
+            tabBarButton: isAdminOrStaff || isTenant ? undefined : () => null,
             tabBarIcon: renderTabBarIcon('receipt-text-outline'),
             header: () => (
               <ThemedHeader
@@ -297,7 +318,7 @@ const TabLayout = function TabLayout() {
                     ? [
                         {
                           icon: 'plus-circle',
-                          onPress: () => router.push('/receipts/create'),
+                          onPress: () => router.navigate('/(tabs)/receipts/create'),
                         },
                       ]
                     : []),
@@ -320,7 +341,8 @@ const TabLayout = function TabLayout() {
           name="maintenance/index"
           options={{
             title: 'Maintenance',
-            href: !isAdmin && (isTenant || isStaff) ? undefined : null,
+            tabBarItemStyle: !isAdmin && (isTenant || isStaff) ? undefined : { display: 'none' },
+            tabBarButton: !isAdmin && (isTenant || isStaff) ? undefined : () => null,
             tabBarIcon: renderTabBarIcon('hammer-wrench'),
             header: () => (
               <ThemedHeader
@@ -329,7 +351,7 @@ const TabLayout = function TabLayout() {
                 actions={[
                   {
                     icon: 'plus-circle',
-                    onPress: () => router.push('/maintenance/create'),
+                    onPress: () => router.navigate('/(tabs)/maintenance/create'),
                   },
                 ]}
               />
@@ -341,13 +363,13 @@ const TabLayout = function TabLayout() {
           name="maintenance/create"
           options={{
             title: 'Report Issue',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Report Issue"
                 subtitle="Report a new maintenance issue"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/maintenance') },
+                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/maintenance') },
                 ]}
               />
             ),
@@ -358,13 +380,13 @@ const TabLayout = function TabLayout() {
           name="maintenance/view/[id]"
           options={{
             title: 'Request Details',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Request Details"
                 subtitle="View maintenance request details"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/maintenance') },
+                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/maintenance') },
                 ]}
               />
             ),
@@ -374,13 +396,13 @@ const TabLayout = function TabLayout() {
           name="maintenance/edit/[id]"
           options={{
             title: 'Edit Request',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Edit Request"
                 subtitle="Edit maintenance request details"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/maintenance') },
+                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/maintenance') },
                 ]}
               />
             ),
@@ -391,13 +413,13 @@ const TabLayout = function TabLayout() {
           name="reports/index"
           options={{
             title: 'Reports',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Reports"
                 subtitle="View reports"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/settings') },
+                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/settings') },
                 ]}
               />
             ),
@@ -408,12 +430,23 @@ const TabLayout = function TabLayout() {
           name="settings/index"
           options={{
             title: 'Settings',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Settings"
                 subtitle="Manage application settings and preferences"
-                actions={[{ icon: 'arrow-left', onPress: () => router.back() }]}
+                actions={[
+                  {
+                    icon: 'arrow-left',
+                    onPress: () => {
+                      if (router.canGoBack()) {
+                        router.back();
+                      } else {
+                        router.navigate('/(tabs)');
+                      }
+                    },
+                  },
+                ]}
               />
             ),
           }}
@@ -423,14 +456,14 @@ const TabLayout = function TabLayout() {
           name="settings/layout-builder"
           options={{
             title: 'Layout Builder',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Layout Builder"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -442,14 +475,14 @@ const TabLayout = function TabLayout() {
           name="settings/business-gallery"
           options={{
             title: 'Business Gallery',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Business Gallery"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -462,14 +495,14 @@ const TabLayout = function TabLayout() {
           name="settings/holidays"
           options={{
             title: 'Holiday Breaks',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Holiday Breaks"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -481,7 +514,7 @@ const TabLayout = function TabLayout() {
           name="businesses/view/[id]"
           options={{
             title: 'View Business',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () =>
               renderBusinessHeader(`${selectedBusiness?.name || 'Select Business'}`),
           }}
@@ -490,14 +523,14 @@ const TabLayout = function TabLayout() {
           name="properties/view/[id]"
           options={{
             title: 'View Property',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="View Property"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/properties'),
+                    onPress: () => router.navigate('/(tabs)/properties'),
                   },
                 ]}
               />
@@ -509,14 +542,14 @@ const TabLayout = function TabLayout() {
           name="tenants/create"
           options={{
             title: 'Create Tenant',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Create Tenant"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/tenants'),
+                    onPress: () => router.navigate('/(tabs)/tenants'),
                   },
                 ]}
               />
@@ -528,14 +561,14 @@ const TabLayout = function TabLayout() {
           name="tenants/edit/[id]"
           options={{
             title: 'Edit Tenant',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Edit Tenant"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/tenants'),
+                    onPress: () => router.navigate('/(tabs)/tenants'),
                   },
                 ]}
               />
@@ -547,14 +580,14 @@ const TabLayout = function TabLayout() {
           name="tenants/view/[id]"
           options={{
             title: 'View Tenant',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="View Tenant"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/tenants'),
+                    onPress: () => router.navigate('/(tabs)/tenants'),
                   },
                 ]}
               />
@@ -566,14 +599,14 @@ const TabLayout = function TabLayout() {
           name="contracts/create"
           options={{
             title: 'Create Contract',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Create Contract"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/contracts'),
+                    onPress: () => router.navigate('/(tabs)/contracts'),
                   },
                 ]}
               />
@@ -585,14 +618,14 @@ const TabLayout = function TabLayout() {
           name="contracts/edit/[id]"
           options={{
             title: 'Edit Contract',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Edit Contract"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/contracts'),
+                    onPress: () => router.navigate('/(tabs)/contracts'),
                   },
                 ]}
               />
@@ -604,14 +637,14 @@ const TabLayout = function TabLayout() {
           name="contracts/view/[id]"
           options={{
             title: 'View Contract',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="View Contract"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/contracts'),
+                    onPress: () => router.navigate('/(tabs)/contracts'),
                   },
                 ]}
               />
@@ -623,14 +656,14 @@ const TabLayout = function TabLayout() {
           name="receipts/create"
           options={{
             title: 'Create Receipt',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Create Receipt"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/receipts'),
+                    onPress: () => router.navigate('/(tabs)/receipts'),
                   },
                 ]}
               />
@@ -642,14 +675,14 @@ const TabLayout = function TabLayout() {
           name="receipts/edit/[id]"
           options={{
             title: 'Edit Receipt',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Edit Receipt"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/receipts'),
+                    onPress: () => router.navigate('/(tabs)/receipts'),
                   },
                 ]}
               />
@@ -661,14 +694,14 @@ const TabLayout = function TabLayout() {
           name="receipts/view/[id]"
           options={{
             title: 'View Receipt',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="View Receipt"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/receipts'),
+                    onPress: () => router.navigate('/(tabs)/receipts'),
                   },
                 ]}
               />
@@ -680,14 +713,14 @@ const TabLayout = function TabLayout() {
           name="settings/currency"
           options={{
             title: 'Currency Settings',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Currency Settings"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -699,14 +732,14 @@ const TabLayout = function TabLayout() {
           name="settings/schedules"
           options={{
             title: 'Schedule Management',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Schedule Management"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -718,14 +751,14 @@ const TabLayout = function TabLayout() {
           name="settings/documentation"
           options={{
             title: 'Documentation',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Documentation"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -737,14 +770,14 @@ const TabLayout = function TabLayout() {
           name="settings/promotions"
           options={{
             title: 'Promotions',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Promotions"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -756,14 +789,14 @@ const TabLayout = function TabLayout() {
           name="settings/templates"
           options={{
             title: 'Message Templates',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Message Templates"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -775,13 +808,13 @@ const TabLayout = function TabLayout() {
           name="settings/change-password"
           options={{
             title: 'Change Password',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Change Password"
                 subtitle="Update your account password"
                 actions={[
-                  { icon: 'arrow-left', onPress: () => router.push('/settings') },
+                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/settings') },
                 ]}
               />
             ),
@@ -792,14 +825,14 @@ const TabLayout = function TabLayout() {
           name="settings/delete-account"
           options={{
             title: 'Delete Account',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Delete Account"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -811,14 +844,14 @@ const TabLayout = function TabLayout() {
           name="settings/api-keys"
           options={{
             title: 'API Keys',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="API Keys"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -830,14 +863,14 @@ const TabLayout = function TabLayout() {
           name="backup/index"
           options={{
             title: 'Backup & Restore',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Backup & Restore"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -849,14 +882,14 @@ const TabLayout = function TabLayout() {
           name="settings/data-integrity"
           options={{
             title: 'Data Integrity',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Data Integrity"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -868,14 +901,14 @@ const TabLayout = function TabLayout() {
           name="settings/configurations"
           options={{
             title: 'Property Configurations',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Property Configurations"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -887,14 +920,14 @@ const TabLayout = function TabLayout() {
           name="settings/payments"
           options={{
             title: 'Payment Methods',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Payment Methods"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />
@@ -906,14 +939,14 @@ const TabLayout = function TabLayout() {
           name="reminders/index"
           options={{
             title: 'Reminders & Notifications',
-            href: null,
+            ...HIDDEN_TAB_OPTIONS,
             header: () => (
               <ThemedHeader
                 title="Reminders & Notifications"
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.push('/settings'),
+                    onPress: () => router.navigate('/(tabs)/settings'),
                   },
                 ]}
               />

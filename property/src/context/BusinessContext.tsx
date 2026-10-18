@@ -40,6 +40,17 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   const businesses = useBusinesses();
   const { user, loading: authLoading } = useAuth();
 
+  // Load persisted selectedBusinessId from Storage on mount
+  useEffect(() => {
+    Storage.getItem('selectedBusinessId')
+      .then(storedId => {
+        if (storedId) {
+          setSelectedBusinessId(storedId);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const selectedBusiness = useMemo(() => {
     if (!selectedBusinessId) return null;
     const found = businesses.find(b => b.id === selectedBusinessId);
