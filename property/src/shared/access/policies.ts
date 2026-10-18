@@ -1,10 +1,11 @@
-import type { Action, AppRole, Permission, Resource } from './types';
+import { createAccessEngine } from 'native-access-control';
+import type { Action, AppPermission, AppRole, Resource } from './types';
 
 /**
  * Declarative Capability Matrix
  * Maps each role directly to its granted permissions.
  */
-export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
+export const ROLE_PERMISSIONS: Record<AppRole, AppPermission[]> = {
   owner: ['*'],
   admin: ['*'],
   staff: [
@@ -34,6 +35,11 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
   ],
 };
 
+export const accessEngine = createAccessEngine<AppRole, Resource, Action>({
+  policies: ROLE_PERMISSIONS,
+  superRoles: ['owner'],
+});
+
 /**
  * Evaluates whether a set of roles grants a specific action on a resource.
  */
@@ -43,30 +49,7 @@ export function evaluatePermission(
   resource: Resource,
   isOwner = false,
 ): boolean {
-  // Business owner always bypasses all restrictions
-  if (isOwner) return true;
-
-  // Normalize role list
-  const normalizedRoles = roles.map(r => r.trim().toLowerCase());
-
-  // Admin bypass
-  if (normalizedRoles.includes('admin') || normalizedRoles.includes('owner')) {
-    return true;
-  }
-
-  const directKey: Permission = `${resource}:${action}`;
-  const wildcardKey: Permission = `${resource}:*`;
-
-  return normalizedRoles.some(role => {
-    const permissions = ROLE_PERMISSIONS[role as AppRole];
-    if (!permissions) return false;
-
-    return (
-      permissions.includes('*') ||
-      permissions.includes(wildcardKey) ||
-      permissions.includes(directKey)
-    );
-  });
+  return accessEngine.evaluate(roles, action, resource, undefined, isOwner);
 }
 
 /**

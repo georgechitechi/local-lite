@@ -1,3 +1,5 @@
+import { scopeRecords } from 'native-access-control';
+
 /**
  * Scoping utility to ensure tenants only see their own records,
  * while admins, owners, and staff see all records.
@@ -12,7 +14,9 @@ export function scopeRecordsForTenant<T>(
   records: T[],
   { tenantId, isTenantOnly, tenantKey = 'tenant_id' as keyof T }: ScopeOptions<T>,
 ): T[] {
-  if (!isTenantOnly) return records;
-  if (!tenantId) return [];
-  return records.filter(record => (record as any)[tenantKey] === tenantId);
+  return scopeRecords(records, {
+    userId: tenantId,
+    isRestrictedRole: isTenantOnly,
+    userKey: tenantKey,
+  });
 }

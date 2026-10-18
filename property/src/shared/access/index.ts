@@ -1,3 +1,4 @@
+export * from 'native-access-control';
 export {
   type AccessGuardProps,
   AdminOnly,

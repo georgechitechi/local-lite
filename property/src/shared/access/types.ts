@@ -16,7 +16,8 @@ export type Resource =
 
 export type Action = 'create' | 'view' | 'edit' | 'delete' | 'refund' | 'manage';
 
-export type Permission = `${Resource}:${Action}` | `${Resource}:*` | '*';
+export type AppPermission = `${Resource}:${Action}` | `${Resource}:*` | '*';
+export type { Permission } from 'native-access-control';
 
 export interface AccessControlState {
   isOwner: boolean;
