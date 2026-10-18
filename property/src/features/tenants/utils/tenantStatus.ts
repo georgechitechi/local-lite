@@ -97,8 +97,9 @@ async function applyClientMutations(
       }
     }
   } else if (wasInactive && isNowActive) {
-    const validContracts = allContracts;
-    const latest = [...validContracts].sort((a, b) =>
+    const allContracts =
+      (await client.findMany('contracts', { where: { tenant_id: tenantId } })) || [];
+    const latest = [...allContracts].sort((a, b) =>
       (b.end_date || b.start_date || '').localeCompare(a.end_date || a.start_date || ''),
     )[0];
 
