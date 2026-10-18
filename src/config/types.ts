@@ -160,6 +160,13 @@ export interface LocalLiteConfig {
   pullIntervalMs?: number;
 
   /**
+   * Automatically pause recurring sync timers and listeners when the app is backgrounded
+   * (React Native AppState or Web Page Visibility API), and resume when foregrounded.
+   * Default: true
+   */
+  autoPauseOnBackground?: boolean;
+
+  /**
    * Maximum retry attempts for failed push items. Default: 5
    */
   maxRetries?: number;

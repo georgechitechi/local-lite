@@ -140,4 +140,27 @@ describe('SyncWorker & Conflict Resolution', () => {
     outbox = db.getAll('sync_outbox');
     expect(outbox).toHaveLength(0);
   });
+
+  it('pauses sync timers when backgrounded and resumes on foreground', async () => {
+    expect(client.syncWorker.isBackgroundPaused).toBe(false);
+
+    client.syncWorker.pause();
+    expect(client.syncWorker.isBackgroundPaused).toBe(true);
+
+    // Mutations while paused stay in outbox without pushing
+    await client.insert('notes', { id: 'paused-note', content: 'While backgrounded' });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    let outbox = db.getAll('sync_outbox');
+    expect(outbox).toHaveLength(1);
+
+    // Resume foreground
+    client.syncWorker.resume();
+    expect(client.syncWorker.isBackgroundPaused).toBe(false);
+
+    // Wait for auto-flush on resume
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    outbox = db.getAll('sync_outbox');
+    expect(outbox).toHaveLength(0);
+  });
 });

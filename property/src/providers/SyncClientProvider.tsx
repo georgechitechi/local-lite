@@ -1,7 +1,6 @@
 import type { LocalFirstClient } from 'local-lite';
 import type React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
 import {
   getAuthStateSyncSnapshot,
   subscribeAuthStateSync,
@@ -78,30 +77,9 @@ export const SyncClientProvider: React.FC<{ children: React.ReactNode }> = ({
       startInitialSync(clientRef);
     });
 
-    const appStateSubscription = AppState.addEventListener(
-      'change',
-      (nextAppState: AppStateStatus) => {
-        if (!mounted || !clientRef) return;
-
-        if (nextAppState.match(/inactive|background/)) {
-          // App backgrounded: suspend sync loops & listeners to conserve battery
-          clientRef.syncWorker.stop();
-        } else if (nextAppState === 'active') {
-          // App foregrounded: resume sync and trigger immediate sync cycle if logged in
-          const isLoggedIn = getAuthStateSyncSnapshot().isLoggedIn;
-          if (isLoggedIn) {
-            clientRef.syncWorker.start();
-            clientRef.syncWorker.schedulePush(0);
-            clientRef.syncWorker.pullRemoteChanges().catch(() => {});
-          }
-        }
-      },
-    );
-
     return () => {
       mounted = false;
       unsubAuth();
-      appStateSubscription.remove();
       if (initialPullTimer) clearTimeout(initialPullTimer);
     };
   }, []);

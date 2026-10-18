@@ -44,6 +44,7 @@ export interface SyncWorkerOptions {
   schemaManager?: SchemaManager;
   autoSync?: boolean;
   syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  autoPauseOnBackground?: boolean;
 }
 
 export class SyncWorker {
@@ -62,6 +63,9 @@ export class SyncWorker {
   private pushIntervalMs: number;
   private pullIntervalMs: number;
   private maxRetries: number;
+  private autoPauseOnBackground: boolean;
+  private isPaused = false;
+  private lifecycleUnsubscribe?: () => void;
 
   private pushIntervalTimer?: any;
   private pullIntervalTimer?: any;
@@ -109,6 +113,7 @@ export class SyncWorker {
     this.pushIntervalMs = options.pushIntervalMs ?? 5000;
     this.pullIntervalMs = options.pullIntervalMs ?? 10000;
     this.syncScope = options.syncScope;
+    this.autoPauseOnBackground = options.autoPauseOnBackground ?? true;
 
     this.logger = createSyncLogger(options.logger, options.logLevel);
 
@@ -149,14 +154,25 @@ export class SyncWorker {
   start(): void {
     this.stop();
     this.automaticSync = true;
+    this.isPaused = false;
     const generation = this.subscriptionGeneration;
+
+    this.setupLifecycleListener();
+
+    // If currently backgrounded, pause immediately and wait for foreground
+    if (this.isAppBackgrounded()) {
+      this.isPaused = true;
+      this.logger.info('App currently in background: sync worker paused until foreground');
+      this.emitStatus();
+      return;
+    }
 
     this.pushIntervalTimer = setInterval(() => this.pushLocalChanges(), this.pushIntervalMs);
     this.pullIntervalTimer = setInterval(() => this.pullRemoteChanges(), this.pullIntervalMs);
 
     // Subscribe to live remote changes
     const unsubscribe = this.remote.subscribeToLiveChanges((deltas) => {
-      if (generation !== this.subscriptionGeneration) return;
+      if (generation !== this.subscriptionGeneration || this.isPaused) return;
       // A realtime event is not a complete pull page and cannot advance its checkpoint.
       this.applyDeltasLocally(deltas, { advanceCursor: false }).catch((err) => {
         this.logger.error('Error applying live remote deltas:', err);
@@ -169,7 +185,7 @@ export class SyncWorker {
     let lastNetworkOnline: boolean | undefined = undefined;
     this.networkUnsubscribe = this.network.subscribe((online) => {
       this.emitStatus();
-      if (online && lastNetworkOnline === false) {
+      if (online && lastNetworkOnline === false && !this.isPaused) {
         this.schedulePush(0);
         this.pullRemoteChanges().catch((err) => {
           this.logger.error('Error pulling changes on reconnect:', err);
@@ -191,7 +207,12 @@ export class SyncWorker {
    */
   stop(): void {
     this.automaticSync = false;
+    this.isPaused = false;
     this.subscriptionGeneration++;
+    if (this.lifecycleUnsubscribe) {
+      this.lifecycleUnsubscribe();
+      this.lifecycleUnsubscribe = undefined;
+    }
     if (this.remoteUnsubscribe) {
       this.remoteUnsubscribe();
       this.remoteUnsubscribe = undefined;
@@ -215,10 +236,127 @@ export class SyncWorker {
   }
 
   /**
+   * Pauses recurring interval timers and active sync loops to conserve battery and data.
+   */
+  pause(): void {
+    if (this.isPaused) return;
+    this.isPaused = true;
+    this.logger.info('App backgrounded: pausing sync timers');
+
+    if (this.pushIntervalTimer) {
+      clearInterval(this.pushIntervalTimer);
+      this.pushIntervalTimer = undefined;
+    }
+    if (this.pullIntervalTimer) {
+      clearInterval(this.pullIntervalTimer);
+      this.pullIntervalTimer = undefined;
+    }
+    if (this.pushDebounceTimer) {
+      clearTimeout(this.pushDebounceTimer);
+      this.pushDebounceTimer = undefined;
+    }
+    this.emitStatus();
+  }
+
+  /**
+   * Resumes recurring interval timers and triggers an immediate catch-up push and pull.
+   */
+  resume(): void {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    this.logger.info('App foregrounded: resuming sync');
+
+    if (this.automaticSync) {
+      if (!this.pushIntervalTimer) {
+        this.pushIntervalTimer = setInterval(() => this.pushLocalChanges(), this.pushIntervalMs);
+      }
+      if (!this.pullIntervalTimer) {
+        this.pullIntervalTimer = setInterval(() => this.pullRemoteChanges(), this.pullIntervalMs);
+      }
+
+      this.schedulePush(0);
+      this.pullRemoteChanges().catch((err) => {
+        this.logger.error('Error pulling changes on app resume:', err);
+      });
+    }
+    this.emitStatus();
+  }
+
+  /**
+   * Returns whether the sync worker is currently suspended due to app backgrounding.
+   */
+  get isBackgroundPaused(): boolean {
+    return this.isPaused;
+  }
+
+  private isAppBackgrounded(): boolean {
+    if (!this.autoPauseOnBackground) return false;
+
+    // React Native AppState
+    try {
+      const { AppState } = require('react-native');
+      if (AppState?.currentState && typeof AppState.currentState === 'string') {
+        return Boolean(AppState.currentState.match(/inactive|background/));
+      }
+    } catch {
+      // Not React Native
+    }
+
+    // Web Page Visibility API
+    if (typeof document !== 'undefined' && typeof document.hidden === 'boolean') {
+      return document.hidden;
+    }
+
+    return false;
+  }
+
+  private setupLifecycleListener(): void {
+    if (!this.autoPauseOnBackground || this.lifecycleUnsubscribe) return;
+
+    // 1. Try React Native AppState
+    try {
+      const { AppState } = require('react-native');
+      if (AppState && typeof AppState.addEventListener === 'function') {
+        const sub = AppState.addEventListener('change', (state: string) => {
+          if (state.match(/inactive|background/)) {
+            this.pause();
+          } else if (state === 'active') {
+            this.resume();
+          }
+        });
+
+        this.lifecycleUnsubscribe = () => {
+          if (typeof sub?.remove === 'function') {
+            sub.remove();
+          }
+        };
+        return;
+      }
+    } catch {
+      // Not React Native
+    }
+
+    // 2. Web Page Visibility API
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      const onVisibilityChange = () => {
+        if (document.hidden) {
+          this.pause();
+        } else {
+          this.resume();
+        }
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      this.lifecycleUnsubscribe = () => {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      };
+    }
+  }
+
+  /**
    * Schedules an immediate push with a short debounce.
    */
   schedulePush(delayMs: number = 50): void {
-    if (!this.automaticSync) return;
+    if (!this.automaticSync || this.isPaused) return;
     if (this.pushDebounceTimer) {
       clearTimeout(this.pushDebounceTimer);
     }
@@ -285,7 +423,7 @@ export class SyncWorker {
    * Pushes pending outbox records to the remote database.
    */
   async pushLocalChanges(): Promise<void> {
-    if (this.isPushing) return;
+    if (this.isPushing || this.isPaused) return;
 
     this.isPushing = true;
     this.emitStatus();
@@ -474,7 +612,7 @@ export class SyncWorker {
    * Pulls delta changes from the remote backend since lastPulledTimestamp.
    */
   async pullRemoteChanges(): Promise<void> {
-    if (this.isPulling) return;
+    if (this.isPulling || this.isPaused) return;
 
     this.isPulling = true;
     this.emitStatus();

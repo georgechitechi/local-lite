@@ -45,6 +45,7 @@ export interface LocalFirstClientConfig {
   jsonColumns?: Record<string, string[]>;
   autoHydrateJSON?: boolean;
   syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  autoPauseOnBackground?: boolean;
 }
 
 export class TransactionalClient {
@@ -247,6 +248,7 @@ export class LocalFirstClient {
       schemaManager: this.schemaManager,
       autoSync: this.autoStart,
       syncScope: config.syncScope,
+      autoPauseOnBackground: config.autoPauseOnBackground,
     };
 
     this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
