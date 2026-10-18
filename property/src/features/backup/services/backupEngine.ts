@@ -137,7 +137,7 @@ export async function saveOrShareBackup({
             needToRequest = true;
           } else {
             const file = dir.createFile(fileName, 'application/json');
-            file.write(content);
+            await file.write(content);
             showSnackbar('Backup saved successfully!', 'success');
             return;
           }
@@ -153,7 +153,7 @@ export async function saveOrShareBackup({
           if (dir?.uri) {
             await SecureStore.setItemAsync('backupDirectoryUri', dir.uri);
             const file = dir.createFile(fileName, 'application/json');
-            file.write(content);
+            await file.write(content);
             showSnackbar('Backup saved successfully!', 'success');
             return;
           } else {
@@ -168,14 +168,14 @@ export async function saveOrShareBackup({
       }
     } else {
       const file = new File(Paths.document, fileName);
-      file.write(content);
+      await file.write(content);
       showSnackbar('Backup saved successfully!', 'success');
       return;
     }
   }
 
   const file = new File(Paths.cache, fileName);
-  file.write(content);
+  await file.write(content);
   await Sharing.shareAsync(file.uri, {
     mimeType: 'application/json',
     dialogTitle: 'Share Backup File',

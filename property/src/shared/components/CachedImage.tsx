@@ -112,7 +112,7 @@ export const queueImageUpload = async (
     const localFile = dir.createFile(safeLocalName, imageAsset.mimeType || 'image/jpeg');
 
     const tempFile = new File(imageAsset.uri);
-    localFile.write(await tempFile.bytes());
+    await localFile.write(await tempFile.bytes());
 
     pendingUploads[uploadId] = {
       id: uploadId,

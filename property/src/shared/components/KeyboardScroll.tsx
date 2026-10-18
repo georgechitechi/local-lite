@@ -1,6 +1,6 @@
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import React from 'react';
-import { type ScrollView, type ScrollViewProps, StyleSheet } from 'react-native';
+import { type ScrollViewInstance, type ScrollViewProps, StyleSheet, type ViewStyle } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,7 +19,7 @@ type Props = ScrollViewProps & {
  * A reusable component that automatically pushes inputs up when the keyboard opens.
  * Uses react-native-keyboard-controller for high-performance, native keyboard avoiding.
  */
-const KeyboardScroll = React.forwardRef<ScrollView, Props>(
+const KeyboardScroll = React.forwardRef<ScrollViewInstance, Props>(
   (
     {
       children,
@@ -40,10 +40,13 @@ const KeyboardScroll = React.forwardRef<ScrollView, Props>(
     const headerHeight = disableHeaderOffset ? 0 : contextHeaderHeight;
     const shouldUseSafeArea = useSafeArea ?? headerHeight === 0;
 
-    const internalRef = React.useRef<ScrollView>(null);
-    const scrollViewRef = (ref as React.RefObject<ScrollView>) || internalRef;
+    const internalRef = React.useRef<ScrollViewInstance>(null);
+    const scrollViewRef = ref || internalRef;
 
-    const flattenedStyle = StyleSheet.flatten(style);
+    // RN's generated flatten signature is narrower than ScrollViewProps.style.
+    const flattenedStyle = StyleSheet.flatten(
+      style as Parameters<typeof StyleSheet.flatten>[0],
+    ) as ViewStyle | undefined;
     const bgColor = safeAreaBackgroundColor || flattenedStyle?.backgroundColor;
 
     // Default high-performance KeyboardAwareScrollView

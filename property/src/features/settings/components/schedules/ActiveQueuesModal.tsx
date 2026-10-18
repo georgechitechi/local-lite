@@ -125,7 +125,7 @@ export default function ActiveQueuesModal({
       }
 
       const file = new File(Paths.document, attachment.filename || 'attachment.pdf');
-      file.write(content, { encoding: 'base64' });
+      await file.write(content, { encoding: 'base64' });
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(file.uri);

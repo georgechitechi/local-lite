@@ -272,7 +272,7 @@ export default function DatePicker({
                 const monthEnd = new Date(viewingYear, i + 1, 0); // Last day of month
                 const isTooEarly = minimumDate && monthEnd < minimumDate;
                 const isTooLate = maximumDate && monthStart > maximumDate;
-                const isMonthDisabled = isTooEarly || isTooLate;
+                const isMonthDisabled = Boolean(isTooEarly || isTooLate);
 
                 return (
                   <SlightPressable

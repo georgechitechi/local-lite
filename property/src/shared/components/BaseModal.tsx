@@ -343,10 +343,7 @@ export default function BaseModal({
                   { backgroundColor: colors.surface },
                   search.style as StyleProp<TextStyle>,
                 ]}
-                containerStyle={StyleSheet.flatten([
-                  styles.searchContainer,
-                  search.containerStyle,
-                ])}
+                containerStyle={{ ...styles.searchContainer, ...search.containerStyle }}
               />
             </View>
           )}

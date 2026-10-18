@@ -21,7 +21,7 @@ const SlightPressableInternal = forwardRef<any, SlightPressableProps>(
       <Pressable
         {...props}
         ref={ref}
-        android_ripple={null}
+        android_ripple={undefined}
         style={state => {
           const baseStyle = typeof style === 'function' ? style(state) : style;
           return [

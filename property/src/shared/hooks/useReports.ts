@@ -1154,7 +1154,7 @@ export function useReports() {
 
         const csvContent = generateCSV(processedData, headers, reportType);
         const file = new File(Paths.cache, filename);
-        file.write(csvContent);
+        await file.write(csvContent);
 
         await Sharing.shareAsync(file.uri, {
           mimeType: 'text/csv',

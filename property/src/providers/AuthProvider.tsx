@@ -58,7 +58,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const appStateRef = useRef(AppState.currentState);
   const authState = useSyncExternalStore(subscribeAuth, getAuthStateSnapshot);
   const { isCloudSyncEnabled } = useLocalSync();
 
@@ -141,7 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const isOfflineAuthoritative = getAuthStateSnapshot().isOfflineAuthoritative;
 
         if (
-          appStateRef.current.match(/inactive|background/) &&
+          appStateRef.current?.match(/inactive|background/) &&
           nextAppState === 'active' &&
           user &&
           !isOfflineAuthoritative &&

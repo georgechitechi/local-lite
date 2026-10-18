@@ -236,7 +236,7 @@ export default function RemindersScreen() {
               !showHolidayFilters &&
               !showDataCleanupFilters
             ) {
-              return null;
+              return undefined;
             }
 
             return (

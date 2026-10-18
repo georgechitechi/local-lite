@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { AppState, type AppStateStatus, Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useAuth } from './AuthProvider';
 import { useBiometric } from './BiometricAuthProvider';
 
@@ -34,7 +34,7 @@ export function LockScreenProvider({ children }: LockScreenProviderProps) {
   const [isLocked, setIsLocked] = useState(false);
   const isAutoLockPausedRef = useRef(false);
   const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const appStateRef = useRef(AppState.currentState);
   const hasLockedOnStartup = useRef(false);
 
   const lockApp = useCallback(() => {

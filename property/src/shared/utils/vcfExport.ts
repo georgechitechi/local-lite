@@ -170,7 +170,7 @@ const downloadVCF = async (
     }
 
     const file = new File(Paths.document, cleanFilename);
-    file.write(vcfContent);
+    await file.write(vcfContent);
 
     if (!file.exists) {
       throw new Error('Failed to create VCF file');
