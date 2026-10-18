@@ -165,15 +165,17 @@ export class SyncWorker {
 
     if (typeof unsubscribe === 'function') this.remoteUnsubscribe = unsubscribe;
 
-    // Subscribe to network connectivity changes
+    // Subscribe to network connectivity changes (only pull on actual offline -> online transition)
+    let lastNetworkOnline: boolean | undefined = undefined;
     this.networkUnsubscribe = this.network.subscribe((online) => {
       this.emitStatus();
-      if (online) {
+      if (online && lastNetworkOnline === false) {
         this.schedulePush(0);
         this.pullRemoteChanges().catch((err) => {
           this.logger.error('Error pulling changes on reconnect:', err);
         });
       }
+      lastNetworkOnline = online;
     });
 
     // Initial pull
@@ -499,6 +501,10 @@ export class SyncWorker {
       if (deltas) {
         this.totalPulledDeltas += changesCount;
         await this.applyDeltasLocally(deltas);
+        if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
+          this.lastPulledTimestamp = deltas.timestamp;
+          await MetaStore.setLastSyncedAt(this.db, deltas.timestamp);
+        }
       }
 
       const pullEvent: PullEvent = {
@@ -649,6 +655,7 @@ export class SyncWorker {
         // Advance durable checkpoint only when a valid pull timestamp was provided
         if (isLastChunk && deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
           await MetaStore.setLastSyncedAt(tx, deltas.timestamp);
+          this.lastPulledTimestamp = deltas.timestamp;
         }
       });
 

@@ -16,13 +16,17 @@ export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
         netInfoInstance
           .fetch()
           .then((state: any) => {
-            const online = state.isConnected === true && state.isInternetReachable !== false;
+            const online =
+              state.isConnected === true &&
+              (state.isInternetReachable === true || state.isInternetReachable === null);
             this.setOnline(online);
           })
           .catch(() => {});
 
         const unsub = netInfoInstance.addEventListener((state: any) => {
-          const online = state.isConnected === true && state.isInternetReachable !== false;
+          const online =
+            state.isConnected === true &&
+            (state.isInternetReachable === true || state.isInternetReachable === null);
           this.setOnline(online);
         });
 

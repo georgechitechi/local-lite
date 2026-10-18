@@ -433,105 +433,131 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     const sinceIso = sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : null;
     let maxServerTimestamp = sinceTimestamp;
 
-    for (const table of this.tables) {
+    const fetchTableDeltas = async (table: string): Promise<DeltaChange[]> => {
       const isTableScoped = !this.scopedTables || this.scopedTables.includes(table);
-      try {
-        let hasMore = true;
-        let currentSinceIso = sinceIso;
+      const tableChanges: DeltaChange[] = [];
+      let hasMore = true;
+      let currentSinceIso = sinceIso;
 
-        while (hasMore) {
-          let query = client
-            .from(table)
-            .select('*');
+      while (hasMore) {
+        let query = client.from(table).select('*');
 
-          if (isTableScoped && scope && typeof scope === 'object') {
-            for (const [col, val] of Object.entries(scope)) {
-              if (val !== undefined && val !== null && typeof query.eq === 'function') {
-                query = query.eq(col, val);
-              }
+        if (isTableScoped && scope && typeof scope === 'object') {
+          for (const [col, val] of Object.entries(scope)) {
+            if (val !== undefined && val !== null && typeof query.eq === 'function') {
+              query = query.eq(col, val);
             }
-          }
-
-          if (currentSinceIso) {
-            query = query.gt(this.updatedAtColumn, currentSinceIso);
-          }
-
-          if (typeof query.order === 'function') {
-            query = query.order(this.updatedAtColumn, { ascending: true });
-          }
-
-          if (typeof query.limit === 'function') {
-            query = query.limit(this.fetchLimit);
-          }
-
-          let { data, error } = await query;
-
-          // If PostgreSQL returns 42703 (undefined column) because a scoped column does not exist on this table,
-          // gracefully fallback to querying without the scope filter so synchronization doesn't halt.
-          if (error && (error.code === '42703' || String(error.message || '').includes('does not exist')) && isTableScoped) {
-            this.logger.debug(`[local-lite] Column in scope does not exist on table "${table}". Retrying without scope filter.`);
-            let fallbackQuery = client.from(table).select('*');
-            if (currentSinceIso) {
-              fallbackQuery = fallbackQuery.gt(this.updatedAtColumn, currentSinceIso);
-            }
-            if (typeof fallbackQuery.order === 'function') {
-              fallbackQuery = fallbackQuery.order(this.updatedAtColumn, { ascending: true });
-            }
-            if (typeof fallbackQuery.limit === 'function') {
-              fallbackQuery = fallbackQuery.limit(this.fetchLimit);
-            }
-            const fallbackResult = await fallbackQuery;
-            data = fallbackResult.data;
-            error = fallbackResult.error;
-          }
-
-          if (error) {
-            throw error;
-          }
-
-          if (data && Array.isArray(data) && data.length > 0) {
-            for (const row of data) {
-              const isSoftDeleted = this.isSoftDeleted(row);
-
-              const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
-              const rowTime = row[this.updatedAtColumn]
-                ? new Date(row[this.updatedAtColumn]).getTime()
-                : Date.now();
-
-              if (rowTime > maxServerTimestamp) {
-                maxServerTimestamp = rowTime;
-              }
-
-              changes.push({
-                tableName: table,
-                operation,
-                rowId: String(row[this.primaryKey]),
-                payload: isSoftDeleted ? null : row,
-                timestamp: rowTime,
-              });
-            }
-
-            // Stop paging if unpaginated query or fewer rows than limit returned
-            if (typeof query.limit !== 'function' || data.length < this.fetchLimit) {
-              hasMore = false;
-            } else {
-              const lastRow = data[data.length - 1];
-              const nextIso = lastRow[this.updatedAtColumn]
-                ? new Date(lastRow[this.updatedAtColumn]).toISOString()
-                : null;
-              if (nextIso && nextIso !== currentSinceIso) {
-                currentSinceIso = nextIso;
-              } else {
-                hasMore = false;
-              }
-            }
-          } else {
-            hasMore = false;
           }
         }
-      } catch (err) {
-        this.logger.error(formatSupabaseError(err, { table, operation: 'PULL' }));
-        throw err;
+
+        if (currentSinceIso) {
+          query = query.gt(this.updatedAtColumn, currentSinceIso);
+        }
+
+        if (typeof query.order === 'function') {
+          query = query.order(this.updatedAtColumn, { ascending: true });
+        }
+
+        if (typeof query.limit === 'function') {
+          query = query.limit(this.fetchLimit);
+        }
+
+        let { data, error } = await query;
+
+        // If PostgreSQL returns 42703 (undefined column) because a scoped column does not exist on this table,
+        // gracefully fallback to querying without the scope filter so synchronization doesn't halt.
+        if (
+          error &&
+          (error.code === '42703' || String(error.message || '').includes('does not exist')) &&
+          isTableScoped
+        ) {
+          this.logger.debug(
+            `[local-lite] Column in scope does not exist on table "${table}". Retrying without scope filter.`
+          );
+          let fallbackQuery = client.from(table).select('*');
+          if (currentSinceIso) {
+            fallbackQuery = fallbackQuery.gt(this.updatedAtColumn, currentSinceIso);
+          }
+          if (typeof fallbackQuery.order === 'function') {
+            fallbackQuery = fallbackQuery.order(this.updatedAtColumn, { ascending: true });
+          }
+          if (typeof fallbackQuery.limit === 'function') {
+            fallbackQuery = fallbackQuery.limit(this.fetchLimit);
+          }
+          const fallbackResult = await fallbackQuery;
+          data = fallbackResult.data;
+          error = fallbackResult.error;
+        }
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && Array.isArray(data) && data.length > 0) {
+          for (const row of data) {
+            const isSoftDeleted = this.isSoftDeleted(row);
+            const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
+            const rowTime = row[this.updatedAtColumn]
+              ? new Date(row[this.updatedAtColumn]).getTime()
+              : Date.now();
+
+            tableChanges.push({
+              tableName: table,
+              operation,
+              rowId: String(row[this.primaryKey]),
+              payload: isSoftDeleted ? null : row,
+              timestamp: rowTime,
+            });
+          }
+
+          // Stop paging if unpaginated query or fewer rows than limit returned
+          if (typeof query.limit !== 'function' || data.length < this.fetchLimit) {
+            hasMore = false;
+          } else {
+            const lastRow = data[data.length - 1];
+            const nextIso = lastRow[this.updatedAtColumn]
+              ? new Date(lastRow[this.updatedAtColumn]).toISOString()
+              : null;
+            if (nextIso && nextIso !== currentSinceIso) {
+              currentSinceIso = nextIso;
+            } else {
+              hasMore = false;
+            }
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return tableChanges;
+    };
+
+    // Query tables in concurrent chunks of 5 to avoid 100+ second serial roundtrips
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < this.tables.length; i += CHUNK_SIZE) {
+      const chunk = this.tables.slice(i, i + CHUNK_SIZE);
+      const results = await Promise.all(
+        chunk.map(async (table) => {
+          try {
+            return await fetchTableDeltas(table);
+          } catch (err: any) {
+            const msg = formatSupabaseError(err, { table, operation: 'PULL' });
+            if (msg.includes('Network Offline') || msg.includes('Failed to reach')) {
+              this.logger.warn(msg);
+            } else {
+              this.logger.error(msg);
+            }
+            throw err;
+          }
+        })
+      );
+      for (const tableChanges of results) {
+        for (const change of tableChanges) {
+          if (change.timestamp !== undefined && change.timestamp > maxServerTimestamp) {
+            maxServerTimestamp = change.timestamp;
+          }
+          changes.push(change);
+        }
       }
     }
 
