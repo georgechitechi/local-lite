@@ -146,40 +146,6 @@ export function SyncInspector({
     [status.pendingCount, metrics?.outboxFailedCount, currentTheme.text]
   );
 
-  // Shared Connection & Telemetry Rows
-  const telemetryItems = useMemo(
-    () => [
-      {
-        id: 'status',
-        label: 'Connection Status',
-        value: status.isOnline ? 'Online (Connected)' : 'Offline',
-        color: statusColor,
-        hasDot: true,
-      },
-      {
-        id: 'sync-state',
-        label: 'Sync State',
-        value: status.isSyncing ? 'Syncing...' : 'Idle',
-        color: status.isSyncing ? '#F59E0B' : currentTheme.textMuted,
-      },
-      {
-        id: 'last-synced',
-        label: 'Last Synchronized',
-        value: status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleTimeString() : 'Never',
-      },
-      {
-        id: 'push-duration',
-        label: 'Last Push Duration',
-        value: `${metrics?.lastPushDurationMs || 0} ms`,
-      },
-      {
-        id: 'pull-duration',
-        label: 'Last Pull Duration',
-        value: `${metrics?.lastPullDurationMs || 0} ms`,
-      },
-    ],
-    [status.isOnline, status.isSyncing, status.lastSyncedAt, statusColor, metrics?.lastPushDurationMs, metrics?.lastPullDurationMs, currentTheme.textMuted]
-  );
 
   // Shared Action Buttons
   const actionButtons = useMemo(
@@ -332,41 +298,6 @@ export function SyncInspector({
                 ))}
               </View>
 
-              {/* Connection & Telemetry */}
-              <View
-                style={[
-                  rnStyles.infoCard,
-                  {
-                    backgroundColor: currentTheme.card,
-                    borderColor: currentTheme.border,
-                  },
-                ]}
-              >
-                <Text style={[rnStyles.infoCardTitle, { color: currentTheme.textMuted }]}>CONNECTION & TELEMETRY</Text>
-                {telemetryItems.map((item, idx) => (
-                  <View
-                    key={item.id}
-                    style={[
-                      rnStyles.infoRow,
-                      { borderBottomColor: currentTheme.border },
-                      idx === telemetryItems.length - 1 && { borderBottomWidth: 0 },
-                    ]}
-                  >
-                    <Text style={[rnStyles.infoKey, { color: currentTheme.textMuted }]}>{item.label}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {item.hasDot && <View style={[rnStyles.dotSmall, { backgroundColor: item.color }]} />}
-                      <Text
-                        style={[
-                          rnStyles.infoVal,
-                          item.color ? { color: item.color, fontWeight: '700' } : { color: currentTheme.text },
-                        ]}
-                      >
-                        {item.value}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
 
               {/* Engine Actions */}
               <View
@@ -725,62 +656,6 @@ export function SyncInspector({
               ))}
             </div>
 
-            {/* Connection & Telemetry Card */}
-            <div
-              style={{
-                backgroundColor: currentTheme.card,
-                border: `1px solid ${currentTheme.border}`,
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: currentTheme.textMuted,
-                  letterSpacing: '0.8px',
-                  marginBottom: 12,
-                }}
-              >
-                CONNECTION & TELEMETRY
-              </div>
-              {telemetryItems.map((item, idx) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 0',
-                    borderBottom: idx === telemetryItems.length - 1 ? 'none' : `1px solid ${currentTheme.border}`,
-                  }}
-                >
-                  <span style={{ color: currentTheme.textMuted, fontSize: 13 }}>{item.label}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {item.hasDot && (
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 4,
-                          backgroundColor: item.color,
-                        }}
-                      />
-                    )}
-                    <span
-                      style={{
-                        color: item.color || currentTheme.text,
-                        fontSize: 13,
-                        fontWeight: item.color ? 700 : 600,
-                      }}
-                    >
-                      {item.value}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
 
             {/* Actions Card */}
             <div

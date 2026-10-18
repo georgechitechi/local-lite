@@ -10,7 +10,6 @@ import {
   OutboxRecord,
   PullEvent,
   PushEvent,
-  PushResult,
   RetryConfig,
   SyncMetrics,
   SyncOperation,
@@ -447,7 +446,7 @@ export class SyncWorker {
         await OutboxStore.deleteCompleted(
           this.db,
           internalRecords.map((r) => r.id),
-        ).catch(() => {});
+        ).catch(() => { });
       }
 
       const validRecords = pendingRecords.filter((r) => !r.tableName.startsWith('_'));
