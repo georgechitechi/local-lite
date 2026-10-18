@@ -74,7 +74,7 @@ export class QueryBuilder<T = any> {
   private tableName: string;
   private selectCols: string[] = ['*'];
   private joins: JoinDefinition[] = [];
-  private whereConditions: WhereFilter = {};
+  private whereConditions: Record<string, any> = {};
   private orderColumn?: string;
   private orderDirection: 'ASC' | 'DESC' = 'ASC';
   private limitCount?: number;
@@ -117,9 +117,40 @@ export class QueryBuilder<T = any> {
 
   /**
    * Adds WHERE criteria to filter results.
+   * Supports:
+   * - where({ status: 'ACTIVE' })
+   * - where('status', 'ACTIVE')
+   * - where('end_date', '>=', today)
    */
-  where(conditions: WhereFilter): this {
-    this.whereConditions = { ...this.whereConditions, ...conditions };
+  where(
+    columnOrFilter: string | WhereFilter,
+    operatorOrValue?: any,
+    value?: any,
+  ): this {
+    if (typeof columnOrFilter === 'string') {
+      if (value !== undefined) {
+        const rawOp = String(operatorOrValue).toLowerCase().trim();
+        const opKey =
+          rawOp === '>=' ? '$gte' :
+          rawOp === '<=' ? '$lte' :
+          rawOp === '>' ? '$gt' :
+          rawOp === '<' ? '$lt' :
+          rawOp === '!=' || rawOp === '<>' ? '$ne' :
+          rawOp === '=' || rawOp === '==' ? '$eq' :
+          rawOp === 'like' ? '$contains' : '$eq';
+
+        const existing =
+          typeof this.whereConditions[columnOrFilter] === 'object' &&
+          this.whereConditions[columnOrFilter] !== null
+            ? (this.whereConditions[columnOrFilter] as any)
+            : {};
+        this.whereConditions[columnOrFilter] = { ...existing, [opKey]: value };
+      } else {
+        this.whereConditions[columnOrFilter] = operatorOrValue;
+      }
+    } else if (columnOrFilter && typeof columnOrFilter === 'object') {
+      this.whereConditions = { ...this.whereConditions, ...columnOrFilter };
+    }
     return this;
   }
 
@@ -198,46 +229,56 @@ export class QueryBuilder<T = any> {
           params.push(val);
         } else if (typeof val === 'object' && !Array.isArray(val)) {
           const ops = val as any;
-          if (ops.$eq !== undefined) {
+          const eqVal = ops.$eq !== undefined ? ops.$eq : ops.eq;
+          if (eqVal !== undefined) {
             whereClauses.push(`${safeCol} = ?`);
-            params.push(typeof ops.$eq === 'boolean' ? (ops.$eq ? 1 : 0) : ops.$eq);
+            params.push(typeof eqVal === 'boolean' ? (eqVal ? 1 : 0) : eqVal);
           }
-          if (ops.$ne !== undefined) {
+          const neVal = ops.$ne !== undefined ? ops.$ne : ops.ne;
+          if (neVal !== undefined) {
             whereClauses.push(`${safeCol} != ?`);
-            params.push(typeof ops.$ne === 'boolean' ? (ops.$ne ? 1 : 0) : ops.$ne);
+            params.push(typeof neVal === 'boolean' ? (neVal ? 1 : 0) : neVal);
           }
-          if (ops.$gt !== undefined) {
+          const gtVal = ops.$gt !== undefined ? ops.$gt : ops.gt;
+          if (gtVal !== undefined) {
             whereClauses.push(`${safeCol} > ?`);
-            params.push(ops.$gt);
+            params.push(gtVal);
           }
-          if (ops.$gte !== undefined) {
+          const gteVal = ops.$gte !== undefined ? ops.$gte : ops.gte;
+          if (gteVal !== undefined) {
             whereClauses.push(`${safeCol} >= ?`);
-            params.push(ops.$gte);
+            params.push(gteVal);
           }
-          if (ops.$lt !== undefined) {
+          const ltVal = ops.$lt !== undefined ? ops.$lt : ops.lt;
+          if (ltVal !== undefined) {
             whereClauses.push(`${safeCol} < ?`);
-            params.push(ops.$lt);
+            params.push(ltVal);
           }
-          if (ops.$lte !== undefined) {
+          const lteVal = ops.$lte !== undefined ? ops.$lte : ops.lte;
+          if (lteVal !== undefined) {
             whereClauses.push(`${safeCol} <= ?`);
-            params.push(ops.$lte);
+            params.push(lteVal);
           }
-          if (Array.isArray(ops.$in) && ops.$in.length > 0) {
-            const placeholders = ops.$in.map(() => '?').join(', ');
+          const inVal = ops.$in !== undefined ? ops.$in : ops.in;
+          if (Array.isArray(inVal) && inVal.length > 0) {
+            const placeholders = inVal.map(() => '?').join(', ');
             whereClauses.push(`${safeCol} IN (${placeholders})`);
-            params.push(...ops.$in);
+            params.push(...inVal);
           }
-          if (Array.isArray(ops.$nin) && ops.$nin.length > 0) {
-            const placeholders = ops.$nin.map(() => '?').join(', ');
+          const ninVal = ops.$nin !== undefined ? ops.$nin : ops.nin;
+          if (Array.isArray(ninVal) && ninVal.length > 0) {
+            const placeholders = ninVal.map(() => '?').join(', ');
             whereClauses.push(`${safeCol} NOT IN (${placeholders})`);
-            params.push(...ops.$nin);
+            params.push(...ninVal);
           }
-          if (ops.$contains !== undefined) {
+          const containsVal = ops.$contains !== undefined ? ops.$contains : ops.contains;
+          if (containsVal !== undefined) {
             whereClauses.push(`${safeCol} LIKE ?`);
-            params.push(`%${ops.$contains}%`);
+            params.push(`%${containsVal}%`);
           }
-          if (ops.$null !== undefined) {
-            whereClauses.push(ops.$null ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
+          const nullVal = ops.$null !== undefined ? ops.$null : ops.null;
+          if (nullVal !== undefined) {
+            whereClauses.push(nullVal ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
           }
         }
       }

@@ -23,7 +23,10 @@ import WaiversCard, {
   type WaiverTenant,
 } from '@/features/dashboard/components/WaiversCard';
 import { WelcomeDashboard } from '@/features/dashboard/components/WelcomeDashboard';
-import { calculateDashboardStats } from '@/features/dashboard/utils/businessMetrics';
+import {
+  useLiveDashboardStats,
+  useLiveExpiringContracts,
+} from '@/features/dashboard/utils/businessMetrics';
 import ExpensesAnalysisCard from '@/features/expenses/components/ExpensesAnalysisCard';
 import MpesaPaymentModal from '@/features/payments/components/MpesaPaymentModal';
 import { useLocalClient } from '@/providers/SyncClientProvider';
@@ -114,8 +117,20 @@ const Dashboard = function Dashboard() {
     return {
       properties: { table: 'properties', where },
       houses: { table: 'houses', where },
-      receipts: { table: 'receipts', where },
-      expenses: { table: 'expenses', where },
+      receipts: {
+        table: 'receipts',
+        where,
+        orderBy: 'payment_date',
+        order: 'desc' as const,
+        limit: 100,
+      },
+      expenses: {
+        table: 'expenses',
+        where,
+        orderBy: 'date',
+        order: 'desc' as const,
+        limit: 100,
+      },
       tenants: { table: 'tenants', where },
       contracts: { table: 'contracts', where },
       paymentMessages: { table: 'payment_messages', where },
@@ -127,6 +142,15 @@ const Dashboard = function Dashboard() {
 
   const { data: dashboardData, loading: isDashboardDataLoading } =
     useLiveQueries(client, querySpecs);
+
+  const { stats, loading: isStatsLoading } = useLiveDashboardStats(
+    client,
+    selectedBusinessId,
+  );
+  const { contracts: expiringContractsList } = useLiveExpiringContracts(
+    client,
+    selectedBusinessId,
+  );
 
   const properties = dashboardData.properties || EMPTY_ARRAY;
   const houses = dashboardData.houses || EMPTY_ARRAY;
@@ -243,87 +267,50 @@ const Dashboard = function Dashboard() {
       : defaultPrefs;
   }, [settings]);
 
-  // Compute stats reactively
-  const { stats, tenantContext } = useMemo(() => {
-    const stats = calculateDashboardStats({
-      properties,
-      houses,
-      tenants,
-      contracts,
-      receipts,
-      expenses,
-      maintenanceRequests,
-    });
+  // Tenant context for tenant view
+  const tenantContext = useMemo(() => {
+    if (!isTenant || !tenantId) return null;
 
-    // Recent Expenses
-    const sortedExpenses = [...expenses]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 3)
-      .map(e => ({
-        id: e.id,
-        amount: e.amount,
-        category: e.category,
-        date: e.date,
-        remarks: e.remarks,
-        createdAt: e.created_at,
-        updatedAt: e.updated_at,
-      }));
-
-    const isActualTenant = isTenant;
+    const contract = contracts.find(
+      c => c.tenant_id === tenantId && isActiveContractStatus(c.status),
+    );
+    const tenantHouseId = contract?.house_id;
+    const tenantPropertyId = houses.find(
+      h => h.id === tenantHouseId,
+    )?.property_id;
 
     return {
-      stats,
-      recentExpenses: sortedExpenses,
-      tenantContext: isActualTenant
-        ? (() => {
-            if (!tenantId) return { contract: null, receipts: [], maintenance: [] };
-
-            const contract = contracts.find(
-              c => c.tenant_id === tenantId && isActiveContractStatus(c.status),
-            );
-            const tenantHouseId = contract?.house_id;
-            const tenantPropertyId = houses.find(
-              h => h.id === tenantHouseId,
-            )?.property_id;
-
-            return {
-              contract,
-              receipts: receipts
-                .filter(r => r.tenant_id === tenantId)
-                .sort(
-                  (a, b) =>
-                    new Date(b.payment_date).getTime() -
-                    new Date(a.payment_date).getTime(),
-                )
-                .slice(0, 5),
-              maintenance: maintenanceRequests
-                .filter(m => {
-                  if (m.tenant_id === tenantId) return true;
-                  if (tenantPropertyId && m.property_id === tenantPropertyId) {
-                    const isPropertyWide =
-                      !m.house_id &&
-                      (!m.affected_houses || m.affected_houses.length === 0);
-                    if (isPropertyWide) return true;
-                  }
-                  return false;
-                })
-                .sort(
-                  (a, b) =>
-                    new Date(b.event_date || 0).getTime() -
-                    new Date(a.event_date || 0).getTime(),
-                )
-                .slice(0, 5),
-            };
-          })()
-        : null,
+      contract,
+      receipts: receipts
+        .filter(r => r.tenant_id === tenantId)
+        .sort(
+          (a, b) =>
+            new Date(b.payment_date).getTime() -
+            new Date(a.payment_date).getTime(),
+        )
+        .slice(0, 5),
+      maintenance: maintenanceRequests
+        .filter(m => {
+          if (m.tenant_id === tenantId) return true;
+          if (tenantPropertyId && m.property_id === tenantPropertyId) {
+            const isPropertyWide =
+              !m.house_id &&
+              (!m.affected_houses || m.affected_houses.length === 0);
+            if (isPropertyWide) return true;
+          }
+          return false;
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.event_date || 0).getTime() -
+            new Date(a.event_date || 0).getTime(),
+        )
+        .slice(0, 5),
     };
   }, [
-    properties,
+    contracts,
     houses,
     receipts,
-    expenses,
-    tenants,
-    contracts,
     maintenanceRequests,
     isTenant,
     tenantId,
@@ -499,58 +486,13 @@ const Dashboard = function Dashboard() {
     propertiesById,
   ]);
 
-  const expiringContractsList = React.useMemo<ExpiringContract[]>(() => {
-    if (!selectedBusiness?.id || !isManagement) return [];
-
-    const now = new Date();
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-
-    return contracts
-      .filter(c => {
-        if (!isActiveContractStatus(c.status)) return false;
-        if (!c.end_date) return false;
-        const endDate = new Date(c.end_date);
-        return endDate <= thirtyDaysFromNow && endDate >= now;
-      })
-      .map(c => {
-        const house = c.house_id ? housesById.get(c.house_id) : undefined;
-        const property = house?.property_id
-          ? propertiesById.get(house.property_id)
-          : undefined;
-        const tenant = c.tenant_id ? tenantsById.get(c.tenant_id) : undefined;
-        const endDate = new Date(c.end_date);
-        const daysRemaining = Math.ceil(
-          (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-        );
-
-        return {
-          id: c.id,
-          tenant_name: tenant?.name || 'Unknown',
-          property_name: (property as any)?.name || 'Unknown Property',
-          house_number: house?.house_number || 'N/A',
-          end_date: c.end_date,
-          days_remaining: daysRemaining,
-        };
-      })
-      .sort((a, b) => a.days_remaining - b.days_remaining);
-  }, [
-    contracts,
-    housesById,
-    tenantsById,
-    propertiesById,
-    isManagement,
-    selectedBusiness?.id,
-  ]);
-
-  const pendingRentLoading = false;
-
   if (
     accessLoading ||
     isHydratingSelection ||
     isWaitingForInitialSync ||
     isInitialSyncing ||
-    isDashboardDataLoading
+    isDashboardDataLoading ||
+    isStatsLoading
   ) {
     return (
       <LoadingCard iconName="view-dashboard-variant" text="Loading workspace data..." />
@@ -833,7 +775,7 @@ const Dashboard = function Dashboard() {
           <>
             {dashboardPreferences.show_pending_rent && (
               <PendingRentCard
-                loading={pendingRentLoading}
+                loading={false}
                 tenants={pendingRentTenants}
                 receipts={receipts}
                 collapsedGroups={collapsedGroups}

@@ -1,3 +1,7 @@
+import type { LocalFirstClient } from 'local-lite';
+import { useCoalescedRunner } from 'local-lite/react';
+import { useCallback, useEffect, useState } from 'react';
+import type { ExpiringContract } from '@/features/contracts/components/ExpiringContractsCard';
 import { isCommissionedAsOf } from '@/features/reports/utils/helpers';
 import { parseMetadata, safeParseJSON } from '@/shared/utils/helper';
 import {
@@ -5,6 +9,12 @@ import {
   isActiveTenantStatus,
   isFormerTenantStatus,
 } from '@/shared/utils/statusHelper';
+
+function computeNet(receipt: any): number {
+  const amount = parseFloat(String(receipt?.amount || 0));
+  const refunded = parseFloat(String(receipt?.refunded_amount || 0));
+  return Math.max(0, amount - refunded);
+}
 
 export interface DashboardStats {
   totalRooms: number;
@@ -38,12 +48,350 @@ interface BusinessData {
   maintenanceRequests?: any[];
 }
 
-const computeNet = (receipt: any) => {
-  return (
-    parseFloat(String(receipt.amount || 0)) -
-    parseFloat(String(receipt.refunded_amount || 0))
-  );
+export const DEFAULT_DASHBOARD_STATS: DashboardStats = {
+  totalRooms: 0,
+  occupiedRooms: 0,
+  vacantRooms: 0,
+  totalTenants: 0,
+  totalRevenue: 0,
+  monthlyRevenue: 0,
+  occupancyRate: 0,
+  projectedRevenue: 0,
+  rentCollectionRate: 0,
+  lastMonthRevenue: 0,
+  revenueGrowth: 0,
+  annualRevenue: 0,
+  activeTenants: 0,
+  totalExpenses: 0,
+  monthlyExpenses: 0,
+  lastMonthExpenses: 0,
+  expenseGrowth: 0,
+  annualExpenses: 0,
+  expiringContracts: 0,
 };
+
+export async function fetchDashboardStatsFromDB(
+  client: LocalFirstClient,
+  businessId: string,
+): Promise<DashboardStats> {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+  const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const currentMonthStart = `${currentYear}-${pad(currentMonth)}-01`;
+  const currentMonthEnd = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
+  const lastMonthStart = `${lastMonthYear}-${pad(lastMonth)}-01`;
+  const lastMonthEnd = new Date(lastMonthYear, lastMonth, 0).toISOString().split('T')[0];
+  const yearStart = `${currentYear}-01-01`;
+  const yearEnd = `${currentYear}-12-31`;
+
+  const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+
+  const [
+    [housesCount],
+    [occupiedCount],
+    [maintenanceCount],
+    [activeTenantsCount],
+    [monthlyRevRow],
+    [lastMonthRevRow],
+    [annualRevRow],
+    [totalRevRow],
+    [monthlyExpRow],
+    [lastMonthExpRow],
+    [annualExpRow],
+    [totalExpRow],
+    [expiringCount],
+    [projectedRevRow],
+  ] = await Promise.all([
+    client.query<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM "houses" WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);',
+      [businessId],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COUNT(DISTINCT "house_id") AS total 
+       FROM "contracts" 
+       WHERE "business_id" = ? 
+         AND "status" = 'ACTIVE' 
+         AND "start_date" <= ? 
+         AND ("end_date" IS NULL OR "end_date" >= ?)
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, todayStr, currentMonthStart],
+    ),
+    client.query<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM "houses" WHERE "business_id" = ? AND "status" = \'maintenance\' AND ("deleted" IS NULL OR "deleted" != 1);',
+      [businessId],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COUNT(DISTINCT "tenant_id") AS total 
+       FROM "contracts" 
+       WHERE "business_id" = ? 
+         AND "status" = 'ACTIVE' 
+         AND "start_date" <= ? 
+         AND ("end_date" IS NULL OR "end_date" >= ?)
+         AND "tenant_id" IS NOT NULL
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, todayStr, currentMonthStart],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
+       FROM "receipts" 
+       WHERE "business_id" = ? 
+         AND "payment_date" >= ? AND "payment_date" <= ?
+         AND "payment_method" != 'promo' AND "type" != 'promo'
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, currentMonthStart, currentMonthEnd],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
+       FROM "receipts" 
+       WHERE "business_id" = ? 
+         AND "payment_date" >= ? AND "payment_date" <= ?
+         AND "payment_method" != 'promo' AND "type" != 'promo'
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, lastMonthStart, lastMonthEnd],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
+       FROM "receipts" 
+       WHERE "business_id" = ? 
+         AND "payment_date" >= ? AND "payment_date" <= ?
+         AND "payment_method" != 'promo' AND "type" != 'promo'
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, yearStart, yearEnd],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount" - "refunded_amount"), 0) AS total 
+       FROM "receipts" 
+       WHERE "business_id" = ? 
+         AND "payment_method" != 'promo' AND "type" != 'promo'
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount"), 0) AS total 
+       FROM "expenses" 
+       WHERE "business_id" = ? 
+         AND "date" >= ? AND "date" <= ?
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, currentMonthStart, currentMonthEnd],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount"), 0) AS total 
+       FROM "expenses" 
+       WHERE "business_id" = ? 
+         AND "date" >= ? AND "date" <= ?
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, lastMonthStart, lastMonthEnd],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount"), 0) AS total 
+       FROM "expenses" 
+       WHERE "business_id" = ? 
+         AND "date" >= ? AND "date" <= ?
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, yearStart, yearEnd],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("amount"), 0) AS total 
+       FROM "expenses" 
+       WHERE "business_id" = ? 
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COUNT(*) AS total 
+       FROM "contracts" 
+       WHERE "business_id" = ? 
+         AND ("status" = 'ACTIVE' OR "status" = 'expiring_soon')
+         AND "end_date" >= ? AND "end_date" <= ?
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, todayStr, thirtyDaysStr],
+    ),
+    client.query<{ total: number }>(
+      `SELECT COALESCE(SUM("rent_amount"), 0) AS total 
+       FROM "contracts" 
+       WHERE "business_id" = ? 
+         AND "status" = 'ACTIVE' 
+         AND "start_date" <= ? 
+         AND ("end_date" IS NULL OR "end_date" >= ?)
+         AND ("deleted" IS NULL OR "deleted" != 1);`,
+      [businessId, todayStr, currentMonthStart],
+    ),
+  ]);
+
+  const totalRooms = Number(housesCount?.total) || 0;
+  const occupiedRooms = Number(occupiedCount?.total) || 0;
+  const maintenanceRooms = Number(maintenanceCount?.total) || 0;
+  const vacantRooms = Math.max(0, totalRooms - occupiedRooms);
+  const activeTenants = Number(activeTenantsCount?.total) || 0;
+
+  const monthlyRevenue = Number(monthlyRevRow?.total) || 0;
+  const lastMonthRevenue = Number(lastMonthRevRow?.total) || 0;
+  const annualRevenue = Number(annualRevRow?.total) || 0;
+  const totalRevenue = Number(totalRevRow?.total) || 0;
+
+  const monthlyExpenses = Number(monthlyExpRow?.total) || 0;
+  const lastMonthExpenses = Number(lastMonthExpRow?.total) || 0;
+  const annualExpenses = Number(annualExpRow?.total) || 0;
+  const totalExpenses = Number(totalExpRow?.total) || 0;
+
+  const expiringContracts = Number(expiringCount?.total) || 0;
+  const projectedRevenue = Number(projectedRevRow?.total) || 0;
+
+  const revenueGrowth = lastMonthRevenue
+    ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
+    : 0;
+
+  const expenseGrowth = lastMonthExpenses
+    ? ((monthlyExpenses - lastMonthExpenses) / lastMonthExpenses) * 100
+    : 0;
+
+  const rentableRooms = totalRooms - maintenanceRooms;
+  const occupancyRate = rentableRooms > 0 ? (occupiedRooms / rentableRooms) * 100 : 0;
+  const rentCollectionRate = projectedRevenue > 0 ? (monthlyRevenue / projectedRevenue) * 100 : 0;
+
+  return {
+    totalRooms,
+    occupiedRooms,
+    vacantRooms,
+    totalTenants: activeTenants,
+    totalRevenue,
+    monthlyRevenue,
+    occupancyRate,
+    projectedRevenue,
+    rentCollectionRate,
+    lastMonthRevenue,
+    revenueGrowth,
+    annualRevenue,
+    activeTenants,
+    totalExpenses,
+    monthlyExpenses,
+    lastMonthExpenses,
+    expenseGrowth,
+    annualExpenses,
+    expiringContracts,
+  };
+}
+
+export function useLiveDashboardStats(
+  client: LocalFirstClient | null | undefined,
+  businessId: string | undefined | null,
+): { stats: DashboardStats; loading: boolean; refetch: () => Promise<void> } {
+  const [stats, setStats] = useState<DashboardStats>(() => DEFAULT_DASHBOARD_STATS);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStats = useCallback(async () => {
+    if (!client || !businessId) {
+      setStats(DEFAULT_DASHBOARD_STATS);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchDashboardStatsFromDB(client, businessId);
+      setStats(data);
+    } catch (err) {
+      console.error('Error fetching dashboard stats from SQLite:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [client, businessId]);
+
+  const scheduleFetch = useCoalescedRunner(fetchStats);
+
+  useEffect(() => {
+    if (!client || !businessId) return;
+    fetchStats();
+    const tables = ['receipts', 'expenses', 'contracts', 'houses'];
+    const unsubs = tables.map(t => client.events.on(t, scheduleFetch));
+    return () => {
+      unsubs.forEach(u => u());
+    };
+  }, [client, businessId, fetchStats, scheduleFetch]);
+
+  return { stats, loading, refetch: fetchStats };
+}
+
+export async function fetchExpiringContractsFromDB(
+  client: LocalFirstClient,
+  businessId: string,
+): Promise<ExpiringContract[]> {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+  const rows = await client
+    .from('contracts')
+    .leftJoin('houses', 'houses.id', 'contracts.house_id')
+    .leftJoin('properties', 'properties.id', 'houses.property_id')
+    .leftJoin('tenants', 'tenants.id', 'contracts.tenant_id')
+    .where('contracts.business_id', '=', businessId)
+    .where('contracts.status', '=', 'ACTIVE')
+    .where('contracts.end_date', '>=', todayStr)
+    .where('contracts.end_date', '<=', thirtyDaysStr)
+    .select([
+      'contracts.id AS id',
+      'contracts.end_date AS end_date',
+      'houses.house_number AS house_number',
+      'properties.name AS property_name',
+      'tenants.name AS tenant_name',
+    ])
+    .orderBy('contracts.end_date', 'ASC')
+    .execute();
+
+  return rows.map((r: any) => {
+    const endDate = new Date(r.end_date);
+    const daysRemaining = Math.ceil(
+      (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return {
+      id: r.id,
+      tenant_name: r.tenant_name || 'Unknown',
+      property_name: r.property_name || 'Unknown Property',
+      house_number: r.house_number || 'N/A',
+      end_date: r.end_date,
+      days_remaining: daysRemaining,
+    };
+  });
+}
+
+export function useLiveExpiringContracts(
+  client: LocalFirstClient | null | undefined,
+  businessId: string | undefined | null,
+): { contracts: ExpiringContract[]; loading: boolean } {
+  const [contracts, setContracts] = useState<ExpiringContract[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchContracts = useCallback(async () => {
+    if (!client || !businessId) {
+      setContracts([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const list = await fetchExpiringContractsFromDB(client, businessId);
+      setContracts(list);
+    } catch (err) {
+      console.error('Error fetching expiring contracts from SQLite:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [client, businessId]);
+
+  const schedule = useCoalescedRunner(fetchContracts);
+
+  useEffect(() => {
+    if (!client || !businessId) return;
+    fetchContracts();
+    const unsubs = ['contracts', 'houses', 'tenants'].map(t => client.events.on(t, schedule));
+    return () => unsubs.forEach(u => u());
+  }, [client, businessId, fetchContracts, schedule]);
+
+  return { contracts, loading };
+}
 
 export const calculateDashboardStats = (data: BusinessData): DashboardStats => {
   const { houses: rawHouses, tenants, contracts, receipts, expenses, properties } = data;
