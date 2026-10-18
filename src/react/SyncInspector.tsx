@@ -28,6 +28,7 @@ export interface SyncInspectorProps {
   onOpenBenchmark?: () => void;
   style?: any;
   theme?: 'auto' | 'dark' | 'light' | Partial<SyncThemeColors>;
+  alwaysVisible?: boolean;
   renderTrigger?: (props: {
     isOpen: boolean;
     open: () => void;
@@ -55,6 +56,7 @@ export function SyncInspector({
   onOpenBenchmark,
   style,
   theme = 'auto',
+  alwaysVisible = true,
   renderTrigger,
 }: SyncInspectorProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -229,7 +231,7 @@ export function SyncInspector({
                 statusColor,
                 statusLabel,
               })
-            ) : (
+            ) : !alwaysVisible && status.pendingCount === 0 && status.isOnline && !status.isSyncing ? null : (
               <TouchableOpacity
                 onPress={() => setIsOpen(true)}
                 style={[
@@ -933,7 +935,7 @@ export function SyncInspector({
               statusColor,
               statusLabel,
             })
-          ) : (
+          ) : !alwaysVisible && status.pendingCount === 0 && status.isOnline && !status.isSyncing ? null : (
             <button
               onClick={() => setIsOpen(true)}
               style={{

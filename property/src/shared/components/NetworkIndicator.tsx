@@ -27,6 +27,7 @@ export const NetworkIndicator = ({
   variant = 'icon',
   enableBenchmark = true,
   renderTrigger,
+  alwaysVisible = false,
   ...rest
 }: NetworkIndicatorProps) => {
   const client = useLocalClient();
@@ -42,6 +43,12 @@ export const NetworkIndicator = ({
         const isSyncing = status?.isSyncing ?? false;
         const pendingCount = status?.pendingCount ?? 0;
         const isFullyOnline = isOnline && isCloudSyncEnabled;
+
+        // When not set to always visible, hide icon when no changes are pending (and fully online), or in demo mode
+        if (!alwaysVisible) {
+          if (pendingCount === 0 && isFullyOnline) return null;
+          if (isDemoMode) return null;
+        }
 
         let iconName = 'cloud-check';
         if (!isOnline) iconName = 'wifi-off';
@@ -96,6 +103,7 @@ export const NetworkIndicator = ({
     isDemoMode,
     theme.colors,
     isNetworkOnline,
+    alwaysVisible,
   ]);
 
   return (
@@ -105,6 +113,7 @@ export const NetworkIndicator = ({
       variant={variant}
       enableBenchmark={enableBenchmark}
       renderTrigger={customRenderTrigger}
+      alwaysVisible={alwaysVisible}
       theme={rest.theme ?? (theme.dark ? 'dark' : 'light')}
       {...rest}
     />
