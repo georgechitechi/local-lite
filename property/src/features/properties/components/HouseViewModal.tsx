@@ -22,6 +22,7 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
+import AccessGuard from '@/shared/components/AccessGuard';
 import BaseModal from '@/shared/components/BaseModal';
 import HistoryModal from '@/shared/components/HistoryModal';
 import StatusUpdateModal from '@/shared/components/StatusUpdateModal';
@@ -80,14 +81,9 @@ export default function HouseViewModal({
   const router = useRouter();
   const { selectedBusiness } = useBusiness();
   const { showSnackbar } = useSnackbar();
-  const { can, hasAccess } = useAccessControl();
+  const { can } = useAccessControl();
   const colors = useThemeColors() as any;
   const historyTargets = useHistoryTargets('houses', houseId);
-
-  const canViewHouse = can('view', 'house') || hasAccess(['admin', 'staff']);
-  const canEditHouse = can('edit', 'house');
-  const canDeleteHouse = can('delete', 'house');
-  const canCreateContract = can('create', 'contract');
 
   const housesById = useHousesById(selectedBusiness?.id);
   const propertiesById = usePropertiesById(selectedBusiness?.id);
@@ -184,7 +180,8 @@ export default function HouseViewModal({
   const displayStatus = house ? getHouseDisplayStatus(house) : 'available';
   const statusStyle = getStatusColor(displayStatus);
 
-  const canShowMenu = canEditHouse || canDeleteHouse || canCreateContract;
+  const canShowMenu =
+    can('edit', 'house') || can('delete', 'house') || can('create', 'contract');
   const headerRight =
     house && canShowMenu ? (
       <Menu
@@ -199,7 +196,7 @@ export default function HouseViewModal({
           />
         }
       >
-        {canEditHouse && (
+        <AccessGuard action="edit" resource="house" fallback={null}>
           <Menu.Item
             onPress={() => {
               setMenuVisible(false);
@@ -211,27 +208,29 @@ export default function HouseViewModal({
             title="Edit House"
             leadingIcon="pencil"
           />
+        </AccessGuard>
+        {(!house.contracts || house.contracts.length === 0) && (
+          <AccessGuard action="create" resource="contract" fallback={null}>
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(false);
+                onDismiss();
+                router.push({
+                  pathname: '/contracts/create',
+                  params: {
+                    houseId: house.id,
+                    propertyId: house.property_id,
+                    propertyName: house.property.name,
+                    houseNumber: house.house_number,
+                  },
+                });
+              }}
+              title="Create Contract"
+              leadingIcon="file-document-edit"
+            />
+          </AccessGuard>
         )}
-        {canCreateContract && (!house.contracts || house.contracts.length === 0) && (
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              onDismiss();
-              router.push({
-                pathname: '/contracts/create',
-                params: {
-                  houseId: house.id,
-                  propertyId: house.property_id,
-                  propertyName: house.property.name,
-                  houseNumber: house.house_number,
-                },
-              });
-            }}
-            title="Create Contract"
-            leadingIcon="file-document-edit"
-          />
-        )}
-        {canEditHouse && (
+        <AccessGuard action="edit" resource="house" fallback={null}>
           <Menu.Item
             onPress={() => {
               setMenuVisible(false);
@@ -240,238 +239,238 @@ export default function HouseViewModal({
             title="Update Status"
             leadingIcon="list-status"
           />
-        )}
-        {canDeleteHouse && (
-          <>
-            <Divider />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(false);
-                setShowDeleteModal(true);
-              }}
-              title="Delete House"
-              leadingIcon="delete"
-              titleStyle={{ color: colors.error }}
-            />
-          </>
-        )}
+        </AccessGuard>
+        <AccessGuard action="delete" resource="house" fallback={null}>
+          <Divider />
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(false);
+              setShowDeleteModal(true);
+            }}
+            title="Delete House"
+            leadingIcon="delete"
+            titleStyle={{ color: colors.error }}
+          />
+        </AccessGuard>
       </Menu>
     ) : null;
 
-  if (!visible || !canViewHouse) return null;
+  if (!visible) return null;
 
   return (
-    <Portal>
-      <BaseModal
-        visible={visible}
-        onDismiss={onDismiss}
-        title={house?.house_number ?? 'House Details'}
-        subtitle={house?.property.name}
-        scrollable
-        maxHeight="85%"
-        headerRight={headerRight}
-      >
-        {!house ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : (
-          <View style={styles.content}>
-            {/* Status badge */}
-            <View style={styles.statusRow}>
-              <Chip
-                style={[styles.statusChip, { backgroundColor: statusStyle.bgColor }]}
-                textStyle={{ color: statusStyle.color, fontWeight: '600' }}
+    <AccessGuard action="view" resource="house" fallback={null}>
+      <Portal>
+        <BaseModal
+          visible={visible}
+          onDismiss={onDismiss}
+          title={house?.house_number ?? 'House Details'}
+          subtitle={house?.property.name}
+          scrollable
+          maxHeight="85%"
+          headerRight={headerRight}
+        >
+          {!house ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : (
+            <View style={styles.content}>
+              {/* Status badge */}
+              <View style={styles.statusRow}>
+                <Chip
+                  style={[styles.statusChip, { backgroundColor: statusStyle.bgColor }]}
+                  textStyle={{ color: statusStyle.color, fontWeight: '600' }}
+                >
+                  {properCase(displayStatus)}
+                </Chip>
+              </View>
+
+              <Divider style={styles.divider} />
+
+              {/* Details */}
+              <Text
+                variant="titleSmall"
+                style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
               >
-                {properCase(displayStatus)}
-              </Chip>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            {/* Details */}
-            <Text
-              variant="titleSmall"
-              style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
-            >
-              DETAILS
-            </Text>
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Text variant="labelSmall" style={{ color: colors.onSurfaceVariant }}>
-                  Type
-                </Text>
-                <Text variant="bodyMedium" style={styles.value}>
-                  {house.type}
-                </Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text variant="labelSmall" style={{ color: colors.onSurfaceVariant }}>
-                  Monthly Rent
-                </Text>
-                <Text variant="bodyMedium" style={styles.value}>
-                  {defaultCurrency
-                    ? formatWithCurrency(house.monthly_rent, defaultCurrency)
-                    : `${house.monthly_rent}`}
-                </Text>
-              </View>
-            </View>
-
-            {/* Amenities */}
-            {house.amenities && house.amenities.length > 0 && (
-              <>
-                <Divider style={styles.divider} />
-                <Text
-                  variant="titleSmall"
-                  style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
-                >
-                  AMENITIES
-                </Text>
-                <View style={styles.amenitiesRow}>
-                  {house.amenities.map((amenity, i) => (
-                    <Chip key={i} compact style={{ marginRight: 6, marginBottom: 6 }}>
-                      {snakeCaseToTitleCase(amenity)}
-                    </Chip>
-                  ))}
-                </View>
-              </>
-            )}
-
-            <Divider style={styles.divider} />
-
-            {/* Current Tenant */}
-            <Text
-              variant="titleSmall"
-              style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
-            >
-              CURRENT TENANT
-            </Text>
-            {house.contracts && house.contracts.length > 0 ? (
-              <View style={styles.tenantSection}>
-                <View style={styles.tenantRow}>
-                  <MaterialCommunityIcons
-                    name="account"
-                    size={16}
-                    color={colors.onSurfaceVariant}
-                  />
-                  <Text variant="bodyMedium" style={styles.tenantText}>
-                    {house.contracts[0].tenant.name}
+                DETAILS
+              </Text>
+              <View style={styles.detailsGrid}>
+                <View style={styles.detailItem}>
+                  <Text variant="labelSmall" style={{ color: colors.onSurfaceVariant }}>
+                    Type
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.value}>
+                    {house.type}
                   </Text>
                 </View>
-                {house.contracts[0].tenant.phone && (
-                  <View style={styles.tenantRow}>
-                    <MaterialCommunityIcons
-                      name="phone"
-                      size={16}
-                      color={colors.onSurfaceVariant}
-                    />
-                    <Text variant="bodySmall" style={styles.tenantText}>
-                      {house.contracts[0].tenant.phone}
-                    </Text>
-                  </View>
-                )}
-                {house.contracts[0].tenant.email && (
-                  <View style={styles.tenantRow}>
-                    <MaterialCommunityIcons
-                      name="email"
-                      size={16}
-                      color={colors.onSurfaceVariant}
-                    />
-                    <Text variant="bodySmall" style={styles.tenantText}>
-                      {house.contracts[0].tenant.email}
-                    </Text>
-                  </View>
-                )}
-                <Divider style={{ marginVertical: 8 }} />
-                <View style={styles.tenantRow}>
-                  <MaterialCommunityIcons
-                    name="calendar-range"
-                    size={16}
-                    color={colors.onSurfaceVariant}
-                  />
-                  <Text variant="bodySmall" style={styles.tenantText}>
-                    {formatDateRange(
-                      house.contracts[0].start_date,
-                      house.contracts[0].end_date,
-                    )}
+                <View style={styles.detailItem}>
+                  <Text variant="labelSmall" style={{ color: colors.onSurfaceVariant }}>
+                    Monthly Rent
                   </Text>
-                </View>
-                <View style={styles.tenantRow}>
-                  <MaterialCommunityIcons
-                    name="cash"
-                    size={16}
-                    color={colors.onSurfaceVariant}
-                  />
-                  <Text variant="bodySmall" style={styles.tenantText}>
+                  <Text variant="bodyMedium" style={styles.value}>
                     {defaultCurrency
-                      ? formatWithCurrency(
-                          house.contracts[0].rent_amount,
-                          defaultCurrency,
-                        )
-                      : `${house.contracts[0].rent_amount}`}
+                      ? formatWithCurrency(house.monthly_rent, defaultCurrency)
+                      : `${house.monthly_rent}`}
                   </Text>
                 </View>
               </View>
-            ) : (
-              <View style={styles.noTenantRow}>
-                <MaterialCommunityIcons
-                  name="account-off-outline"
-                  size={18}
-                  color={colors.onSurfaceVariant}
-                />
-                <Text
-                  variant="bodyMedium"
-                  style={{
-                    color: colors.onSurfaceVariant,
-                    marginLeft: 6,
-                    fontStyle: 'italic',
-                  }}
-                >
-                  No active tenant
-                </Text>
-              </View>
-            )}
 
-            {/* History */}
-            <Divider style={styles.divider} />
-            <HistoryModal
-              entityType="houses"
-              entityId={house?.id}
-              targets={historyTargets}
-              containerStyle={{ marginTop: 0 }}
-            />
-          </View>
-        )}
-      </BaseModal>
+              {/* Amenities */}
+              {house.amenities && house.amenities.length > 0 && (
+                <>
+                  <Divider style={styles.divider} />
+                  <Text
+                    variant="titleSmall"
+                    style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
+                  >
+                    AMENITIES
+                  </Text>
+                  <View style={styles.amenitiesRow}>
+                    {house.amenities.map((amenity, i) => (
+                      <Chip key={i} compact style={{ marginRight: 6, marginBottom: 6 }}>
+                        {snakeCaseToTitleCase(amenity)}
+                      </Chip>
+                    ))}
+                  </View>
+                </>
+              )}
 
-      {/* Delete confirmation */}
-      <BaseModal
-        visible={showDeleteModal}
-        onDismiss={() => setShowDeleteModal(false)}
-        mode="confirm"
-        title="Delete House"
-        message="Are you sure you want to delete this house? This action cannot be undone."
-        confirmText="Delete"
-        destructive
-        onConfirm={handleDelete}
-        zIndex={1100}
-      />
+              <Divider style={styles.divider} />
 
-      {/* Status update */}
-      {house && (
-        <StatusUpdateModal
-          visible={statusModalVisible}
-          onDismiss={() => setStatusModalVisible(false)}
-          title="Update House Status"
-          subtitle={`House: ${house.house_number}`}
-          items={statusItems}
-          onSelect={status => {
-            handleUpdateStatus(status);
-            setStatusModalVisible(false);
-          }}
+              {/* Current Tenant */}
+              <Text
+                variant="titleSmall"
+                style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
+              >
+                CURRENT TENANT
+              </Text>
+              {house.contracts && house.contracts.length > 0 ? (
+                <View style={styles.tenantSection}>
+                  <View style={styles.tenantRow}>
+                    <MaterialCommunityIcons
+                      name="account"
+                      size={16}
+                      color={colors.onSurfaceVariant}
+                    />
+                    <Text variant="bodyMedium" style={styles.tenantText}>
+                      {house.contracts[0].tenant.name}
+                    </Text>
+                  </View>
+                  {house.contracts[0].tenant.phone && (
+                    <View style={styles.tenantRow}>
+                      <MaterialCommunityIcons
+                        name="phone"
+                        size={16}
+                        color={colors.onSurfaceVariant}
+                      />
+                      <Text variant="bodySmall" style={styles.tenantText}>
+                        {house.contracts[0].tenant.phone}
+                      </Text>
+                    </View>
+                  )}
+                  {house.contracts[0].tenant.email && (
+                    <View style={styles.tenantRow}>
+                      <MaterialCommunityIcons
+                        name="email"
+                        size={16}
+                        color={colors.onSurfaceVariant}
+                      />
+                      <Text variant="bodySmall" style={styles.tenantText}>
+                        {house.contracts[0].tenant.email}
+                      </Text>
+                    </View>
+                  )}
+                  <Divider style={{ marginVertical: 8 }} />
+                  <View style={styles.tenantRow}>
+                    <MaterialCommunityIcons
+                      name="calendar-range"
+                      size={16}
+                      color={colors.onSurfaceVariant}
+                    />
+                    <Text variant="bodySmall" style={styles.tenantText}>
+                      {formatDateRange(
+                        house.contracts[0].start_date,
+                        house.contracts[0].end_date,
+                      )}
+                    </Text>
+                  </View>
+                  <View style={styles.tenantRow}>
+                    <MaterialCommunityIcons
+                      name="cash"
+                      size={16}
+                      color={colors.onSurfaceVariant}
+                    />
+                    <Text variant="bodySmall" style={styles.tenantText}>
+                      {defaultCurrency
+                        ? formatWithCurrency(
+                            house.contracts[0].rent_amount,
+                            defaultCurrency,
+                          )
+                        : `${house.contracts[0].rent_amount}`}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.noTenantRow}>
+                  <MaterialCommunityIcons
+                    name="account-off-outline"
+                    size={18}
+                    color={colors.onSurfaceVariant}
+                  />
+                  <Text
+                    variant="bodyMedium"
+                    style={{
+                      color: colors.onSurfaceVariant,
+                      marginLeft: 6,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    No active tenant
+                  </Text>
+                </View>
+              )}
+
+              {/* History */}
+              <Divider style={styles.divider} />
+              <HistoryModal
+                entityType="houses"
+                entityId={house?.id}
+                targets={historyTargets}
+                containerStyle={{ marginTop: 0 }}
+              />
+            </View>
+          )}
+        </BaseModal>
+
+        {/* Delete confirmation */}
+        <BaseModal
+          visible={showDeleteModal}
+          onDismiss={() => setShowDeleteModal(false)}
+          mode="confirm"
+          title="Delete House"
+          message="Are you sure you want to delete this house? This action cannot be undone."
+          confirmText="Delete"
+          destructive
+          onConfirm={handleDelete}
+          zIndex={1100}
         />
-      )}
-    </Portal>
+
+        {/* Status update */}
+        {house && (
+          <StatusUpdateModal
+            visible={statusModalVisible}
+            onDismiss={() => setStatusModalVisible(false)}
+            title="Update House Status"
+            subtitle={`House: ${house.house_number}`}
+            items={statusItems}
+            onSelect={status => {
+              handleUpdateStatus(status);
+              setStatusModalVisible(false);
+            }}
+          />
+        )}
+      </Portal>
+    </AccessGuard>
   );
 }
 
