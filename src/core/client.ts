@@ -19,11 +19,13 @@ import {
   SyncMetrics,
   SyncOp,
   TableChangeEvent,
+  WhereFilter,
 } from './types.js';
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier } from '../utils/sql.js';
 import { applyQueryOptions, isDeletedRecord, hasExplicitDeletedFilter } from './query.js';
+import { QueryBuilder, AggregateSpec, AggregateResult } from './query-builder.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -201,6 +203,10 @@ export class TransactionalClient {
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     return (await this.tx.execute(sql, params)) as T[];
+  }
+
+  from<T = any>(tableName: string): QueryBuilder<T> {
+    return new QueryBuilder<T>(this, tableName);
   }
 
   get rawTx(): LocalTransaction {
@@ -670,6 +676,134 @@ export class LocalFirstClient {
    */
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     return (await this.db.execute(sql, params)) as T[];
+  }
+
+  /**
+   * Returns a fluent SQL QueryBuilder for the specified table.
+   * Allows writing clean JavaScript method chains (select, join, leftJoin, where, orderBy, groupBy)
+   * that automatically compile into optimized native SQLite queries.
+   *
+   * Example:
+   * const activeRentals = await client
+   *   .from('contracts')
+   *   .join('houses', 'contracts.house_id', 'houses.id')
+   *   .leftJoin('tenants', 'contracts.tenant_id', 'tenants.id')
+   *   .where({ 'contracts.business_id': bizId, 'contracts.status': 'ACTIVE' })
+   *   .select('contracts.id', 'contracts.rent_amount', 'houses.house_number', 'tenants.name')
+   *   .execute();
+   */
+  from<T = any>(tableName: string): QueryBuilder<T> {
+    return new QueryBuilder<T>(this, tableName);
+  }
+
+  /**
+   * Executes a native SQLite COUNT(*) query and returns the count directly.
+   */
+  async count(tableName: string, options?: { where?: WhereFilter }): Promise<number> {
+    const qb = this.from(tableName);
+    if (options?.where) qb.where(options.where);
+    return qb.count();
+  }
+
+  /**
+   * Executes a native SQLite SUM(column) query and returns the sum directly.
+   */
+  async sum(tableName: string, column: string, options?: { where?: WhereFilter }): Promise<number> {
+    const qb = this.from(tableName);
+    if (options?.where) qb.where(options.where);
+    return qb.sum(column);
+  }
+
+  /**
+   * Executes a native SQLite AVG(column) query and returns the average directly.
+   */
+  async avg(tableName: string, column: string, options?: { where?: WhereFilter }): Promise<number | null> {
+    const qb = this.from(tableName);
+    if (options?.where) qb.where(options.where);
+    return qb.avg(column);
+  }
+
+  /**
+   * Executes native multi-metric SQLite aggregation in a single query.
+   *
+   * Example:
+   * const stats = await client.aggregate('receipts', {
+   *   where: { business_id: bizId },
+   *   count: true,
+   *   sum: ['amount', 'refunded_amount'],
+   *   avg: ['amount']
+   * });
+   */
+  async aggregate(tableName: string, spec: AggregateSpec): Promise<AggregateResult> {
+    const projections: string[] = [];
+    if (spec.count) {
+      projections.push('COUNT(*) AS "_count"');
+    }
+    if (spec.sum) {
+      for (const col of spec.sum) {
+        projections.push(`COALESCE(SUM("${col.replace(/"/g, '""')}"), 0) AS "sum_${col}"`);
+      }
+    }
+    if (spec.avg) {
+      for (const col of spec.avg) {
+        projections.push(`AVG("${col.replace(/"/g, '""')}") AS "avg_${col}"`);
+      }
+    }
+    if (spec.min) {
+      for (const col of spec.min) {
+        projections.push(`MIN("${col.replace(/"/g, '""')}") AS "min_${col}"`);
+      }
+    }
+    if (spec.max) {
+      for (const col of spec.max) {
+        projections.push(`MAX("${col.replace(/"/g, '""')}") AS "max_${col}"`);
+      }
+    }
+
+    if (projections.length === 0) {
+      return {};
+    }
+
+    const qb = this.from(tableName).select(...projections);
+    if (spec.where) {
+      qb.where(spec.where);
+    }
+
+    const rows = await qb.execute();
+    const row = (rows[0] as any) || {};
+    const result: AggregateResult = {};
+
+    if (spec.count) {
+      result.count = typeof row._count === 'number' ? row._count : Number(row._count) || 0;
+    }
+    if (spec.sum) {
+      result.sum = {};
+      for (const col of spec.sum) {
+        const val = row[`sum_${col}`];
+        result.sum[col] = typeof val === 'number' ? val : Number(val) || 0;
+      }
+    }
+    if (spec.avg) {
+      result.avg = {};
+      for (const col of spec.avg) {
+        const val = row[`avg_${col}`];
+        result.avg[col] = val === null || val === undefined ? null : Number(val) || 0;
+      }
+    }
+    if (spec.min) {
+      result.min = {};
+      for (const col of spec.min) {
+        result.min[col] = row[`min_${col}`];
+      }
+    }
+    if (spec.max) {
+      result.max = {};
+      for (const col of spec.max) {
+        result.max[col] = row[`max_${col}`];
+      }
+    }
+
+    return result;
   }
 
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {

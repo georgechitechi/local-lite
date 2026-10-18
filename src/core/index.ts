@@ -8,6 +8,7 @@ export * from './outbox-store.js';
 export * from './meta-store.js';
 export * from './table-manager.js';
 export * from './schema-manager.js';
+export * from './query-builder.js';
 export * from '../reactive/event-emitter.js';
 export * from '../adapters/network/index.js';
 export type { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';

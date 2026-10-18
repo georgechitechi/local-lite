@@ -7,6 +7,7 @@ export * from './core/outbox-store.js';
 export * from './core/meta-store.js';
 export * from './core/table-manager.js';
 export * from './core/schema-manager.js';
+export * from './core/query-builder.js';
 export * from './reactive/event-emitter.js';
 export * from './adapters/local/index.js';
 export * from './adapters/remote/index.js';
