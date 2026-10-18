@@ -3,12 +3,13 @@ module.exports = {
   setupFiles: ['<rootDir>/tests/setup/jest.setup.js'],
   setupFilesAfterEnv: ['<rootDir>/tests/setup/jest.setupAfterEnv.js'],
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|react-native-svg|uuid)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|react-native-svg|uuid)',
   ],
   moduleNameMapper: {
     '^react$': '<rootDir>/node_modules/react',
     '^react-dom$': '<rootDir>/node_modules/react-dom',
     '^react-native/setup-env$': '<rootDir>/tests/setup/jest.setup.js',
+    '^@babel/runtime/(.*)$': '<rootDir>/node_modules/@babel/runtime/$1',
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
