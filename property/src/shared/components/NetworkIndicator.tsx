@@ -105,6 +105,7 @@ export const NetworkIndicator = ({
       variant={variant}
       enableBenchmark={enableBenchmark}
       renderTrigger={customRenderTrigger}
+      theme={rest.theme ?? (theme.dark ? 'dark' : 'light')}
       {...rest}
     />
   );

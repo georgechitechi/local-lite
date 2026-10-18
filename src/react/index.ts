@@ -410,6 +410,7 @@ export function useMutations<TTable extends string = string>(
 
 export * from './runner.js';
 export * from './status.js';
+export * from './theme.js';
 export * from './BenchmarkModal.js';
 export { SyncInspector, SyncIndicator } from './SyncInspector.js';
 export type { SyncInspectorProps, SyncIndicatorProps } from './SyncInspector.js';

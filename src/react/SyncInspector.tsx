@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 import { useSyncStatus } from './status.js';
 import { BenchmarkModal } from './BenchmarkModal.js';
+import { resolveSyncTheme, type SyncThemeColors } from './theme.js';
 
 let RN: any;
 try {
@@ -26,6 +27,7 @@ export interface SyncInspectorProps {
   enableBenchmark?: boolean;
   onOpenBenchmark?: () => void;
   style?: any;
+  theme?: 'auto' | 'dark' | 'light' | Partial<SyncThemeColors>;
   renderTrigger?: (props: {
     isOpen: boolean;
     open: () => void;
@@ -41,8 +43,8 @@ const BENCHMARK_DESCRIPTION =
 
 /**
  * Universal Developer Inspector Component for local-lite.
- * Respects device safe areas and displays real-time outbox telemetry,
- * connection status, metrics, and triggers manual push, pull, reset, and benchmarks.
+ * Respects device safe areas and active theme (dark/light/custom).
+ * Displays real-time outbox telemetry, connection status, metrics, and triggers manual push, pull, reset, and benchmarks.
  */
 export function SyncInspector({
   client,
@@ -52,6 +54,7 @@ export function SyncInspector({
   enableBenchmark = true,
   onOpenBenchmark,
   style,
+  theme = 'auto',
   renderTrigger,
 }: SyncInspectorProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -59,6 +62,12 @@ export function SyncInspector({
   const status = useSyncStatus(client);
   const [metrics, setMetrics] = useState<any>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const systemColorScheme = RN?.useColorScheme ? RN.useColorScheme() : null;
+  const currentTheme = useMemo(
+    () => resolveSyncTheme(theme, systemColorScheme),
+    [theme, systemColorScheme]
+  );
 
   useEffect(() => {
     if (!client || !isOpen) return;
@@ -122,7 +131,7 @@ export function SyncInspector({
         num: status.pendingCount,
         label: 'Pending Outbox',
         sub: 'Awaiting sync push',
-        numColor: '#F9FAFB',
+        numColor: currentTheme.text,
       },
       {
         id: 'failed',
@@ -132,7 +141,7 @@ export function SyncInspector({
         numColor: metrics?.outboxFailedCount ? '#EF4444' : '#10B981',
       },
     ],
-    [status.pendingCount, metrics?.outboxFailedCount]
+    [status.pendingCount, metrics?.outboxFailedCount, currentTheme.text]
   );
 
   // Shared Connection & Telemetry Rows
@@ -141,9 +150,15 @@ export function SyncInspector({
       {
         id: 'status',
         label: 'Connection Status',
-        value: status.isOnline ? 'Connected' : 'Offline',
+        value: status.isOnline ? 'Online (Connected)' : 'Offline',
         color: statusColor,
         hasDot: true,
+      },
+      {
+        id: 'sync-state',
+        label: 'Sync State',
+        value: status.isSyncing ? 'Syncing...' : 'Idle',
+        color: status.isSyncing ? '#F59E0B' : currentTheme.textMuted,
       },
       {
         id: 'last-synced',
@@ -161,18 +176,18 @@ export function SyncInspector({
         value: `${metrics?.lastPullDurationMs || 0} ms`,
       },
     ],
-    [status.isOnline, status.isSyncing, status.lastSyncedAt, statusColor, metrics?.lastPushDurationMs, metrics?.lastPullDurationMs]
+    [status.isOnline, status.isSyncing, status.lastSyncedAt, statusColor, metrics?.lastPushDurationMs, metrics?.lastPullDurationMs, currentTheme.textMuted]
   );
 
   // Shared Action Buttons
   const actionButtons = useMemo(
     () => [
-      { id: 'push', label: '🚀 Push Changes', onPress: handlePush, bg: '#3B82F6' },
-      { id: 'pull', label: '📥 Pull Changes', onPress: handlePull, bg: '#2563EB' },
-      { id: 'retry', label: '🔄 Retry Failed', onPress: handleRetryFailed, bg: '#374151' },
-      { id: 'reset', label: '⏪ Reset Cursor', onPress: handleResetCursor, bg: '#374151' },
+      { id: 'push', label: '🚀 Push Changes', onPress: handlePush, bg: '#3B82F6', color: '#FFFFFF' },
+      { id: 'pull', label: '📥 Pull Changes', onPress: handlePull, bg: '#2563EB', color: '#FFFFFF' },
+      { id: 'retry', label: '🔄 Retry Failed', onPress: handleRetryFailed, bg: currentTheme.actionBg, color: currentTheme.actionText },
+      { id: 'reset', label: '⏪ Reset Cursor', onPress: handleResetCursor, bg: currentTheme.actionBg, color: currentTheme.actionText },
     ],
-    [handlePush, handlePull, handleRetryFailed, handleResetCursor]
+    [handlePush, handlePull, handleRetryFailed, handleResetCursor, currentTheme.actionBg, currentTheme.actionText]
   );
 
   const triggerLabel =
@@ -221,6 +236,7 @@ export function SyncInspector({
                   isInline ? rnStyles.inlinePill : rnStyles.pill,
                   {
                     borderColor: statusColor,
+                    backgroundColor: currentTheme.surface,
                     alignSelf: isInline ? 'auto' : isCenter ? 'center' : isLeft ? 'flex-start' : 'flex-end',
                   },
                 ]}
@@ -228,7 +244,9 @@ export function SyncInspector({
               >
                 <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
                 {variant !== 'icon' && variant !== 'minimal' && (
-                  <Text style={isInline ? rnStyles.inlinePillText : rnStyles.pillText}>{triggerLabel}</Text>
+                  <Text style={[isInline ? rnStyles.inlinePillText : rnStyles.pillText, { color: currentTheme.text }]}>
+                    {triggerLabel}
+                  </Text>
                 )}
                 {status.pendingCount > 0 && variant !== 'compact' && (
                   <View style={rnStyles.badge}>
@@ -247,29 +265,42 @@ export function SyncInspector({
           statusBarTranslucent={true}
           onRequestClose={() => setIsOpen(false)}
         >
-          <SafeComp style={rnStyles.fullScreenSafe} edges={['top', 'bottom', 'left', 'right']}>
+          <SafeComp
+            style={[rnStyles.fullScreenSafe, { backgroundColor: currentTheme.bg }]}
+            edges={['top', 'bottom', 'left', 'right']}
+          >
             {/* Top Bar */}
             <View
               style={[
                 rnStyles.topBar,
+                {
+                  backgroundColor: currentTheme.surface,
+                  borderBottomColor: currentTheme.border,
+                },
                 !RNSafeArea?.SafeAreaView && isAndroid && { paddingTop: statusBarHeight + 10 },
               ]}
             >
               <View style={{ flex: 1 }}>
-                <Text style={rnStyles.topBarTitle}>⚡ Local Lite DevTools</Text>
-                <Text style={rnStyles.topBarSub}>Engine Inspector & Sync Telemetry</Text>
+                <Text style={[rnStyles.topBarTitle, { color: currentTheme.text }]}>⚡ Local Lite DevTools</Text>
+                <Text style={[rnStyles.topBarSub, { color: currentTheme.textMuted }]}>
+                  Engine Inspector & Sync Telemetry
+                </Text>
               </View>
               <View style={[rnStyles.statusBadge, { borderColor: statusColor, backgroundColor: `${statusColor}20` }]}>
                 <Text style={[rnStyles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
               </View>
-              <TouchableOpacity onPress={() => setIsOpen(false)} style={rnStyles.closeCircle} activeOpacity={0.7}>
-                <Text style={rnStyles.closeCircleText}>✕</Text>
+              <TouchableOpacity
+                onPress={() => setIsOpen(false)}
+                style={[rnStyles.closeCircle, { backgroundColor: currentTheme.actionBg }]}
+                activeOpacity={0.7}
+              >
+                <Text style={[rnStyles.closeCircleText, { color: currentTheme.actionText }]}>✕</Text>
               </TouchableOpacity>
             </View>
 
             {/* Scrollable Body */}
             <ScrollView
-              style={rnStyles.scrollBody}
+              style={[rnStyles.scrollBody, { backgroundColor: currentTheme.bg }]}
               contentContainerStyle={rnStyles.scrollContent}
               showsVerticalScrollIndicator={true}
             >
@@ -282,29 +313,50 @@ export function SyncInspector({
               {/* Stat Cards (Pending & Failed) */}
               <View style={rnStyles.statGrid}>
                 {statCards.map((card) => (
-                  <View key={card.id} style={rnStyles.statCard}>
+                  <View
+                    key={card.id}
+                    style={[
+                      rnStyles.statCard,
+                      {
+                        backgroundColor: currentTheme.card,
+                        borderColor: currentTheme.border,
+                      },
+                    ]}
+                  >
                     <Text style={[rnStyles.statNum, { color: card.numColor }]}>{String(card.num ?? 0)}</Text>
-                    <Text style={rnStyles.statLabel}>{card.label}</Text>
-                    <Text style={rnStyles.statSub}>{card.sub}</Text>
+                    <Text style={[rnStyles.statLabel, { color: currentTheme.textSecondary }]}>{card.label}</Text>
+                    <Text style={[rnStyles.statSub, { color: currentTheme.textMuted }]}>{card.sub}</Text>
                   </View>
                 ))}
               </View>
 
               {/* Connection & Telemetry */}
-              <View style={rnStyles.infoCard}>
-                <Text style={rnStyles.infoCardTitle}>CONNECTION & TELEMETRY</Text>
+              <View
+                style={[
+                  rnStyles.infoCard,
+                  {
+                    backgroundColor: currentTheme.card,
+                    borderColor: currentTheme.border,
+                  },
+                ]}
+              >
+                <Text style={[rnStyles.infoCardTitle, { color: currentTheme.textMuted }]}>CONNECTION & TELEMETRY</Text>
                 {telemetryItems.map((item, idx) => (
                   <View
                     key={item.id}
-                    style={[rnStyles.infoRow, idx === telemetryItems.length - 1 && { borderBottomWidth: 0 }]}
+                    style={[
+                      rnStyles.infoRow,
+                      { borderBottomColor: currentTheme.border },
+                      idx === telemetryItems.length - 1 && { borderBottomWidth: 0 },
+                    ]}
                   >
-                    <Text style={rnStyles.infoKey}>{item.label}</Text>
+                    <Text style={[rnStyles.infoKey, { color: currentTheme.textMuted }]}>{item.label}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       {item.hasDot && <View style={[rnStyles.dotSmall, { backgroundColor: item.color }]} />}
                       <Text
                         style={[
                           rnStyles.infoVal,
-                          item.color ? { color: item.color, fontWeight: '700' } : undefined,
+                          item.color ? { color: item.color, fontWeight: '700' } : { color: currentTheme.text },
                         ]}
                       >
                         {item.value}
@@ -315,8 +367,16 @@ export function SyncInspector({
               </View>
 
               {/* Engine Actions */}
-              <View style={rnStyles.infoCard}>
-                <Text style={rnStyles.infoCardTitle}>ENGINE ACTIONS</Text>
+              <View
+                style={[
+                  rnStyles.infoCard,
+                  {
+                    backgroundColor: currentTheme.card,
+                    borderColor: currentTheme.border,
+                  },
+                ]}
+              >
+                <Text style={[rnStyles.infoCardTitle, { color: currentTheme.textMuted }]}>ENGINE ACTIONS</Text>
                 <View style={rnStyles.btnRow}>
                   {actionButtons.slice(0, 2).map((btn) => (
                     <TouchableOpacity
@@ -325,7 +385,7 @@ export function SyncInspector({
                       style={[rnStyles.actionBtn, { backgroundColor: btn.bg }]}
                       activeOpacity={0.8}
                     >
-                      <Text style={rnStyles.actionBtnText}>{btn.label}</Text>
+                      <Text style={[rnStyles.actionBtnText, { color: btn.color }]}>{btn.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -337,7 +397,7 @@ export function SyncInspector({
                       style={[rnStyles.actionBtn, { backgroundColor: btn.bg }]}
                       activeOpacity={0.8}
                     >
-                      <Text style={rnStyles.actionBtnText}>{btn.label}</Text>
+                      <Text style={[rnStyles.actionBtnText, { color: btn.color }]}>{btn.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -364,7 +424,15 @@ export function SyncInspector({
 
               {/* Queued Outbox Mutations */}
               {status.pendingRecords && status.pendingRecords.length > 0 && (
-                <View style={rnStyles.infoCard}>
+                <View
+                  style={[
+                    rnStyles.infoCard,
+                    {
+                      backgroundColor: currentTheme.card,
+                      borderColor: currentTheme.border,
+                    },
+                  ]}
+                >
                   <View
                     style={{
                       flexDirection: 'row',
@@ -373,16 +441,17 @@ export function SyncInspector({
                       marginBottom: 10,
                     }}
                   >
-                    <Text style={rnStyles.infoCardTitle}>
+                    <Text style={[rnStyles.infoCardTitle, { color: currentTheme.textMuted }]}>
                       QUEUED OUTBOX MUTATIONS ({status.pendingRecords.length})
                     </Text>
-                    <Text style={{ fontSize: 10, color: '#9CA3AF' }}>Latest queued</Text>
+                    <Text style={{ fontSize: 10, color: currentTheme.textMuted }}>Latest queued</Text>
                   </View>
                   {status.pendingRecords.slice(0, 8).map((rec: any, idx: number) => (
                     <View
                       key={rec.id || idx}
                       style={[
                         rnStyles.infoRow,
+                        { borderBottomColor: currentTheme.border },
                         idx === Math.min(status.pendingRecords.length, 8) - 1 && { borderBottomWidth: 0 },
                       ]}
                     >
@@ -394,24 +463,24 @@ export function SyncInspector({
                               { backgroundColor: rec.status === 'FAILED' ? '#EF4444' : '#F59E0B' },
                             ]}
                           />
-                          <Text style={{ color: '#F9FAFB', fontSize: 13, fontWeight: '600' }}>
+                          <Text style={{ color: currentTheme.text, fontSize: 13, fontWeight: '600' }}>
                             {rec.tableName || 'record'}
                           </Text>
                           <View
                             style={{
-                              backgroundColor: '#374151',
+                              backgroundColor: currentTheme.actionBg,
                               paddingHorizontal: 5,
                               paddingVertical: 1,
                               borderRadius: 4,
                             }}
                           >
-                            <Text style={{ color: '#D1D5DB', fontSize: 10, fontWeight: '700' }}>
+                            <Text style={{ color: currentTheme.actionText, fontSize: 10, fontWeight: '700' }}>
                               {rec.operation || 'MUTATE'}
                             </Text>
                           </View>
                         </View>
                         {rec.rowId && (
-                          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                          <Text style={{ color: currentTheme.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
                             ID: {rec.rowId}
                           </Text>
                         )}
@@ -419,11 +488,11 @@ export function SyncInspector({
                           <Text style={{ color: '#EF4444', fontSize: 11, marginTop: 2 }}>{rec.errorMessage}</Text>
                         )}
                       </View>
-                      <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{rec.status || 'PENDING'}</Text>
+                      <Text style={{ color: currentTheme.textMuted, fontSize: 11 }}>{rec.status || 'PENDING'}</Text>
                     </View>
                   ))}
                   {status.pendingRecords.length > 8 && (
-                    <Text style={{ color: '#9CA3AF', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                    <Text style={{ color: currentTheme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
                       + {status.pendingRecords.length - 8} more mutations in outbox
                     </Text>
                   )}
@@ -435,7 +504,10 @@ export function SyncInspector({
                 <View
                   style={[
                     rnStyles.infoCard,
-                    { borderColor: '#8B5CF640', backgroundColor: '#1E1B4B25' },
+                    {
+                      borderColor: '#8B5CF640',
+                      backgroundColor: currentTheme.isDark ? '#1E1B4B25' : '#F5F3FF',
+                    },
                   ]}
                 >
                   <View
@@ -446,12 +518,25 @@ export function SyncInspector({
                       marginBottom: 8,
                     }}
                   >
-                    <Text style={[rnStyles.infoCardTitle, { color: '#C4B5FD', marginBottom: 0 }]}>
+                    <Text
+                      style={[
+                        rnStyles.infoCardTitle,
+                        { color: currentTheme.isDark ? '#C4B5FD' : '#6D28D9', marginBottom: 0 },
+                      ]}
+                    >
                       PERFORMANCE BENCHMARK
                     </Text>
-                    <Text style={{ fontSize: 10, color: '#A78BFA', fontWeight: '700' }}>ACID & WAL</Text>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: currentTheme.isDark ? '#A78BFA' : '#7C3AED',
+                        fontWeight: '700',
+                      }}
+                    >
+                      ACID & WAL
+                    </Text>
                   </View>
-                  <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 12, lineHeight: 18 }}>
+                  <Text style={{ fontSize: 12, color: currentTheme.textMuted, marginBottom: 12, lineHeight: 18 }}>
                     {BENCHMARK_DESCRIPTION}
                   </Text>
                   <TouchableOpacity
@@ -459,7 +544,7 @@ export function SyncInspector({
                     style={[rnStyles.actionBtn, { backgroundColor: '#8B5CF6' }]}
                     activeOpacity={0.8}
                   >
-                    <Text style={[rnStyles.actionBtnText, { fontWeight: '700' }]}>
+                    <Text style={[rnStyles.actionBtnText, { color: '#FFFFFF', fontWeight: '700' }]}>
                       ⚡ Open SQLite Benchmark Suite
                     </Text>
                   </TouchableOpacity>
@@ -471,11 +556,19 @@ export function SyncInspector({
             <View
               style={[
                 rnStyles.bottomBar,
+                {
+                  backgroundColor: currentTheme.surface,
+                  borderTopColor: currentTheme.border,
+                },
                 !RNSafeArea?.SafeAreaView && isAndroid && { paddingBottom: 32 },
               ]}
             >
-              <TouchableOpacity onPress={() => setIsOpen(false)} style={rnStyles.doneBtn} activeOpacity={0.8}>
-                <Text style={rnStyles.doneBtnText}>Close DevTools</Text>
+              <TouchableOpacity
+                onPress={() => setIsOpen(false)}
+                style={[rnStyles.doneBtn, { backgroundColor: currentTheme.actionBg }]}
+                activeOpacity={0.8}
+              >
+                <Text style={[rnStyles.doneBtnText, { color: currentTheme.actionText }]}>Close DevTools</Text>
               </TouchableOpacity>
             </View>
           </SafeComp>
@@ -486,6 +579,7 @@ export function SyncInspector({
             client={client}
             visible={isBenchmarkModalOpen}
             onDismiss={() => setIsBenchmarkModalOpen(false)}
+            theme={theme}
           />
         )}
       </>
@@ -500,12 +594,12 @@ export function SyncInspector({
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: '#111827',
+            backgroundColor: currentTheme.bg,
             zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',
             fontFamily: 'system-ui, -apple-system, sans-serif',
-            color: '#F9FAFB',
+            color: currentTheme.text,
           }}
         >
           {/* Top Bar */}
@@ -515,8 +609,8 @@ export function SyncInspector({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '16px 24px',
-              backgroundColor: '#1F2937',
-              borderBottom: '1px solid #374151',
+              backgroundColor: currentTheme.surface,
+              borderBottom: `1px solid ${currentTheme.border}`,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -529,8 +623,8 @@ export function SyncInspector({
                 }}
               />
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700 }}>⚡ local-lite DevTools</div>
-                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                <div style={{ fontSize: 17, fontWeight: 700, color: currentTheme.text }}>⚡ Local Lite DevTools</div>
+                <div style={{ fontSize: 11, color: currentTheme.textMuted, marginTop: 2 }}>
                   Engine Inspector & Sync Telemetry
                 </div>
               </div>
@@ -555,9 +649,9 @@ export function SyncInspector({
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: '#374151',
+                  backgroundColor: currentTheme.actionBg,
                   border: 'none',
-                  color: '#F9FAFB',
+                  color: currentTheme.actionText,
                   fontSize: 14,
                   cursor: 'pointer',
                   display: 'flex',
@@ -614,17 +708,17 @@ export function SyncInspector({
                 <div
                   key={card.id}
                   style={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
+                    backgroundColor: currentTheme.card,
+                    border: `1px solid ${currentTheme.border}`,
                     borderRadius: 12,
                     padding: 16,
                   }}
                 >
                   <div style={{ fontSize: 24, fontWeight: 800, color: card.numColor }}>{card.num}</div>
-                  <div style={{ fontSize: 12, color: '#D1D5DB', marginTop: 4, fontWeight: 600 }}>
+                  <div style={{ fontSize: 12, color: currentTheme.textSecondary, marginTop: 4, fontWeight: 600 }}>
                     {card.label}
                   </div>
-                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{card.sub}</div>
+                  <div style={{ fontSize: 11, color: currentTheme.textMuted, marginTop: 2 }}>{card.sub}</div>
                 </div>
               ))}
             </div>
@@ -632,8 +726,8 @@ export function SyncInspector({
             {/* Connection & Telemetry Card */}
             <div
               style={{
-                backgroundColor: '#1F2937',
-                border: '1px solid #374151',
+                backgroundColor: currentTheme.card,
+                border: `1px solid ${currentTheme.border}`,
                 borderRadius: 12,
                 padding: 16,
               }}
@@ -642,7 +736,7 @@ export function SyncInspector({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: '#9CA3AF',
+                  color: currentTheme.textMuted,
                   letterSpacing: '0.8px',
                   marginBottom: 12,
                 }}
@@ -657,10 +751,10 @@ export function SyncInspector({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '8px 0',
-                    borderBottom: idx === telemetryItems.length - 1 ? 'none' : '1px solid #374151',
+                    borderBottom: idx === telemetryItems.length - 1 ? 'none' : `1px solid ${currentTheme.border}`,
                   }}
                 >
-                  <span style={{ color: '#9CA3AF', fontSize: 13 }}>{item.label}</span>
+                  <span style={{ color: currentTheme.textMuted, fontSize: 13 }}>{item.label}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {item.hasDot && (
                       <span
@@ -674,7 +768,7 @@ export function SyncInspector({
                     )}
                     <span
                       style={{
-                        color: item.color || '#F9FAFB',
+                        color: item.color || currentTheme.text,
                         fontSize: 13,
                         fontWeight: item.color ? 700 : 600,
                       }}
@@ -689,8 +783,8 @@ export function SyncInspector({
             {/* Actions Card */}
             <div
               style={{
-                backgroundColor: '#1F2937',
-                border: '1px solid #374151',
+                backgroundColor: currentTheme.card,
+                border: `1px solid ${currentTheme.border}`,
                 borderRadius: 12,
                 padding: 16,
               }}
@@ -699,7 +793,7 @@ export function SyncInspector({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: '#9CA3AF',
+                  color: currentTheme.textMuted,
                   letterSpacing: '0.8px',
                   marginBottom: 12,
                 }}
@@ -714,7 +808,7 @@ export function SyncInspector({
                     style={{
                       padding: '10px 14px',
                       backgroundColor: btn.bg,
-                      color: '#FFF',
+                      color: btn.color,
                       border: 'none',
                       borderRadius: 8,
                       fontWeight: 600,
@@ -731,7 +825,7 @@ export function SyncInspector({
             {enableBenchmark && (
               <div
                 style={{
-                  backgroundColor: '#1E1B4B25',
+                  backgroundColor: currentTheme.isDark ? '#1E1B4B25' : '#F5F3FF',
                   border: '1px solid #8B5CF640',
                   borderRadius: 12,
                   padding: 16,
@@ -745,12 +839,26 @@ export function SyncInspector({
                     marginBottom: 8,
                   }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#C4B5FD' }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: currentTheme.isDark ? '#C4B5FD' : '#6D28D9',
+                    }}
+                  >
                     PERFORMANCE BENCHMARK
                   </div>
-                  <div style={{ fontSize: 10, color: '#A78BFA', fontWeight: 700 }}>ACID & WAL</div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: currentTheme.isDark ? '#A78BFA' : '#7C3AED',
+                      fontWeight: 700,
+                    }}
+                  >
+                    ACID & WAL
+                  </div>
                 </div>
-                <p style={{ fontSize: 12, color: '#9CA3AF', margin: '0 0 12px 0', lineHeight: '18px' }}>
+                <p style={{ fontSize: 12, color: currentTheme.textMuted, margin: '0 0 12px 0', lineHeight: '18px' }}>
                   {BENCHMARK_DESCRIPTION}
                 </p>
                 <button
@@ -777,8 +885,8 @@ export function SyncInspector({
           <div
             style={{
               padding: '14px 20px',
-              backgroundColor: '#1F2937',
-              borderTop: '1px solid #374151',
+              backgroundColor: currentTheme.surface,
+              borderTop: `1px solid ${currentTheme.border}`,
             }}
           >
             <button
@@ -786,8 +894,8 @@ export function SyncInspector({
               style={{
                 width: '100%',
                 padding: '12px',
-                backgroundColor: '#374151',
-                color: '#F9FAFB',
+                backgroundColor: currentTheme.actionBg,
+                color: currentTheme.actionText,
                 border: 'none',
                 borderRadius: 8,
                 fontWeight: 700,
@@ -832,13 +940,13 @@ export function SyncInspector({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 8,
-                background: '#1F2937',
-                color: '#F9FAFB',
+                background: currentTheme.surface,
+                color: currentTheme.text,
                 border: `1.5px solid ${statusColor}`,
                 padding: isInline ? '5px 10px' : '8px 14px',
                 borderRadius: 20,
                 cursor: 'pointer',
-                boxShadow: isInline ? undefined : '0 4px 12px rgba(0,0,0,0.3)',
+                boxShadow: isInline ? undefined : '0 4px 12px rgba(0,0,0,0.15)',
               }}
             >
               <span
@@ -876,6 +984,7 @@ export function SyncInspector({
           client={client}
           visible={isBenchmarkModalOpen}
           onDismiss={() => setIsBenchmarkModalOpen(false)}
+          theme={theme}
         />
       )}
     </>
@@ -888,7 +997,6 @@ const rnStyles =
         fullScreenSafe: {
           flex: 1,
           height: '100%',
-          backgroundColor: '#111827',
         },
         topBar: {
           flexDirection: 'row',
@@ -896,17 +1004,13 @@ const rnStyles =
           justifyContent: 'space-between',
           paddingHorizontal: 18,
           paddingVertical: 14,
-          backgroundColor: '#1F2937',
           borderBottomWidth: 1,
-          borderBottomColor: '#374151',
         },
         topBarTitle: {
-          color: '#F9FAFB',
           fontSize: 17,
           fontWeight: '700',
         },
         topBarSub: {
-          color: '#9CA3AF',
           fontSize: 11,
           marginTop: 2,
         },
@@ -925,18 +1029,15 @@ const rnStyles =
           width: 32,
           height: 32,
           borderRadius: 16,
-          backgroundColor: '#374151',
           alignItems: 'center',
           justifyContent: 'center',
         },
         closeCircleText: {
-          color: '#F9FAFB',
           fontSize: 14,
           fontWeight: '700',
         },
         scrollBody: {
           flex: 1,
-          backgroundColor: '#111827',
         },
         scrollContent: {
           padding: 16,
@@ -965,9 +1066,7 @@ const rnStyles =
         statCard: {
           flex: 1,
           minWidth: '45%',
-          backgroundColor: '#1F2937',
           borderWidth: 1,
-          borderColor: '#374151',
           borderRadius: 12,
           padding: 14,
         },
@@ -978,18 +1077,14 @@ const rnStyles =
         statLabel: {
           fontSize: 12,
           fontWeight: '600',
-          color: '#D1D5DB',
           marginTop: 4,
         },
         statSub: {
           fontSize: 11,
-          color: '#6B7280',
           marginTop: 2,
         },
         infoCard: {
-          backgroundColor: '#1F2937',
           borderWidth: 1,
-          borderColor: '#374151',
           borderRadius: 12,
           padding: 16,
           marginBottom: 14,
@@ -997,7 +1092,6 @@ const rnStyles =
         infoCardTitle: {
           fontSize: 11,
           fontWeight: '700',
-          color: '#9CA3AF',
           letterSpacing: 0.8,
           marginBottom: 10,
         },
@@ -1007,14 +1101,11 @@ const rnStyles =
           justifyContent: 'space-between',
           paddingVertical: 9,
           borderBottomWidth: 1,
-          borderBottomColor: '#374151',
         },
         infoKey: {
-          color: '#9CA3AF',
           fontSize: 13,
         },
         infoVal: {
-          color: '#F9FAFB',
           fontSize: 13,
           fontWeight: '600',
         },
@@ -1032,7 +1123,6 @@ const rnStyles =
           justifyContent: 'center',
         },
         actionBtnText: {
-          color: '#FFFFFF',
           fontSize: 13,
           fontWeight: '600',
         },
@@ -1044,26 +1134,21 @@ const rnStyles =
         bottomBar: {
           paddingHorizontal: 18,
           paddingVertical: 12,
-          backgroundColor: '#1F2937',
           borderTopWidth: 1,
-          borderTopColor: '#374151',
         },
         doneBtn: {
-          backgroundColor: '#374151',
           paddingVertical: 12,
           borderRadius: 8,
           alignItems: 'center',
           justifyContent: 'center',
         },
         doneBtnText: {
-          color: '#F9FAFB',
           fontSize: 14,
           fontWeight: '700',
         },
         pill: {
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: '#1F2937',
           paddingVertical: 8,
           paddingHorizontal: 14,
           borderRadius: 20,
@@ -1071,26 +1156,23 @@ const rnStyles =
           elevation: 6,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.3,
+          shadowOpacity: 0.15,
           shadowRadius: 4,
         },
         inlinePill: {
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: '#1F2937',
           paddingVertical: 5,
           paddingHorizontal: 10,
           borderRadius: 16,
           borderWidth: 1.5,
         },
         pillText: {
-          color: '#F9FAFB',
           fontWeight: '600',
           fontSize: 13,
           marginLeft: 8,
         },
         inlinePillText: {
-          color: '#F9FAFB',
           fontWeight: '600',
           fontSize: 12,
           marginLeft: 6,

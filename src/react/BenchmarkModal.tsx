@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LocalFirstClient } from '../core/client.js';
+import { resolveSyncTheme, type SyncThemeColors } from './theme.js';
 
 let RN: any;
 try {
@@ -30,6 +31,7 @@ export interface BenchmarkModalProps {
   client: LocalFirstClient | null | undefined;
   visible: boolean;
   onDismiss: () => void;
+  theme?: 'auto' | 'dark' | 'light' | Partial<SyncThemeColors>;
 }
 
 /**
@@ -469,12 +471,18 @@ export async function runSQLiteBenchmark(
  * Pure package-driven, full-height Performance Benchmark Modal.
  * Opens full-height with zero screen flickering or dynamic jumping.
  */
-export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalProps) {
+export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: BenchmarkModalProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [step, setStep] = useState('Idle');
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<BuiltinBenchmarkResult[]>([]);
   const [copied, setCopied] = useState(false);
+
+  const systemColorScheme = RN?.useColorScheme ? RN.useColorScheme() : null;
+  const currentTheme = React.useMemo(
+    () => resolveSyncTheme(theme, systemColorScheme),
+    [theme, systemColorScheme]
+  );
 
   const startBenchmark = async () => {
     if (!client) return;
@@ -544,34 +552,39 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
         onRequestClose={onDismiss}
       >
         <SafeComp
-          style={styles.fullScreenSafe}
+          style={[styles.fullScreenSafe, { backgroundColor: currentTheme.bg }]}
           edges={['top', 'bottom', 'left', 'right']}
         >
           {/* Top Navigation Bar */}
           <View
             style={[
               styles.topBar,
+              { backgroundColor: currentTheme.surface, borderBottomColor: currentTheme.border },
               !RNSafeArea?.SafeAreaView && isAndroid && { paddingTop: statusBarHeight + 10 },
             ]}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.topBarTitle}>⚡ SQLite Benchmark</Text>
-              <Text style={styles.topBarSub}>Inbuilt local-lite throughput & ACID test suite</Text>
+              <Text style={[styles.topBarTitle, { color: currentTheme.text }]}>⚡ SQLite Benchmark</Text>
+              <Text style={[styles.topBarSub, { color: currentTheme.textMuted }]}>Inbuilt local-lite throughput & ACID test suite</Text>
             </View>
-            <TouchableOpacity onPress={onDismiss} style={styles.closeCircle} activeOpacity={0.7}>
-              <Text style={styles.closeCircleText}>✕</Text>
+            <TouchableOpacity
+              onPress={onDismiss}
+              style={[styles.closeCircle, { backgroundColor: currentTheme.actionBg }]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.closeCircleText, { color: currentTheme.actionText }]}>✕</Text>
             </TouchableOpacity>
           </View>
 
           {/* Progress Section (fixed height to prevent flickering) */}
-          <View style={styles.progressSection}>
+          <View style={[styles.progressSection, { backgroundColor: currentTheme.surface, borderBottomColor: currentTheme.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 22 }}>
               {isRunning && <ActivityIndicator size="small" color="#8B5CF6" />}
               <Text style={styles.stepText} numberOfLines={1}>
                 {isRunning ? step : results.length > 0 ? 'Benchmark complete!' : 'Ready to test'}
               </Text>
             </View>
-            <View style={styles.progressTrack}>
+            <View style={[styles.progressTrack, { backgroundColor: currentTheme.border }]}>
               <View
                 style={[
                   styles.progressFill,
@@ -583,15 +596,15 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
 
           {/* Scrollable Results List */}
           <ScrollView
-            style={styles.scrollList}
+            style={[styles.scrollList, { backgroundColor: currentTheme.bg }]}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={true}
           >
             {results.length === 0 && !isRunning && (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyIcon}>⚡</Text>
-                <Text style={styles.emptyTitle}>Run Real-Time Inbuilt Tests</Text>
-                <Text style={styles.emptyText}>
+                <Text style={[styles.emptyTitle, { color: currentTheme.text }]}>Run Real-Time Inbuilt Tests</Text>
+                <Text style={[styles.emptyText, { color: currentTheme.textMuted }]}>
                   Executes ACID transactions, constraint rollbacks, bulk UPSERTs, point lookups, and heavy payload I/O in an isolated temporary table.
                 </Text>
                 <TouchableOpacity
@@ -607,29 +620,29 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
             {results.map((r, idx) => {
               const rating =
                 r.opsPerSec > 5000
-                  ? { label: 'Blazing 🚀', color: '#10B981', bg: '#064E3B' }
+                  ? { label: 'Blazing 🚀', color: '#10B981', bg: currentTheme.isDark ? '#064E3B' : '#D1FAE5' }
                   : r.opsPerSec > 500
-                    ? { label: 'Fast ⚡', color: '#8B5CF6', bg: '#4C1D95' }
-                    : { label: 'Normal 👍', color: '#9CA3AF', bg: '#374151' };
+                    ? { label: 'Fast ⚡', color: '#8B5CF6', bg: currentTheme.isDark ? '#4C1D95' : '#EDE9FE' }
+                    : { label: 'Normal 👍', color: currentTheme.textMuted, bg: currentTheme.border };
 
               return (
-                <View key={idx} style={styles.card}>
+                <View key={idx} style={[styles.card, { backgroundColor: currentTheme.card, borderColor: currentTheme.border }]}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{r.name}</Text>
+                    <Text style={[styles.cardTitle, { color: currentTheme.text }]}>{r.name}</Text>
                     <View style={[styles.badge, { backgroundColor: rating.bg }]}>
                       <Text style={[styles.badgeText, { color: rating.color }]}>
                         {rating.label}
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.cardDesc}>{r.description}</Text>
-                  <View style={styles.cardMetrics}>
+                  <Text style={[styles.cardDesc, { color: currentTheme.textMuted }]}>{r.description}</Text>
+                  <View style={[styles.cardMetrics, { borderTopColor: currentTheme.border }]}>
                     <View>
-                      <Text style={styles.metricLabel}>Duration</Text>
-                      <Text style={styles.metricVal}>{r.durationMs} ms</Text>
+                      <Text style={[styles.metricLabel, { color: currentTheme.textMuted }]}>Duration</Text>
+                      <Text style={[styles.metricVal, { color: currentTheme.text }]}>{r.durationMs} ms</Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.metricLabel}>Throughput</Text>
+                      <Text style={[styles.metricLabel, { color: currentTheme.textMuted }]}>Throughput</Text>
                       <Text style={[styles.metricVal, { color: '#8B5CF6' }]}>
                         {r.opsPerSec.toLocaleString()} ops/s
                       </Text>
@@ -644,6 +657,7 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
           <View
             style={[
               styles.bottomBar,
+              { backgroundColor: currentTheme.surface, borderTopColor: currentTheme.border },
               !RNSafeArea?.SafeAreaView && isAndroid && { paddingBottom: 32 },
             ]}
           >
@@ -664,10 +678,10 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
             {results.length > 0 && (
               <TouchableOpacity
                 onPress={copyReport}
-                style={[styles.footerBtn, { backgroundColor: '#374151', flex: 0.8 }]}
+                style={[styles.footerBtn, { backgroundColor: currentTheme.actionBg, flex: 0.8 }]}
                 activeOpacity={0.8}
               >
-                <Text style={styles.footerBtnText}>
+                <Text style={[styles.footerBtnText, { color: currentTheme.actionText }]}>
                   {copied ? '✓ Copied' : 'Copy Report'}
                 </Text>
               </TouchableOpacity>
@@ -684,12 +698,12 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: '#111827',
+        backgroundColor: currentTheme.bg,
         zIndex: 100000,
         display: 'flex',
         flexDirection: 'column',
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        color: '#F9FAFB',
+        color: currentTheme.text,
       }}
     >
       <div
@@ -698,20 +712,20 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '16px 24px',
-          borderBottom: '1px solid #374151',
-          backgroundColor: '#1F2937',
+          borderBottom: `1px solid ${currentTheme.border}`,
+          backgroundColor: currentTheme.surface,
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>⚡ SQLite Benchmark</h2>
-          <span style={{ fontSize: 12, color: '#9CA3AF' }}>Inbuilt local-lite throughput & ACID test suite</span>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: currentTheme.text }}>⚡ SQLite Benchmark</h2>
+          <span style={{ fontSize: 12, color: currentTheme.textMuted }}>Inbuilt local-lite throughput & ACID test suite</span>
         </div>
         <button
           onClick={onDismiss}
           style={{
-            background: '#374151',
+            background: currentTheme.actionBg,
             border: 'none',
-            color: '#F9FAFB',
+            color: currentTheme.actionText,
             width: 32,
             height: 32,
             borderRadius: 16,
@@ -723,9 +737,9 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
         </button>
       </div>
 
-      <div style={{ padding: '12px 24px', borderBottom: '1px solid #374151', backgroundColor: '#1F2937' }}>
+      <div style={{ padding: '12px 24px', borderBottom: `1px solid ${currentTheme.border}`, backgroundColor: currentTheme.surface }}>
         <div style={{ fontSize: 12, color: '#A78BFA', marginBottom: 6 }}>{isRunning ? step : 'Ready'}</div>
-        <div style={{ width: '100%', height: 6, backgroundColor: '#374151', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: 6, backgroundColor: currentTheme.border, borderRadius: 3, overflow: 'hidden' }}>
           <div
             style={{
               width: isRunning ? `${Math.round(progress * 100)}%` : results.length > 0 ? '100%' : '0%',
@@ -737,12 +751,12 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 12, backgroundColor: currentTheme.bg }}>
         {results.length === 0 && !isRunning && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9CA3AF' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: currentTheme.textMuted }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>⚡</div>
-            <h3 style={{ color: '#F9FAFB', margin: '0 0 8px 0' }}>Run Inbuilt Performance Benchmark</h3>
-            <p style={{ maxWidth: 460, margin: '0 auto 20px auto', fontSize: 13 }}>
+            <h3 style={{ color: currentTheme.text, margin: '0 0 8px 0' }}>Run Inbuilt Performance Benchmark</h3>
+            <p style={{ maxWidth: 460, margin: '0 auto 20px auto', fontSize: 13, color: currentTheme.textMuted }}>
               Tests ACID transactions, constraint rollbacks, bulk UPSERTs, point lookups, and heavy payload I/O directly against your database.
             </p>
             <button
@@ -766,27 +780,27 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
           <div
             key={idx}
             style={{
-              backgroundColor: '#1F2937',
-              border: '1px solid #374151',
+              backgroundColor: currentTheme.card,
+              border: `1px solid ${currentTheme.border}`,
               borderRadius: 12,
               padding: 16,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: 14 }}>{r.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#A78BFA', backgroundColor: '#8B5CF625', padding: '2px 8px', borderRadius: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: currentTheme.text }}>{r.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#8B5CF6', backgroundColor: currentTheme.isDark ? '#8B5CF625' : '#EDE9FE', padding: '2px 8px', borderRadius: 10 }}>
                 {r.opsPerSec.toLocaleString()} ops/s
               </span>
             </div>
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10 }}>{r.description}</div>
-            <div style={{ fontSize: 11, color: '#6B7280' }}>
+            <div style={{ fontSize: 12, color: currentTheme.textMuted, marginBottom: 10 }}>{r.description}</div>
+            <div style={{ fontSize: 11, color: currentTheme.textMuted }}>
               {r.operations.toLocaleString()} ops in {r.durationMs}ms
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ padding: '16px 24px', borderTop: '1px solid #374151', backgroundColor: '#1F2937', display: 'flex', gap: 12 }}>
+      <div style={{ padding: '16px 24px', borderTop: `1px solid ${currentTheme.border}`, backgroundColor: currentTheme.surface, display: 'flex', gap: 12 }}>
         <button
           onClick={startBenchmark}
           disabled={isRunning}
@@ -808,8 +822,8 @@ export function BenchmarkModal({ client, visible, onDismiss }: BenchmarkModalPro
             onClick={copyReport}
             style={{
               padding: '12px 20px',
-              backgroundColor: '#374151',
-              color: '#FFF',
+              backgroundColor: currentTheme.actionBg,
+              color: currentTheme.actionText,
               border: 'none',
               borderRadius: 8,
               fontWeight: 700,
