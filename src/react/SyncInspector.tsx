@@ -60,7 +60,7 @@ export function SyncInspector({
 
   useEffect(() => {
     if (!client || !isOpen) return;
-    client.getMetrics().then(setMetrics).catch(() => {});
+    client.getMetrics().then(setMetrics).catch(() => { });
   }, [client, isOpen, status.isSyncing, status.pendingCount]);
 
   if (!client) return null;
@@ -137,12 +137,12 @@ export function SyncInspector({
     const pillPosStyle = isInline
       ? { position: 'relative' as const }
       : {
-          position: 'absolute' as const,
-          zIndex: 99999,
-          left: isCenter ? 16 : isLeft ? 16 : undefined,
-          right: isCenter ? 16 : !isLeft ? 16 : undefined,
-          ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
-        };
+        position: 'absolute' as const,
+        zIndex: 99999,
+        left: isCenter ? 16 : isLeft ? 16 : undefined,
+        right: isCenter ? 16 : !isLeft ? 16 : undefined,
+        ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
+      };
 
     return (
       <>
@@ -210,7 +210,6 @@ export function SyncInspector({
               ]}
             >
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={[rnStyles.dotLarge, { backgroundColor: statusColor }]} />
                 <View>
                   <Text style={rnStyles.topBarTitle}>⚡ local-lite DevTools</Text>
                   <Text style={rnStyles.topBarSub}>Engine Inspector & Sync Telemetry</Text>
@@ -245,7 +244,7 @@ export function SyncInspector({
                 </View>
               )}
 
-              {/* 4 Stat Overview Cards */}
+              {/* Stat Overview Cards: Pending and Failed */}
               <View style={rnStyles.statGrid}>
                 <View style={rnStyles.statCard}>
                   <Text style={rnStyles.statNum}>{status.pendingCount}</Text>
@@ -265,16 +264,6 @@ export function SyncInspector({
                   <Text style={rnStyles.statSub}>
                     {metrics?.outboxFailedCount ? 'Needs retry' : 'All clear'}
                   </Text>
-                </View>
-                <View style={rnStyles.statCard}>
-                  <Text style={rnStyles.statNum}>{metrics?.totalPushedOperations || 0}</Text>
-                  <Text style={rnStyles.statLabel}>Pushed Mutations</Text>
-                  <Text style={rnStyles.statSub}>{metrics?.totalPushCycles || 0} push cycles</Text>
-                </View>
-                <View style={rnStyles.statCard}>
-                  <Text style={rnStyles.statNum}>{metrics?.totalPulledDeltas || 0}</Text>
-                  <Text style={rnStyles.statLabel}>Pulled Deltas</Text>
-                  <Text style={rnStyles.statSub}>{metrics?.totalPullCycles || 0} pull cycles</Text>
                 </View>
               </View>
 
@@ -645,42 +634,6 @@ export function SyncInspector({
                   {metrics?.outboxFailedCount ? 'Needs retry' : 'All clear'}
                 </div>
               </div>
-              <div
-                style={{
-                  backgroundColor: '#1F2937',
-                  border: '1px solid #374151',
-                  borderRadius: 12,
-                  padding: 16,
-                }}
-              >
-                <div style={{ fontSize: 24, fontWeight: 800 }}>
-                  {metrics?.totalPushedOperations || 0}
-                </div>
-                <div style={{ fontSize: 12, color: '#D1D5DB', marginTop: 4, fontWeight: 600 }}>
-                  Pushed Total
-                </div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                  {metrics?.totalPushCycles || 0} cycles
-                </div>
-              </div>
-              <div
-                style={{
-                  backgroundColor: '#1F2937',
-                  border: '1px solid #374151',
-                  borderRadius: 12,
-                  padding: 16,
-                }}
-              >
-                <div style={{ fontSize: 24, fontWeight: 800 }}>
-                  {metrics?.totalPulledDeltas || 0}
-                </div>
-                <div style={{ fontSize: 12, color: '#D1D5DB', marginTop: 4, fontWeight: 600 }}>
-                  Pulled Deltas
-                </div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                  {metrics?.totalPullCycles || 0} cycles
-                </div>
-              </div>
             </div>
 
             {/* Connection & Telemetry Card */}
@@ -935,15 +888,15 @@ export function SyncInspector({
             isInline
               ? { position: 'relative', display: 'inline-flex', ...style }
               : {
-                  position: 'fixed',
-                  zIndex: 99999,
-                  left: isCenter ? '50%' : isLeft ? 16 : undefined,
-                  right: !isCenter && !isLeft ? 16 : undefined,
-                  transform: isCenter ? 'translateX(-50%)' : undefined,
-                  ...(isTop ? { top: 20 } : { bottom: 20 }),
-                  pointerEvents: 'auto',
-                  ...style,
-                }
+                position: 'fixed',
+                zIndex: 99999,
+                left: isCenter ? '50%' : isLeft ? 16 : undefined,
+                right: !isCenter && !isLeft ? 16 : undefined,
+                transform: isCenter ? 'translateX(-50%)' : undefined,
+                ...(isTop ? { top: 20 } : { bottom: 20 }),
+                pointerEvents: 'auto',
+                ...style,
+              }
           }
         >
           {renderTrigger ? (
@@ -1022,240 +975,240 @@ export function SyncInspector({
 const rnStyles =
   RN && RN.StyleSheet
     ? RN.StyleSheet.create({
-        fullScreenSafe: {
-          flex: 1,
-          height: '100%',
-          backgroundColor: '#111827',
-        },
-        topBar: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 18,
-          paddingVertical: 14,
-          backgroundColor: '#1F2937',
-          borderBottomWidth: 1,
-          borderBottomColor: '#374151',
-        },
-        topBarTitle: {
-          color: '#F9FAFB',
-          fontSize: 17,
-          fontWeight: '700',
-        },
-        topBarSub: {
-          color: '#9CA3AF',
-          fontSize: 11,
-          marginTop: 2,
-        },
-        statusBadge: {
-          paddingHorizontal: 8,
-          paddingVertical: 3,
-          borderRadius: 12,
-          borderWidth: 1,
-          marginRight: 10,
-        },
-        statusBadgeText: {
-          fontSize: 11,
-          fontWeight: '700',
-        },
-        closeCircle: {
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: '#374151',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        closeCircleText: {
-          color: '#F9FAFB',
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        scrollBody: {
-          flex: 1,
-          backgroundColor: '#111827',
-        },
-        scrollContent: {
-          padding: 16,
-          paddingBottom: 24,
-        },
-        actionMsgBox: {
-          backgroundColor: '#1E3A8A',
-          borderWidth: 1,
-          borderColor: '#3B82F6',
-          padding: 10,
-          borderRadius: 8,
-          marginBottom: 14,
-        },
-        actionMsgText: {
-          color: '#93C5FD',
-          fontSize: 13,
-          fontWeight: '600',
-          textAlign: 'center',
-        },
-        statGrid: {
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: 10,
-          marginBottom: 14,
-        },
-        statCard: {
-          flex: 1,
-          minWidth: '45%',
-          backgroundColor: '#1F2937',
-          borderWidth: 1,
-          borderColor: '#374151',
-          borderRadius: 12,
-          padding: 14,
-        },
-        statNum: {
-          fontSize: 24,
-          fontWeight: '800',
-          color: '#F9FAFB',
-        },
-        statLabel: {
-          fontSize: 12,
-          fontWeight: '600',
-          color: '#D1D5DB',
-          marginTop: 4,
-        },
-        statSub: {
-          fontSize: 10,
-          color: '#6B7280',
-          marginTop: 2,
-        },
-        infoCard: {
-          backgroundColor: '#1F2937',
-          borderWidth: 1,
-          borderColor: '#374151',
-          borderRadius: 12,
-          padding: 14,
-          marginBottom: 14,
-        },
-        infoCardTitle: {
-          fontSize: 11,
-          fontWeight: '700',
-          color: '#9CA3AF',
-          letterSpacing: 0.8,
-          marginBottom: 10,
-        },
-        infoRow: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          paddingVertical: 8,
-          borderBottomWidth: 1,
-          borderBottomColor: '#374151',
-        },
-        infoKey: {
-          fontSize: 13,
-          color: '#9CA3AF',
-        },
-        infoVal: {
-          fontSize: 13,
-          color: '#F9FAFB',
-          fontWeight: '600',
-        },
-        dotSmall: {
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-        },
-        dotLarge: {
-          width: 12,
-          height: 12,
-          borderRadius: 6,
-        },
-        btnRow: {
-          flexDirection: 'row',
-          gap: 8,
-          marginTop: 8,
-        },
-        actionBtn: {
-          flex: 1,
-          paddingVertical: 10,
-          paddingHorizontal: 12,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        actionBtnText: {
-          color: '#FFFFFF',
-          fontSize: 13,
-          fontWeight: '600',
-        },
-        bottomBar: {
-          paddingHorizontal: 18,
-          paddingVertical: 12,
-          backgroundColor: '#1F2937',
-          borderTopWidth: 1,
-          borderTopColor: '#374151',
-        },
-        doneBtn: {
-          backgroundColor: '#374151',
-          paddingVertical: 12,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        doneBtnText: {
-          color: '#F9FAFB',
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        pill: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: '#1F2937',
-          paddingVertical: 8,
-          paddingHorizontal: 14,
-          borderRadius: 20,
-          borderWidth: 1.5,
-          elevation: 6,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-        },
-        inlinePill: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: '#1F2937',
-          paddingVertical: 5,
-          paddingHorizontal: 10,
-          borderRadius: 16,
-          borderWidth: 1.5,
-        },
-        pillText: {
-          color: '#F9FAFB',
-          fontWeight: '600',
-          fontSize: 13,
-          marginLeft: 8,
-        },
-        inlinePillText: {
-          color: '#F9FAFB',
-          fontWeight: '600',
-          fontSize: 12,
-          marginLeft: 6,
-        },
-        dot: {
-          width: 10,
-          height: 10,
-          borderRadius: 5,
-        },
-        badge: {
-          backgroundColor: '#EF4444',
-          paddingHorizontal: 6,
-          paddingVertical: 1,
-          borderRadius: 10,
-          marginLeft: 8,
-        },
-        badgeText: {
-          color: '#FFF',
-          fontSize: 11,
-          fontWeight: '700',
-        },
-      })
+      fullScreenSafe: {
+        flex: 1,
+        height: '100%',
+        backgroundColor: '#111827',
+      },
+      topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        backgroundColor: '#1F2937',
+        borderBottomWidth: 1,
+        borderBottomColor: '#374151',
+      },
+      topBarTitle: {
+        color: '#F9FAFB',
+        fontSize: 17,
+        fontWeight: '700',
+      },
+      topBarSub: {
+        color: '#9CA3AF',
+        fontSize: 11,
+        marginTop: 2,
+      },
+      statusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginRight: 10,
+      },
+      statusBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+      },
+      closeCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#374151',
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      closeCircleText: {
+        color: '#F9FAFB',
+        fontSize: 14,
+        fontWeight: '700',
+      },
+      scrollBody: {
+        flex: 1,
+        backgroundColor: '#111827',
+      },
+      scrollContent: {
+        padding: 16,
+        paddingBottom: 24,
+      },
+      actionMsgBox: {
+        backgroundColor: '#1E3A8A',
+        borderWidth: 1,
+        borderColor: '#3B82F6',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 14,
+      },
+      actionMsgText: {
+        color: '#93C5FD',
+        fontSize: 13,
+        fontWeight: '600',
+        textAlign: 'center',
+      },
+      statGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginBottom: 14,
+      },
+      statCard: {
+        flex: 1,
+        minWidth: '45%',
+        backgroundColor: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#374151',
+        borderRadius: 12,
+        padding: 14,
+      },
+      statNum: {
+        fontSize: 24,
+        fontWeight: '800',
+        color: '#F9FAFB',
+      },
+      statLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#D1D5DB',
+        marginTop: 4,
+      },
+      statSub: {
+        fontSize: 10,
+        color: '#6B7280',
+        marginTop: 2,
+      },
+      infoCard: {
+        backgroundColor: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#374151',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 14,
+      },
+      infoCardTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#9CA3AF',
+        letterSpacing: 0.8,
+        marginBottom: 10,
+      },
+      infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#374151',
+      },
+      infoKey: {
+        fontSize: 13,
+        color: '#9CA3AF',
+      },
+      infoVal: {
+        fontSize: 13,
+        color: '#F9FAFB',
+        fontWeight: '600',
+      },
+      dotSmall: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+      },
+      dotLarge: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+      },
+      btnRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 8,
+      },
+      actionBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      actionBtnText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '600',
+      },
+      bottomBar: {
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        backgroundColor: '#1F2937',
+        borderTopWidth: 1,
+        borderTopColor: '#374151',
+      },
+      doneBtn: {
+        backgroundColor: '#374151',
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      doneBtnText: {
+        color: '#F9FAFB',
+        fontSize: 14,
+        fontWeight: '700',
+      },
+      pill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1F2937',
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      inlinePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1F2937',
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 16,
+        borderWidth: 1.5,
+      },
+      pillText: {
+        color: '#F9FAFB',
+        fontWeight: '600',
+        fontSize: 13,
+        marginLeft: 8,
+      },
+      inlinePillText: {
+        color: '#F9FAFB',
+        fontWeight: '600',
+        fontSize: 12,
+        marginLeft: 6,
+      },
+      dot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+      },
+      badge: {
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 10,
+        marginLeft: 8,
+      },
+      badgeText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '700',
+      },
+    })
     : {};
 
 export const SyncIndicator = SyncInspector;
