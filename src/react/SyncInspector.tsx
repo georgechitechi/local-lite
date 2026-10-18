@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 import { useSyncStatus } from './status.js';
 import { BenchmarkModal } from './BenchmarkModal.js';
@@ -36,11 +36,13 @@ export interface SyncInspectorProps {
   }) => React.ReactNode;
 }
 
+const BENCHMARK_DESCRIPTION =
+  'Runs automated stress tests directly validating local-lite client APIs: atomic batch ingestion, indexing, ACID rollback isolation, outbox queues, and non-blocking WAL concurrency.';
+
 /**
  * Universal Developer Inspector Component for local-lite.
- * Opens as a full-screen modal respecting device safe areas, exactly like BenchmarkModal.
- * Displays real-time outbox telemetry, connection status, metrics, and triggers manual pushes,
- * pulls, cursor resets, and the benchmark test suite.
+ * Respects device safe areas and displays real-time outbox telemetry,
+ * connection status, metrics, and triggers manual push, pull, reset, and benchmarks.
  */
 export function SyncInspector({
   client,
@@ -60,55 +62,40 @@ export function SyncInspector({
 
   useEffect(() => {
     if (!client || !isOpen) return;
-    client.getMetrics().then(setMetrics).catch(() => { });
+    client.getMetrics().then(setMetrics).catch(() => {});
   }, [client, isOpen, status.isSyncing, status.pendingCount]);
 
-  if (!client) return null;
+  const runAction = useCallback(
+    async (startMsg: string, doneMsg: (res?: any) => string, action: () => Promise<any>) => {
+      if (!client) return;
+      setActionMessage(startMsg);
+      try {
+        const res = await action();
+        setActionMessage(doneMsg(res));
+      } catch (err: any) {
+        setActionMessage(`Failed: ${err.message || err}`);
+      }
+      setTimeout(() => setActionMessage(null), 3000);
+    },
+    [client]
+  );
 
-  const handlePush = async () => {
-    setActionMessage('Pushing mutations...');
-    try {
-      await client.syncWorker.pushLocalChanges();
-      setActionMessage('Push complete');
-    } catch (err: any) {
-      setActionMessage(`Push failed: ${err.message || err}`);
-    }
-    setTimeout(() => setActionMessage(null), 3000);
-  };
+  const handlePush = () =>
+    runAction('Pushing mutations...', () => 'Push complete', () => client!.syncWorker.pushLocalChanges());
 
-  const handlePull = async () => {
-    setActionMessage('Pulling remote changes...');
-    try {
-      await client.syncWorker.pullRemoteChanges();
-      setActionMessage('Pull complete');
-    } catch (err: any) {
-      setActionMessage(`Pull failed: ${err.message || err}`);
-    }
-    setTimeout(() => setActionMessage(null), 3000);
-  };
+  const handlePull = () =>
+    runAction('Pulling remote changes...', () => 'Pull complete', () => client!.syncWorker.pullRemoteChanges());
 
-  const handleResetCursor = async () => {
-    setActionMessage('Resetting cursor & refetching...');
-    try {
-      await client.resetSyncCursor();
-      await client.syncWorker.pullRemoteChanges();
-      setActionMessage('Cursor reset & refetched');
-    } catch (err: any) {
-      setActionMessage(`Reset failed: ${err.message || err}`);
-    }
-    setTimeout(() => setActionMessage(null), 3000);
-  };
+  const handleResetCursor = () =>
+    runAction('Resetting cursor & refetching...', () => 'Cursor reset & refetched', async () => {
+      await client!.resetSyncCursor();
+      await client!.syncWorker.pullRemoteChanges();
+    });
 
-  const handleRetryFailed = async () => {
-    setActionMessage('Re-queueing failed mutations...');
-    try {
-      const count = await client.retryFailedMutations();
-      setActionMessage(`Re-queued ${count} mutations`);
-    } catch (err: any) {
-      setActionMessage(`Retry failed: ${err.message || err}`);
-    }
-    setTimeout(() => setActionMessage(null), 3000);
-  };
+  const handleRetryFailed = () =>
+    runAction('Re-queueing failed mutations...', (count) => `Re-queued ${count || 0} mutations`, () =>
+      client!.retryFailedMutations()
+    );
 
   const handleBenchmarkPress = () => {
     if (onOpenBenchmark) {
@@ -122,31 +109,100 @@ export function SyncInspector({
   const statusColor = !status.isOnline ? '#EF4444' : status.isSyncing ? '#F59E0B' : '#10B981';
   const statusLabel = !status.isOnline ? 'Offline' : status.isSyncing ? 'Syncing' : 'Online';
 
-  // React Native renderer (Full-height modal with Safe Areas)
+  const isInline = position === 'inline';
+  const isTop = position.startsWith('top') || position === 'top';
+  const isLeft = position.includes('left');
+  const isCenter = position === 'top' || position === 'bottom';
+
+  // Shared Stat Cards Data (Pending & Failed)
+  const statCards = useMemo(
+    () => [
+      {
+        id: 'pending',
+        num: status.pendingCount,
+        label: 'Pending Outbox',
+        sub: 'Awaiting sync push',
+        numColor: '#F9FAFB',
+      },
+      {
+        id: 'failed',
+        num: metrics?.outboxFailedCount || 0,
+        label: 'Failed Mutations',
+        sub: metrics?.outboxFailedCount ? 'Needs retry' : 'All clear',
+        numColor: metrics?.outboxFailedCount ? '#EF4444' : '#10B981',
+      },
+    ],
+    [status.pendingCount, metrics?.outboxFailedCount]
+  );
+
+  // Shared Connection & Telemetry Rows
+  const telemetryItems = useMemo(
+    () => [
+      {
+        id: 'status',
+        label: 'Connection Status',
+        value: status.isOnline ? 'Connected' : 'Offline',
+        color: statusColor,
+        hasDot: true,
+      },
+      {
+        id: 'last-synced',
+        label: 'Last Synchronized',
+        value: status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleTimeString() : 'Never',
+      },
+      {
+        id: 'push-duration',
+        label: 'Last Push Duration',
+        value: `${metrics?.lastPushDurationMs || 0} ms`,
+      },
+      {
+        id: 'pull-duration',
+        label: 'Last Pull Duration',
+        value: `${metrics?.lastPullDurationMs || 0} ms`,
+      },
+    ],
+    [status.isOnline, status.isSyncing, status.lastSyncedAt, statusColor, metrics?.lastPushDurationMs, metrics?.lastPullDurationMs]
+  );
+
+  // Shared Action Buttons
+  const actionButtons = useMemo(
+    () => [
+      { id: 'push', label: '🚀 Push Changes', onPress: handlePush, bg: '#3B82F6' },
+      { id: 'pull', label: '📥 Pull Changes', onPress: handlePull, bg: '#2563EB' },
+      { id: 'retry', label: '🔄 Retry Failed', onPress: handleRetryFailed, bg: '#374151' },
+      { id: 'reset', label: '⏪ Reset Cursor', onPress: handleResetCursor, bg: '#374151' },
+    ],
+    [handlePush, handlePull, handleRetryFailed, handleResetCursor]
+  );
+
+  const triggerLabel =
+    variant === 'compact'
+      ? status.pendingCount > 0
+        ? `${status.pendingCount} queued`
+        : statusLabel
+      : 'local-lite';
+
+  if (!client) return null;
+
+  // React Native Renderer
   if (RN && RN.View) {
     const { View, Text, TouchableOpacity, ScrollView, Modal, Platform, StatusBar } = RN;
     const SafeComp = RNSafeArea?.SafeAreaView || RN.SafeAreaView || View;
     const isAndroid = Platform?.OS === 'android';
-    const statusBarHeight = isAndroid ? (StatusBar?.currentHeight || 24) : 0;
-
-    const isInline = position === 'inline';
-    const isTop = position.startsWith('top') || position === 'top';
-    const isLeft = position.includes('left');
-    const isCenter = position === 'top' || position === 'bottom';
+    const statusBarHeight = isAndroid ? StatusBar?.currentHeight || 24 : 0;
 
     const pillPosStyle = isInline
       ? { position: 'relative' as const }
       : {
-        position: 'absolute' as const,
-        zIndex: 99999,
-        left: isCenter ? 16 : isLeft ? 16 : undefined,
-        right: isCenter ? 16 : !isLeft ? 16 : undefined,
-        ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
-      };
+          position: 'absolute' as const,
+          zIndex: 99999,
+          left: isCenter ? 16 : isLeft ? 16 : undefined,
+          right: isCenter ? 16 : !isLeft ? 16 : undefined,
+          ...(isTop ? { top: isAndroid ? statusBarHeight + 12 : 48 } : { bottom: 24 }),
+        };
 
     return (
       <>
-        {/* Floating or Inline Trigger Pill when closed */}
         {!isOpen && (
           <View style={[pillPosStyle, style]} pointerEvents="box-none">
             {renderTrigger ? (
@@ -172,13 +228,7 @@ export function SyncInspector({
               >
                 <View style={[rnStyles.dot, { backgroundColor: statusColor }]} />
                 {variant !== 'icon' && variant !== 'minimal' && (
-                  <Text style={isInline ? rnStyles.inlinePillText : rnStyles.pillText}>
-                    {variant === 'compact'
-                      ? status.pendingCount > 0
-                        ? `${status.pendingCount} queued`
-                        : statusLabel
-                      : 'local-lite'}
-                  </Text>
+                  <Text style={isInline ? rnStyles.inlinePillText : rnStyles.pillText}>{triggerLabel}</Text>
                 )}
                 {status.pendingCount > 0 && variant !== 'compact' && (
                   <View style={rnStyles.badge}>
@@ -190,7 +240,6 @@ export function SyncInspector({
           </View>
         )}
 
-        {/* Full-screen DevTools Modal with Safe Areas */}
         <Modal
           visible={isOpen}
           animationType="slide"
@@ -198,41 +247,27 @@ export function SyncInspector({
           statusBarTranslucent={true}
           onRequestClose={() => setIsOpen(false)}
         >
-          <SafeComp
-            style={rnStyles.fullScreenSafe}
-            edges={['top', 'bottom', 'left', 'right']}
-          >
-            {/* Top Navigation Bar with safe area padding */}
+          <SafeComp style={rnStyles.fullScreenSafe} edges={['top', 'bottom', 'left', 'right']}>
+            {/* Top Bar */}
             <View
               style={[
                 rnStyles.topBar,
                 !RNSafeArea?.SafeAreaView && isAndroid && { paddingTop: statusBarHeight + 10 },
               ]}
             >
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View>
-                  <Text style={rnStyles.topBarTitle}>⚡ local-lite DevTools</Text>
-                  <Text style={rnStyles.topBarSub}>Engine Inspector & Sync Telemetry</Text>
-                </View>
+              <View style={{ flex: 1 }}>
+                <Text style={rnStyles.topBarTitle}>⚡ Local Lite DevTools</Text>
+                <Text style={rnStyles.topBarSub}>Engine Inspector & Sync Telemetry</Text>
               </View>
-              <View
-                style={[
-                  rnStyles.statusBadge,
-                  { borderColor: statusColor, backgroundColor: `${statusColor}20` },
-                ]}
-              >
+              <View style={[rnStyles.statusBadge, { borderColor: statusColor, backgroundColor: `${statusColor}20` }]}>
                 <Text style={[rnStyles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => setIsOpen(false)}
-                style={rnStyles.closeCircle}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity onPress={() => setIsOpen(false)} style={rnStyles.closeCircle} activeOpacity={0.7}>
                 <Text style={rnStyles.closeCircleText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Scrollable Content Body */}
+            {/* Scrollable Body */}
             <ScrollView
               style={rnStyles.scrollBody}
               contentContainerStyle={rnStyles.scrollContent}
@@ -244,99 +279,67 @@ export function SyncInspector({
                 </View>
               )}
 
-              {/* Stat Overview Cards: Pending and Failed */}
+              {/* Stat Cards (Pending & Failed) */}
               <View style={rnStyles.statGrid}>
-                <View style={rnStyles.statCard}>
-                  <Text style={rnStyles.statNum}>{status.pendingCount}</Text>
-                  <Text style={rnStyles.statLabel}>Pending Outbox</Text>
-                  <Text style={rnStyles.statSub}>Awaiting sync push</Text>
-                </View>
-                <View style={rnStyles.statCard}>
-                  <Text
-                    style={[
-                      rnStyles.statNum,
-                      { color: metrics?.outboxFailedCount ? '#EF4444' : '#10B981' },
-                    ]}
-                  >
-                    {metrics?.outboxFailedCount || 0}
-                  </Text>
-                  <Text style={rnStyles.statLabel}>Failed Mutations</Text>
-                  <Text style={rnStyles.statSub}>
-                    {metrics?.outboxFailedCount ? 'Needs retry' : 'All clear'}
-                  </Text>
-                </View>
+                {statCards.map((card) => (
+                  <View key={card.id} style={rnStyles.statCard}>
+                    <Text style={[rnStyles.statNum, { color: card.numColor }]}>{String(card.num ?? 0)}</Text>
+                    <Text style={rnStyles.statLabel}>{card.label}</Text>
+                    <Text style={rnStyles.statSub}>{card.sub}</Text>
+                  </View>
+                ))}
               </View>
 
-              {/* Engine & Connection Telemetry */}
+              {/* Connection & Telemetry */}
               <View style={rnStyles.infoCard}>
                 <Text style={rnStyles.infoCardTitle}>CONNECTION & TELEMETRY</Text>
-                <View style={rnStyles.infoRow}>
-                  <Text style={rnStyles.infoKey}>Connection Status</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={[rnStyles.dotSmall, { backgroundColor: statusColor }]} />
-                    <Text style={[rnStyles.infoVal, { color: statusColor, fontWeight: '700' }]}>
-                      {status.isOnline ? 'Online (Connected)' : 'Offline'}
-                    </Text>
+                {telemetryItems.map((item, idx) => (
+                  <View
+                    key={item.id}
+                    style={[rnStyles.infoRow, idx === telemetryItems.length - 1 && { borderBottomWidth: 0 }]}
+                  >
+                    <Text style={rnStyles.infoKey}>{item.label}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {item.hasDot && <View style={[rnStyles.dotSmall, { backgroundColor: item.color }]} />}
+                      <Text
+                        style={[
+                          rnStyles.infoVal,
+                          item.color ? { color: item.color, fontWeight: '700' } : undefined,
+                        ]}
+                      >
+                        {item.value}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <View style={rnStyles.infoRow}>
-                  <Text style={rnStyles.infoKey}>Sync State</Text>
-                  <Text style={[rnStyles.infoVal, { color: status.isSyncing ? '#F59E0B' : '#9CA3AF' }]}>
-                    {status.isSyncing ? 'Syncing...' : 'Idle'}
-                  </Text>
-                </View>
-                <View style={rnStyles.infoRow}>
-                  <Text style={rnStyles.infoKey}>Last Synchronized</Text>
-                  <Text style={rnStyles.infoVal}>
-                    {status.lastSyncedAt
-                      ? new Date(status.lastSyncedAt).toLocaleTimeString()
-                      : 'Never'}
-                  </Text>
-                </View>
-                <View style={rnStyles.infoRow}>
-                  <Text style={rnStyles.infoKey}>Last Push Duration</Text>
-                  <Text style={rnStyles.infoVal}>{metrics?.lastPushDurationMs || 0} ms</Text>
-                </View>
-                <View style={[rnStyles.infoRow, { borderBottomWidth: 0 }]}>
-                  <Text style={rnStyles.infoKey}>Last Pull Duration</Text>
-                  <Text style={rnStyles.infoVal}>{metrics?.lastPullDurationMs || 0} ms</Text>
-                </View>
+                ))}
               </View>
 
-              {/* Engine Actions Card */}
+              {/* Engine Actions */}
               <View style={rnStyles.infoCard}>
                 <Text style={rnStyles.infoCardTitle}>ENGINE ACTIONS</Text>
                 <View style={rnStyles.btnRow}>
-                  <TouchableOpacity
-                    onPress={handlePush}
-                    style={[rnStyles.actionBtn, { backgroundColor: '#3B82F6' }]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={rnStyles.actionBtnText}>🚀 Push Changes</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handlePull}
-                    style={[rnStyles.actionBtn, { backgroundColor: '#2563EB' }]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={rnStyles.actionBtnText}>📥 Pull Changes</Text>
-                  </TouchableOpacity>
+                  {actionButtons.slice(0, 2).map((btn) => (
+                    <TouchableOpacity
+                      key={btn.id}
+                      onPress={btn.onPress}
+                      style={[rnStyles.actionBtn, { backgroundColor: btn.bg }]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={rnStyles.actionBtnText}>{btn.label}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-                <View style={rnStyles.btnRow}>
-                  <TouchableOpacity
-                    onPress={handleRetryFailed}
-                    style={[rnStyles.actionBtn, { backgroundColor: '#374151' }]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={rnStyles.actionBtnText}>🔄 Retry Failed</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleResetCursor}
-                    style={[rnStyles.actionBtn, { backgroundColor: '#374151' }]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={rnStyles.actionBtnText}>⏪ Reset Cursor</Text>
-                  </TouchableOpacity>
+                <View style={[rnStyles.btnRow, { marginTop: 8 }]}>
+                  {actionButtons.slice(2, 4).map((btn) => (
+                    <TouchableOpacity
+                      key={btn.id}
+                      onPress={btn.onPress}
+                      style={[rnStyles.actionBtn, { backgroundColor: btn.bg }]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={rnStyles.actionBtnText}>{btn.label}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
 
@@ -362,18 +365,49 @@ export function SyncInspector({
               {/* Queued Outbox Mutations */}
               {status.pendingRecords && status.pendingRecords.length > 0 && (
                 <View style={rnStyles.infoCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={rnStyles.infoCardTitle}>QUEUED OUTBOX MUTATIONS ({status.pendingRecords.length})</Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Text style={rnStyles.infoCardTitle}>
+                      QUEUED OUTBOX MUTATIONS ({status.pendingRecords.length})
+                    </Text>
                     <Text style={{ fontSize: 10, color: '#9CA3AF' }}>Latest queued</Text>
                   </View>
                   {status.pendingRecords.slice(0, 8).map((rec: any, idx: number) => (
-                    <View key={rec.id || idx} style={[rnStyles.infoRow, idx === Math.min(status.pendingRecords.length, 8) - 1 && { borderBottomWidth: 0 }]}>
+                    <View
+                      key={rec.id || idx}
+                      style={[
+                        rnStyles.infoRow,
+                        idx === Math.min(status.pendingRecords.length, 8) - 1 && { borderBottomWidth: 0 },
+                      ]}
+                    >
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <View style={[rnStyles.dotSmall, { backgroundColor: rec.status === 'FAILED' ? '#EF4444' : '#F59E0B' }]} />
-                          <Text style={{ color: '#F9FAFB', fontSize: 13, fontWeight: '600' }}>{rec.tableName || 'record'}</Text>
-                          <View style={{ backgroundColor: '#374151', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                            <Text style={{ color: '#D1D5DB', fontSize: 10, fontWeight: '700' }}>{rec.operation || 'MUTATE'}</Text>
+                          <View
+                            style={[
+                              rnStyles.dotSmall,
+                              { backgroundColor: rec.status === 'FAILED' ? '#EF4444' : '#F59E0B' },
+                            ]}
+                          />
+                          <Text style={{ color: '#F9FAFB', fontSize: 13, fontWeight: '600' }}>
+                            {rec.tableName || 'record'}
+                          </Text>
+                          <View
+                            style={{
+                              backgroundColor: '#374151',
+                              paddingHorizontal: 5,
+                              paddingVertical: 1,
+                              borderRadius: 4,
+                            }}
+                          >
+                            <Text style={{ color: '#D1D5DB', fontSize: 10, fontWeight: '700' }}>
+                              {rec.operation || 'MUTATE'}
+                            </Text>
                           </View>
                         </View>
                         {rec.rowId && (
@@ -415,20 +449,10 @@ export function SyncInspector({
                     <Text style={[rnStyles.infoCardTitle, { color: '#C4B5FD', marginBottom: 0 }]}>
                       PERFORMANCE BENCHMARK
                     </Text>
-                    <Text style={{ fontSize: 10, color: '#A78BFA', fontWeight: '700' }}>
-                      ACID & WAL
-                    </Text>
+                    <Text style={{ fontSize: 10, color: '#A78BFA', fontWeight: '700' }}>ACID & WAL</Text>
                   </View>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: '#9CA3AF',
-                      marginBottom: 12,
-                      lineHeight: 18,
-                    }}
-                  >
-                    Runs 11 automated stress tests directly testing local-lite client APIs: atomic
-                    batch ingestion, indexing, ACID rollback isolation, outbox queues, and non-blocking WAL concurrency.
+                  <Text style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 12, lineHeight: 18 }}>
+                    {BENCHMARK_DESCRIPTION}
                   </Text>
                   <TouchableOpacity
                     onPress={handleBenchmarkPress}
@@ -443,25 +467,20 @@ export function SyncInspector({
               )}
             </ScrollView>
 
-            {/* Bottom Safe Area Action Bar */}
+            {/* Bottom Bar */}
             <View
               style={[
                 rnStyles.bottomBar,
                 !RNSafeArea?.SafeAreaView && isAndroid && { paddingBottom: 32 },
               ]}
             >
-              <TouchableOpacity
-                onPress={() => setIsOpen(false)}
-                style={rnStyles.doneBtn}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity onPress={() => setIsOpen(false)} style={rnStyles.doneBtn} activeOpacity={0.8}>
                 <Text style={rnStyles.doneBtnText}>Close DevTools</Text>
               </TouchableOpacity>
             </View>
           </SafeComp>
         </Modal>
 
-        {/* Separated Full-Height Benchmark Modal */}
         {enableBenchmark && !onOpenBenchmark && (
           <BenchmarkModal
             client={client}
@@ -473,12 +492,7 @@ export function SyncInspector({
     );
   }
 
-  // Web / DOM renderer fallback
-  const isInline = position === 'inline';
-  const isTop = position.startsWith('top') || position === 'top';
-  const isLeft = position.includes('left');
-  const isCenter = position === 'top' || position === 'bottom';
-
+  // Web / DOM Renderer Fallback
   return (
     <>
       {isOpen ? (
@@ -596,44 +610,23 @@ export function SyncInspector({
                 gap: 12,
               }}
             >
-              <div
-                style={{
-                  backgroundColor: '#1F2937',
-                  border: '1px solid #374151',
-                  borderRadius: 12,
-                  padding: 16,
-                }}
-              >
-                <div style={{ fontSize: 24, fontWeight: 800 }}>{status.pendingCount}</div>
-                <div style={{ fontSize: 12, color: '#D1D5DB', marginTop: 4, fontWeight: 600 }}>
-                  Pending Outbox
-                </div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Awaiting sync push</div>
-              </div>
-              <div
-                style={{
-                  backgroundColor: '#1F2937',
-                  border: '1px solid #374151',
-                  borderRadius: 12,
-                  padding: 16,
-                }}
-              >
+              {statCards.map((card) => (
                 <div
+                  key={card.id}
                   style={{
-                    fontSize: 24,
-                    fontWeight: 800,
-                    color: metrics?.outboxFailedCount ? '#EF4444' : '#10B981',
+                    backgroundColor: '#1F2937',
+                    border: '1px solid #374151',
+                    borderRadius: 12,
+                    padding: 16,
                   }}
                 >
-                  {metrics?.outboxFailedCount || 0}
+                  <div style={{ fontSize: 24, fontWeight: 800, color: card.numColor }}>{card.num}</div>
+                  <div style={{ fontSize: 12, color: '#D1D5DB', marginTop: 4, fontWeight: 600 }}>
+                    {card.label}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{card.sub}</div>
                 </div>
-                <div style={{ fontSize: 12, color: '#D1D5DB', marginTop: 4, fontWeight: 600 }}>
-                  Failed Mutations
-                </div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                  {metrics?.outboxFailedCount ? 'Needs retry' : 'All clear'}
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Connection & Telemetry Card */}
@@ -656,77 +649,41 @@ export function SyncInspector({
               >
                 CONNECTION & TELEMETRY
               </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 0',
-                  borderBottom: '1px solid #374151',
-                }}
-              >
-                <span style={{ color: '#9CA3AF', fontSize: 13 }}>Connection Status</span>
-                <span style={{ color: statusColor, fontWeight: 700, fontSize: 13 }}>
-                  {status.isOnline ? 'Online (Connected)' : 'Offline'}
-                </span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 0',
-                  borderBottom: '1px solid #374151',
-                }}
-              >
-                <span style={{ color: '#9CA3AF', fontSize: 13 }}>Sync State</span>
-                <span
+              {telemetryItems.map((item, idx) => (
+                <div
+                  key={item.id}
                   style={{
-                    color: status.isSyncing ? '#F59E0B' : '#9CA3AF',
-                    fontSize: 13,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px 0',
+                    borderBottom: idx === telemetryItems.length - 1 ? 'none' : '1px solid #374151',
                   }}
                 >
-                  {status.isSyncing ? 'Syncing...' : 'Idle'}
-                </span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 0',
-                  borderBottom: '1px solid #374151',
-                }}
-              >
-                <span style={{ color: '#9CA3AF', fontSize: 13 }}>Last Synchronized</span>
-                <span style={{ color: '#F9FAFB', fontSize: 13, fontWeight: 600 }}>
-                  {status.lastSyncedAt
-                    ? new Date(status.lastSyncedAt).toLocaleTimeString()
-                    : 'Never'}
-                </span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 0',
-                  borderBottom: '1px solid #374151',
-                }}
-              >
-                <span style={{ color: '#9CA3AF', fontSize: 13 }}>Last Push Duration</span>
-                <span style={{ color: '#F9FAFB', fontSize: 13, fontWeight: 600 }}>
-                  {metrics?.lastPushDurationMs || 0} ms
-                </span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 0',
-                }}
-              >
-                <span style={{ color: '#9CA3AF', fontSize: 13 }}>Last Pull Duration</span>
-                <span style={{ color: '#F9FAFB', fontSize: 13, fontWeight: 600 }}>
-                  {metrics?.lastPullDurationMs || 0} ms
-                </span>
-              </div>
+                  <span style={{ color: '#9CA3AF', fontSize: 13 }}>{item.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {item.hasDot && (
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: item.color,
+                        }}
+                      />
+                    )}
+                    <span
+                      style={{
+                        color: item.color || '#F9FAFB',
+                        fontSize: 13,
+                        fontWeight: item.color ? 700 : 600,
+                      }}
+                    >
+                      {item.value}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Actions Card */}
@@ -750,62 +707,23 @@ export function SyncInspector({
                 ENGINE ACTIONS
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <button
-                  onClick={handlePush}
-                  style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#3B82F6',
-                    color: '#FFF',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  🚀 Push Changes
-                </button>
-                <button
-                  onClick={handlePull}
-                  style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#2563EB',
-                    color: '#FFF',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  📥 Pull Changes
-                </button>
-                <button
-                  onClick={handleRetryFailed}
-                  style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#374151',
-                    color: '#E5E7EB',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  🔄 Retry Failed
-                </button>
-                <button
-                  onClick={handleResetCursor}
-                  style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#374151',
-                    color: '#E5E7EB',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  ⏪ Reset Cursor
-                </button>
+                {actionButtons.map((btn) => (
+                  <button
+                    key={btn.id}
+                    onClick={btn.onPress}
+                    style={{
+                      padding: '10px 14px',
+                      backgroundColor: btn.bg,
+                      color: '#FFF',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -833,8 +751,7 @@ export function SyncInspector({
                   <div style={{ fontSize: 10, color: '#A78BFA', fontWeight: 700 }}>ACID & WAL</div>
                 </div>
                 <p style={{ fontSize: 12, color: '#9CA3AF', margin: '0 0 12px 0', lineHeight: '18px' }}>
-                  Runs 11 automated stress tests directly testing local-lite client APIs: atomic
-                  batch ingestion, indexing, ACID rollback isolation, outbox queues, and non-blocking WAL concurrency.
+                  {BENCHMARK_DESCRIPTION}
                 </p>
                 <button
                   onClick={handleBenchmarkPress}
@@ -888,15 +805,15 @@ export function SyncInspector({
             isInline
               ? { position: 'relative', display: 'inline-flex', ...style }
               : {
-                position: 'fixed',
-                zIndex: 99999,
-                left: isCenter ? '50%' : isLeft ? 16 : undefined,
-                right: !isCenter && !isLeft ? 16 : undefined,
-                transform: isCenter ? 'translateX(-50%)' : undefined,
-                ...(isTop ? { top: 20 } : { bottom: 20 }),
-                pointerEvents: 'auto',
-                ...style,
-              }
+                  position: 'fixed',
+                  zIndex: 99999,
+                  left: isCenter ? '50%' : isLeft ? 16 : undefined,
+                  right: !isCenter && !isLeft ? 16 : undefined,
+                  transform: isCenter ? 'translateX(-50%)' : undefined,
+                  ...(isTop ? { top: 20 } : { bottom: 20 }),
+                  pointerEvents: 'auto',
+                  ...style,
+                }
           }
         >
           {renderTrigger ? (
@@ -933,13 +850,7 @@ export function SyncInspector({
                 }}
               />
               {variant !== 'icon' && variant !== 'minimal' && (
-                <span style={{ fontWeight: 600, fontSize: isInline ? 12 : 13 }}>
-                  {variant === 'compact'
-                    ? status.pendingCount > 0
-                      ? `${status.pendingCount} queued`
-                      : statusLabel
-                    : 'local-lite'}
-                </span>
+                <span style={{ fontWeight: 600, fontSize: isInline ? 12 : 13 }}>{triggerLabel}</span>
               )}
               {status.pendingCount > 0 && variant !== 'compact' && (
                 <span
@@ -960,7 +871,6 @@ export function SyncInspector({
         </div>
       )}
 
-      {/* Separated Full-Height Benchmark Modal */}
       {enableBenchmark && !onOpenBenchmark && (
         <BenchmarkModal
           client={client}
@@ -975,240 +885,234 @@ export function SyncInspector({
 const rnStyles =
   RN && RN.StyleSheet
     ? RN.StyleSheet.create({
-      fullScreenSafe: {
-        flex: 1,
-        height: '100%',
-        backgroundColor: '#111827',
-      },
-      topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 18,
-        paddingVertical: 14,
-        backgroundColor: '#1F2937',
-        borderBottomWidth: 1,
-        borderBottomColor: '#374151',
-      },
-      topBarTitle: {
-        color: '#F9FAFB',
-        fontSize: 17,
-        fontWeight: '700',
-      },
-      topBarSub: {
-        color: '#9CA3AF',
-        fontSize: 11,
-        marginTop: 2,
-      },
-      statusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 12,
-        borderWidth: 1,
-        marginRight: 10,
-      },
-      statusBadgeText: {
-        fontSize: 11,
-        fontWeight: '700',
-      },
-      closeCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#374151',
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-      closeCircleText: {
-        color: '#F9FAFB',
-        fontSize: 14,
-        fontWeight: '700',
-      },
-      scrollBody: {
-        flex: 1,
-        backgroundColor: '#111827',
-      },
-      scrollContent: {
-        padding: 16,
-        paddingBottom: 24,
-      },
-      actionMsgBox: {
-        backgroundColor: '#1E3A8A',
-        borderWidth: 1,
-        borderColor: '#3B82F6',
-        padding: 10,
-        borderRadius: 8,
-        marginBottom: 14,
-      },
-      actionMsgText: {
-        color: '#93C5FD',
-        fontSize: 13,
-        fontWeight: '600',
-        textAlign: 'center',
-      },
-      statGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-        marginBottom: 14,
-      },
-      statCard: {
-        flex: 1,
-        minWidth: '45%',
-        backgroundColor: '#1F2937',
-        borderWidth: 1,
-        borderColor: '#374151',
-        borderRadius: 12,
-        padding: 14,
-      },
-      statNum: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: '#F9FAFB',
-      },
-      statLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#D1D5DB',
-        marginTop: 4,
-      },
-      statSub: {
-        fontSize: 10,
-        color: '#6B7280',
-        marginTop: 2,
-      },
-      infoCard: {
-        backgroundColor: '#1F2937',
-        borderWidth: 1,
-        borderColor: '#374151',
-        borderRadius: 12,
-        padding: 14,
-        marginBottom: 14,
-      },
-      infoCardTitle: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#9CA3AF',
-        letterSpacing: 0.8,
-        marginBottom: 10,
-      },
-      infoRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#374151',
-      },
-      infoKey: {
-        fontSize: 13,
-        color: '#9CA3AF',
-      },
-      infoVal: {
-        fontSize: 13,
-        color: '#F9FAFB',
-        fontWeight: '600',
-      },
-      dotSmall: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-      },
-      dotLarge: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-      },
-      btnRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginTop: 8,
-      },
-      actionBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-      actionBtnText: {
-        color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: '600',
-      },
-      bottomBar: {
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-        backgroundColor: '#1F2937',
-        borderTopWidth: 1,
-        borderTopColor: '#374151',
-      },
-      doneBtn: {
-        backgroundColor: '#374151',
-        paddingVertical: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-      doneBtnText: {
-        color: '#F9FAFB',
-        fontSize: 14,
-        fontWeight: '700',
-      },
-      pill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#1F2937',
-        paddingVertical: 8,
-        paddingHorizontal: 14,
-        borderRadius: 20,
-        borderWidth: 1.5,
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-      },
-      inlinePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#1F2937',
-        paddingVertical: 5,
-        paddingHorizontal: 10,
-        borderRadius: 16,
-        borderWidth: 1.5,
-      },
-      pillText: {
-        color: '#F9FAFB',
-        fontWeight: '600',
-        fontSize: 13,
-        marginLeft: 8,
-      },
-      inlinePillText: {
-        color: '#F9FAFB',
-        fontWeight: '600',
-        fontSize: 12,
-        marginLeft: 6,
-      },
-      dot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-      },
-      badge: {
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 10,
-        marginLeft: 8,
-      },
-      badgeText: {
-        color: '#FFF',
-        fontSize: 11,
-        fontWeight: '700',
-      },
-    })
+        fullScreenSafe: {
+          flex: 1,
+          height: '100%',
+          backgroundColor: '#111827',
+        },
+        topBar: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 18,
+          paddingVertical: 14,
+          backgroundColor: '#1F2937',
+          borderBottomWidth: 1,
+          borderBottomColor: '#374151',
+        },
+        topBarTitle: {
+          color: '#F9FAFB',
+          fontSize: 17,
+          fontWeight: '700',
+        },
+        topBarSub: {
+          color: '#9CA3AF',
+          fontSize: 11,
+          marginTop: 2,
+        },
+        statusBadge: {
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+          borderRadius: 12,
+          borderWidth: 1,
+          marginRight: 10,
+        },
+        statusBadgeText: {
+          fontSize: 11,
+          fontWeight: '700',
+        },
+        closeCircle: {
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          backgroundColor: '#374151',
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        closeCircleText: {
+          color: '#F9FAFB',
+          fontSize: 14,
+          fontWeight: '700',
+        },
+        scrollBody: {
+          flex: 1,
+          backgroundColor: '#111827',
+        },
+        scrollContent: {
+          padding: 16,
+          paddingBottom: 24,
+        },
+        actionMsgBox: {
+          backgroundColor: '#1E3A8A',
+          borderWidth: 1,
+          borderColor: '#3B82F6',
+          padding: 10,
+          borderRadius: 8,
+          marginBottom: 14,
+        },
+        actionMsgText: {
+          color: '#93C5FD',
+          fontSize: 13,
+          fontWeight: '600',
+          textAlign: 'center',
+        },
+        statGrid: {
+          flexDirection: 'row',
+          width: '100%',
+          gap: 10,
+          marginBottom: 14,
+        },
+        statCard: {
+          flex: 1,
+          minWidth: '45%',
+          backgroundColor: '#1F2937',
+          borderWidth: 1,
+          borderColor: '#374151',
+          borderRadius: 12,
+          padding: 14,
+        },
+        statNum: {
+          fontSize: 24,
+          fontWeight: '800',
+        },
+        statLabel: {
+          fontSize: 12,
+          fontWeight: '600',
+          color: '#D1D5DB',
+          marginTop: 4,
+        },
+        statSub: {
+          fontSize: 11,
+          color: '#6B7280',
+          marginTop: 2,
+        },
+        infoCard: {
+          backgroundColor: '#1F2937',
+          borderWidth: 1,
+          borderColor: '#374151',
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 14,
+        },
+        infoCardTitle: {
+          fontSize: 11,
+          fontWeight: '700',
+          color: '#9CA3AF',
+          letterSpacing: 0.8,
+          marginBottom: 10,
+        },
+        infoRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingVertical: 9,
+          borderBottomWidth: 1,
+          borderBottomColor: '#374151',
+        },
+        infoKey: {
+          color: '#9CA3AF',
+          fontSize: 13,
+        },
+        infoVal: {
+          color: '#F9FAFB',
+          fontSize: 13,
+          fontWeight: '600',
+        },
+        btnRow: {
+          flexDirection: 'row',
+          width: '100%',
+          gap: 8,
+        },
+        actionBtn: {
+          flex: 1,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderRadius: 8,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        actionBtnText: {
+          color: '#FFFFFF',
+          fontSize: 13,
+          fontWeight: '600',
+        },
+        dotSmall: {
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+        },
+        bottomBar: {
+          paddingHorizontal: 18,
+          paddingVertical: 12,
+          backgroundColor: '#1F2937',
+          borderTopWidth: 1,
+          borderTopColor: '#374151',
+        },
+        doneBtn: {
+          backgroundColor: '#374151',
+          paddingVertical: 12,
+          borderRadius: 8,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        doneBtnText: {
+          color: '#F9FAFB',
+          fontSize: 14,
+          fontWeight: '700',
+        },
+        pill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#1F2937',
+          paddingVertical: 8,
+          paddingHorizontal: 14,
+          borderRadius: 20,
+          borderWidth: 1.5,
+          elevation: 6,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+        },
+        inlinePill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#1F2937',
+          paddingVertical: 5,
+          paddingHorizontal: 10,
+          borderRadius: 16,
+          borderWidth: 1.5,
+        },
+        pillText: {
+          color: '#F9FAFB',
+          fontWeight: '600',
+          fontSize: 13,
+          marginLeft: 8,
+        },
+        inlinePillText: {
+          color: '#F9FAFB',
+          fontWeight: '600',
+          fontSize: 12,
+          marginLeft: 6,
+        },
+        dot: {
+          width: 10,
+          height: 10,
+          borderRadius: 5,
+        },
+        badge: {
+          backgroundColor: '#EF4444',
+          paddingHorizontal: 6,
+          paddingVertical: 1,
+          borderRadius: 10,
+          marginLeft: 8,
+        },
+        badgeText: {
+          color: '#FFF',
+          fontSize: 11,
+          fontWeight: '700',
+        },
+      })
     : {};
 
 export const SyncIndicator = SyncInspector;
