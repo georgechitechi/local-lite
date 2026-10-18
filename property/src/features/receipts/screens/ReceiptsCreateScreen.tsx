@@ -28,7 +28,7 @@ import {
   type MatchResult,
 } from '@/features/tenants/utils/tenantMatcher';
 import { useAuth } from '@/providers/AuthProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { Protect } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
 import EmptyState from '@/shared/components/EmptyState';
@@ -592,7 +592,7 @@ export default function CreateReceiptScreen() {
   };
 
   return (
-    <AccessGuard action="create" resource="receipt">
+    <Protect action="create" resource="receipt">
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -1028,7 +1028,7 @@ export default function CreateReceiptScreen() {
           }}
         />
       </KeyboardScroll>
-    </AccessGuard>
+    </Protect>
   );
 }
 

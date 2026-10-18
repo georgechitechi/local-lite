@@ -8,7 +8,7 @@ import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import SwapHouseModal from '@/features/properties/components/SwapHouseModal';
 import TransferHouseModal from '@/features/properties/components/TransferHouseModal';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { StaffOrAdmin } from '@/shared/access';
 import HistoryModal from '@/shared/components/HistoryModal';
 import LoadingCard from '@/shared/components/LoadingCard';
 import SPressable from '@/shared/components/SlightPressable';
@@ -375,7 +375,7 @@ export default function ViewTenantScreen() {
   }
 
   return (
-    <AccessGuard roles={['admin', 'staff']}>
+    <StaffOrAdmin>
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -714,7 +714,7 @@ export default function ViewTenantScreen() {
           contractId={swapContractId}
         />
       </ScrollView>
-    </AccessGuard>
+    </StaffOrAdmin>
   );
 }
 

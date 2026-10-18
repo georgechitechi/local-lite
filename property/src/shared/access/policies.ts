@@ -1,4 +1,6 @@
 import { createAccessControl } from 'native-access-control';
+import React from 'react';
+import AccessDenied from '@/shared/components/AccessDenied';
 import type { Action, AppRole, Resource } from './types';
 
 /**
@@ -40,6 +42,7 @@ export const accessControl = createAccessControl<AppRole, Resource, Action>({
     admin: ['staff'],
   },
   superRoles: ['owner'],
+  defaultFallback: React.createElement(AccessDenied),
 });
 
 export const {

@@ -18,7 +18,7 @@ import {
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import { sendAcceptanceEmail } from '@/shared/services/emailService';
-import { isActiveBusinessShare, normalizeIdentity } from '@/shared/utils/businessAccess';
+import { isActiveBusinessShare, normalizeIdentity } from '@/shared/utils/businessScope';
 import ManageBusinessModal from './ManageBusinessModal';
 
 interface BusinessSelectModalProps {

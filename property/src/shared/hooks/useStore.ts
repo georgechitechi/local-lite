@@ -37,7 +37,7 @@ import type {
   Tenant,
   Transaction,
 } from '@/shared/types/types';
-import { accessibleBusinesses, normalizeIdentity } from '@/shared/utils/businessAccess';
+import { accessibleBusinesses, normalizeIdentity } from '@/shared/utils/businessScope';
 import { EMPTY_ARRAY } from '@/shared/utils/helper';
 
 export {

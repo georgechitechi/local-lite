@@ -16,7 +16,7 @@ import {
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import { useIdleLock } from '@/providers/LockScreenProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { AdminOnly } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import HistoryModal from '@/shared/components/HistoryModal';
 import LoadingCard from '@/shared/components/LoadingCard';
@@ -444,7 +444,7 @@ export default function ViewContractScreen() {
   );
 
   return (
-    <AccessGuard roles={['admin']}>
+    <AdminOnly>
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -953,7 +953,7 @@ export default function ViewContractScreen() {
           />
         </Portal>
       </ScrollView>
-    </AccessGuard>
+    </AdminOnly>
   );
 }
 

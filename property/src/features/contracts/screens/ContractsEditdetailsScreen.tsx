@@ -22,7 +22,7 @@ import {
   type Property,
 } from '@/features/contracts/components/ContractsForm';
 import { useAuth } from '@/providers/AuthProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { AdminOnly } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
 import EmptyState from '@/shared/components/EmptyState';
@@ -358,7 +358,7 @@ export default function EditContractScreen() {
   }
 
   return (
-    <AccessGuard roles={['admin']}>
+    <AdminOnly>
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -624,7 +624,7 @@ export default function EditContractScreen() {
           }}
         />
       </KeyboardScroll>
-    </AccessGuard>
+    </AdminOnly>
   );
 }
 

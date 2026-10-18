@@ -20,7 +20,7 @@ import { generatePDFContent, processReportData } from '@/features/reports/utils'
 import { updateTenantStatus } from '@/features/tenants/utils/tenantStatus';
 import { useAuth } from '@/providers/AuthProvider';
 import { useIdleLock } from '@/providers/LockScreenProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { StaffOrAdmin } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import BaseSearch from '@/shared/components/BaseSearch';
 import DiffViewer from '@/shared/components/DiffViewer';
@@ -1110,7 +1110,7 @@ export default function TenantsScreen() {
   }
 
   return (
-    <AccessGuard roles={['admin', 'staff']}>
+    <StaffOrAdmin>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <BaseSearch
           placeholder="Search tenants"
@@ -1509,7 +1509,7 @@ export default function TenantsScreen() {
           </BaseModal>
         </Portal>
       </View>
-    </AccessGuard>
+    </StaffOrAdmin>
   );
 }
 

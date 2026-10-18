@@ -19,7 +19,7 @@ import { Linking, RefreshControl, SectionList, StyleSheet, View } from 'react-na
 import { Divider, IconButton, Menu, Portal, Surface, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { AdminOnly } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import BaseSearch from '@/shared/components/BaseSearch';
 import EmptyState from '@/shared/components/EmptyState';
@@ -584,7 +584,7 @@ export default function PropertiesScreen() {
   }
 
   return (
-    <AccessGuard roles={['admin']}>
+    <AdminOnly>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <BaseSearch
           placeholder="Search properties"
@@ -654,7 +654,7 @@ export default function PropertiesScreen() {
           />
         </Portal>
       </View>
-    </AccessGuard>
+    </AdminOnly>
   );
 }
 

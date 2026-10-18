@@ -3,8 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
-import { scopeRecordsForTenant } from '@/shared/access';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { Protect, scopeRecordsForTenant } from '@/shared/access';
 import BaseSearch from '@/shared/components/BaseSearch';
 import EmptyState from '@/shared/components/EmptyState';
 import FilterButtons from '@/shared/components/FilterButtons';
@@ -157,7 +156,7 @@ export default function TransactionsScreen() {
   );
 
   return (
-    <AccessGuard action="view" resource="transaction">
+    <Protect action="view" resource="transaction">
       <View
         style={[
           styles.container,
@@ -319,7 +318,7 @@ export default function TransactionsScreen() {
           }
         />
       </View>
-    </AccessGuard>
+    </Protect>
   );
 }
 

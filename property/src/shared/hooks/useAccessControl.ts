@@ -11,7 +11,7 @@ import {
   isBusinessOwner,
   normalizeIdentity,
   parseShareRoles,
-} from '@/shared/utils/businessAccess';
+} from '@/shared/utils/businessScope';
 
 export type { Action, Resource };
 

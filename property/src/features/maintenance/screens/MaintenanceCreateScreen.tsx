@@ -9,7 +9,7 @@ import MaintenanceForm, {
 } from '@/features/maintenance/components/MaintenanceForm';
 import { useAuth } from '@/providers/AuthProvider';
 import { useIdleLock } from '@/providers/LockScreenProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { Protect } from '@/shared/access';
 import EmptyState from '@/shared/components/EmptyState';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
@@ -235,7 +235,7 @@ export default function CreateMaintenanceScreen() {
 
   const selectedHouse = houses.find(h => h.id === form.house_id);
   return (
-    <AccessGuard action="create" resource="maintenance">
+    <Protect action="create" resource="maintenance">
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -276,7 +276,7 @@ export default function CreateMaintenanceScreen() {
           Submit Request
         </Button>
       </KeyboardScroll>
-    </AccessGuard>
+    </Protect>
   );
 }
 

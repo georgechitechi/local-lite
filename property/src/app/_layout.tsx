@@ -18,6 +18,7 @@ import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { BiometricAuthProvider } from '@/providers/BiometricAuthProvider';
 import { LockScreenProvider, useIdleLock } from '@/providers/LockScreenProvider';
 import { SyncClientProvider, useLocalClient } from '@/providers/SyncClientProvider';
+import { AppAccessProvider } from '@/shared/access/AppAccessProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
 import DeletionBlocker from '@/shared/components/DeletionBlocker';
 import DemoModeBanner from '@/shared/components/DemoModeBanner';
@@ -190,7 +191,9 @@ function ThemedApp() {
               <BiometricAuthProvider>
                 <LockScreenProvider>
                   <BusinessProvider>
-                    <RootLayoutNav />
+                    <AppAccessProvider>
+                      <RootLayoutNav />
+                    </AppAccessProvider>
                   </BusinessProvider>
                 </LockScreenProvider>
               </BiometricAuthProvider>

@@ -19,7 +19,7 @@ import ContractActionModal, {
   type ContractActionType,
 } from '@/features/contracts/components/ContractActionModal';
 import { useIdleLock } from '@/providers/LockScreenProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { AdminOnly } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import BaseSearch from '@/shared/components/BaseSearch';
 import EmptyState from '@/shared/components/EmptyState';
@@ -836,7 +836,7 @@ export default function ContractsScreen() {
   }
 
   return (
-    <AccessGuard roles={['admin']}>
+    <AdminOnly>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <BaseSearch
           placeholder="Search contracts"
@@ -1048,7 +1048,7 @@ export default function ContractsScreen() {
           />
         </Portal>
       </View>
-    </AccessGuard>
+    </AdminOnly>
   );
 }
 

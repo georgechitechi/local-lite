@@ -24,7 +24,7 @@ import {
   isActiveBusinessShare,
   normalizeIdentity,
   parseShareRoles,
-} from '@/shared/utils/businessAccess';
+} from '@/shared/utils/businessScope';
 
 const BusinessLogo = ({
   logoUrl,

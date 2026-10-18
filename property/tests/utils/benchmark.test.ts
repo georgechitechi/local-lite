@@ -1,5 +1,5 @@
 import type { Business, BusinessShare, Tenant } from '@/shared/types/types';
-import { accessibleBusinesses } from '@/shared/utils/businessAccess';
+import { accessibleBusinesses } from '@/shared/utils/businessScope';
 import { defaultCurrencies, formatWithCurrency } from '@/shared/utils/formatters';
 import {
   calculateEffectiveRent,

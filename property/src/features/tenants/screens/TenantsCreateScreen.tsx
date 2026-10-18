@@ -10,7 +10,7 @@ import TenantForm, {
   type TenantFormData,
 } from '@/features/tenants/components/TenantForm';
 import { useAuth } from '@/providers/AuthProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { Protect } from '@/shared/access';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import { useCoreMutations, useTenants } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
@@ -225,7 +225,7 @@ export default function CreateTenantScreen() {
   };
 
   return (
-    <AccessGuard action="create" resource="tenant">
+    <Protect action="create" resource="tenant">
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -251,7 +251,7 @@ export default function CreateTenantScreen() {
           </Button>
         </View>
       </KeyboardScroll>
-    </AccessGuard>
+    </Protect>
   );
 }
 

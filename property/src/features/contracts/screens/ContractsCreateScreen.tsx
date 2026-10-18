@@ -13,7 +13,7 @@ import ContractsForm, {
   type Tenant,
 } from '@/features/contracts/components/ContractsForm';
 import { useAuth } from '@/providers/AuthProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { AdminOnly } from '@/shared/access';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import { useCurrency } from '@/shared/hooks/useCurrency';
 import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
@@ -305,7 +305,7 @@ export default function CreateContractScreen() {
   };
 
   return (
-    <AccessGuard roles={['admin']}>
+    <AdminOnly>
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -352,7 +352,7 @@ export default function CreateContractScreen() {
           Create Contract
         </Button>
       </KeyboardScroll>
-    </AccessGuard>
+    </AdminOnly>
   );
 }
 

@@ -10,7 +10,7 @@ import TenantForm, {
   type TenantFormData,
 } from '@/features/tenants/components/TenantForm';
 import { updateTenantStatus } from '@/features/tenants/utils/tenantStatus';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { Protect } from '@/shared/access';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import LoadingCard from '@/shared/components/LoadingCard';
 import { useCoreMutations, useTenants } from '@/shared/hooks/useStore';
@@ -280,7 +280,7 @@ export default function EditTenantScreen() {
   }
 
   return (
-    <AccessGuard action="edit" resource="tenant">
+    <Protect action="edit" resource="tenant">
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -366,7 +366,7 @@ export default function EditTenantScreen() {
           </Dialog>
         </Portal>
       </KeyboardScroll>
-    </AccessGuard>
+    </Protect>
   );
 }
 

@@ -30,7 +30,7 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { AdminOnly } from '@/shared/access';
 import BaseSearch from '@/shared/components/BaseSearch';
 import EmptyState from '@/shared/components/EmptyState';
 import FilterButtons from '@/shared/components/FilterButtons';
@@ -377,7 +377,7 @@ export default function ViewProperty() {
   }
 
   return (
-    <AccessGuard roles={['admin']}>
+    <AdminOnly>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Surface
           style={[styles.header, { backgroundColor: colors.surface }]}
@@ -612,7 +612,7 @@ export default function ViewProperty() {
           />
         </Portal>
       </View>
-    </AccessGuard>
+    </AdminOnly>
   );
 }
 

@@ -22,7 +22,7 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
-import { Can } from '@/shared/components/AccessGuard';
+import { Can } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
 import HistoryModal from '@/shared/components/HistoryModal';
 import StatusUpdateModal from '@/shared/components/StatusUpdateModal';

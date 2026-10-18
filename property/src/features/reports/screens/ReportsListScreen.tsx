@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { ReportCard } from '@/features/reports/components/ReportCard';
 import { ReportModalSwitch } from '@/features/reports/components/ReportModalSwitch';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { StaffOrAdmin } from '@/shared/access';
 import { useReports } from '@/shared/hooks/useReports';
 
 interface ReportType {
@@ -184,7 +184,7 @@ export default function ReportsScreen() {
   };
 
   return (
-    <AccessGuard roles={['admin', 'staff']}>
+    <StaffOrAdmin>
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.content}
@@ -218,7 +218,7 @@ export default function ReportsScreen() {
         }}
         pendingExport={pendingExport}
       />
-    </AccessGuard>
+    </StaffOrAdmin>
   );
 }
 

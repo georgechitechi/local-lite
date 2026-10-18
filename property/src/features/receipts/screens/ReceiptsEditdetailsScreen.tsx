@@ -21,7 +21,7 @@ import {
   getAmountAffix,
 } from '@/features/receipts/utils/receiptHelper';
 import { useAuth } from '@/providers/AuthProvider';
-import AccessGuard from '@/shared/components/AccessGuard';
+import { Protect } from '@/shared/access';
 import DatePicker from '@/shared/components/DatePicker';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import LoadingCard from '@/shared/components/LoadingCard';
@@ -467,7 +467,7 @@ export default function EditReceiptScreen() {
   }
 
   return (
-    <AccessGuard action="edit" resource="receipt">
+    <Protect action="edit" resource="receipt">
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
@@ -691,7 +691,7 @@ export default function EditReceiptScreen() {
           existingMessages={paymentMessagesWithCounts as any}
         />
       </KeyboardScroll>
-    </AccessGuard>
+    </Protect>
   );
 }
 
