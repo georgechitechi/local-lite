@@ -62,7 +62,6 @@ export function accessibleBusinesses(
   if (!user) return [];
   const email = normalizeIdentity(user.email);
   const normalizedUserId = normalizeIdentity(user.id);
-  const normalizedOfflineId = normalizeIdentity(offlineUserId);
 
   const sharedIds = new Set(
     shares

@@ -23,7 +23,6 @@ let mockAuth: any;
 jest.mock('@/providers/SyncClientProvider', () => ({ useLocalClient: () => mockClient }));
 jest.mock('@/providers/AuthProvider', () => ({ useAuth: () => mockAuth }));
 jest.mock('@/shared/services/auth', () => ({ OFFLINE_USER_ID: 'offline' }));
-jest.mock('@/shared/utils/permissions', () => ({ ac: {}, mapActionToCrud: jest.fn() }));
 jest.mock('@/shared/services/sync/client', () => ({
   getSyncClientSync: () => null,
   getSyncClient: jest.fn(),

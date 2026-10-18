@@ -66,13 +66,14 @@ const Dashboard = function Dashboard() {
   const mpesaPaymentModalVisible = useUIState(s => s.mpesaPaymentModalVisible);
   const isDarkModeInstance = useTheme();
   const {
-    hasAccess,
     user,
     userRoles,
     tenantId,
     loading: accessLoading,
+    isAdmin,
+    isAdminOrStaff,
   } = useAccessControl();
-  const isManagement = hasAccess(['admin', 'staff']);
+  const isManagement = isAdminOrStaff;
   const colors = useThemeColors();
   const router = useRouter();
   const isKE = selectedBusiness?.country === 'KE';
@@ -551,7 +552,7 @@ const Dashboard = function Dashboard() {
       style={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {!hasAccess(['admin']) && (
+      {!isAdmin && (
         <View style={{ marginBottom: 0, backgroundColor: colors.surface }}>
           <View style={{ paddingHorizontal: 16, marginVertical: 0 }}>
             <View style={styles.userInfoContainer}>
@@ -706,7 +707,7 @@ const Dashboard = function Dashboard() {
         />
       )}
 
-      {hasAccess(['admin']) && (
+      {isAdmin && (
         <View style={{ padding: 10 }}>
           <View style={styles.statsGrid}>
             <StatCard
@@ -809,12 +810,12 @@ const Dashboard = function Dashboard() {
         </View>
       )}
 
-      {hasAccess(['admin']) && dashboardPreferences.show_insights && (
+      {isAdmin && dashboardPreferences.show_insights && (
         <InsightsCard insights={insights} onAction={handleInsightAction} />
       )}
 
       <View style={[styles.cardsContainer, { paddingHorizontal: 0 }]}>
-        {hasAccess(['admin', 'staff']) && (
+        {isAdminOrStaff && (
           <>
             {dashboardPreferences.show_pending_rent && (
               <PendingRentCard
@@ -865,7 +866,7 @@ const Dashboard = function Dashboard() {
           </>
         )}
 
-        {hasAccess(['admin']) && (
+        {isAdmin && (
           <>
             {dashboardPreferences.show_daily_finance && (
               <DailyFinanceCard

@@ -377,7 +377,7 @@ export default function RemindersScreen() {
                 r.setDeleteDialogVisible(true);
               }}
               onShowHistory={r.setHistoryTenant}
-              hasAdminAccess={r.hasAccess(['admin'])}
+              hasAdminAccess={r.isAdmin}
             />
           )}
           renderSectionHeader={({ section: { title, key, count } }: { section: any }) => (

@@ -24,7 +24,7 @@ export function useReminderActions(
   showSnackbar: any,
   checkOnline: any,
   requireCloudSync: any,
-  hasAccess: any,
+  isAdmin: boolean,
   state: any,
   data: any,
 ) {
@@ -322,7 +322,7 @@ export function useReminderActions(
   };
 
   const handleDeleteReminder = async () => {
-    if (!hasAccess(['admin'])) {
+    if (!isAdmin) {
       showSnackbar('You do not have permission to delete reminders', 'error');
       return;
     }
@@ -358,7 +358,7 @@ export function useReminderActions(
   const handleBulkEmailReminders = async () => {
     if (!checkOnline('Bulk Email')) return;
     if (!requireCloudSync('Bulk Email')) return;
-    if (!hasAccess(['admin'])) {
+    if (!isAdmin) {
       showSnackbar('You do not have permission to send bulk reminders', 'error');
       return;
     }
@@ -546,7 +546,7 @@ export function useReminderActions(
       if (!requireCloudSync('Bulk SMS')) return;
     }
 
-    if (!hasAccess(['admin'])) {
+    if (!isAdmin) {
       showSnackbar('You do not have permission to send bulk reminders', 'error');
       return;
     }

@@ -1,8 +1,9 @@
 import type { User } from '@supabase/supabase-js';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useBusiness } from '@/context/BusinessContext';
 import { useAuth } from '@/providers/AuthProvider';
-import { type Action, evaluatePermission, type Resource } from '@/shared/access';
+import { accessEngine } from '@/shared/access/policies';
+import type { Action, Resource } from '@/shared/access/types';
 import { useBusinessShares, useTenants } from '@/shared/hooks/useStore';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
 import {
@@ -24,9 +25,9 @@ export interface UseAccessControlReturn {
   userRoles: string[];
   loading: boolean;
   hasAccess: (requiredRoles: string | string[]) => boolean;
-  hasAllRoles: (requiredRoles: string | string[]) => boolean;
+  hasAllRoles: (requiredRoles: string[]) => boolean;
   hasOneRole: (role: string) => boolean;
-  hasRole: (role: string) => boolean;
+  hasRole: (role: string | string[]) => boolean;
   can: (action: Action, resource: Resource) => boolean;
   cannot: (action: Action, resource: Resource) => boolean;
   canCreate: (resource: Resource) => boolean;
@@ -37,38 +38,15 @@ export interface UseAccessControlReturn {
   tenantId: string | null;
 }
 
-/** Stable fallback returned when auth is loading or there's no active business. */
-const NO_ACCESS: UseAccessControlReturn = {
-  isOwner: false,
-  isAdmin: false,
-  isStaff: false,
-  isTenant: false,
-  isAdminOrStaff: false,
-  isTenantOnly: false,
-  userRoles: [] as string[],
-  loading: false,
-  hasAccess: () => false,
-  hasAllRoles: () => false,
-  hasOneRole: () => false,
-  hasRole: () => false,
-  can: () => false,
-  cannot: () => true,
-  canCreate: () => false,
-  canView: () => false,
-  canEdit: () => false,
-  canDelete: () => false,
-  user: null,
-  tenantId: null,
-};
-
 export function useAccessControl(): UseAccessControlReturn {
   const { selectedBusiness } = useBusiness();
   const { user, loading: authLoading } = useAuth();
   const businessShares = useBusinessShares();
+  const businessTenants = useTenants(selectedBusiness?.id);
 
   // 1. Get the shared roles for this business and user from local-lite business_shares
   const shareRoles = useMemo(() => {
-    if (authLoading || !selectedBusiness || !user) return [] as string[];
+    if (authLoading || !selectedBusiness || !user?.email) return [] as string[];
     const userEmail = normalizeIdentity(user.email);
     if (!userEmail) return [] as string[];
     const shares = businessShares.filter(
@@ -80,13 +58,10 @@ export function useAccessControl(): UseAccessControlReturn {
     return shares.flatMap(share => parseShareRoles(share.roles));
   }, [authLoading, selectedBusiness, user, businessShares]);
 
-  const businessTenants = useTenants(selectedBusiness?.id);
-
   // 2. Get the tenant ID for this user reactively from SQLite / local-lite
   const tenantId = useMemo(() => {
-    if (authLoading || !selectedBusiness || !user) return null;
-    const userEmail = user.email?.toLowerCase();
-    if (!userEmail) return null;
+    if (authLoading || !selectedBusiness || !user?.email) return null;
+    const userEmail = user.email.toLowerCase();
     const tenant = businessTenants.find((t: any) => t.email?.toLowerCase() === userEmail);
     return tenant ? tenant.id : null;
   }, [authLoading, selectedBusiness, user, businessTenants]);
@@ -111,87 +86,16 @@ export function useAccessControl(): UseAccessControlReturn {
     return Array.from(new Set(roles));
   }, [authLoading, selectedBusiness, user, isOwner, shareRoles, tenantId]);
 
-  const isAdmin = useMemo(
-    () => isOwner || uniqueRoles.includes('admin'),
-    [isOwner, uniqueRoles],
-  );
-  const isStaff = useMemo(() => uniqueRoles.includes('staff'), [uniqueRoles]);
-  const isTenant = useMemo(() => uniqueRoles.includes('tenant'), [uniqueRoles]);
-  const isAdminOrStaff = useMemo(() => isAdmin || isStaff, [isAdmin, isStaff]);
-  const isTenantOnly = useMemo(
-    () => isTenant && !isAdmin && !isStaff,
-    [isTenant, isAdmin, isStaff],
-  );
-
-  const hasAccess = useCallback(
-    (requiredRoles: string | string[]): boolean => {
-      if (isOwner) return true;
-      const rolesArray = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-      return rolesArray.some(role => uniqueRoles.includes(role));
-    },
-    [isOwner, uniqueRoles],
-  );
-
-  const hasOneRole = useCallback(
-    (role: string): boolean => {
-      return uniqueRoles.length === 1 && uniqueRoles.includes(role);
-    },
-    [uniqueRoles],
-  );
-
-  const hasAllRoles = useCallback(
-    (requiredRoles: string | string[]): boolean => {
-      if (isOwner) return true;
-      const rolesArray = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-      return rolesArray.every(role => uniqueRoles.includes(role));
-    },
-    [isOwner, uniqueRoles],
-  );
-
-  const can = useCallback(
-    (action: Action, resource: Resource): boolean => {
-      return evaluatePermission(uniqueRoles, action, resource, isOwner);
-    },
-    [isOwner, uniqueRoles],
-  );
-
-  const cannot = useCallback(
-    (action: Action, resource: Resource): boolean => {
-      return !can(action, resource);
-    },
-    [can],
-  );
-
-  const hasRole = useCallback(
-    (role: string): boolean => {
-      return uniqueRoles.includes(role);
-    },
-    [uniqueRoles],
-  );
-
-  const canCreate = useCallback(
-    (resource: Resource): boolean => can('create', resource),
-    [can],
-  );
-
-  const canView = useCallback(
-    (resource: Resource): boolean => can('view', resource),
-    [can],
-  );
-
-  const canEdit = useCallback(
-    (resource: Resource): boolean => can('edit', resource),
-    [can],
-  );
-
-  const canDelete = useCallback(
-    (resource: Resource): boolean => can('delete', resource),
-    [can],
-  );
+  const evaluator = useMemo(() => {
+    return accessEngine.buildEvaluator(uniqueRoles, isOwner);
+  }, [uniqueRoles, isOwner]);
 
   return useMemo(() => {
-    if (authLoading) return { ...NO_ACCESS, loading: true };
-    if (!selectedBusiness || !user) return { ...NO_ACCESS, user: user || null };
+    const isAdmin = isOwner || evaluator.hasRole('admin');
+    const isStaff = evaluator.hasRole('staff');
+    const isTenant = evaluator.hasRole('tenant');
+    const isAdminOrStaff = isAdmin || isStaff;
+    const isTenantOnly = isTenant && !isAdmin && !isStaff;
 
     return {
       isOwner,
@@ -201,41 +105,20 @@ export function useAccessControl(): UseAccessControlReturn {
       isAdminOrStaff,
       isTenantOnly,
       userRoles: uniqueRoles,
-      loading: false,
-      hasAccess,
-      hasAllRoles,
-      hasOneRole,
-      hasRole,
-      can,
-      cannot,
-      canCreate,
-      canView,
-      canEdit,
-      canDelete,
-      user,
+      loading: authLoading,
+      hasAccess: (roles: string | string[]) => evaluator.hasRole(roles as any),
+      hasAllRoles: (roles: string[]) => evaluator.hasAllRoles(roles as any),
+      hasOneRole: (role: string) =>
+        uniqueRoles.length === 1 && uniqueRoles.includes(role),
+      hasRole: (role: string | string[]) => evaluator.hasRole(role as any),
+      can: (action: Action, resource: Resource) => evaluator.can(action, resource),
+      cannot: (action: Action, resource: Resource) => evaluator.cannot(action, resource),
+      canCreate: (resource: Resource) => evaluator.can('create', resource),
+      canView: (resource: Resource) => evaluator.can('view', resource),
+      canEdit: (resource: Resource) => evaluator.can('edit', resource),
+      canDelete: (resource: Resource) => evaluator.can('delete', resource),
+      user: user || null,
       tenantId,
     };
-  }, [
-    authLoading,
-    selectedBusiness,
-    user,
-    isOwner,
-    isAdmin,
-    isStaff,
-    isTenant,
-    isAdminOrStaff,
-    isTenantOnly,
-    uniqueRoles,
-    hasAccess,
-    hasAllRoles,
-    hasOneRole,
-    hasRole,
-    can,
-    cannot,
-    canCreate,
-    canView,
-    canEdit,
-    canDelete,
-    tenantId,
-  ]);
+  }, [authLoading, isOwner, evaluator, uniqueRoles, user, tenantId]);
 }

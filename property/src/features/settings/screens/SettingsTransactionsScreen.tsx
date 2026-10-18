@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
+import { scopeRecordsForTenant } from '@/shared/access';
 import AccessGuard from '@/shared/components/AccessGuard';
 import BaseSearch from '@/shared/components/BaseSearch';
 import EmptyState from '@/shared/components/EmptyState';
@@ -39,7 +40,7 @@ const getTransactionDate = (transaction: Transaction): Date => {
 export default function TransactionsScreen() {
   const colors = useThemeColors();
   const { selectedBusiness } = useBusiness();
-  const { hasAccess, tenantId } = useAccessControl();
+  const { isTenantOnly, tenantId } = useAccessControl();
 
   const transactions = useTransactions(selectedBusiness?.id);
 
@@ -47,10 +48,10 @@ export default function TransactionsScreen() {
   const [selectedFilter, setSelectedFilter] = useState('all');
 
   const scopedTransactions = useMemo(() => {
-    const tenantTransactions =
-      hasAccess(['tenant']) && tenantId
-        ? transactions.filter(t => t.tenant_id === tenantId)
-        : transactions;
+    const tenantTransactions = scopeRecordsForTenant(transactions, {
+      tenantId,
+      isTenantOnly,
+    });
 
     return tenantTransactions.filter(transaction => {
       const raw = transaction.raw_payload as any;
@@ -85,7 +86,7 @@ export default function TransactionsScreen() {
 
       return matchesSearch && matchesFilter;
     });
-  }, [transactions, tenantId, hasAccess, searchQuery, selectedFilter]);
+  }, [transactions, tenantId, isTenantOnly, searchQuery, selectedFilter]);
 
   const sections = useMemo(() => {
     const sorted = [...scopedTransactions].sort((a, b) => {

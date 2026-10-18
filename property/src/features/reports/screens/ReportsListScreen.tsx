@@ -165,7 +165,7 @@ export default function ReportsScreen() {
     setActiveModal,
     reportParams,
     updateParam,
-    hasAccess,
+    isAdmin,
     // Store data
     storeProperties,
     storeTenants,
@@ -189,7 +189,7 @@ export default function ReportsScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.content}
       >
-        {REPORT_TYPES.filter(r => !r.adminOnly || hasAccess('admin')).map(report => (
+        {REPORT_TYPES.filter(r => !r.adminOnly || isAdmin).map(report => (
           <ReportCard
             key={report.id}
             report={report}

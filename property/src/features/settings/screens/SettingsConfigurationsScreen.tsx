@@ -50,7 +50,7 @@ export default function PropertyConfigurations() {
   const theme = useTheme();
   const { selectedBusiness } = useBusiness();
   const { showSnackbar } = useSnackbar();
-  const { hasAccess } = useAccessControl();
+  const { isAdmin } = useAccessControl();
 
   // Local-Lite SQLite store
   const allSettings = useSettings(selectedBusiness?.id);
@@ -194,7 +194,7 @@ export default function PropertyConfigurations() {
   };
 
   const handleDeleteHouseType = async (type: HouseType) => {
-    if (!hasAccess(['admin'])) {
+    if (!isAdmin) {
       showSnackbar('You do not have permission to delete house types', 'error');
       return;
     }
@@ -235,7 +235,7 @@ export default function PropertyConfigurations() {
   };
 
   const handleDeleteAmenity = async (amenity: Amenity) => {
-    if (!hasAccess(['admin'])) {
+    if (!isAdmin) {
       showSnackbar('You do not have permission to delete amenities', 'error');
       return;
     }
@@ -329,7 +329,7 @@ export default function PropertyConfigurations() {
                         size={20}
                         iconColor={theme.colors.error}
                         onPress={() => handleDeleteHouseType(type)}
-                        disabled={!hasAccess(['admin'])}
+                        disabled={!isAdmin}
                       />
                     </DataTable.Cell>
                   </DataTable.Row>
@@ -381,7 +381,7 @@ export default function PropertyConfigurations() {
                         size={20}
                         iconColor={theme.colors.error}
                         onPress={() => handleDeleteAmenity(amenity)}
-                        disabled={!hasAccess(['admin'])}
+                        disabled={!isAdmin}
                       />
                     </DataTable.Cell>
                   </DataTable.Row>

@@ -62,7 +62,13 @@ export default function ViewReceiptScreen() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors() as any;
-  const { loading: accessLoading, isAdmin, isTenantOnly, tenantId, isOwner } = useAccessControl();
+  const {
+    loading: accessLoading,
+    isAdmin,
+    isTenantOnly,
+    tenantId,
+    isOwner,
+  } = useAccessControl();
 
   const { selectedBusiness } = useBusiness();
   const { update, insert, insertMany } = useCoreMutations();
@@ -246,7 +252,6 @@ export default function ViewReceiptScreen() {
       </View>
     );
   }
-
 
   if (!receipt || (isTenantOnly && receipt.tenant_id !== tenantId)) {
     return (

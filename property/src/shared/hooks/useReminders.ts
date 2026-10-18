@@ -21,7 +21,7 @@ export function useReminders() {
   const settings = useSettings(selectedBusiness?.id);
   const { refreshing, onRefresh: fetchData } = useStoreRefresh();
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
-  const { hasAccess } = useAccessControl();
+  const { isAdmin } = useAccessControl();
 
   const state = useReminderState(settings);
   const data = useReminderData(selectedBusiness, state);
@@ -32,7 +32,7 @@ export function useReminders() {
     showSnackbar,
     checkOnline,
     requireCloudSync,
-    hasAccess,
+    isAdmin,
     state,
     data,
   );
@@ -46,7 +46,7 @@ export function useReminders() {
     business,
     refreshing,
     defaultCurrency,
-    hasAccess,
+    isAdmin,
     fetchData,
     showSnackbar,
   };

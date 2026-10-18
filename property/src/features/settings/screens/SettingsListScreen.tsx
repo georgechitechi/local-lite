@@ -180,7 +180,7 @@ export default function SettingsManager() {
   const router = useRouter();
   const { confirmSignOut, user: authUser } = useAuth();
   const { selectedBusiness, requireBusiness } = useBusiness();
-  const { hasAccess } = useAccessControl();
+  const { isAdmin, isTenant, isAdminOrStaff } = useAccessControl();
   const { isDarkMode, themeMode, setThemeMode } = useTheme();
   const {
     isBiometricSupported,
@@ -868,11 +868,11 @@ export default function SettingsManager() {
 
         <Divider />
 
-        {(hasAccess(['admin']) || hasAccess(['tenant'])) && (
+        {(isAdmin || isTenant) && (
           <>
             <List.Section>
               <List.Subheader>Financial Settings</List.Subheader>
-              {hasAccess(['admin']) && (
+              {isAdmin && (
                 <>
                   <List.Item
                     title="Payment Methods"
@@ -916,7 +916,7 @@ export default function SettingsManager() {
               <List.Item
                 title="Transactions"
                 description={
-                  hasAccess(['tenant'])
+                  isTenant
                     ? 'View your payment transactions'
                     : 'View all payment transactions'
                 }
@@ -926,7 +926,7 @@ export default function SettingsManager() {
               />
             </List.Section>
 
-            {hasAccess(['admin']) && (
+            {isAdmin && (
               <>
                 <Divider />
 
@@ -983,7 +983,7 @@ export default function SettingsManager() {
 
         <Divider />
 
-        {hasAccess(['admin', 'staff']) && (
+        {isAdminOrStaff && (
           <List.Section>
             <List.Subheader>Data Management</List.Subheader>
             <List.Item
@@ -993,7 +993,7 @@ export default function SettingsManager() {
               onPress={() => router.push('/reports')}
               right={props => <IconButton {...props} icon="chevron-right" />}
             />
-            {hasAccess(['admin']) && (
+            {isAdmin && (
               <>
                 <List.Item
                   title="Manage Contacts"
@@ -1037,7 +1037,7 @@ export default function SettingsManager() {
         <Divider />
 
         <List.Section>
-          {hasAccess(['admin']) && (
+          {isAdmin && (
             <>
               <List.Subheader>Application Settings</List.Subheader>
               <List.Item
@@ -1108,7 +1108,7 @@ export default function SettingsManager() {
 
         <Divider />
 
-        {hasAccess(['admin']) && (
+        {isAdmin && (
           <List.Section>
             <List.Item
               title="Business Customizations"
