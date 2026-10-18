@@ -6,6 +6,12 @@ export {
   checkRouteAccess,
   filterRecord,
 } from 'native-access-control';
+export {
+  applySupabaseScope,
+  generateRlsPolicy,
+  toPostgresWhere,
+  toSupabaseMatch,
+} from 'native-access-control/adapters';
 export { useAccessControl } from '@/shared/hooks/useAccessControl';
 export { AppAccessProvider } from './AppAccessProvider';
 export * from './policies';
