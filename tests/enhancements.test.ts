@@ -165,6 +165,50 @@ describe('local-lite Architectural Enhancements', () => {
     });
   });
 
+  describe('Automatic Soft-Delete Omission', () => {
+    beforeEach(async () => {
+      await client.insert('items', 'active-1', { name: 'Active 1', deleted: 0 });
+      await client.insert('items', 'active-2', { name: 'Active 2', deleted: null });
+      await client.insert('items', 'deleted-1', { name: 'Deleted 1', deleted: 1 });
+      await client.insert('items', 'deleted-2', { name: 'Deleted 2', deleted: true });
+    });
+
+    it('omits deleted: 1 and deleted: true records by default in findMany', async () => {
+      const results = await client.findMany('items');
+      const ids = results.map((r: any) => r.id);
+
+      expect(ids).toContain('active-1');
+      expect(ids).toContain('active-2');
+      expect(ids).not.toContain('deleted-1');
+      expect(ids).not.toContain('deleted-2');
+    });
+
+    it('returns deleted records when includeDeleted: true or explicit deleted where is passed', async () => {
+      const all = await client.findMany('items', { includeDeleted: true });
+      expect(all.map((r: any) => r.id)).toEqual(
+        expect.arrayContaining(['active-1', 'active-2', 'deleted-1', 'deleted-2'])
+      );
+
+      const onlyDeleted = await client.findMany('items', { where: { deleted: 1 } });
+      expect(onlyDeleted.map((r: any) => r.id)).toContain('deleted-1');
+    });
+
+    it('omits deleted records in findById and findByIds by default', async () => {
+      expect(await client.findById('items', 'deleted-1')).toBeNull();
+      expect(await client.findById('items', 'deleted-1', { includeDeleted: true })).toMatchObject({
+        id: 'deleted-1',
+      });
+
+      const batched = await client.findByIds('items', ['active-1', 'deleted-1']);
+      expect(batched.map((r: any) => r.id)).toEqual(['active-1']);
+
+      const batchedWithDeleted = await client.findByIds('items', ['active-1', 'deleted-1'], {
+        includeDeleted: true,
+      });
+      expect(batchedWithDeleted.map((r: any) => r.id)).toEqual(['active-1', 'deleted-1']);
+    });
+  });
+
   describe('React Exports & Component Availability', () => {
     it('exports useLiveRow, useLiveInfiniteQuery, useMutations, and SyncInspector', () => {
       expect(typeof useLiveRow).toBe('function');

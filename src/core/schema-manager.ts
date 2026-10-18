@@ -82,6 +82,35 @@ export class SchemaManager {
   }
 
   /**
+   * Checks whether a column is known to exist on the specified table.
+   */
+  hasColumn(tableName: string, column: string): boolean {
+    return this.knownColumns.has(`${tableName}:${column.toLowerCase()}`);
+  }
+
+  /**
+   * Introspects table columns via PRAGMA table_info if not previously cached.
+   */
+  async ensureTableIntrospected(db: DBExecutable, tableName: string): Promise<void> {
+    const cacheKey = `${tableName}:__introspected__`;
+    if (this.knownColumns.has(cacheKey)) return;
+    this.knownColumns.add(cacheKey);
+    const safeTable = escapeIdentifier(tableName);
+    try {
+      const tableInfo = await db.execute(`PRAGMA table_info(${safeTable});`);
+      if (Array.isArray(tableInfo)) {
+        for (const col of tableInfo) {
+          if (col && col.name) {
+            this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
    * Ensures that the target table exists in SQLite with the specified primary key.
    */
   async ensureTable(

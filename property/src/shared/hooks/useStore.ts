@@ -93,11 +93,10 @@ export function useCoreTableWithLoading<
 
   const queryOptions = useMemo(() => {
     if (scoped && !targetId) return null;
-    const where: Record<string, any> = { deleted: { $ne: 1 } };
     if (scoped && targetId) {
-      where.business_id = targetId;
+      return { where: { business_id: targetId } };
     }
-    return { where };
+    return undefined;
   }, [scoped, targetId]);
 
   const { data, loading } = useLiveQuery<T>(
@@ -106,13 +105,8 @@ export function useCoreTableWithLoading<
     queryOptions ?? { where: { id: '__none__' } },
   );
 
-  const filtered = useMemo(() => {
-    if (!client || (scoped && !targetId)) return EMPTY_ARRAY as T[];
-    return (data ?? []).filter(row => !isDeletedRecord(row));
-  }, [client, data, scoped, targetId]);
-
   return {
-    data: filtered,
+    data: !client || (scoped && !targetId) ? (EMPTY_ARRAY as T[]) : (data ?? (EMPTY_ARRAY as T[])),
     loading: !client || loading,
   };
 }
@@ -220,8 +214,6 @@ export function useBusinesses(): Business[] {
   const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants', {
     select: ['id', 'email', 'business_id', 'deleted'],
   });
-
-  console.log('tenants', tenants);
   const { user, loading } = useAuth();
   return useMemo(
     () =>
@@ -237,7 +229,7 @@ export function useBusiness(id: string | undefined): Business | undefined {
   const businesses = useBusinesses();
   return useMemo(() => {
     if (!id) return undefined;
-    return businesses.find(b => b.id === id && !b.deleted);
+    return businesses.find(b => b.id === id);
   }, [businesses, id]);
 }
 
@@ -285,7 +277,7 @@ export function useCoreIndexMap<T extends { id: string }>(items: T[]): IndexMap<
     return {
       get: (id: string) => dict.get(id),
       has: (id: string) => dict.has(id),
-      values: () => Array.from(dict.values()),
+      values: () => items,
     };
   }, [items]);
 }
@@ -403,6 +395,124 @@ export function useHousesByPropertyId(businessId: string | undefined): GroupMap<
 }
 
 // ---------------------------------------------------------------------------
+// Scoped Query Pushdowns (Ultra-fast index seeks for detail screens)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reactively queries contracts for a specific tenant pushed down to SQLite.
+ * Uses index seek on tenant_id, eliminating full table scans.
+ */
+export function useTenantContracts(
+  businessId: string | undefined,
+  tenantId: string | undefined,
+): Contract[] {
+  const client = useLocalClient();
+  const query = useMemo(() => {
+    if (!tenantId) return null;
+    const where: Record<string, any> = { tenant_id: tenantId };
+    if (businessId) where.business_id = businessId;
+    return {
+      where,
+      orderBy: 'created_at',
+      order: 'desc' as const,
+    };
+  }, [businessId, tenantId]);
+
+  const { data } = useLiveQuery<Contract>(
+    client,
+    'contracts',
+    query ?? { where: { id: '__none__' } },
+  );
+
+  return data ?? (EMPTY_ARRAY as Contract[]);
+}
+
+/**
+ * Reactively queries receipts for a specific tenant pushed down to SQLite.
+ * Uses index seek on tenant_id, eliminating full table scans.
+ */
+export function useTenantReceipts(
+  businessId: string | undefined,
+  tenantId: string | undefined,
+): Receipt[] {
+  const client = useLocalClient();
+  const query = useMemo(() => {
+    if (!tenantId) return null;
+    const where: Record<string, any> = { tenant_id: tenantId };
+    if (businessId) where.business_id = businessId;
+    return {
+      where,
+      orderBy: 'payment_date',
+      order: 'desc' as const,
+    };
+  }, [businessId, tenantId]);
+
+  const { data } = useLiveQuery<Receipt>(
+    client,
+    'receipts',
+    query ?? { where: { id: '__none__' } },
+  );
+
+  return data ?? (EMPTY_ARRAY as Receipt[]);
+}
+
+/**
+ * Reactively queries receipts for a specific contract pushed down to SQLite.
+ */
+export function useContractReceipts(
+  businessId: string | undefined,
+  contractId: string | undefined,
+): Receipt[] {
+  const client = useLocalClient();
+  const query = useMemo(() => {
+    if (!contractId) return null;
+    const where: Record<string, any> = { contract_id: contractId };
+    if (businessId) where.business_id = businessId;
+    return {
+      where,
+      orderBy: 'payment_date',
+      order: 'desc' as const,
+    };
+  }, [businessId, contractId]);
+
+  const { data } = useLiveQuery<Receipt>(
+    client,
+    'receipts',
+    query ?? { where: { id: '__none__' } },
+  );
+
+  return data ?? (EMPTY_ARRAY as Receipt[]);
+}
+
+/**
+ * Reactively queries houses for a specific property pushed down to SQLite.
+ */
+export function usePropertyHouses(
+  businessId: string | undefined,
+  propertyId: string | undefined,
+): House[] {
+  const client = useLocalClient();
+  const query = useMemo(() => {
+    if (!propertyId) return null;
+    const where: Record<string, any> = { property_id: propertyId };
+    if (businessId) where.business_id = businessId;
+    return {
+      where,
+      orderBy: 'house_number',
+      order: 'asc' as const,
+    };
+  }, [businessId, propertyId]);
+
+  const { data } = useLiveQuery<House>(
+    client,
+    'houses',
+    query ?? { where: { id: '__none__' } },
+  );
+
+  return data ?? (EMPTY_ARRAY as House[]);
+}
+
+// ---------------------------------------------------------------------------
 // Direct Mutation API for Core Tables (Simple insert, update, delete)
 // ---------------------------------------------------------------------------
 
@@ -417,23 +527,45 @@ export function useProfiles(): Profile[] {
   return useCoreTable<Profile>('profiles');
 }
 
-/** Get a single profile by User ID */
+/** Get a single profile by User ID using point read-through lookup */
 export function useProfile(userId: string | undefined | null): Profile | undefined {
-  const profiles = useProfiles();
-  return useMemo(() => {
-    if (!userId) return undefined;
-    return profiles.find(p => p.id === userId || p.user_id === userId);
-  }, [profiles, userId]);
+  const client = useLocalClient();
+  const query = useMemo(() => {
+    if (!userId) return null;
+    return {
+      where: { id: userId },
+      limit: 1,
+    };
+  }, [userId]);
+
+  const { data } = useLiveQuery<Profile>(
+    client,
+    'profiles',
+    query ?? { where: { id: '__none__' } },
+  );
+
+  return data && data.length > 0 ? data[0] : undefined;
 }
 
-/** Get a single profile by Email */
+/** Get a single profile by Email using indexed point lookup */
 export function useProfileByEmail(email: string | undefined | null): Profile | undefined {
-  const profiles = useProfiles();
-  return useMemo(() => {
-    if (!email) return undefined;
-    const lower = email.toLowerCase();
-    return profiles.find(p => p.email?.toLowerCase() === lower);
-  }, [profiles, email]);
+  const client = useLocalClient();
+  const lower = email ? email.toLowerCase() : '';
+  const query = useMemo(() => {
+    if (!lower) return null;
+    return {
+      where: { email: lower },
+      limit: 1,
+    };
+  }, [lower]);
+
+  const { data } = useLiveQuery<Profile>(
+    client,
+    'profiles',
+    query ?? { where: { id: '__none__' } },
+  );
+
+  return data && data.length > 0 ? data[0] : undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ import {
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier } from '../utils/sql.js';
-import { applyQueryOptions } from './query.js';
+import { applyQueryOptions, isDeletedRecord, hasExplicitDeletedFilter } from './query.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -146,7 +146,11 @@ export class TransactionalClient {
     await this.mutate(tableName, rowId, 'DELETE', null, options);
   }
 
-  async findById<T = any>(tableName: string, id: string): Promise<T | null> {
+  async findById<T = any>(
+    tableName: string,
+    id: string,
+    options?: { includeDeleted?: boolean }
+  ): Promise<T | null> {
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(this.parent.getPrimaryKey());
     try {
@@ -154,13 +158,22 @@ export class TransactionalClient {
         `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
         [id]
       );
-      return rows && rows.length > 0 ? this.parent.hydrateRow<T>(tableName, rows[0]) : null;
+      if (!rows || rows.length === 0) return null;
+      const row = this.parent.hydrateRow<T>(tableName, rows[0]);
+      if (!options?.includeDeleted && isDeletedRecord(row)) {
+        return null;
+      }
+      return row;
     } catch {
       return null;
     }
   }
 
-  async findByIds<T = any>(tableName: string, ids: string[]): Promise<T[]> {
+  async findByIds<T = any>(
+    tableName: string,
+    ids: string[],
+    options?: { includeDeleted?: boolean }
+  ): Promise<T[]> {
     if (!ids || ids.length === 0) return [];
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(this.parent.getPrimaryKey());
@@ -171,7 +184,11 @@ export class TransactionalClient {
         ids
       );
       if (!rows || rows.length === 0) return [];
-      return rows.map((r) => this.parent.hydrateRow<T>(tableName, r));
+      const hydrated = rows.map((r) => this.parent.hydrateRow<T>(tableName, r));
+      if (!options?.includeDeleted) {
+        return hydrated.filter((r) => !isDeletedRecord(r));
+      }
+      return hydrated;
     } catch {
       return [];
     }
@@ -657,6 +674,8 @@ export class LocalFirstClient {
     tableName: string,
     options?: QueryOptions
   ): Promise<T[]> {
+    await this.schemaManager.ensureTableIntrospected(db, tableName);
+
     const safeTable = escapeIdentifier(tableName);
     let rows: any[];
     const projection =
@@ -665,10 +684,17 @@ export class LocalFirstClient {
         : '*';
     let sql = `SELECT ${projection} FROM ${safeTable}`;
     const params: any[] = [];
+    const whereClauses: string[] = [];
+
+    // Automatically push down soft-delete filter if table has deleted column and not explicitly overridden
+    const hasDeletedClause = options?.where && typeof options.where === 'object' && hasExplicitDeletedFilter(options.where);
+    if (!options?.includeDeleted && !hasDeletedClause && this.schemaManager.hasColumn(tableName, 'deleted')) {
+      const safeDel = escapeIdentifier('deleted');
+      whereClauses.push(`(${safeDel} IS NULL OR (${safeDel} != 1 AND ${safeDel} != 'true'))`);
+    }
 
     // Push down where conditions to SQLite
     if (options?.where && typeof options.where === 'object' && !Array.isArray(options.where)) {
-      const whereClauses: string[] = [];
       for (const [col, filter] of Object.entries(options.where)) {
         if (col === '$or' || col === '$and') continue;
         const safeCol = escapeIdentifier(col);
@@ -785,7 +811,11 @@ export class LocalFirstClient {
    * Example:
    * const tenant = await client.findById('tenants', 'ten-1');
    */
-  async findById<T = any>(tableName: string, id: string): Promise<T | null> {
+  async findById<T = any>(
+    tableName: string,
+    id: string,
+    options?: { includeDeleted?: boolean }
+  ): Promise<T | null> {
     // Primary-key lookup in SQLite instead of loading the whole table into JS.
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(this.primaryKey);
@@ -794,7 +824,12 @@ export class LocalFirstClient {
         `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
         [id]
       );
-      return rows && rows.length > 0 ? this.hydrateRow<T>(tableName, rows[0]) : null;
+      if (!rows || rows.length === 0) return null;
+      const row = this.hydrateRow<T>(tableName, rows[0]);
+      if (!options?.includeDeleted && isDeletedRecord(row)) {
+        return null;
+      }
+      return row;
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {
@@ -807,11 +842,16 @@ export class LocalFirstClient {
   /**
    * Finds multiple records by primary keys in a single batched SQL query.
    * Eliminates the N-roundtrip bridge overhead of multiple findById calls.
+   * Automatically omits soft-deleted records unless includeDeleted: true.
    *
    * Example:
    * const tenants = await client.findByIds('tenants', ['ten-1', 'ten-2', 'ten-3']);
    */
-  async findByIds<T = any>(tableName: string, ids: string[]): Promise<T[]> {
+  async findByIds<T = any>(
+    tableName: string,
+    ids: string[],
+    options?: { includeDeleted?: boolean }
+  ): Promise<T[]> {
     if (!ids || ids.length === 0) return [];
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(this.primaryKey);
@@ -823,7 +863,11 @@ export class LocalFirstClient {
       );
       if (!rows || rows.length === 0) return [];
       const hasJsonConfig = Boolean(this.jsonColumns[tableName] || this.autoHydrateJSON);
-      return hasJsonConfig ? rows.map((r) => this.hydrateRow<T>(tableName, r)) : (rows as T[]);
+      const hydrated = hasJsonConfig ? rows.map((r) => this.hydrateRow<T>(tableName, r)) : (rows as T[]);
+      if (!options?.includeDeleted) {
+        return hydrated.filter((r) => !isDeletedRecord(r));
+      }
+      return hydrated;
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {

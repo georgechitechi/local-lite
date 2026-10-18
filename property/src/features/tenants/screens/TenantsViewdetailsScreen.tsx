@@ -14,14 +14,13 @@ import SPressable from '@/shared/components/SlightPressable';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useHistoryTargets } from '@/shared/hooks/useHistoryTargets';
 import {
-  useContracts,
   useContractsById,
   useHousesById,
   usePropertiesById,
-  useReceipts,
   useSettings,
   useStoreRefresh,
-  useTenants,
+  useTenantContracts,
+  useTenantReceipts,
   useTenantsById,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
@@ -101,9 +100,8 @@ export default function ViewTenantScreen() {
   const housesById = useHousesById(selectedBusiness?.id);
   const propertiesById = usePropertiesById(selectedBusiness?.id);
   const contractsById = useContractsById(selectedBusiness?.id);
-  const allTenants = useTenants(selectedBusiness?.id);
-  const allContracts = useContracts(selectedBusiness?.id);
-  const allReceipts = useReceipts(selectedBusiness?.id);
+  const tenantContracts = useTenantContracts(selectedBusiness?.id, id);
+  const tenantReceipts = useTenantReceipts(selectedBusiness?.id, id);
   const allSettings = useSettings(selectedBusiness?.id);
   const { refreshing, onRefresh } = useStoreRefresh();
 
@@ -119,69 +117,57 @@ export default function ViewTenantScreen() {
   const tenant = useMemo(() => {
     const t = tenantsById.get(id as string);
     return (t as unknown as Tenant) || null;
-  }, [id, tenantsById.get]);
+  }, [id, tenantsById]);
 
   const contracts = useMemo(() => {
     if (!tenant) return [];
-    return allContracts
-      .filter(c => c.tenant_id === id)
-      .map(c => {
-        const house = housesById.get(c.house_id as string);
-        const property = house?.property_id
-          ? propertiesById.get(house.property_id as string)
-          : undefined;
-        return {
-          ...c,
-          houses: house
-            ? {
-                ...house,
-                properties: property ? { name: property.name } : undefined,
-              }
-            : undefined,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
-      );
-  }, [id, tenant, allContracts, propertiesById.get, housesById.get]);
+    return tenantContracts.map(c => {
+      const house = housesById.get(c.house_id as string);
+      const property = house?.property_id
+        ? propertiesById.get(house.property_id as string)
+        : undefined;
+      return {
+        ...c,
+        houses: house
+          ? {
+              ...house,
+              properties: property ? { name: property.name } : undefined,
+            }
+          : undefined,
+      };
+    });
+  }, [tenant, tenantContracts, propertiesById, housesById]);
 
   const receipts = useMemo(() => {
     if (!tenant) return [];
-    return allReceipts
-      .filter(r => r.tenant_id === id)
-      .map(r => {
-        const contractId = r.contract_id;
-        const contract = contractId ? contractsById.get(contractId as string) : undefined;
+    return tenantReceipts.map(r => {
+      const contractId = r.contract_id;
+      const contract = contractId ? contractsById.get(contractId as string) : undefined;
 
-        let propertyName = 'N/A';
-        let roomNumber = 'N/A';
+      let propertyName = 'N/A';
+      let roomNumber = 'N/A';
 
-        if (contract) {
-          const house = housesById.get(contract.house_id as string);
-          if (house) {
-            roomNumber = house.house_number || 'N/A';
-            const property = propertiesById.get(house.property_id as string);
-            if (property) propertyName = property.name || 'N/A';
-          }
+      if (contract) {
+        const house = housesById.get(contract.house_id as string);
+        if (house) {
+          roomNumber = house.house_number || 'N/A';
+          const property = propertiesById.get(house.property_id as string);
+          if (property) propertyName = property.name || 'N/A';
         }
+      }
 
-        return {
-          ...r,
-          tenantName: tenant?.name || 'N/A',
-          tenantEmail: tenant?.email || 'N/A',
-          tenantPhone: tenant?.phone || 'N/A',
-          propertyName,
-          roomNumber,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
-      );
-  }, [id, tenant, allReceipts, housesById.get, propertiesById.get, contractsById.get]);
+      return {
+        ...r,
+        tenantName: tenant?.name || 'N/A',
+        tenantEmail: tenant?.email || 'N/A',
+        tenantPhone: tenant?.phone || 'N/A',
+        propertyName,
+        roomNumber,
+      };
+    });
+  }, [tenant, tenantReceipts, housesById, propertiesById, contractsById]);
 
-  const loading = !id || (allTenants.length === 0 && !selectedBusiness);
+  const loading = !id || (!tenant && !selectedBusiness);
 
   // ... rest of component
   const handleSharePersonalData = async () => {

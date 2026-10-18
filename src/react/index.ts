@@ -177,9 +177,10 @@ export function useLiveQuery<T = any>(
 export function useLiveRow<T = any>(
   client: LocalFirstClient | null | undefined,
   tableName: string,
-  rowId: string | null | undefined
+  rowId: string | null | undefined,
+  options?: { includeDeleted?: boolean }
 ): { data: T | null; refetch: () => Promise<void>; loading: boolean } {
-  const cacheKey = `${tableName}:row:${rowId || 'null'}`;
+  const cacheKey = `${tableName}:row:${rowId || 'null'}:${Boolean(options?.includeDeleted)}`;
   const [data, setData] = useState<T | null>(() => {
     if (!rowId) return null;
     const cached = queryCache.get(cacheKey);
@@ -196,7 +197,7 @@ export function useLiveRow<T = any>(
     try {
       let inFlight = inFlightQueries.get(cacheKey);
       if (!inFlight) {
-        inFlight = client.findById<T>(tableName, rowId).then((r) => (r ? [r] : []));
+        inFlight = client.findById<T>(tableName, rowId, options).then((r) => (r ? [r] : []));
         inFlightQueries.set(cacheKey, inFlight);
         inFlight.finally(() => inFlightQueries.delete(cacheKey));
       }

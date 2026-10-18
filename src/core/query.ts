@@ -122,11 +122,34 @@ export function matchesWhere(row: Record<string, any>, where?: WhereFilter): boo
 }
 
 /**
+ * Checks whether a row is considered soft-deleted.
+ */
+export function isDeletedRecord(row: any): boolean {
+  if (!row || typeof row !== 'object') return false;
+  const d = row.deleted;
+  return d === 1 || d === true || d === '1' || d === 'true';
+}
+
+/**
+ * Checks if a where filter explicitly specifies a condition on the 'deleted' column.
+ */
+export function hasExplicitDeletedFilter(where?: WhereFilter): boolean {
+  if (!where || typeof where !== 'object' || Array.isArray(where)) return false;
+  return 'deleted' in where;
+}
+
+/**
  * Applies in-memory filtering, sorting, offset, and limit to an array of rows.
  */
 export function applyQueryOptions<T = any>(rows: T[], options?: QueryOptions): T[] {
   if (!rows || rows.length === 0) return [];
   let result = [...rows];
+
+  // 0. Automatic soft-delete filtering: omit deleted records unless includeDeleted is true
+  // or the where filter explicitly targets 'deleted'.
+  if (!options?.includeDeleted && !hasExplicitDeletedFilter(options?.where)) {
+    result = result.filter((row: any) => !isDeletedRecord(row));
+  }
 
   // 1. Where filtering
   if (options?.where) {

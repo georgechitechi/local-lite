@@ -122,6 +122,7 @@ export interface QueryOptions {
   order?: 'asc' | 'desc' | 'ASC' | 'DESC';
   limit?: number;
   offset?: number;
+  includeDeleted?: boolean;
 }
 
 /**
