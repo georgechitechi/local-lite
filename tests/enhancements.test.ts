@@ -121,6 +121,50 @@ describe('local-lite Architectural Enhancements', () => {
     });
   });
 
+  describe('Column Projections (options.select)', () => {
+    it('only returns specified fields when select projection is passed', async () => {
+      await client.insert('houses', 'h1', {
+        house_number: 'A101',
+        status: 'vacant',
+        metadata: { notes: 'Large blob' },
+        amenities: ['wifi', 'ac'],
+      });
+
+      const projected = await client.findMany('houses', {
+        select: ['id', 'house_number', 'status'],
+        where: { id: 'h1' },
+      });
+
+      expect(projected).toHaveLength(1);
+      expect(projected[0]).toEqual({
+        id: 'h1',
+        house_number: 'A101',
+        status: 'vacant',
+      });
+      expect(projected[0].metadata).toBeUndefined();
+      expect(projected[0].amenities).toBeUndefined();
+    });
+
+    it('works inside client.transaction with transactional findMany', async () => {
+      await client.insert('houses', 'h2', {
+        house_number: 'B202',
+        status: 'occupied',
+        secret: 'hidden',
+      });
+
+      await client.transaction(async (tx) => {
+        const results = await tx.findMany('houses', {
+          select: ['id', 'house_number'],
+          where: { id: 'h2' },
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0]).toEqual({ id: 'h2', house_number: 'B202' });
+        expect(results[0].secret).toBeUndefined();
+      });
+    });
+  });
+
   describe('React Exports & Component Availability', () => {
     it('exports useLiveRow, useLiveInfiniteQuery, useMutations, and SyncInspector', () => {
       expect(typeof useLiveRow).toBe('function');

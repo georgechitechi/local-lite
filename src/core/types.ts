@@ -116,6 +116,7 @@ export type WhereFilter =
     };
 
 export interface QueryOptions {
+  select?: string[];
   where?: WhereFilter;
   orderBy?: string;
   order?: 'asc' | 'desc' | 'ASC' | 'DESC';

@@ -5,7 +5,7 @@ import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
 import { OutboxStore } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
-import { SchemaManager } from './schema-manager.js';
+import { SchemaManager, DBExecutable } from './schema-manager.js';
 import {
   BatchMutation,
   ConflictResolver,
@@ -175,6 +175,10 @@ export class TransactionalClient {
     } catch {
       return [];
     }
+  }
+
+  async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
+    return this.parent.findManyInternal<T>(this.tx, tableName, options);
   }
 
   get rawTx(): LocalTransaction {
@@ -642,9 +646,24 @@ export class LocalFirstClient {
    * const expensive = await client.findMany('properties', { where: { rent: { $gte: 2000 } } });
    */
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
+    return this.findManyInternal<T>(this.db, tableName, options);
+  }
+
+  /**
+   * Internal findMany implementation shared between LocalFirstClient and TransactionalClient.
+   */
+  async findManyInternal<T = any>(
+    db: DBExecutable,
+    tableName: string,
+    options?: QueryOptions
+  ): Promise<T[]> {
     const safeTable = escapeIdentifier(tableName);
     let rows: any[];
-    let sql = `SELECT * FROM ${safeTable}`;
+    const projection =
+      options?.select && Array.isArray(options.select) && options.select.length > 0
+        ? options.select.map(escapeIdentifier).join(', ')
+        : '*';
+    let sql = `SELECT ${projection} FROM ${safeTable}`;
     const params: any[] = [];
 
     // Push down where conditions to SQLite
@@ -738,7 +757,7 @@ export class LocalFirstClient {
     }
 
     try {
-      rows = await this.db.execute(sql, params);
+      rows = await db.execute(sql, params);
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {
@@ -746,7 +765,7 @@ export class LocalFirstClient {
       }
       // Fallback to select * if pushdown syntax differs
       try {
-        rows = await this.db.execute(`SELECT * FROM ${safeTable}`);
+        rows = await db.execute(`SELECT * FROM ${safeTable}`);
       } catch {
         return [];
       }

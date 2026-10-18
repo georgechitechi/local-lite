@@ -217,7 +217,9 @@ export function useBusinesses(): Business[] {
   const businesses = useCachedBusinesses();
   const shares = useBusinessShares();
   const client = useLocalClient();
-  const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants');
+  const { data: tenants } = useLiveQuery<Tenant>(client, 'tenants', {
+    select: ['id', 'email', 'business_id', 'deleted'],
+  });
   const { user, loading } = useAuth();
   return useMemo(
     () =>

@@ -125,8 +125,8 @@ export class MockDB implements LocalDBAdapter {
       return Array.from(rows.values()).filter((r: any) => idSet.has(r[col]));
     }
 
-    // Select all rows from table (with optional WHERE / ORDER / LIMIT)
-    const selectAllMatch = normQ.match(/^SELECT \* FROM "?(\w+)"?(?:\s+WHERE\s+[^;]+)?(?:\s+ORDER BY\s+[^;]+)?(?:\s+LIMIT\s+[^;]+)?;?$/i);
+    // Select rows from table (with optional projection / WHERE / ORDER / LIMIT)
+    const selectAllMatch = normQ.match(/^SELECT (?:[\w",\s]+|\*) FROM "?(\w+)"?(?:\s+WHERE\s+[^;]+)?(?:\s+ORDER BY\s+[^;]+)?(?:\s+LIMIT\s+[^;]+)?;?$/i);
     if (selectAllMatch) {
       const table = selectAllMatch[1];
       return Array.from(this.getTable(table).values());

@@ -161,5 +161,19 @@ export function applyQueryOptions<T = any>(rows: T[], options?: QueryOptions): T
     result = result.slice(0, options.limit);
   }
 
+  // 4. Column Projection
+  if (options?.select && Array.isArray(options.select) && options.select.length > 0) {
+    const fields = options.select;
+    result = result.map((row: any) => {
+      const projected: Record<string, any> = {};
+      for (const field of fields) {
+        if (field in row) {
+          projected[field] = row[field];
+        }
+      }
+      return projected as any;
+    });
+  }
+
   return result;
 }
