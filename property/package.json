@@ -21,7 +21,6 @@
     "@react-native-community/netinfo": "12.0.1",
     "@react-native-vector-icons/material-design-icons": "^13.1.4",
     "@supabase/supabase-js": "2.117.2",
-    "accesscontrol": "^3.1.1",
     "expo": "~57.0.30",
     "expo-background-task": "~57.0.21",
     "expo-clipboard": "~57.0.2",

@@ -1,12 +1,11 @@
-import { createAccessEngine } from 'native-access-control';
-import type { Action, AppPermission, AppRole, Resource } from './types';
+import { createAccessControl } from 'native-access-control';
+import type { Action, AppRole, Resource } from './types';
 
 /**
  * Declarative Capability Matrix
  * Maps each role directly to its granted permissions.
  */
-export const ROLE_PERMISSIONS: Record<AppRole, AppPermission[]> = {
-  owner: ['*'],
+export const ROLE_PERMISSIONS = {
   admin: ['*'],
   staff: [
     'tenant:view',
@@ -35,10 +34,27 @@ export const ROLE_PERMISSIONS: Record<AppRole, AppPermission[]> = {
   ],
 };
 
-export const accessEngine = createAccessEngine<AppRole, Resource, Action>({
+export const accessControl = createAccessControl<AppRole, Resource, Action>({
   policies: ROLE_PERMISSIONS,
+  roleHierarchy: {
+    admin: ['staff'],
+  },
   superRoles: ['owner'],
 });
+
+export const {
+  AccessProvider,
+  useAccess,
+  Can,
+  Cannot,
+  Protect,
+  createRoleGuard,
+  engine: accessEngine,
+} = accessControl;
+
+export const AdminOnly = createRoleGuard('admin');
+export const StaffOrAdmin = createRoleGuard(['admin', 'staff']);
+export const TenantOnly = createRoleGuard('tenant');
 
 /**
  * Evaluates whether a set of roles grants a specific action on a resource.

@@ -4,10 +4,14 @@ import type React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Text, useTheme } from 'react-native-paper';
 import {
-  type Action,
-  type Resource,
-  useAccessControl,
-} from '@/shared/hooks/useAccessControl';
+  AdminOnly,
+  Can,
+  Cannot,
+  StaffOrAdmin,
+  TenantOnly,
+} from '@/shared/access/policies';
+import type { Action, Resource } from '@/shared/access/types';
+import { useAccessControl } from '@/shared/hooks/useAccessControl';
 
 export interface AccessGuardProps {
   children: React.ReactNode;
@@ -52,7 +56,7 @@ export default function AccessGuard({
   }
 
   if (!isAllowed) {
-    if (fallback !== undefined) return <>{fallback}</>;
+    if (fallback !== undefined) return fallback as React.ReactElement | null;
 
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -85,91 +89,11 @@ export default function AccessGuard({
     );
   }
 
-  return <>{children}</>;
+  return children as React.ReactElement | null;
 }
 
 export const Protect = AccessGuard;
-
-export interface CanProps {
-  children: React.ReactNode;
-  action?: Action;
-  resource?: Resource;
-  do?: Action;
-  on?: Resource;
-  roles?: string | string[];
-  condition?: boolean;
-  fallback?: React.ReactNode;
-}
-
-/**
- * Shorthand access check component for inline UI elements (buttons, menus, cards).
- * Defaults fallback to null.
- *
- * Usage:
- * <Can action="edit" resource="house">
- *   <EditButton />
- * </Can>
- *
- * <Can roles={['admin', 'staff']}>
- *   <AdminTools />
- * </Can>
- */
-export function Can({
-  children,
-  action,
-  resource,
-  do: doAction,
-  on: onResource,
-  roles,
-  condition,
-  fallback = null,
-}: CanProps) {
-  const { can, hasAccess, loading } = useAccessControl();
-
-  if (loading) return null;
-
-  const resolvedAction = action ?? doAction;
-  const resolvedResource = resource ?? onResource;
-
-  let isAllowed = false;
-  if (condition !== undefined) {
-    isAllowed = condition;
-  } else if (resolvedAction && resolvedResource) {
-    isAllowed = can(resolvedAction, resolvedResource);
-  } else if (roles) {
-    isAllowed = hasAccess(roles);
-  } else {
-    isAllowed = true;
-  }
-
-  return (isAllowed ? children : fallback) as React.ReactElement | null;
-}
-
-export interface RoleGuardProps {
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
-}
-
-/** Renders children only if user is owner or has admin role. Defaults fallback to null. */
-export function AdminOnly({ children, fallback = null }: RoleGuardProps) {
-  const { isAdmin, loading } = useAccessControl();
-  if (loading) return null;
-  return (isAdmin ? children : fallback) as React.ReactElement | null;
-}
-
-/** Renders children only if user is owner, admin, or staff. Defaults fallback to null. */
-export function StaffOrAdmin({ children, fallback = null }: RoleGuardProps) {
-  const { isAdminOrStaff, loading } = useAccessControl();
-  if (loading) return null;
-  return (isAdminOrStaff ? children : fallback) as React.ReactElement | null;
-}
-
-/** Renders children only if user is exclusively a tenant (not admin/staff). Defaults fallback to null. */
-export function TenantOnly({ children, fallback = null }: RoleGuardProps) {
-  const { isTenantOnly, loading } = useAccessControl();
-  if (loading) return null;
-  return (isTenantOnly ? children : fallback) as React.ReactElement | null;
-}
+export { AdminOnly, Can, Cannot, StaffOrAdmin, TenantOnly };
 
 const styles = StyleSheet.create({
   container: {
