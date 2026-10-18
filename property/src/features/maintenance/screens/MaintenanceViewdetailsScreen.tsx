@@ -37,9 +37,13 @@ export default function ViewMaintenanceScreen() {
   const colors = useThemeColors();
   const screenWidth = Dimensions.get('window').width;
   const { selectedBusiness } = useBusiness();
-  const { userRoles, tenantId, loading: accessLoading, isOwner } = useAccessControl();
-  const isStaff = userRoles.includes('staff');
-  const isTenant = userRoles.includes('tenant') && !isStaff;
+  const {
+    tenantId,
+    loading: accessLoading,
+    isOwner,
+    isStaff,
+    isTenantOnly: isTenant,
+  } = useAccessControl();
 
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);

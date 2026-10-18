@@ -67,11 +67,11 @@ const Dashboard = function Dashboard() {
   const isDarkModeInstance = useTheme();
   const {
     user,
-    userRoles,
     tenantId,
     loading: accessLoading,
     isAdmin,
     isAdminOrStaff,
+    isTenant,
   } = useAccessControl();
   const isManagement = isAdminOrStaff;
   const colors = useThemeColors();
@@ -256,7 +256,7 @@ const Dashboard = function Dashboard() {
         updatedAt: e.updated_at,
       }));
 
-    const isActualTenant = userRoles.includes('tenant');
+    const isActualTenant = isTenant;
 
     return {
       stats,
@@ -312,7 +312,7 @@ const Dashboard = function Dashboard() {
     tenants,
     contracts,
     maintenanceRequests,
-    userRoles,
+    isTenant,
     tenantId,
   ]);
 

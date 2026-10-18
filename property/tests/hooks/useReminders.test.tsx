@@ -15,7 +15,7 @@ jest.mock('@/context/SnackbarContext', () => ({
 }));
 
 jest.mock('@/shared/hooks/useAccessControl', () => ({
-  useAccessControl: () => ({ isAdmin: true, hasAccess: jest.fn().mockReturnValue(true) }),
+  useAccessControl: () => ({ isAdmin: true }),
 }));
 
 jest.mock('@/shared/hooks/useCurrency', () => ({

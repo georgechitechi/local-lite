@@ -35,7 +35,7 @@ import type { Tenant } from '@/stores/types';
 export function useReports() {
   const { selectedBusiness } = useBusiness();
   const { showSnackbar } = useSnackbar();
-  const { hasAccess, isAdmin } = useAccessControl();
+  const { isAdmin } = useAccessControl();
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
 
   const storeProperties = useProperties(selectedBusiness?.id);
@@ -1198,7 +1198,6 @@ export function useReports() {
     handleExport,
     pendingExport,
     setPendingExport,
-    hasAccess,
     isAdmin,
   };
 }

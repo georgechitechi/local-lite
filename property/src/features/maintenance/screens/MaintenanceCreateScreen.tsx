@@ -34,9 +34,7 @@ export default function CreateMaintenanceScreen() {
   const { selectedBusiness } = useBusiness();
   const { showSnackbar } = useSnackbar();
   const { pauseAutoLock, resumeAutoLock } = useIdleLock();
-  const { userRoles, tenantId } = useAccessControl();
-  const isStaff = userRoles.includes('staff');
-  const isTenant = userRoles.includes('tenant') && !isStaff;
+  const { tenantId, isTenantOnly: isTenant } = useAccessControl();
 
   const [saving, setSaving] = useState(false);
   const [showHouseModal, setShowHouseModal] = useState(false);

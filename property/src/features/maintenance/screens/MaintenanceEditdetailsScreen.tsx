@@ -34,9 +34,7 @@ export default function EditMaintenanceScreen() {
   const colors = useThemeColors();
   const { selectedBusiness } = useBusiness();
   const { pauseAutoLock, resumeAutoLock } = useIdleLock();
-  const { userRoles, tenantId } = useAccessControl();
-  const isStaff = userRoles.includes('staff');
-  const isTenant = userRoles.includes('tenant') && !isStaff;
+  const { tenantId, isTenantOnly: isTenant } = useAccessControl();
 
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
