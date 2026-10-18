@@ -23,7 +23,7 @@ const getWhatsappGroupLink = async (businessId: string): Promise<string> => {
     const rows = await client.findMany('settings', {
       where: { business_id: businessId, setting_key: 'links' },
     });
-    const setting = (rows || []).find((s: any) => !s.deleted);
+    const setting = rows?.[0];
     let val = setting?.setting_value;
     if (typeof val === 'string') {
       try {

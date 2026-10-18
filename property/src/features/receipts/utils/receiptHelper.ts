@@ -115,8 +115,7 @@ export function resolveReceiptWaiverAndRent(options: {
       if (period.month > 0 && period.year > 0 && receipt.contract_id && rawReceipts) {
         totalPaidForPeriod = rawReceipts
           .filter(r => {
-            if (r.contract_id !== receipt.contract_id || r.deleted || r.is_refunded)
-              return false;
+            if (r.contract_id !== receipt.contract_id || r.is_refunded) return false;
             const rPeriod = parsePeriod(r.payment_period);
             return rPeriod.month === period.month && rPeriod.year === period.year;
           })

@@ -496,8 +496,7 @@ export default function CreateReceiptScreen() {
           r.type === form.type &&
           form.type !== 'others' &&
           (r.payment_period as any)?.month === form.payment_period.month &&
-          (r.payment_period as any)?.year === form.payment_period.year &&
-          !r.deleted,
+          (r.payment_period as any)?.year === form.payment_period.year,
       );
 
       if (existingReceipt) {

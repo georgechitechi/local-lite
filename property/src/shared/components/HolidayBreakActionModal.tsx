@@ -128,7 +128,7 @@ export default function HolidayBreakActionModal({
         const contract = contracts.find(c => c.id === editingBreak.contractId);
         if (contract) {
           const hasPayment = receipts.some(r => {
-            if (r.contract_id !== contract.id || r.is_refunded || r.deleted) return false;
+            if (r.contract_id !== contract.id || r.is_refunded) return false;
             const period = parsePeriod(r.payment_period);
             if (!period?.month || !period.year) return false;
             return affectedMonths.some(
@@ -143,8 +143,7 @@ export default function HolidayBreakActionModal({
           if (contract) {
             const tenant = activeTenants.find(t => t.id === contract.tenant_id);
             const hasPayment = receipts.some(r => {
-              if (r.contract_id !== contract.id || r.is_refunded || r.deleted)
-                return false;
+              if (r.contract_id !== contract.id || r.is_refunded) return false;
               const period = parsePeriod(r.payment_period);
               if (!period?.month || !period.year) return false;
               return affectedMonths.some(

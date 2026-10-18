@@ -125,9 +125,7 @@ export const checkExpenseDuplicate = (
     return { isDuplicate: false };
   }
 
-  const otherExpenses = existingExpenses.filter(
-    e => e && !e.deleted && e.id !== candidate.id,
-  );
+  const otherExpenses = existingExpenses.filter(e => e && e.id !== candidate.id);
 
   const candidateRemarks = candidate.remarks || '';
   const candidateToken = extractTokenNumber(candidateRemarks);

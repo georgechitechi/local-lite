@@ -269,10 +269,7 @@ export default function ExpenseModal({
   const isDuplicateToken = useMemo(() => {
     if (!detectedToken) return null;
     return storeExpenses.find(
-      e =>
-        !e.deleted &&
-        e.id !== expenseId &&
-        extractTokenNumber(e.remarks) === detectedToken,
+      e => e.id !== expenseId && extractTokenNumber(e.remarks) === detectedToken,
     );
   }, [detectedToken, storeExpenses, expenseId]);
 

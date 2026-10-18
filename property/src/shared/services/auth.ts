@@ -92,7 +92,7 @@ export const ensureUserProfile = async (
         const rows = await client.findMany('profiles', {
           where: { user_id: userId },
         });
-        const existing = (rows || []).find((p: any) => !p.deleted);
+        const existing = rows?.[0];
         if (existing) {
           return { profile: existing };
         }

@@ -28,9 +28,7 @@ export default function PropertySelectModal({
 
   const filteredProperties = useMemo(
     () =>
-      properties.filter(
-        p => !p.deleted && p.name.toLowerCase().includes(search.trim().toLowerCase()),
-      ),
+      properties.filter(p => p.name.toLowerCase().includes(search.trim().toLowerCase())),
     [properties, search],
   );
 

@@ -77,9 +77,7 @@ export function useAccessControl(): UseAccessControlReturn {
     if (authLoading || !selectedBusiness || !user) return null;
     const userEmail = user.email?.toLowerCase();
     if (!userEmail) return null;
-    const tenant = businessTenants.find(
-      (t: any) => t.email?.toLowerCase() === userEmail && !t.deleted,
-    );
+    const tenant = businessTenants.find((t: any) => t.email?.toLowerCase() === userEmail);
     return tenant ? tenant.id : null;
   }, [authLoading, selectedBusiness, user, businessTenants]);
 

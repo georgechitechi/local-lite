@@ -137,7 +137,6 @@ export default function PromotionsScreen() {
     const sourceYear = new Date(sourceDate).getFullYear();
 
     return allTenants
-      .filter(t => !t.deleted)
       .map(tenant => {
         const contract = (contractsByTenant.get(tenant.id) || []).find((c: any) =>
           isActiveContractStatus(c.status),
@@ -146,7 +145,6 @@ export default function PromotionsScreen() {
 
         const paidAmount = (receiptsByTenant.get(tenant.id) || [])
           .filter((r: any) => {
-            if (r.deleted) return false;
             const p = safeParseJSON<{ month?: number; year?: number }>(
               r.payment_period as any,
               {},
@@ -375,8 +373,6 @@ export default function PromotionsScreen() {
           // 2. Transfer their Rent Receipts from Source to Target Month
           const periodRentReceipts = (receiptsByTenant.get(tenant.id) || []).filter(
             (r: any) => {
-              if (r.deleted) return false;
-
               // Check if it's conceptually rent
               const p = safeParseJSON<{ month?: number; year?: number }>(
                 r.payment_period as any,
@@ -475,7 +471,7 @@ export default function PromotionsScreen() {
       // Find existing receipts for this period to check if we should update statuses
       const periodReceipts = (receiptsByTenant.get(selectedTenantId) || []).filter(
         (r: any) => {
-          if (r.contract_id !== contract.id || r.deleted) return false;
+          if (r.contract_id !== contract.id) return false;
           const p = safeParseJSON<{ month?: number; year?: number }>(
             r.payment_period as any,
             {},
@@ -1813,10 +1809,7 @@ export default function PromotionsScreen() {
       >
         <View>
           {allProperties
-            .filter(
-              p =>
-                !p.deleted && p.name.toLowerCase().includes(propertySearch.toLowerCase()),
-            )
+            .filter(p => p.name.toLowerCase().includes(propertySearch.toLowerCase()))
             .map(property => (
               <React.Fragment key={property.id}>
                 <List.Item

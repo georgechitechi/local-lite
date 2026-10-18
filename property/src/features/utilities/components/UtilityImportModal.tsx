@@ -86,7 +86,7 @@ export default function UtilityImportModal({
 
   const activeMeterNumber = React.useMemo(() => {
     const utilityMeters = (settings || []).find(
-      (s: any) => s.setting_key === 'utility_meters' && !s.deleted,
+      (s: any) => s.setting_key === 'utility_meters',
     );
     let val: any = utilityMeters?.setting_value;
     if (typeof val === 'string') {

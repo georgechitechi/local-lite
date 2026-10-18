@@ -79,7 +79,6 @@ export default function PendingRentHousekeepingModal({
         const tenantContracts = rawContracts.filter(
           c =>
             c.tenant_id === tenant.id &&
-            !c.deleted &&
             isActiveContractStatus(c.status) &&
             !isContractPaused(c),
         );

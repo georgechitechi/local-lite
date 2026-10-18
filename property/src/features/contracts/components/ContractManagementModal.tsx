@@ -429,9 +429,7 @@ export default function ContractManagementModal({
         return true;
       })
       .map((t: any) => {
-        const tenantContracts = rawContracts.filter(
-          (c: any) => c.tenant_id === t.id && !c.deleted,
-        );
+        const tenantContracts = rawContracts.filter((c: any) => c.tenant_id === t.id);
         tenantContracts.sort(
           (a: any, b: any) =>
             new Date(b.end_date || 0).getTime() - new Date(a.end_date || 0).getTime(),
@@ -454,7 +452,6 @@ export default function ContractManagementModal({
             (c: any) =>
               c.house_id === latestContract.house_id &&
               c.tenant_id !== t.id &&
-              !c.deleted &&
               isActiveContractStatus(c.status),
           );
         }
@@ -1584,7 +1581,7 @@ export default function ContractManagementModal({
           visible={selectTenantVisible}
           onDismiss={() => setSelectTenantVisible(false)}
           tenants={tenants.filter(
-            t => rawContracts.filter(c => c.tenant_id === t.id && !c.deleted).length > 1,
+            t => rawContracts.filter(c => c.tenant_id === t.id).length > 1,
           )}
           contracts={rawContracts}
           houses={houses}

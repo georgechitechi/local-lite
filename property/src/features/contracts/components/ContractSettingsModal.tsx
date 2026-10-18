@@ -124,7 +124,7 @@ export default function ContractSettingsModal({
     try {
       setLoading(true);
       const contractSetting = (rawSettings || []).find(
-        (s: any) => s.setting_key === 'contract_settings' && !s.deleted,
+        (s: any) => s.setting_key === 'contract_settings',
       ) as any;
 
       if (contractSetting?.setting_value) {
@@ -172,7 +172,7 @@ export default function ContractSettingsModal({
       if (!user) throw new Error('Not authenticated');
 
       const existingSetting = (rawSettings || []).find(
-        (s: any) => s.setting_key === 'contract_settings' && !s.deleted,
+        (s: any) => s.setting_key === 'contract_settings',
       ) as any;
 
       if (existingSetting) {

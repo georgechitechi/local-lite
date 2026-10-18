@@ -154,7 +154,7 @@ export default function BusinessView() {
         const client = await getSyncClient().catch(() => null);
         if (client) {
           const found = await client.findById('businesses', id).catch(() => null);
-          if (active && found && !found.deleted) {
+          if (active && found) {
             setDirectBusiness(found);
             setDirectLoading(false);
             return;
@@ -484,7 +484,7 @@ export default function BusinessView() {
                 try {
                   const rows = await client.findMany(table, {
                     where: (r: Record<string, any>) =>
-                      !r.deleted && (!r.business_id || r.business_id === business.id),
+                      !r.business_id || r.business_id === business.id,
                   });
                   if (rows && rows.length > 0) return rows;
                 } catch {

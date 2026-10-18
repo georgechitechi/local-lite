@@ -191,7 +191,7 @@ export default function ReportScheduleModal({
         if (client) {
           const rows = await client.findMany('schedules', {
             where: (r: Record<string, any>) =>
-              !r.deleted && r.schedule_type !== 'system_backup' && r.status === 'active',
+              r.schedule_type !== 'system_backup' && r.status === 'active',
           });
           activeCount = rows.length;
         } else {

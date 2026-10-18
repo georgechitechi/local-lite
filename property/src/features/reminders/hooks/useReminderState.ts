@@ -28,9 +28,7 @@ export function useReminderState(settingsOrStore?: any) {
       ? settingsOrStore
       : Object.values(settingsOrStore?.settings$?.get?.() || {});
 
-    const setting = settingsList.find(
-      (s: any) => s.setting_key === 'house_types' && !s.deleted,
-    );
+    const setting = settingsList.find((s: any) => s.setting_key === 'house_types');
     if (setting?.setting_value) {
       const val =
         typeof setting.setting_value === 'string'

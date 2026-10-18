@@ -152,7 +152,7 @@ export default function HouseFormModal({
       try {
         let types: HouseType[] = [];
         const setting = allSettings?.find(
-          (s: any) => s.setting_key === 'house_types' && !s.deleted,
+          (s: any) => s.setting_key === 'house_types',
         ) as any;
         if (setting?.setting_value) {
           const houseTypesSetting = setting.setting_value as any[];

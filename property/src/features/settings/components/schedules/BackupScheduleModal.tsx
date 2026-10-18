@@ -141,9 +141,7 @@ export default function BackupScheduleModal({
                 where: { schedule_type: 'system_backup', status: 'active' },
               })
               .catch(() => []);
-            hasActive = (rows || []).some(
-              (r: any) => !r.deleted && r.id !== backupSchedule?.id,
-            );
+            hasActive = (rows || []).some((r: any) => r.id !== backupSchedule?.id);
           } else if (supabase) {
             const { data: enabledSchedules } = await supabase
               .from('schedules')

@@ -56,9 +56,7 @@ async function applyClientMutations(
   if (isDeactivation(newStatus)) {
     const allContracts =
       (await client.findMany('contracts', { where: { tenant_id: tenantId } })) || [];
-    const activeContracts = allContracts.filter(
-      c => isActiveContractStatus(c.status) && !c.deleted,
-    );
+    const activeContracts = allContracts.filter(c => isActiveContractStatus(c.status));
 
     const houseIds = activeContracts
       .map(c => c.house_id)
@@ -99,9 +97,7 @@ async function applyClientMutations(
       }
     }
   } else if (wasInactive && isNowActive) {
-    const allContracts =
-      (await client.findMany('contracts', { where: { tenant_id: tenantId } })) || [];
-    const validContracts = allContracts.filter(c => !c.deleted);
+    const validContracts = allContracts;
     const latest = [...validContracts].sort((a, b) =>
       (b.end_date || b.start_date || '').localeCompare(a.end_date || a.start_date || ''),
     )[0];
@@ -138,6 +134,6 @@ export const updateTenantStatus = async ({
   if (!tenantId) throw new Error('Tenant ID is required');
   const client = providedClient ?? (await getSyncClient());
   const tenant = await client.findById('tenants', tenantId);
-  if (!tenant || tenant.deleted) throw new Error(`Tenant not found: ${tenantId}`);
+  if (!tenant) throw new Error(`Tenant not found: ${tenantId}`);
   await applyClientMutations(client, tenantId, newStatus, tenant.status);
 };

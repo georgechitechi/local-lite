@@ -853,7 +853,6 @@ export function useReports() {
                     const parsedPeriod = parsePeriod(r.payment_period);
                     return (
                       r.contract_id === c.id &&
-                      !r.deleted &&
                       parsedPeriod.month === month &&
                       parsedPeriod.year === year
                     );

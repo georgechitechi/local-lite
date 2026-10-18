@@ -47,7 +47,7 @@ export default function MergeContractsModal({
 
   const tenantContracts = useMemo(() => {
     return allContracts
-      .filter(c => c.tenant_id === tenantId && !c.deleted)
+      .filter(c => c.tenant_id === tenantId)
       .sort((a, b) => a.start_date.localeCompare(b.start_date));
   }, [allContracts, tenantId]);
 

@@ -60,7 +60,7 @@ export async function areNotificationsEnabled(businessId?: string): Promise<bool
         ? { business_id: businessId, setting_key: 'notification_settings' }
         : { setting_key: 'notification_settings' },
     });
-    const notificationSetting = (rows || []).find((s: any) => !s.deleted);
+    const notificationSetting = rows?.[0];
     let val = notificationSetting?.setting_value;
     if (typeof val === 'string') {
       try {

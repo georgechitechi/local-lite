@@ -95,7 +95,7 @@ const checkMissingSettings = async (): Promise<MissingSettingsResult> => {
     const client = await getSyncClient();
     const allBusinesses = (await client.findMany('businesses')) || [];
     const userBusinesses = allBusinesses.filter(
-      (b: any) => (b.user_id === user.id || user.id === OFFLINE_USER_ID) && !b.deleted,
+      (b: any) => b.user_id === user.id || user.id === OFFLINE_USER_ID,
     );
 
     const businessesWithMissingSettings: {
@@ -109,7 +109,7 @@ const checkMissingSettings = async (): Promise<MissingSettingsResult> => {
         (await client.findMany('settings', {
           where: { business_id: business.id },
         })) || [];
-      const settings = allSettings.filter((s: any) => !s.deleted);
+      const settings = allSettings;
 
       let foundEssential = 0;
       if (settings.some((s: any) => s.setting_key === 'house_types')) foundEssential++;

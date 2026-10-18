@@ -76,7 +76,7 @@ export default function HolidayBreaks() {
 
   const activeContractsList = useMemo(() => {
     return contracts
-      .filter(c => isActiveContractStatus(c.status) && !c.deleted)
+      .filter(c => isActiveContractStatus(c.status))
       .map(contract => {
         const tenant = rawTenants.find(t => t.id === contract.tenant_id);
         const house = houses.find(h => h.id === contract.house_id);

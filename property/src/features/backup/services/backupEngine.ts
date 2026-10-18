@@ -50,10 +50,7 @@ export async function fetchAllData({
 
       if (client) {
         try {
-          tableData =
-            (await client.findMany(tableName, {
-              where: (row: Record<string, any>) => !row.deleted,
-            })) || [];
+          tableData = (await client.findMany(tableName)) || [];
         } catch {
           tableData = [];
         }

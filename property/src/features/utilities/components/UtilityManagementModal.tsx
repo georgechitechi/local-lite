@@ -129,7 +129,7 @@ export default function UtilityManagementModal({
 
     try {
       const setting = (rawSettings || []).find(
-        (s: any) => s.setting_key === 'utility_meters' && !s.deleted,
+        (s: any) => s.setting_key === 'utility_meters',
       );
       let val = setting?.setting_value;
       if (typeof val === 'string') {
@@ -158,7 +158,7 @@ export default function UtilityManagementModal({
   const persist = async (updated: UtilityMeter[]) => {
     if (!selectedBusiness?.id || !user) return;
     const existing = (rawSettings || []).find(
-      (s: any) => s.setting_key === 'utility_meters' && !s.deleted,
+      (s: any) => s.setting_key === 'utility_meters',
     );
     if (existing) {
       await update('settings', existing.id, { setting_value: updated as any });

@@ -66,7 +66,6 @@ export default function SelectTenantModal({
   const filteredTenants = useMemo(() => {
     return tenants
       .filter(t => {
-        if (t.deleted) return false;
         const searchLower = search.toLowerCase();
         const matchesName = t.name.toLowerCase().includes(searchLower);
         const matchesPhone = showPhone && t.phone?.includes(search);

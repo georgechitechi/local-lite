@@ -43,13 +43,13 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   const selectedBusiness = useMemo(() => {
     if (!selectedBusinessId) return null;
     const found = businesses.find(b => b.id === selectedBusinessId);
-    if (found && !found.deleted) return found;
+    if (found) return found;
     return null;
   }, [businesses, selectedBusinessId]);
 
   useEffect(() => {
     if (selectedBusinessId && businesses.length > 0) {
-      const exists = businesses.some(b => b.id === selectedBusinessId && !b.deleted);
+      const exists = businesses.some(b => b.id === selectedBusinessId);
       if (!exists) {
         setSelectedBusinessId('');
         Storage.removeItem('selectedBusinessId').catch(() => {});

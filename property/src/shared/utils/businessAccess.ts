@@ -12,7 +12,7 @@ export const isDeletedRecord = (row: { deleted?: unknown }): boolean =>
   row.deleted === '1';
 
 export const isActiveBusinessShare = (share: BusinessShare): boolean =>
-  !isDeletedRecord(share) && normalizeIdentity(share.status) === 'active';
+  normalizeIdentity(share.status) === 'active';
 
 /** SQLite stores array fields as JSON text. Never treat that text as a role list. */
 export function parseShareRoles(value: unknown): string[] {
@@ -48,19 +48,15 @@ export function accessibleBusinesses(
   );
   const tenantBusinessIds = new Set(
     tenants
-      .filter(
-        tenant =>
-          email && !isDeletedRecord(tenant) && normalizeIdentity(tenant.email) === email,
-      )
+      .filter(tenant => email && normalizeIdentity(tenant.email) === email)
       .map(tenant => normalizeIdentity(tenant.business_id)),
   );
 
   return businesses.filter(
     business =>
-      !isDeletedRecord(business) &&
-      (business.user_id === user.id ||
-        (isOffline && business.user_id === offlineUserId) ||
-        sharedIds.has(normalizeIdentity(business.id)) ||
-        tenantBusinessIds.has(normalizeIdentity(business.id))),
+      business.user_id === user.id ||
+      (isOffline && business.user_id === offlineUserId) ||
+      sharedIds.has(normalizeIdentity(business.id)) ||
+      tenantBusinessIds.has(normalizeIdentity(business.id)),
   );
 }

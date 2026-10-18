@@ -354,7 +354,7 @@ export default function SettingsManager() {
       if (!selectedBusiness?.id || !userId) return;
 
       const existingLinksSetting = allSettings.find(
-        (s: any) => s.setting_key === 'links' && !s.deleted,
+        (s: any) => s.setting_key === 'links',
       );
 
       if (existingLinksSetting) {

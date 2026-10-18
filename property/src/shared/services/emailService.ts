@@ -54,7 +54,7 @@ const getBusinessWebsiteLink = async (
           where: { business_id: businessId, setting_key: 'links' },
         })
         .catch(() => []);
-      const found = (rows || []).find((r: any) => !r.deleted);
+      const found = rows?.[0];
       if (found?.setting_value) {
         try {
           const linksData =
@@ -447,7 +447,7 @@ export const sendReceiptEmail = async (
           where: { business_id: receipt.business_id, setting_key: 'currency_settings' },
         })
         .catch(() => []);
-      settings = (settingsRows || []).find((r: any) => !r.deleted);
+      settings = settingsRows?.[0];
     }
 
     if (!business) throw new Error(`Business with ID ${receipt.business_id} not found`);

@@ -214,7 +214,6 @@ export function useReminderData(selectedBusiness: any, state: any) {
     candidateTenants = candidateTenants.filter(tenant => {
       if (state.selectedCategory === 'mark_holiday') {
         const hasMatchingContract = tenant.contracts?.some((c: any) => {
-          if (c.deleted) return false;
           if (state.contractStatusFilter === 'all') return true;
           if (state.contractStatusFilter === 'active')
             return c.status?.toLowerCase() === 'active' && !isContractPaused(c);

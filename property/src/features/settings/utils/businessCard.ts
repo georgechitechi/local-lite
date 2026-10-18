@@ -22,7 +22,7 @@ export const generateBusinessCard = async (business: Business): Promise<void> =>
         const rows = await client.findMany('settings', {
           where: { business_id: business.id, setting_key: 'payment_methods' },
         });
-        const paymentSetting = (rows || []).find((s: any) => !s.deleted);
+        const paymentSetting = rows?.[0];
         let methods: PaymentMethod[] = [];
         if (paymentSetting?.setting_value) {
           const val = paymentSetting.setting_value;

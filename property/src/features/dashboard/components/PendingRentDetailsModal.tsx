@@ -32,11 +32,11 @@ export default function PendingRentDetailsModal({
     if (!tenantId || !rawContracts || !receipts) return [];
 
     const tenantContracts = rawContracts.filter(
-      c => c.tenant_id === tenantId && !c.deleted && isActiveContractStatus(c.status),
+      c => c.tenant_id === tenantId && isActiveContractStatus(c.status),
     );
     if (tenantContracts.length === 0) return [];
 
-    const tenantReceipts = receipts.filter(r => r.tenant_id === tenantId && !r.deleted);
+    const tenantReceipts = receipts.filter(r => r.tenant_id === tenantId);
 
     const now = new Date();
     const currentMonth = now.getMonth();

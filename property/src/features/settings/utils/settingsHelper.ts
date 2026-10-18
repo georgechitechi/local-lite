@@ -56,7 +56,7 @@ export const initializeAllMissingSettings = async (
     const client = await getSyncClient();
     const allBusinesses = (await client.findMany('businesses')) || [];
     let userBusinesses = allBusinesses.filter(
-      (b: any) => (b.user_id === user.id || user.id === OFFLINE_USER_ID) && !b.deleted,
+      (b: any) => b.user_id === user.id || user.id === OFFLINE_USER_ID,
     );
 
     if (targetBusinessId) {
@@ -70,7 +70,7 @@ export const initializeAllMissingSettings = async (
         (await client.findMany('settings', {
           where: { business_id: business.id },
         })) || [];
-      const settings = allSettings.filter((s: any) => !s.deleted);
+      const settings = allSettings;
 
       const hasHouseTypes = settings.some((s: any) => s.setting_key === 'house_types');
       const hasAmenities = settings.some((s: any) => s.setting_key === 'amenities');

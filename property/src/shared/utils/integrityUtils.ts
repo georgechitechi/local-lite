@@ -229,7 +229,7 @@ export const performIntegrityScan = (data: IntegrityScanData): IntegrityIssue[] 
   // 28. Relationship: Orphaned Converted Bookings
   const orphanedBookings = allBookings
     .filter(b => {
-      if (b.status !== 'converted' || b.deleted) return false;
+      if (b.status !== 'converted') return false;
       if (!b.converted_tenant_id) return true; // Converted but no ID is also an issue
       return !allTenants.some(t => t.id === b.converted_tenant_id);
     })
@@ -577,10 +577,7 @@ export const performIntegrityScan = (data: IntegrityScanData): IntegrityIssue[] 
   const unconvertedBookings = allBookings
     .filter(
       b =>
-        b.status !== 'converted' &&
-        b.status !== 'rejected' &&
-        b.status !== 'cancelled' &&
-        !b.deleted,
+        b.status !== 'converted' && b.status !== 'rejected' && b.status !== 'cancelled',
     )
     .map(b => ({
       ...b,

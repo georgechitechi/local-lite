@@ -15,7 +15,7 @@ export const getJoinedReportData = async (
           where: { business_id: businessId },
         });
         if (rows && rows.length > 0) {
-          return rows.filter((r: any) => !r.deleted);
+          return rows;
         }
       } catch (_e) {
         return [];

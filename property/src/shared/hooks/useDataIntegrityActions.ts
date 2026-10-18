@@ -95,7 +95,6 @@ export function useDataIntegrityActions({
         });
 
         msgs.forEach((msg: any) => {
-          if (msg.deleted) return;
           let isDuplicate = false;
           if (msg.message_id) {
             if (seenMessageIds.has(msg.message_id)) {
@@ -125,7 +124,7 @@ export function useDataIntegrityActions({
         });
 
         allReceipts.forEach((r: any) => {
-          if (!r.deleted && r.notes) {
+          if (r.notes) {
             const updated = maskPhoneNumber(r.notes);
             if (updated !== r.notes) {
               mutations.push({
@@ -818,13 +817,11 @@ export function useDataIntegrityActions({
 
         items.forEach((item: any) => {
           const links = allPaymentMessageReceipts.filter(
-            (pmr: any) => pmr.receipt_id === item.id && !pmr.deleted,
+            (pmr: any) => pmr.receipt_id === item.id,
           );
           const linkedMsgs = links
             .map((link: any) =>
-              allPaymentMessages.find(
-                (pm: any) => pm.id === link.payment_message_id && !pm.deleted,
-              ),
+              allPaymentMessages.find((pm: any) => pm.id === link.payment_message_id),
             )
             .filter(Boolean);
 

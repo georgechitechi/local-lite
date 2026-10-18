@@ -269,7 +269,7 @@ export const getDefaultCurrency = async (businessId?: string): Promise<Currency>
     const settings = await client.findMany('settings', {
       where: { business_id: businessId, setting_key: 'currency_settings' },
     });
-    const setting = settings.find(row => !row.deleted);
+    const setting = settings[0];
     if (setting?.setting_value) {
       let val = setting.setting_value;
       if (typeof val === 'string') {
