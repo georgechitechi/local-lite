@@ -37,18 +37,30 @@ interface BusinessProviderProps {
 
 export function BusinessProvider({ children }: BusinessProviderProps) {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
+  const [storageLoading, setStorageLoading] = useState<boolean>(true);
   const businesses = useBusinesses();
   const { user, loading: authLoading } = useAuth();
 
   // Load persisted selectedBusinessId from Storage on mount
   useEffect(() => {
+    let isMounted = true;
     Storage.getItem('selectedBusinessId')
       .then(storedId => {
-        if (storedId) {
-          setSelectedBusinessId(storedId);
+        if (isMounted) {
+          if (storedId) {
+            setSelectedBusinessId(storedId);
+          }
+          setStorageLoading(false);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (isMounted) {
+          setStorageLoading(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const selectedBusiness = useMemo(() => {
@@ -59,14 +71,14 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   }, [businesses, selectedBusinessId]);
 
   useEffect(() => {
-    if (selectedBusinessId && businesses.length > 0) {
+    if (!authLoading && !storageLoading && selectedBusinessId && businesses.length > 0) {
       const exists = businesses.some(b => b.id === selectedBusinessId);
       if (!exists) {
         setSelectedBusinessId('');
         Storage.removeItem('selectedBusinessId').catch(() => {});
       }
     }
-  }, [selectedBusinessId, businesses]);
+  }, [selectedBusinessId, businesses, authLoading, storageLoading]);
 
   // Pre-cache gallery images and update syncScope when business changes
   useEffect(() => {
@@ -147,7 +159,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
       clearSelectedBusiness,
       requireBusiness,
       refreshBusiness,
-      loading: authLoading,
+      loading: authLoading || storageLoading,
       isAuthenticated: !!user,
     }),
     [
@@ -157,6 +169,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
       requireBusiness,
       refreshBusiness,
       authLoading,
+      storageLoading,
       user,
     ],
   );

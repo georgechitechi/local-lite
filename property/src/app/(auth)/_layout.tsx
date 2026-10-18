@@ -32,7 +32,13 @@ export default function AuthLayout() {
             headerBackVisible: false,
             headerRight: () => (
               <SPressable
-                onPress={() => router.push('/(tabs)')}
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace('/(auth)/login');
+                  }
+                }}
                 style={{ marginRight: 8 }}
               >
                 <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
@@ -48,7 +54,13 @@ export default function AuthLayout() {
             headerBackVisible: false,
             headerRight: () => (
               <SPressable
-                onPress={() => router.push('/(tabs)')}
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace('/(auth)/login');
+                  }
+                }}
                 style={{ marginRight: 8 }}
               >
                 <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />

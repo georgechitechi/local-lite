@@ -350,6 +350,7 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 32,
+    alignItems: 'center',
   },
   title: {
     fontWeight: 'bold',
