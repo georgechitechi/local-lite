@@ -1,6 +1,11 @@
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import React from 'react';
-import { type ScrollViewInstance, type ScrollViewProps, StyleSheet, type ViewStyle } from 'react-native';
+import {
+  type ScrollViewInstance,
+  type ScrollViewProps,
+  StyleSheet,
+  type ViewStyle,
+} from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
