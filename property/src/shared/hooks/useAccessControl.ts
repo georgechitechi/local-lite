@@ -83,10 +83,17 @@ export function useAccessControl(): UseAccessControlReturn {
 
   const isOwner = useMemo(() => {
     if (authLoading || !selectedBusiness || !user) return false;
+    const bizUserId = normalizeIdentity(selectedBusiness.user_id);
+    const userId = normalizeIdentity(user.id);
+    const offlineId = normalizeIdentity(OFFLINE_USER_ID);
+    const userEmail = normalizeIdentity(user.email);
+    const bizEmail = normalizeIdentity(selectedBusiness.email);
+
     return (
-      user.id === OFFLINE_USER_ID ||
-      selectedBusiness.user_id === user.id ||
-      selectedBusiness.user_id === OFFLINE_USER_ID
+      userId === offlineId ||
+      bizUserId === userId ||
+      bizUserId === offlineId ||
+      Boolean(userEmail && bizEmail && bizEmail === userEmail)
     );
   }, [authLoading, selectedBusiness, user]);
 

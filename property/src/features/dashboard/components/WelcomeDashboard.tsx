@@ -155,10 +155,18 @@ export const WelcomeDashboard = () => {
   };
 
   const getRoleLabel = (b: Business): string => {
+    const bizUserId = normalizeIdentity(b.user_id);
+    const userId = normalizeIdentity(user?.id);
+    const offlineId = normalizeIdentity(OFFLINE_USER_ID);
+    const userEmail = normalizeIdentity(user?.email);
+    const bizEmail = normalizeIdentity(b.email);
+
     if (
       user &&
-      (b.user_id === user.id ||
-        (user.id === OFFLINE_USER_ID && b.user_id === OFFLINE_USER_ID))
+      (userId === offlineId ||
+        bizUserId === userId ||
+        bizUserId === offlineId ||
+        Boolean(userEmail && bizEmail && bizEmail === userEmail))
     ) {
       return 'Owner';
     }

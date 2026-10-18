@@ -88,18 +88,16 @@ export function useCoreTableWithLoading<
   const targetId = normalizeIdentity(businessId);
 
   const queryOptions = useMemo(() => {
-    if (scoped && !targetId) return null;
+    if (scoped && !targetId) {
+      return { where: { id: '__none__' } };
+    }
     if (scoped && targetId) {
       return { where: { business_id: targetId } };
     }
     return undefined;
   }, [scoped, targetId]);
 
-  const { data, loading } = useLiveQuery<T>(
-    client,
-    tableName,
-    queryOptions ?? { where: { id: '__none__' } },
-  );
+  const { data, loading } = useLiveQuery<T>(client, tableName, queryOptions);
 
   return {
     data:

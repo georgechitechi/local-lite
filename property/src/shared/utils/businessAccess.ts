@@ -11,8 +11,10 @@ export const isDeletedRecord = (row: { deleted?: unknown }): boolean =>
   normalizeIdentity(row.deleted) === 'true' ||
   row.deleted === '1';
 
-export const isActiveBusinessShare = (share: BusinessShare): boolean =>
-  normalizeIdentity(share.status) === 'active';
+export const isActiveBusinessShare = (share: BusinessShare): boolean => {
+  const status = normalizeIdentity(share.status);
+  return status === 'active' || status === 'accepted';
+};
 
 /** SQLite stores array fields as JSON text. Never treat that text as a role list. */
 export function parseShareRoles(value: unknown): string[] {
@@ -35,28 +37,38 @@ export function accessibleBusinesses(
 ): Business[] {
   if (!user) return [];
   const email = normalizeIdentity(user.email);
-  const isOffline = user.id === offlineUserId;
+  const normalizedUserId = normalizeIdentity(user.id);
+  const normalizedOfflineId = normalizeIdentity(offlineUserId);
+
   const sharedIds = new Set(
     shares
       .filter(
         share =>
-          email &&
-          normalizeIdentity(share.shared_with) === email &&
+          ((email && normalizeIdentity(share.shared_with) === email) ||
+            (normalizedUserId &&
+              normalizeIdentity(share.user_id) === normalizedUserId)) &&
           isActiveBusinessShare(share),
       )
       .map(share => normalizeIdentity(share.business_id)),
   );
+
   const tenantBusinessIds = new Set(
     tenants
       .filter(tenant => email && normalizeIdentity(tenant.email) === email)
       .map(tenant => normalizeIdentity(tenant.business_id)),
   );
 
-  return businesses.filter(
-    business =>
-      business.user_id === user.id ||
-      (isOffline && business.user_id === offlineUserId) ||
-      sharedIds.has(normalizeIdentity(business.id)) ||
-      tenantBusinessIds.has(normalizeIdentity(business.id)),
-  );
+  return businesses.filter(business => {
+    const bizUserId = normalizeIdentity(business.user_id);
+    const bizEmail = normalizeIdentity(business.email);
+    const bizId = normalizeIdentity(business.id);
+
+    return (
+      (bizUserId && bizUserId === normalizedUserId) ||
+      (bizUserId && bizUserId === normalizedOfflineId) ||
+      (email && bizEmail && bizEmail === email) ||
+      sharedIds.has(bizId) ||
+      tenantBusinessIds.has(bizId)
+    );
+  });
 }

@@ -110,8 +110,16 @@ export default function BusinessSelectModal({
     return accessibleBusinesses
       .map(b => {
         const isOffline = user.id === OFFLINE_USER_ID;
+        const bizUserId = normalizeIdentity(b.user_id);
+        const userId = normalizeIdentity(user.id);
+        const offlineId = normalizeIdentity(OFFLINE_USER_ID);
+        const userEmail = normalizeIdentity(user.email);
+        const bizEmail = normalizeIdentity(b.email);
         const isOwned =
-          isOffline || b.user_id === user.id || b.user_id === OFFLINE_USER_ID;
+          isOffline ||
+          bizUserId === userId ||
+          bizUserId === offlineId ||
+          Boolean(userEmail && bizEmail && bizEmail === userEmail);
         const myShare = myShares.find(s => s.business_id === b.id);
         const isSharedWithMe = !isOwned && !!myShare;
 
