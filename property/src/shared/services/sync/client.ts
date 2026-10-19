@@ -1,7 +1,7 @@
 import { createSyncClient, type LocalFirstClient } from 'local-lite/config';
 import { syncConfig } from './syncConfig';
 import { BUSINESS_COLLECTIONS } from './tables';
-import { ensureSchemaForeignIndexes } from './schemaIndexes';
+import { ensureSchemaIndexes } from './schemaIndexes';
 
 let clientInstance: LocalFirstClient | null = null;
 let clientPromise: Promise<LocalFirstClient> | null = null;
@@ -32,7 +32,7 @@ export async function getSyncClient(): Promise<LocalFirstClient> {
           await client.db.execute(
             `CREATE INDEX IF NOT EXISTS "idx_${table}_biz_del" ON "${table}" ("business_id", "deleted");`,
           );
-        } catch {}
+        } catch { }
       }
 
       // Specialized performance indexes for hot queries
@@ -61,13 +61,13 @@ export async function getSyncClient(): Promise<LocalFirstClient> {
         await client.db.execute(
           'CREATE INDEX IF NOT EXISTS "idx_bookings_biz_house" ON "bookings" ("business_id", "house_id", "deleted");',
         );
-      } catch {}
+      } catch { }
 
-      // Apply all foreign-key indexes extracted from database.types.ts
-      await ensureSchemaForeignIndexes(client.db);
+      // Apply all schema indexes extracted from database.types.ts
+      await ensureSchemaIndexes(client.db);
 
       // Clean up any unrecoverable unique constraint / duplicate key violations from the outbox queue
-      await client.clearFailedMutations().catch(() => {});
+      await client.clearFailedMutations().catch(() => { });
 
       // Purge any stuck profile insertion poison pills from outbox
       try {
@@ -76,7 +76,7 @@ export async function getSyncClient(): Promise<LocalFirstClient> {
             "DELETE FROM sync_outbox WHERE table_name = 'profiles' AND operation = 'INSERT';",
           );
         });
-      } catch {}
+      } catch { }
 
       clientInstance = client;
       return client;
