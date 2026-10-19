@@ -30,6 +30,7 @@ import SPressable from '@/shared/components/SlightPressable';
 import StatusUpdateModal from '@/shared/components/StatusUpdateModal';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCurrency } from '@/shared/hooks/useCurrency';
+import { useListScreenScaffolding } from '@/shared/hooks/useListScreenScaffolding';
 import {
   useContracts,
   useCoreMutations,
@@ -97,27 +98,24 @@ export default function ContractsScreen() {
   const { pauseAutoLock } = useIdleLock();
   const { showSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false);
-  const params = useLocalSearchParams<{ search?: string }>();
-  const [searchQuery, setSearchQuery] = useState(params.search || '');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-
-  // Update search query when params change (if they differ from current state)
-  React.useEffect(() => {
-    if (params.search && params.search !== searchQuery) {
-      setSearchQuery(params.search as string);
-      // Consume the parameter to prevent re-triggering on manual clear
-      router.setParams({ search: undefined } as any);
-    }
-  }, [params.search, searchQuery, router]);
+  const {
+    searchQuery,
+    setSearchQuery,
+    deferredSearchQuery,
+    expandedStatuses,
+    setExpandedStatuses,
+    toggleSection,
+    deleteDialogVisible,
+    setDeleteDialogVisible,
+    itemToDelete: selectedContract,
+    setItemToDelete: setSelectedContract,
+  } = useListScreenScaffolding<Contract>({
+    initialStatuses: ['active', 'expiring_soon', 'expired', 'terminated', 'unknown'],
+  });
 
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(
-    new Set(['active', 'expiring_soon', 'expired', 'terminated', 'unknown']),
-  );
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [statusUpdateDialogVisible, setStatusUpdateDialogVisible] = useState(false);
   const [selectedStatusToUpdate, setSelectedStatusToUpdate] = useState<string>('');
@@ -284,7 +282,7 @@ export default function ContractsScreen() {
         return prev;
       });
     }
-  }, [sections]);
+  }, [sections, setExpandedStatuses]);
 
   const renderStatusHeader = useCallback(
     ({ section }: { section: ContractSection }) => (
@@ -296,21 +294,11 @@ export default function ContractsScreen() {
             : `Total Contracts: ${section.data.length}`
         }
         isExpanded={expandedStatuses.has(section.title.toLowerCase())}
-        onToggle={() => {
-          setExpandedStatuses(prev => {
-            const next = new Set(prev);
-            if (next.has(section.title.toLowerCase())) {
-              next.delete(section.title.toLowerCase());
-            } else {
-              next.add(section.title.toLowerCase());
-            }
-            return next;
-          });
-        }}
+        onToggle={() => toggleSection(section.title.toLowerCase())}
         containerStyle={styles.statusHeader}
       />
     ),
-    [expandedStatuses, can, defaultCurrency],
+    [expandedStatuses, can, defaultCurrency, toggleSection],
   );
 
   const getStatusWatermarkColor = (status: string): string => {

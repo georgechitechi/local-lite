@@ -15,7 +15,7 @@ import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import PaymentMessageModal from '@/features/payments/components/PaymentMessageModal';
 import PaymentMessagesListModal from '@/features/payments/components/PaymentMessagesListModal';
-import LinkedMessages from '@/features/receipts/components/LinkedMessages';
+import ReceiptFormFields from '@/features/receipts/components/ReceiptFormFields';
 import {
   calculateReceiptTargetRent,
   getAmountAffix,
@@ -513,132 +513,14 @@ export default function EditReceiptScreen() {
           </View>
         </Surface>
 
-        <TextInput
-          label={`Amount (${defaultCurrency?.symbol || '$'})`}
-          value={form.amount}
-          onChangeText={handleAmountChange}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          error={!!errors.amount}
-          right={
-            amountAffix ? (
-              <TextInput.Affix
-                text={amountAffix.text}
-                textStyle={{
-                  color:
-                    amountAffix.color === 'success'
-                      ? (colors as any).success || colors.primary
-                      : colors.error,
-                }}
-              />
-            ) : null
-          }
-        />
-        {errors.amount ? (
-          <HelperText type="error">{errors.amount}</HelperText>
-        ) : isRentWaived ? (
-          <HelperText type="error" style={{ color: colors.warning }}>
-            Expected rent is {formatWithCurrency(0, defaultCurrency as any)} due to active
-            waivers.
-          </HelperText>
-        ) : null}
-
-        <Text variant="bodyMedium" style={styles.label}>
-          Receipt Date
-        </Text>
-        <DatePicker
-          label="Select Receipt Date"
-          value={form.payment_date || ''}
-          onChange={date => setForm(prev => ({ ...prev, payment_date: date }))}
-          style={styles.input}
-        />
-        {errors.payment_date && (
-          <HelperText type="error">{errors.payment_date}</HelperText>
-        )}
-
-        <DatePicker
-          label="Payment Period"
-          mode="month"
-          value={formatDateForDB(
-            new Date(form.payment_period.year, form.payment_period.month - 1, 1),
-          )}
-          onChange={date => {
-            if (date) {
-              const d = parseLocalDate(date);
-              setForm(prev => ({
-                ...prev,
-                payment_period: {
-                  month: d.getMonth() + 1,
-                  year: d.getFullYear(),
-                },
-              }));
-            }
-          }}
-          style={styles.input}
-        />
-        {(errors.month || errors.year) && (
-          <HelperText type="error">{errors.month || errors.year}</HelperText>
-        )}
-
-        <Text variant="bodyMedium" style={styles.label}>
-          Payment Status
-        </Text>
-        <SegmentedButtons
-          value={form.status}
-          onValueChange={value => setForm(prev => ({ ...prev, status: value }))}
-          buttons={[
-            { value: 'paid', label: 'Fully Paid' },
-            { value: 'partial', label: 'Partial Payment' },
-          ]}
-          style={styles.segmentedButton}
-        />
-
-        <Text variant="bodyMedium" style={styles.label}>
-          Payment Type
-        </Text>
-        <SegmentedButtons
-          value={form.type}
-          onValueChange={value =>
-            setForm(prev => ({
-              ...prev,
-              type: value,
-              status: value === 'others' ? 'paid' : prev.status,
-            }))
-          }
-          buttons={[
-            { value: 'rent', label: 'Rent' },
-            { value: 'deposit', label: 'Deposit' },
-            { value: 'others', label: 'Others' },
-          ]}
-          style={styles.segmentedButton}
-        />
-
-        <Text variant="bodyMedium" style={styles.label}>
-          Payment Method
-        </Text>
-        <SegmentedButtons
-          value={form.payment_method}
-          onValueChange={value => setForm(prev => ({ ...prev, payment_method: value }))}
-          buttons={[
-            { value: 'cash', label: 'Cash' },
-            { value: 'bank', label: 'Bank' },
-            { value: 'mpesa', label: 'M-Pesa' },
-            { value: 'other', label: 'Other' },
-          ]}
-          style={styles.segmentedButton}
-        />
-
-        <TextInput
-          label="Notes"
-          value={form.notes}
-          onChangeText={text => setForm(prev => ({ ...prev, notes: text }))}
-          multiline
-          numberOfLines={5}
-          style={styles.input}
-        />
-
-        {/* Payment Messages Section */}
-        <LinkedMessages
+        <ReceiptFormFields
+          form={form}
+          setForm={setForm}
+          errors={errors}
+          defaultCurrency={defaultCurrency}
+          amountAffix={amountAffix}
+          isRentWaived={isRentWaived}
+          onAmountChange={handleAmountChange}
           messages={filteredMessages}
           selectedMessageIds={selectedMessageIds}
           linkedMessages={linkedPaymentMessages}
@@ -655,10 +537,9 @@ export default function EditReceiptScreen() {
               }
             });
           }}
-          onShow={() => setLinkModalVisible(true)}
-          visible={linkModalVisible}
-          onDismiss={() => setLinkModalVisible(false)}
-          onCreateNew={() => setMessagesListModalVisible(true)}
+          linkModalVisible={linkModalVisible}
+          setLinkModalVisible={setLinkModalVisible}
+          onCreateNewMessage={() => setMessagesListModalVisible(true)}
           onClearSelection={() => setSelectedMessageIds([])}
         />
 

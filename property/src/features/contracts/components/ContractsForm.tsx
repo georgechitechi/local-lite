@@ -1,9 +1,11 @@
 import type React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Linking, StyleSheet, View } from 'react-native';
 import {
   Button,
   HelperText,
   IconButton,
+  List,
   Menu,
   Text,
   TextInput,
@@ -12,6 +14,7 @@ import SelectTenantModal from '@/features/tenants/components/SelectTenantModal';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
 import { formatDateForDB, parseLocalDate } from '@/shared/utils/formatters';
+import { properCase } from '@/shared/utils/helper';
 import SelectHouseModal from './SelectHouseModal';
 import SelectPropertyModal from './SelectPropertyModal';
 
@@ -80,7 +83,7 @@ export interface Errors {
   end_date?: string;
 }
 
-interface ContractsFormProps {
+export interface ContractsFormProps {
   form: ContractsFormData;
   setForm: React.Dispatch<React.SetStateAction<ContractsFormData>>;
   errors: Errors;
@@ -93,24 +96,14 @@ interface ContractsFormProps {
   storeHouses: any[];
   storeProperties: any[];
   isOnline: boolean;
-  statusMenuVisible: boolean;
-  setStatusMenuVisible: (v: boolean) => void;
-  showPropertyModal: boolean;
-  setShowPropertyModal: (v: boolean) => void;
-  showHouseModal: boolean;
-  setShowHouseModal: (v: boolean) => void;
-  showTenantModal: boolean;
-  setShowTenantModal: (v: boolean) => void;
-  houseSearch: string;
-  setHouseSearch: (v: string) => void;
-  existingContractsInfo: { tenant: Tenant; message: string } | null;
-  setExistingContractsInfo: (v: any) => void;
-  handleDocumentUpload: () => void;
-  removeDocument: (index: number) => void;
-  selectProperty: (property: Property) => void;
-  selectHouse: (house: House) => void;
-  selectTenant: (tenant: Tenant) => void;
-  confirmSelectTenant: () => void;
+  isEdit?: boolean;
+  handleDocumentUpload?: () => void;
+  removeDocument?: (index: number) => void;
+  onRemoveExistingDocument?: (doc: string, index: number) => void;
+  onRemoveNewDocument?: (index: number) => void;
+  selectProperty?: (property: Property) => void;
+  selectHouse?: (house: House) => void;
+  selectTenant?: (tenant: Tenant) => void;
 }
 
 export default function ContractsForm({
@@ -126,25 +119,107 @@ export default function ContractsForm({
   storeHouses,
   storeProperties,
   isOnline,
-  statusMenuVisible,
-  setStatusMenuVisible,
-  showPropertyModal,
-  setShowPropertyModal,
-  showHouseModal,
-  setShowHouseModal,
-  showTenantModal,
-  setShowTenantModal,
-  houseSearch,
-  setHouseSearch,
-  existingContractsInfo,
-  setExistingContractsInfo,
+  isEdit = false,
   handleDocumentUpload,
   removeDocument,
+  onRemoveExistingDocument,
+  onRemoveNewDocument,
   selectProperty,
   selectHouse,
   selectTenant,
-  confirmSelectTenant,
 }: ContractsFormProps) {
+  const [showPropertyModal, setShowPropertyModal] = useState(false);
+  const [showHouseModal, setShowHouseModal] = useState(false);
+  const [showTenantModal, setShowTenantModal] = useState(false);
+  const [houseSearch, setHouseSearch] = useState('');
+  const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+  const [existingContractsInfo, setExistingContractsInfo] = useState<{
+    tenant: Tenant;
+    message: string;
+  } | null>(null);
+
+  const onSelectProperty = (property: Property) => {
+    if (selectProperty) {
+      selectProperty(property);
+    } else {
+      setForm(prev => ({
+        ...prev,
+        property_id: property.id,
+        property_name: property.name,
+        house_id: '',
+        house_number: '',
+        house: prev.house ? { ...prev.house, property } : null,
+      }));
+    }
+    setShowPropertyModal(false);
+  };
+
+  const onSelectHouse = (house: House) => {
+    if (selectHouse) {
+      selectHouse(house);
+    } else {
+      setForm(prev => ({
+        ...prev,
+        house_id: house.id,
+        house_number: house.house_number,
+        rent_amount: house.monthly_rent?.toString() || prev.rent_amount,
+        house: { ...house, property: prev.house?.property },
+      }));
+    }
+    setHouseSearch('');
+    setShowHouseModal(false);
+  };
+
+  const onSelectTenant = (tenant: Tenant) => {
+    if (selectTenant) {
+      selectTenant(tenant);
+      return;
+    }
+    const existing = storeContracts.filter(c => c.tenant_id === tenant.id);
+    if (existing.length > 0) {
+      const contractList = existing
+        .map(c => {
+          const house = storeHouses.find(h => h.id === c.house_id);
+          const prop = house
+            ? storeProperties.find(p => p.id === house.property_id)
+            : null;
+          return `${prop?.name || 'Unknown'} - House ${house?.house_number || 'Unknown'} (${properCase(c.status || 'unknown')})`;
+        })
+        .join('\n');
+
+      setExistingContractsInfo({
+        tenant,
+        message: `This tenant already has ${existing.length} contract(s):\n\n${contractList}\n\nDo you want to create another contract for this tenant?`,
+      });
+    } else {
+      setForm(prev => ({
+        ...prev,
+        tenant_id: tenant.id,
+        tenant_name: tenant.name,
+      }));
+      setShowTenantModal(false);
+    }
+  };
+
+  const confirmSelectTenant = () => {
+    if (existingContractsInfo) {
+      setForm(prev => ({
+        ...prev,
+        tenant_id: existingContractsInfo.tenant.id,
+        tenant_name: existingContractsInfo.tenant.name,
+      }));
+      setExistingContractsInfo(null);
+      setShowTenantModal(false);
+    }
+  };
+
+  const propertyDisplayName =
+    form.property_name || form.house?.property?.name || 'Select Property';
+  const houseDisplayName =
+    form.house_number || form.house?.house_number
+      ? `House ${form.house_number || form.house?.house_number}`
+      : 'Select House';
+
   return (
     <View>
       <Button
@@ -152,7 +227,7 @@ export default function ContractsForm({
         onPress={() => setShowPropertyModal(true)}
         style={{ ...styles.input, backgroundColor: colors.surface }}
       >
-        {form.property_name || 'Select Property'}
+        {propertyDisplayName}
       </Button>
       {errors.property && <HelperText type="error">{errors.property}</HelperText>}
 
@@ -160,20 +235,29 @@ export default function ContractsForm({
         mode="outlined"
         onPress={() => setShowHouseModal(true)}
         style={{ ...styles.input, backgroundColor: colors.surface }}
-        disabled={!form.property_id}
+        disabled={!form.property_id && !form.house?.property?.id}
       >
-        {form.house_number ? `House ${form.house_number}` : 'Select House'}
+        {houseDisplayName}
       </Button>
       {errors.house && <HelperText type="error">{errors.house}</HelperText>}
 
-      <Button
-        mode="outlined"
-        onPress={() => setShowTenantModal(true)}
-        style={{ ...styles.input, backgroundColor: colors.surface }}
-      >
-        {form.tenant_name || 'Select Tenant'}
-      </Button>
-      {errors.tenant && <HelperText type="error">{errors.tenant}</HelperText>}
+      {isEdit ? (
+        <View style={styles.tenantInfoBox}>
+          <Text variant="titleMedium">Tenant Information</Text>
+          <Text>Name: {form.tenant?.name || form.tenant_name || 'Unknown'}</Text>
+        </View>
+      ) : (
+        <>
+          <Button
+            mode="outlined"
+            onPress={() => setShowTenantModal(true)}
+            style={{ ...styles.input, backgroundColor: colors.surface }}
+          >
+            {form.tenant_name || 'Select Tenant'}
+          </Button>
+          {errors.tenant && <HelperText type="error">{errors.tenant}</HelperText>}
+        </>
+      )}
 
       <Menu
         visible={statusMenuVisible}
@@ -259,30 +343,91 @@ export default function ContractsForm({
         <Text variant="titleMedium" style={styles.sectionTitle}>
           Documents
         </Text>
-        <Button
-          mode="outlined"
-          icon="file-upload"
-          onPress={handleDocumentUpload}
-          style={[styles.uploadButton, !isOnline && { opacity: 0.5 }]}
-          disabled={false}
-        >
-          Upload Document
-        </Button>
-        {form.documents.map((doc, index) => (
-          <View key={index} style={styles.documentItem}>
-            <Text numberOfLines={1} style={styles.documentName}>
-              {doc.name}
-            </Text>
-            <IconButton icon="close" size={20} onPress={() => removeDocument(index)} />
-          </View>
-        ))}
+        {handleDocumentUpload && (
+          <Button
+            mode="outlined"
+            icon="file-upload"
+            onPress={handleDocumentUpload}
+            style={[styles.uploadButton, !isOnline && { opacity: 0.5 }]}
+          >
+            Upload Document
+          </Button>
+        )}
+
+        {/* Existing Documents (Edit Mode) */}
+        {isEdit &&
+          form.documents?.map((doc: any, index: number) => {
+            const docUrl = typeof doc === 'string' ? doc : doc?.url;
+            const fileName = typeof doc === 'string' ? doc.split('/').pop() : doc?.name;
+            return (
+              <List.Item
+                key={`existing-${index}`}
+                title={fileName || 'Document'}
+                left={props => <List.Icon {...props} icon="file-document" />}
+                right={props => (
+                  <View style={styles.documentActions}>
+                    {docUrl && (
+                      <IconButton
+                        {...props}
+                        icon="eye"
+                        onPress={() => Linking.openURL(docUrl)}
+                      />
+                    )}
+                    {onRemoveExistingDocument && docUrl && (
+                      <IconButton
+                        {...props}
+                        icon="delete"
+                        onPress={() => onRemoveExistingDocument(docUrl, index)}
+                      />
+                    )}
+                  </View>
+                )}
+              />
+            );
+          })}
+
+        {/* New Documents (Edit Mode) */}
+        {isEdit &&
+          form.newDocuments?.map((doc: any, index: number) => (
+            <List.Item
+              key={`new-${index}`}
+              title={doc.name}
+              left={props => <List.Icon {...props} icon="file-document-outline" />}
+              right={props =>
+                onRemoveNewDocument ? (
+                  <IconButton
+                    {...props}
+                    icon="close"
+                    onPress={() => onRemoveNewDocument(index)}
+                  />
+                ) : null
+              }
+            />
+          ))}
+
+        {/* Create Mode Documents */}
+        {!isEdit &&
+          form.documents.map((doc, index) => (
+            <View key={index} style={styles.documentItem}>
+              <Text numberOfLines={1} style={styles.documentName}>
+                {doc.name}
+              </Text>
+              {removeDocument && (
+                <IconButton
+                  icon="close"
+                  size={20}
+                  onPress={() => removeDocument(index)}
+                />
+              )}
+            </View>
+          ))}
       </View>
 
       <SelectPropertyModal
         visible={showPropertyModal}
         onDismiss={() => setShowPropertyModal(false)}
         properties={properties}
-        onSelectProperty={selectProperty}
+        onSelectProperty={onSelectProperty}
       />
 
       <SelectHouseModal
@@ -293,11 +438,11 @@ export default function ContractsForm({
         form={form}
         houseSearch={houseSearch}
         setHouseSearch={setHouseSearch}
-        onSelectHouse={selectHouse}
+        onSelectHouse={onSelectHouse}
         defaultCurrency={defaultCurrency}
       />
 
-      {showTenantModal && (
+      {!isEdit && showTenantModal && (
         <SelectTenantModal
           visible={true}
           onDismiss={() => setShowTenantModal(false)}
@@ -307,7 +452,7 @@ export default function ContractsForm({
           properties={storeProperties}
           onSelect={selection => {
             if (Array.isArray(selection)) return;
-            selectTenant(selection);
+            onSelectTenant(selection);
           }}
           selectedId={form.tenant_id}
           showAllTenants={true}
@@ -335,6 +480,13 @@ const styles = StyleSheet.create({
   remarksInput: {
     height: 100,
   },
+  tenantInfoBox: {
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#ccc',
+  },
   documentsSection: {
     marginTop: 16,
     marginBottom: 24,
@@ -344,6 +496,9 @@ const styles = StyleSheet.create({
   },
   uploadButton: {
     marginBottom: 16,
+  },
+  documentActions: {
+    flexDirection: 'row',
   },
   documentItem: {
     flexDirection: 'row',

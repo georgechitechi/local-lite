@@ -20,6 +20,7 @@ import SPressable from '@/shared/components/SlightPressable';
 import StatusUpdateModal from '@/shared/components/StatusUpdateModal';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCurrency } from '@/shared/hooks/useCurrency';
+import { useListScreenScaffolding } from '@/shared/hooks/useListScreenScaffolding';
 import {
   useContracts,
   useCoreMutations,
@@ -76,18 +77,24 @@ export default function MaintenanceScreen() {
   const { showSnackbar } = useSnackbar();
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const {
+    searchQuery,
+    setSearchQuery,
+    deferredSearchQuery,
+    expandedStatuses: expandedSections,
+    toggleSection,
+    deleteDialogVisible,
+    setDeleteDialogVisible,
+    itemToDelete: selectedMaintenance,
+    setItemToDelete: setSelectedMaintenance,
+  } = useListScreenScaffolding<MaintenanceRequest>({
+    initialStatuses: ['pending', 'in_progress'],
+  });
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'pending' | 'in_progress' | 'completed' | 'cancelled'
   >('all');
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['pending', 'in_progress']),
-  );
   const [visibleMenuId, setVisibleMenuId] = useState<string | null>(null);
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
-  const [selectedMaintenance, setSelectedMaintenance] =
-    useState<MaintenanceRequest | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -193,7 +200,7 @@ export default function MaintenanceScreen() {
       if (statusFilter !== 'all' && req.status !== statusFilter) return false;
 
       // Search Filter
-      const searchLower = searchQuery.toLowerCase();
+      const searchLower = deferredSearchQuery.toLowerCase();
       return (
         req.description?.toLowerCase().includes(searchLower) ||
         req.houseNumber.toLowerCase().includes(searchLower)
@@ -225,7 +232,7 @@ export default function MaintenanceScreen() {
           return timeB - timeA;
         }),
       }));
-  }, [requests, searchQuery, statusFilter]);
+  }, [requests, deferredSearchQuery, statusFilter]);
 
   const getPriorityColor = useCallback(
     (priority: string) => {
@@ -352,23 +359,13 @@ export default function MaintenanceScreen() {
               : ' • No expenses recorded'
           }`}
           isExpanded={isExpanded}
-          onToggle={() => {
-            setExpandedSections(prev => {
-              const next = new Set(prev);
-              if (next.has(section.status)) {
-                next.delete(section.status);
-              } else {
-                next.add(section.status);
-              }
-              return next;
-            });
-          }}
+          onToggle={() => toggleSection(section.status)}
           containerStyle={styles.statusHeader}
           headerStyle={{ backgroundColor: colors.surface }}
         />
       );
     },
-    [expandedSections, colors, defaultCurrency],
+    [expandedSections, colors, defaultCurrency, toggleSection],
   );
 
   const renderItem = useCallback(
@@ -616,6 +613,8 @@ export default function MaintenanceScreen() {
       handleConvertToExpense,
       defaultCurrency,
       getPriorityColor,
+      setSelectedMaintenance,
+      setDeleteDialogVisible,
     ],
   );
 

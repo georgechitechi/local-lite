@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import {
   Button,
@@ -13,6 +13,7 @@ import {
 import BaseModal from '@/shared/components/BaseModal';
 import BaseSearch from '@/shared/components/BaseSearch';
 import DatePicker from '@/shared/components/DatePicker';
+import { formatDateForDB, parseLocalDate } from '@/shared/utils/formatters';
 
 export interface MaintenanceFormData {
   description: string;
@@ -27,30 +28,48 @@ export interface MaintenanceFormData {
   status?: string;
 }
 
-interface MaintenanceFormProps {
+export function validateMaintenanceForm(form: MaintenanceFormData): string | null {
+  if (!form.description?.trim()) {
+    return 'Description is required';
+  }
+  if (form.scope === 'property' && !form.property_id) {
+    return 'Property is required for property-wide maintenance';
+  }
+  if (form.scope === 'single_house' && !form.house_id) {
+    return 'House is required for single house maintenance';
+  }
+  if (form.scope === 'multi_house' && form.affected_houses.length === 0) {
+    return 'Please select at least one house for multi-house maintenance';
+  }
+  return null;
+}
+
+export interface MaintenanceFormProps {
   form: MaintenanceFormData;
   setForm: React.Dispatch<React.SetStateAction<MaintenanceFormData>>;
   isTenant: boolean;
-  tenantId: string | null;
+  tenantId?: string | null;
   storeProperties: any[];
   houses: any[];
   getTenantName: (houseId: string) => string | null;
-  selectedHouse: any;
+  selectedHouse?: any;
   handleImageUpload: () => void;
   removeImage: (index: number) => void;
   colors: any;
-  showHouseModal: boolean;
-  setShowHouseModal: (v: boolean) => void;
-  showPropertyModal: boolean;
-  setShowPropertyModal: (v: boolean) => void;
-  showMultiHouseModal: boolean;
-  setShowMultiHouseModal: (v: boolean) => void;
-  houseSearch: string;
-  setHouseSearch: (v: string) => void;
-  propertySearch: string;
-  setPropertySearch: (v: string) => void;
-  multiHouseSearch: string;
-  setMultiHouseSearch: (v: string) => void;
+
+  // Optional controlled props for backward compatibility
+  showHouseModal?: boolean;
+  setShowHouseModal?: (v: boolean) => void;
+  showPropertyModal?: boolean;
+  setShowPropertyModal?: (v: boolean) => void;
+  showMultiHouseModal?: boolean;
+  setShowMultiHouseModal?: (v: boolean) => void;
+  houseSearch?: string;
+  setHouseSearch?: (v: string) => void;
+  propertySearch?: string;
+  setPropertySearch?: (v: string) => void;
+  multiHouseSearch?: string;
+  setMultiHouseSearch?: (v: string) => void;
 }
 
 export default function MaintenanceForm({
@@ -60,23 +79,50 @@ export default function MaintenanceForm({
   storeProperties,
   houses,
   getTenantName,
-  selectedHouse,
+  selectedHouse: controlledSelectedHouse,
   handleImageUpload,
   removeImage,
   colors,
-  showHouseModal,
-  setShowHouseModal,
-  showPropertyModal,
-  setShowPropertyModal,
-  showMultiHouseModal,
-  setShowMultiHouseModal,
-  houseSearch,
-  setHouseSearch,
-  propertySearch,
-  setPropertySearch,
-  multiHouseSearch,
-  setMultiHouseSearch,
+  showHouseModal: controlledShowHouseModal,
+  setShowHouseModal: controlledSetShowHouseModal,
+  showPropertyModal: controlledShowPropertyModal,
+  setShowPropertyModal: controlledSetShowPropertyModal,
+  showMultiHouseModal: controlledShowMultiHouseModal,
+  setShowMultiHouseModal: controlledSetShowMultiHouseModal,
+  houseSearch: controlledHouseSearch,
+  setHouseSearch: controlledSetHouseSearch,
+  propertySearch: controlledPropertySearch,
+  setPropertySearch: controlledSetPropertySearch,
+  multiHouseSearch: controlledMultiHouseSearch,
+  setMultiHouseSearch: controlledSetMultiHouseSearch,
 }: MaintenanceFormProps) {
+  // Internal state when not controlled
+  const [internalShowHouse, setInternalShowHouse] = useState(false);
+  const [internalShowProperty, setInternalShowProperty] = useState(false);
+  const [internalShowMultiHouse, setInternalShowMultiHouse] = useState(false);
+  const [internalHouseSearch, setInternalHouseSearch] = useState('');
+  const [internalPropertySearch, setInternalPropertySearch] = useState('');
+  const [internalMultiHouseSearch, setInternalMultiHouseSearch] = useState('');
+
+  const showHouseModal = controlledShowHouseModal ?? internalShowHouse;
+  const setShowHouseModal = controlledSetShowHouseModal ?? setInternalShowHouse;
+  const showPropertyModal = controlledShowPropertyModal ?? internalShowProperty;
+  const setShowPropertyModal = controlledSetShowPropertyModal ?? setInternalShowProperty;
+  const showMultiHouseModal = controlledShowMultiHouseModal ?? internalShowMultiHouse;
+  const setShowMultiHouseModal =
+    controlledSetShowMultiHouseModal ?? setInternalShowMultiHouse;
+
+  const houseSearch = controlledHouseSearch ?? internalHouseSearch;
+  const setHouseSearch = controlledSetHouseSearch ?? setInternalHouseSearch;
+  const propertySearch = controlledPropertySearch ?? internalPropertySearch;
+  const setPropertySearch = controlledSetPropertySearch ?? setInternalPropertySearch;
+  const multiHouseSearch = controlledMultiHouseSearch ?? internalMultiHouseSearch;
+  const setMultiHouseSearch =
+    controlledSetMultiHouseSearch ?? setInternalMultiHouseSearch;
+
+  const selectedHouse =
+    controlledSelectedHouse ?? houses.find(h => h.id === form.house_id);
+
   const handleHouseSelect = (house: any) => {
     setForm(f => ({ ...f, house_id: house.id }));
     setShowHouseModal(false);
@@ -100,71 +146,112 @@ export default function MaintenanceForm({
           }));
         }}
         buttons={[
-          { value: 'single_house', label: 'Single', icon: 'home' },
-          {
-            value: 'multi_house',
-            label: 'Multi',
-            icon: 'home-group',
-            disabled: isTenant,
-          },
-          {
-            value: 'property',
-            label: 'Property',
-            icon: 'office-building',
-            disabled: isTenant,
-          },
+          { value: 'single_house', label: 'Single House' },
+          { value: 'multi_house', label: 'Multi House' },
+          { value: 'property', label: 'Property-wide' },
         ]}
         style={styles.input}
       />
 
-      {form.scope === 'property' && (
-        <Button
-          mode="outlined"
-          onPress={() => setShowPropertyModal(true)}
-          style={styles.input}
-          icon="office-building"
-        >
-          {form.property_id
-            ? storeProperties.find(p => p.id === form.property_id)?.name ||
-              'Select Property'
-            : 'Select Property'}
-        </Button>
+      <DatePicker
+        label="Event Date"
+        value={formatDateForDB(form.event_date)}
+        onChange={date =>
+          setForm(f => ({ ...f, event_date: date ? parseLocalDate(date) : new Date() }))
+        }
+        style={styles.input}
+      />
+
+      {/* Scope: Single House */}
+      {form.scope === 'single_house' && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.label}>
+            Select House
+          </Text>
+          <Button
+            mode="outlined"
+            onPress={() => setShowHouseModal(true)}
+            style={styles.input}
+            disabled={isTenant}
+          >
+            {selectedHouse
+              ? `House ${selectedHouse.house_number}${
+                  selectedHouse.property ? ` (${selectedHouse.property.name})` : ''
+                }`
+              : 'Choose a House'}
+          </Button>
+
+          {selectedHouse && (
+            <View style={{ marginBottom: 16 }}>
+              <Chip icon="home" style={{ alignSelf: 'flex-start' }}>
+                House {selectedHouse.house_number}
+                {getTenantName(selectedHouse.id)
+                  ? ` • ${getTenantName(selectedHouse.id)}`
+                  : ' • Vacant'}
+              </Chip>
+            </View>
+          )}
+        </View>
       )}
 
+      {/* Scope: Property-wide */}
+      {form.scope === 'property' && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.label}>
+            Select Property
+          </Text>
+          <Button
+            mode="outlined"
+            onPress={() => setShowPropertyModal(true)}
+            style={styles.input}
+          >
+            {form.property_id
+              ? storeProperties.find(p => p.id === form.property_id)?.name ||
+                'Choose a Property'
+              : 'Choose a Property'}
+          </Button>
+        </View>
+      )}
+
+      {/* Scope: Multi House */}
       {form.scope === 'multi_house' && (
-        <View style={styles.input}>
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.label}>
+            Select Affected Houses
+          </Text>
           <Button
             mode="outlined"
             onPress={() => setShowMultiHouseModal(true)}
-            icon="home-group"
+            style={styles.input}
           >
             {form.affected_houses.length > 0
               ? `${form.affected_houses.length} Houses Selected`
-              : 'Select Houses'}
+              : 'Choose Houses'}
           </Button>
+
           {form.affected_houses.length > 0 && (
             <View
               style={{
-                marginTop: 8,
                 flexDirection: 'row',
                 flexWrap: 'wrap',
-                gap: 4,
+                gap: 8,
+                marginBottom: 16,
               }}
             >
-              {form.affected_houses.map(houseId => {
-                const house = houses.find(h => h.id === houseId);
+              {form.affected_houses.map(id => {
+                const h = houses.find(house => house.id === id);
+                if (!h) return null;
                 return (
                   <Chip
-                    key={houseId}
-                    onClose={() => {
+                    key={id}
+                    onClose={() =>
                       setForm(f => ({
                         ...f,
-                        affected_houses: f.affected_houses.filter(id => id !== houseId),
-                      }));
-                    }}
-                    style={{ marginBottom: 4 }}
+                        affected_houses: f.affected_houses.filter(hid => hid !== id),
+                      }))
+                    }
                   >
-                    House {house?.house_number || 'Unknown'}
+                    House {h.house_number}
                   </Chip>
                 );
               })}
@@ -172,45 +259,6 @@ export default function MaintenanceForm({
           )}
         </View>
       )}
-
-      {form.scope === 'single_house' && (
-        <Button
-          mode="outlined"
-          onPress={() => !isTenant && setShowHouseModal(true)}
-          style={styles.input}
-          disabled={isTenant}
-          icon="home-outline"
-        >
-          {selectedHouse
-            ? `${
-                storeProperties.find(p => p.id === selectedHouse.property_id)?.name || ''
-              }: House ${selectedHouse.house_number}`
-            : 'Select House'}
-        </Button>
-      )}
-
-      <View style={styles.input}>
-        <DatePicker
-          label="Event Date"
-          value={form.event_date.toISOString()}
-          onChange={date => {
-            if (date) {
-              setForm(f => ({ ...f, event_date: new Date(date) }));
-            }
-          }}
-          maximumDate={null}
-        />
-      </View>
-
-      <TextInput
-        label="Description"
-        value={form.description}
-        onChangeText={t => setForm(f => ({ ...f, description: t }))}
-        style={[styles.input, styles.textArea]}
-        mode="outlined"
-        multiline
-        numberOfLines={4}
-      />
 
       <Text variant="titleMedium" style={styles.label}>
         Priority
@@ -220,49 +268,48 @@ export default function MaintenanceForm({
         onValueChange={v => setForm(f => ({ ...f, priority: v as any }))}
         buttons={[
           { value: 'low', label: 'Low' },
-          { value: 'medium', label: 'Med' },
+          { value: 'medium', label: 'Medium' },
           { value: 'high', label: 'High' },
           { value: 'urgent', label: 'Urgent' },
         ]}
         style={styles.input}
       />
 
-      {/* Images Section */}
+      <TextInput
+        label="Description"
+        value={form.description}
+        onChangeText={t => setForm(f => ({ ...f, description: t }))}
+        multiline
+        numberOfLines={4}
+        style={[styles.input, styles.textArea]}
+      />
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text variant="titleMedium">Images</Text>
-          <Button mode="text" onPress={handleImageUpload} icon="camera" compact>
-            Add Image
+          <Text variant="titleMedium">Photos</Text>
+          <Button icon="camera" mode="text" onPress={handleImageUpload}>
+            Add Photo
           </Button>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.imageList}
-        >
-          {form.images.map((uri, index) => (
-            <View key={index} style={styles.imageContainer}>
-              <Image source={{ uri }} style={styles.imageThumbnail} />
-              <IconButton
-                icon="close-circle"
-                size={20}
-                style={styles.removeImageBtn}
-                iconColor={colors.error}
-                onPress={() => removeImage(index)}
-              />
-            </View>
-          ))}
-          {form.images.length === 0 && (
-            <Text
-              variant="bodySmall"
-              style={{ fontStyle: 'italic', color: colors.outline }}
-            >
-              No images added
-            </Text>
-          )}
-        </ScrollView>
+
+        {form.images.length > 0 && (
+          <ScrollView horizontal style={styles.imageList}>
+            {form.images.map((uri, index) => (
+              <View key={index} style={styles.imageContainer}>
+                <Image source={{ uri }} style={styles.imageThumbnail} />
+                <IconButton
+                  icon="close-circle"
+                  size={20}
+                  style={styles.removeImageBtn}
+                  onPress={() => removeImage(index)}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
+      {/* House Selection Modal */}
       <BaseModal
         title="Select House"
         subtitle="Manage your properties"
@@ -271,21 +318,18 @@ export default function MaintenanceForm({
         scrollable={false}
         onDismiss={() => setShowHouseModal(false)}
       >
-        {!isTenant && (
-          <BaseSearch
-            placeholder="Search houses..."
-            value={houseSearch}
-            onChangeText={setHouseSearch}
-            leftIcon="magnify"
-            rightIcon="close"
-            onClear={() => setHouseSearch('')}
-            style={styles.searchInput}
-          />
-        )}
+        <BaseSearch
+          placeholder="Search houses..."
+          value={houseSearch}
+          onChangeText={setHouseSearch}
+          leftIcon="magnify"
+          rightIcon="close"
+          onClear={() => setHouseSearch('')}
+          style={styles.searchInput}
+        />
         <ScrollView>
           {houses
             .filter(h => {
-              if (isTenant) return h.id === form.house_id;
               const searchStr = houseSearch.toLowerCase();
               const houseNum = h.house_number.toLowerCase();
               const property = storeProperties.find(p => p.id === h.property_id);

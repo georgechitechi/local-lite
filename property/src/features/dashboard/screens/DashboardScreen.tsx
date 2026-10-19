@@ -140,8 +140,10 @@ const Dashboard = function Dashboard() {
     };
   }, [selectedBusinessId]);
 
-  const { data: dashboardData, loading: isDashboardDataLoading } =
-    useLiveQueries(client, querySpecs);
+  const { data: dashboardData, loading: isDashboardDataLoading } = useLiveQueries(
+    client,
+    querySpecs,
+  );
 
   const { stats, loading: isStatsLoading } = useLiveDashboardStats(
     client,
@@ -275,9 +277,7 @@ const Dashboard = function Dashboard() {
       c => c.tenant_id === tenantId && isActiveContractStatus(c.status),
     );
     const tenantHouseId = contract?.house_id;
-    const tenantPropertyId = houses.find(
-      h => h.id === tenantHouseId,
-    )?.property_id;
+    const tenantPropertyId = houses.find(h => h.id === tenantHouseId)?.property_id;
 
     return {
       contract,
@@ -285,8 +285,7 @@ const Dashboard = function Dashboard() {
         .filter(r => r.tenant_id === tenantId)
         .sort(
           (a, b) =>
-            new Date(b.payment_date).getTime() -
-            new Date(a.payment_date).getTime(),
+            new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime(),
         )
         .slice(0, 5),
       maintenance: maintenanceRequests
@@ -294,27 +293,18 @@ const Dashboard = function Dashboard() {
           if (m.tenant_id === tenantId) return true;
           if (tenantPropertyId && m.property_id === tenantPropertyId) {
             const isPropertyWide =
-              !m.house_id &&
-              (!m.affected_houses || m.affected_houses.length === 0);
+              !m.house_id && (!m.affected_houses || m.affected_houses.length === 0);
             if (isPropertyWide) return true;
           }
           return false;
         })
         .sort(
           (a, b) =>
-            new Date(b.event_date || 0).getTime() -
-            new Date(a.event_date || 0).getTime(),
+            new Date(b.event_date || 0).getTime() - new Date(a.event_date || 0).getTime(),
         )
         .slice(0, 5),
     };
-  }, [
-    contracts,
-    houses,
-    receipts,
-    maintenanceRequests,
-    isTenant,
-    tenantId,
-  ]);
+  }, [contracts, houses, receipts, maintenanceRequests, isTenant, tenantId]);
 
   // Calculated locally to support offline mode
   const pendingRentTenants = React.useMemo(() => {

@@ -10,9 +10,8 @@ import {
 import ContactPicker from '@/shared/components/ContactPicker';
 import Select from '@/shared/components/Select';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
-import { capitalizeEachWord } from '@/shared/utils/helper';
-
 import type { NextOfKin } from '@/shared/types/types';
+import { capitalizeEachWord } from '@/shared/utils/helper';
 
 export type { NextOfKin };
 

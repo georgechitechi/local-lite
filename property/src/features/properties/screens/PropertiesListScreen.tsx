@@ -29,6 +29,7 @@ import SectionGroup from '@/shared/components/SectionGroup';
 import SPressable from '@/shared/components/SlightPressable';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCurrency } from '@/shared/hooks/useCurrency';
+import { useListScreenScaffolding } from '@/shared/hooks/useListScreenScaffolding';
 import {
   useContracts,
   useContractsByHouseId,
@@ -336,15 +337,21 @@ export default function PropertiesScreen() {
   const housesByPropertyId = useHousesByPropertyId(selectedBusiness?.id);
   const contractsByHouseId = useContractsByHouseId(selectedBusiness?.id);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const {
+    searchQuery,
+    setSearchQuery,
+    deferredSearchQuery,
+    expandedStatuses,
+    toggleSection,
+    deleteDialogVisible,
+    setDeleteDialogVisible,
+    itemToDelete: selectedProperty,
+    setItemToDelete: setSelectedProperty,
+  } = useListScreenScaffolding<Property>({
+    initialStatuses: ['active', 'coming_soon', 'unknown'],
+  });
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState('all');
-  const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(
-    () => new Set<string>(['active', 'coming_soon', 'unknown']),
-  );
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [syncingHouses, setSyncingHouses] = useState(false);
 
@@ -522,20 +529,10 @@ export default function PropertiesScreen() {
         title={snakeCaseToTitleCase(section.title)}
         subtitle={`Total Properties: ${section.count}`}
         isExpanded={expandedStatuses.has(section.title.toLowerCase())}
-        onToggle={() => {
-          setExpandedStatuses(prev => {
-            const next = new Set(prev);
-            if (next.has(section.title.toLowerCase())) {
-              next.delete(section.title.toLowerCase());
-            } else {
-              next.add(section.title.toLowerCase());
-            }
-            return next;
-          });
-        }}
+        onToggle={() => toggleSection(section.title.toLowerCase())}
       />
     ),
-    [expandedStatuses],
+    [expandedStatuses, toggleSection],
   );
 
   const renderProperty = useCallback(
@@ -576,6 +573,8 @@ export default function PropertiesScreen() {
       defaultCurrency,
       getStatusColor,
       handleSyncHouseStatuses,
+      setSelectedProperty,
+      setDeleteDialogVisible,
     ],
   );
 

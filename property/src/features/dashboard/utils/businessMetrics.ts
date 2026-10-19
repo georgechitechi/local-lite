@@ -82,7 +82,9 @@ export async function fetchDashboardStatsFromDB(
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const currentMonthStart = `${currentYear}-${pad(currentMonth)}-01`;
-  const currentMonthEnd = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
+  const currentMonthEnd = new Date(currentYear, currentMonth, 0)
+    .toISOString()
+    .split('T')[0];
   const lastMonthStart = `${lastMonthYear}-${pad(lastMonth)}-01`;
   const lastMonthEnd = new Date(lastMonthYear, lastMonth, 0).toISOString().split('T')[0];
   const yearStart = `${currentYear}-01-01`;
@@ -91,23 +93,22 @@ export async function fetchDashboardStatsFromDB(
   const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
   const todayStr = now.toISOString().split('T')[0];
 
-  const [
-    [housesRow],
-    [contractsRow],
-    [expiringRow],
-    [receiptsRow],
-    [expensesRow],
-  ] = await Promise.all([
-    client.query<{ total_rooms: number; maintenance_rooms: number }>(
-      `SELECT 
+  const [[housesRow], [contractsRow], [expiringRow], [receiptsRow], [expensesRow]] =
+    await Promise.all([
+      client.query<{ total_rooms: number; maintenance_rooms: number }>(
+        `SELECT 
          COUNT(*) AS total_rooms,
          COALESCE(SUM(CASE WHEN "status" = 'maintenance' THEN 1 ELSE 0 END), 0) AS maintenance_rooms
        FROM "houses"
        WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId],
-    ),
-    client.query<{ occupied_rooms: number; active_tenants: number; projected_revenue: number }>(
-      `SELECT 
+        [businessId],
+      ),
+      client.query<{
+        occupied_rooms: number;
+        active_tenants: number;
+        projected_revenue: number;
+      }>(
+        `SELECT 
          COUNT(DISTINCT "house_id") AS occupied_rooms,
          COUNT(DISTINCT "tenant_id") AS active_tenants,
          COALESCE(SUM("rent_amount"), 0) AS projected_revenue
@@ -117,24 +118,24 @@ export async function fetchDashboardStatsFromDB(
          AND "start_date" <= ? 
          AND ("end_date" IS NULL OR "end_date" >= ?)
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, todayStr, currentMonthStart],
-    ),
-    client.query<{ expiring_contracts: number }>(
-      `SELECT COUNT(*) AS expiring_contracts
+        [businessId, todayStr, currentMonthStart],
+      ),
+      client.query<{ expiring_contracts: number }>(
+        `SELECT COUNT(*) AS expiring_contracts
        FROM "contracts"
        WHERE "business_id" = ?
          AND ("status" = 'ACTIVE' OR "status" = 'expiring_soon')
          AND "end_date" >= ? AND "end_date" <= ?
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [businessId, todayStr, thirtyDaysStr],
-    ),
-    client.query<{
-      monthly_revenue: number;
-      last_month_revenue: number;
-      annual_revenue: number;
-      total_revenue: number;
-    }>(
-      `SELECT 
+        [businessId, todayStr, thirtyDaysStr],
+      ),
+      client.query<{
+        monthly_revenue: number;
+        last_month_revenue: number;
+        annual_revenue: number;
+        total_revenue: number;
+      }>(
+        `SELECT 
          COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS monthly_revenue,
          COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS last_month_revenue,
          COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS annual_revenue,
@@ -143,15 +144,23 @@ export async function fetchDashboardStatsFromDB(
        WHERE "business_id" = ? 
          AND "payment_method" != 'promo' AND "type" != 'promo'
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [currentMonthStart, currentMonthEnd, lastMonthStart, lastMonthEnd, yearStart, yearEnd, businessId],
-    ),
-    client.query<{
-      monthly_expenses: number;
-      last_month_expenses: number;
-      annual_expenses: number;
-      total_expenses: number;
-    }>(
-      `SELECT 
+        [
+          currentMonthStart,
+          currentMonthEnd,
+          lastMonthStart,
+          lastMonthEnd,
+          yearStart,
+          yearEnd,
+          businessId,
+        ],
+      ),
+      client.query<{
+        monthly_expenses: number;
+        last_month_expenses: number;
+        annual_expenses: number;
+        total_expenses: number;
+      }>(
+        `SELECT 
          COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS monthly_expenses,
          COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS last_month_expenses,
          COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS annual_expenses,
@@ -159,9 +168,17 @@ export async function fetchDashboardStatsFromDB(
        FROM "expenses"
        WHERE "business_id" = ? 
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-      [currentMonthStart, currentMonthEnd, lastMonthStart, lastMonthEnd, yearStart, yearEnd, businessId],
-    ),
-  ]);
+        [
+          currentMonthStart,
+          currentMonthEnd,
+          lastMonthStart,
+          lastMonthEnd,
+          yearStart,
+          yearEnd,
+          businessId,
+        ],
+      ),
+    ]);
 
   const totalRooms = Number(housesRow?.total_rooms) || 0;
   const maintenanceRooms = Number(housesRow?.maintenance_rooms) || 0;
@@ -191,7 +208,8 @@ export async function fetchDashboardStatsFromDB(
 
   const rentableRooms = totalRooms - maintenanceRooms;
   const occupancyRate = rentableRooms > 0 ? (occupiedRooms / rentableRooms) * 100 : 0;
-  const rentCollectionRate = projectedRevenue > 0 ? (monthlyRevenue / projectedRevenue) * 100 : 0;
+  const rentCollectionRate =
+    projectedRevenue > 0 ? (monthlyRevenue / projectedRevenue) * 100 : 0;
 
   return {
     totalRooms,
@@ -331,7 +349,9 @@ export function useLiveExpiringContracts(
       return;
     }
     fetchContracts();
-    const unsubs = ['contracts', 'houses', 'tenants'].map(t => client.events.on(t, schedule));
+    const unsubs = ['contracts', 'houses', 'tenants'].map(t =>
+      client.events.on(t, schedule),
+    );
     return () => unsubs.forEach(u => u());
   }, [client, businessId, fetchContracts, schedule]);
 

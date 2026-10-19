@@ -31,6 +31,7 @@ import SectionGroup from '@/shared/components/SectionGroup';
 import SPressable from '@/shared/components/SlightPressable';
 import StatusUpdateModal from '@/shared/components/StatusUpdateModal';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
+import { useListScreenScaffolding } from '@/shared/hooks/useListScreenScaffolding';
 import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
 import {
   useBookings,
@@ -121,16 +122,24 @@ export default function TenantsScreen() {
   const { refreshing, onRefresh } = useStoreRefresh();
   const isInitialSyncing = useIsInitialSyncing();
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const {
+    searchQuery,
+    setSearchQuery,
+    deferredSearchQuery,
+    expandedStatuses,
+    toggleSection,
+    deleteDialogVisible,
+    setDeleteDialogVisible,
+    itemToDelete: selectedTenant,
+    setItemToDelete: setSelectedTenant,
+  } = useListScreenScaffolding<Tenant>({
+    initialStatuses: ['active', 'former', 'inactive', 'unknown'],
+  });
+
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(
-    new Set(['active', 'former', 'inactive', 'unknown']),
-  );
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [ledgerLoading, setLedgerLoading] = useState<string | null>(null);
   const { pauseAutoLock } = useIdleLock();
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [convertDialogVisible, setConvertDialogVisible] = useState(false);
   const [convertLoading, setConvertLoading] = useState(false);
@@ -507,18 +516,7 @@ export default function TenantsScreen() {
       title={section.title}
       subtitle={`Total Tenants: ${section.count}`}
       isExpanded={expandedStatuses.has(section.title.toLowerCase())}
-      onToggle={() => {
-        setExpandedStatuses((prev: Set<string>) => {
-          const next = new Set(prev);
-          const key = section.title.toLowerCase();
-          if (next.has(key)) {
-            next.delete(key);
-          } else {
-            next.add(key);
-          }
-          return next;
-        });
-      }}
+      onToggle={() => toggleSection(section.title.toLowerCase())}
     />
   );
 

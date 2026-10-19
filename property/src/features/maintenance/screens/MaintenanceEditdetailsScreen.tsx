@@ -6,6 +6,7 @@ import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import MaintenanceForm, {
   type MaintenanceFormData,
+  validateMaintenanceForm,
 } from '@/features/maintenance/components/MaintenanceForm';
 import { useAuth } from '@/providers/AuthProvider';
 import { useIdleLock } from '@/providers/LockScreenProvider';
@@ -27,7 +28,6 @@ import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 
 export default function EditMaintenanceScreen() {
   const { user } = useAuth();
-
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { showSnackbar } = useSnackbar();
@@ -39,12 +39,6 @@ export default function EditMaintenanceScreen() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [initializedId, setInitializedId] = useState<string | null>(null);
-  const [showHouseModal, setShowHouseModal] = useState(false);
-  const [showPropertyModal, setShowPropertyModal] = useState(false);
-  const [showMultiHouseModal, setShowMultiHouseModal] = useState(false);
-  const [houseSearch, setHouseSearch] = useState('');
-  const [propertySearch, setPropertySearch] = useState('');
-  const [multiHouseSearch, setMultiHouseSearch] = useState('');
 
   const { update } = useCoreMutations();
   const storeHouses = useHouses(selectedBusiness?.id);
@@ -65,14 +59,9 @@ export default function EditMaintenanceScreen() {
     event_date: new Date(),
   });
 
-  // Load existing data
   useEffect(() => {
     if (!maintenanceRequests || !id) return;
     if (initializedId === id) return;
-
-    if (!loading) {
-      setLoading(true);
-    }
 
     const request = maintenanceRequests.find(r => r.id === id);
     if (request) {
@@ -102,7 +91,11 @@ export default function EditMaintenanceScreen() {
       setLoading(false);
       setInitializedId(id);
     }
-  }, [maintenanceRequests, id, loading, initializedId, showSnackbar, router]);
+  }, [id, maintenanceRequests, initializedId, router, showSnackbar]);
+
+  const houses = storeHouses.sort((a, b) =>
+    a.house_number.localeCompare(b.house_number, undefined, { numeric: true }),
+  );
 
   const getTenantName = (houseId: string) => {
     const contract = storeContracts.find(
@@ -112,11 +105,6 @@ export default function EditMaintenanceScreen() {
     const tenant = storeTenants.find(t => t.id === contract.tenant_id);
     return tenant ? tenant.name : null;
   };
-
-  // Reactive Lists
-  const houses = storeHouses.sort((a, b) =>
-    a.house_number.localeCompare(b.house_number, undefined, { numeric: true }),
-  );
 
   const handleImageUpload = async () => {
     try {
@@ -152,25 +140,9 @@ export default function EditMaintenanceScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!form.description) {
-      showSnackbar('Description is required', 'error');
-      return;
-    }
-
-    // Validate based on scope
-    if (form.scope === 'property' && !form.property_id) {
-      showSnackbar('Property is required for property-wide maintenance', 'error');
-      return;
-    }
-    if (form.scope === 'single_house' && !form.house_id) {
-      showSnackbar('House is required for single house maintenance', 'error');
-      return;
-    }
-    if (form.scope === 'multi_house' && form.affected_houses.length === 0) {
-      showSnackbar(
-        'Please select at least one house for multi-house maintenance',
-        'error',
-      );
+    const errorMsg = validateMaintenanceForm(form);
+    if (errorMsg) {
+      showSnackbar(errorMsg, 'error');
       return;
     }
 
@@ -178,50 +150,45 @@ export default function EditMaintenanceScreen() {
     try {
       if (!user) throw new Error('User not authenticated');
 
-      // Only set changed fields
-      const property_id = form.scope === 'property' ? form.property_id || null : null;
-      const house_id = form.scope === 'single_house' ? form.house_id || null : null;
-      const affected_houses =
-        form.scope === 'multi_house' && form.affected_houses.length > 0
-          ? form.affected_houses
-          : null;
-      const tenant_id = form.tenant_id || null; // Allow tenant change if house changes
+      let targetTenantId = form.tenant_id;
+      if (!isTenant && form.scope === 'single_house' && form.house_id) {
+        const activeContract = storeContracts.find(
+          c => c.house_id === form.house_id && isActiveContractStatus(c.status),
+        );
+        targetTenantId = activeContract?.tenant_id || '';
+      }
 
-      const updateData: any = {
-        description: form.description || null,
+      await update('maintenance_requests', id, {
+        description: form.description,
         priority: form.priority,
-        property_id: property_id,
-        house_id: house_id,
-        affected_houses: affected_houses,
-        tenant_id: tenant_id,
+        property_id: form.scope === 'property' ? form.property_id : null,
+        house_id: form.scope === 'single_house' ? form.house_id : null,
+        affected_houses: form.scope === 'multi_house' ? form.affected_houses : null,
+        tenant_id: targetTenantId || null,
         images: form.images.length > 0 ? form.images : null,
         event_date: form.event_date.toISOString(),
-      };
+      });
 
-      await update('maintenance_requests', id, updateData);
-
-      showSnackbar('Request updated successfully', 'success');
-      router.push('/maintenance');
-    } catch (error) {
-      console.error('Error updating request:', error);
-      showSnackbar('Failed to update request', 'error');
+      showSnackbar('Maintenance request updated successfully', 'success');
+      router.push(`/(tabs)/maintenance`);
+    } catch (error: any) {
+      console.error(error);
+      showSnackbar(`Failed to update request: ${error.message}`, 'error');
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) {
-    return <LoadingCard text="Loading Request..." />;
+    return <LoadingCard iconName="tools" text="Loading maintenance request..." />;
   }
 
-  const selectedHouse = houses.find(h => h.id === form.house_id);
   return (
     <Protect action="edit" resource="maintenance">
       <KeyboardScroll
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
       >
-        {/* Maintenance Scope - Moved to Top */}
         <MaintenanceForm
           form={form}
           setForm={setForm}
@@ -230,31 +197,19 @@ export default function EditMaintenanceScreen() {
           storeProperties={storeProperties}
           houses={houses}
           getTenantName={getTenantName}
-          selectedHouse={selectedHouse}
           handleImageUpload={handleImageUpload}
           removeImage={removeImage}
           colors={colors}
-          showHouseModal={showHouseModal}
-          setShowHouseModal={setShowHouseModal}
-          showPropertyModal={showPropertyModal}
-          setShowPropertyModal={setShowPropertyModal}
-          showMultiHouseModal={showMultiHouseModal}
-          setShowMultiHouseModal={setShowMultiHouseModal}
-          houseSearch={houseSearch}
-          setHouseSearch={setHouseSearch}
-          propertySearch={propertySearch}
-          setPropertySearch={setPropertySearch}
-          multiHouseSearch={multiHouseSearch}
-          setMultiHouseSearch={setMultiHouseSearch}
         />
+
         <Button
           mode="contained"
           onPress={handleSubmit}
+          style={styles.button}
           loading={saving}
           disabled={saving}
-          style={styles.submitBtn}
         >
-          Save Changes
+          Update Request
         </Button>
       </KeyboardScroll>
     </Protect>
@@ -268,7 +223,8 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  submitBtn: {
+  button: {
     marginTop: 24,
+    marginBottom: 40,
   },
 });

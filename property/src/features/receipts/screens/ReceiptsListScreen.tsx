@@ -27,6 +27,7 @@ import SectionGroup from '@/shared/components/SectionGroup';
 import SPressable from '@/shared/components/SlightPressable';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCurrency } from '@/shared/hooks/useCurrency';
+import { useListScreenScaffolding } from '@/shared/hooks/useListScreenScaffolding';
 import {
   useContracts,
   useContractsById,
@@ -127,15 +128,24 @@ export default function ReceiptsScreen() {
   const propertiesById = usePropertiesById(selectedBusiness?.id);
   const tenantsById = useTenantsById(selectedBusiness?.id);
   const contractsById = useContractsById(selectedBusiness?.id);
-
   const params = useLocalSearchParams();
-  const [searchQuery, setSearchQuery] = useState('');
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    deferredSearchQuery,
+    expandedStatuses: expandedPeriods,
+    setExpandedStatuses: setExpandedPeriods,
+    toggleSection: togglePeriod,
+    deleteDialogVisible,
+    setDeleteDialogVisible,
+    itemToDelete: selectedReceipt,
+    setItemToDelete: setSelectedReceipt,
+  } = useListScreenScaffolding<Receipt>();
+
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [expandedPeriods, setExpandedPeriods] = useState<Set<string>>(new Set());
   const [warningVisible, setWarningVisible] = useState(false);
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
   const [displayedMonths, setDisplayedMonths] = useState(5);
@@ -288,7 +298,7 @@ export default function ReceiptsScreen() {
         router.setParams({ contract_id: undefined, search: undefined } as any);
       }
     }
-  }, [params.search, params.contract_id, searchQuery, contracts, tenants, router]);
+  }, [params.search, params.contract_id, searchQuery, contracts, tenants, router, setSearchQuery]);
 
   const handleEditReceipt = (receipt: Receipt) => {
     if (selectedBusiness) {
@@ -430,21 +440,22 @@ export default function ReceiptsScreen() {
 
   const filterAndSortReceipts = useCallback(
     (receipts: Receipt[]): Receipt[] => {
+      const query = deferredSearchQuery.toLowerCase();
       let filtered = receipts.filter(receipt => {
         const matchesSearch =
-          receipt.tenantName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          receipt.houseNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          receipt.propertyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          receipt.amount.toString().includes(searchQuery) ||
+          receipt.tenantName?.toLowerCase().includes(query) ||
+          receipt.houseNumber?.toLowerCase().includes(query) ||
+          receipt.propertyName?.toLowerCase().includes(query) ||
+          receipt.amount.toString().includes(deferredSearchQuery) ||
           (Array.isArray(receipt.tenant?.next_of_kin) &&
             (receipt.tenant?.next_of_kin as NextOfKin[])?.some(
               (kin: NextOfKin) =>
-                kin.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                kin.phone?.toLowerCase().includes(searchQuery.toLowerCase()),
+                kin.name?.toLowerCase().includes(query) ||
+                kin.phone?.toLowerCase().includes(query),
             )) ||
           // Search in linked payment messages
           receipt.linked_payment_messages?.some((message: LinkedPaymentMessage) =>
-            message.message_content.toLowerCase().includes(searchQuery.toLowerCase()),
+            message.message_content.toLowerCase().includes(query),
           );
 
         const matchesStatus =
@@ -497,7 +508,7 @@ export default function ReceiptsScreen() {
         (a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime(),
       );
     },
-    [searchQuery, selectedStatus, isStaff, isAdmin],
+    [deferredSearchQuery, selectedStatus, isStaff, isAdmin],
   );
 
   const groupReceiptsByPeriod = useCallback(
@@ -554,7 +565,7 @@ export default function ReceiptsScreen() {
         return prev;
       });
     }
-  }, [sections]);
+  }, [sections, setExpandedPeriods]);
 
   const renderPeriodHeader = ({ section }: { section: ReceiptSection }) => (
     <SectionGroup
@@ -574,17 +585,7 @@ export default function ReceiptsScreen() {
         </Text>
       }
       isExpanded={expandedPeriods.has(section.title)}
-      onToggle={() => {
-        setExpandedPeriods(prev => {
-          const next = new Set(prev);
-          if (next.has(section.title)) {
-            next.delete(section.title);
-          } else {
-            next.add(section.title);
-          }
-          return next;
-        });
-      }}
+      onToggle={() => togglePeriod(section.title)}
     />
   );
 

@@ -8,9 +8,6 @@ import { useSnackbar } from '@/context/SnackbarContext';
 import ContractsForm, {
   type ContractsFormData,
   type Errors,
-  type House,
-  type Property,
-  type Tenant,
 } from '@/features/contracts/components/ContractsForm';
 import { useAuth } from '@/providers/AuthProvider';
 import { AdminOnly } from '@/shared/access';
@@ -28,13 +25,12 @@ import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { pickDocument, uploadContractDocument } from '@/shared/services/fileUpload';
 import { sendNotification } from '@/shared/services/notifications';
 import { formatDateForDB } from '@/shared/utils/formatters';
-import { generateUUID, properCase } from '@/shared/utils/helper';
+import { generateUUID } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 import { validations } from '@/shared/utils/validations';
 
 export default function CreateContractScreen() {
   const { user } = useAuth();
-
   const router = useRouter();
   const params = useLocalSearchParams<{
     houseId?: string;
@@ -52,20 +48,9 @@ export default function CreateContractScreen() {
 
   const { isOnline } = useOfflineCheck();
   const { showSnackbar } = useSnackbar();
-
   const colors = useThemeColors();
-  const [saving, setSaving] = useState(false);
-
-  const [showPropertyModal, setShowPropertyModal] = useState(false);
-  const [showHouseModal, setShowHouseModal] = useState(false);
-  const [showTenantModal, setShowTenantModal] = useState(false);
-  const [existingContractsInfo, setExistingContractsInfo] = useState<{
-    tenant: Tenant;
-    message: string;
-  } | null>(null);
   const { defaultCurrency } = useCurrency(selectedBusiness?.id);
-  const [houseSearch, setHouseSearch] = useState('');
-  const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState<ContractsFormData>({
     property_id: '',
@@ -84,7 +69,6 @@ export default function CreateContractScreen() {
 
   const [errors, setErrors] = useState<Errors>({});
 
-  // Reactive Lists
   // Initial Data Effect (Params)
   React.useEffect(() => {
     if (params.houseId && storeHouses.length > 0) {
@@ -171,9 +155,7 @@ export default function CreateContractScreen() {
         return;
       }
 
-      // Generate local ID
       const contractId = generateUUID();
-      // Handle document uploads first (if any)
       let documentUrls: string[] = [];
       if (form.documents.length > 0) {
         try {
@@ -197,7 +179,7 @@ export default function CreateContractScreen() {
         tenant_id: form.tenant_id,
         start_date: formatDateForDB(form.start_date),
         end_date: formatDateForDB(form.end_date),
-        rent_amount: parseFloat(form.rent_amount),
+        rent_amount: Number.parseFloat(form.rent_amount),
         remarks: form.remarks || null,
         status: form.status,
         documents: documentUrls.length > 0 ? documentUrls : null,
@@ -214,7 +196,6 @@ export default function CreateContractScreen() {
         },
       ];
 
-      // Update house status to occupied when contract is active
       if (isActiveContractStatus(form.status) && form.house_id) {
         mutations.push({
           tableName: 'houses',
@@ -242,68 +223,6 @@ export default function CreateContractScreen() {
     }
   };
 
-  const selectProperty = (property: Property) => {
-    setForm((prev: ContractsFormData) => ({
-      ...prev,
-      property_id: property.id,
-      property_name: property.name,
-      house_id: '',
-      house_number: '',
-    }));
-    setShowPropertyModal(false);
-  };
-
-  const selectHouse = (house: House) => {
-    setForm((prev: ContractsFormData) => ({
-      ...prev,
-      house_id: house.id,
-      house_number: house.house_number,
-      rent_amount: house.monthly_rent.toString(),
-    }));
-    setShowHouseModal(false);
-  };
-
-  const selectTenant = (tenant: Tenant) => {
-    // Check if tenant has any existing contracts using local data
-    const existingContracts = storeContracts.filter(c => c.tenant_id === tenant.id);
-
-    if (existingContracts.length > 0) {
-      const contractList = existingContracts
-        .map(c => {
-          const house = storeHouses.find(h => h.id === c.house_id);
-          const property = house
-            ? storeProperties.find(p => p.id === house.property_id)
-            : null;
-          return `${property?.name || 'Unknown'} - House ${house?.house_number || 'Unknown'} (${properCase(c.status || 'unknown')})`;
-        })
-        .join('\n');
-
-      setExistingContractsInfo({
-        tenant,
-        message: `This tenant already has ${existingContracts.length} contract(s):\n\n${contractList}\n\nDo you want to create another contract for this tenant?`,
-      });
-    } else {
-      setForm((prev: ContractsFormData) => ({
-        ...prev,
-        tenant_id: tenant.id,
-        tenant_name: tenant.name,
-      }));
-      setShowTenantModal(false);
-    }
-  };
-
-  const confirmSelectTenant = () => {
-    if (existingContractsInfo) {
-      setForm((prev: ContractsFormData) => ({
-        ...prev,
-        tenant_id: existingContractsInfo.tenant.id,
-        tenant_name: existingContractsInfo.tenant.name,
-      }));
-      setExistingContractsInfo(null);
-      setShowTenantModal(false);
-    }
-  };
-
   return (
     <AdminOnly>
       <KeyboardScroll
@@ -323,29 +242,14 @@ export default function CreateContractScreen() {
           storeHouses={storeHouses}
           storeProperties={storeProperties}
           isOnline={isOnline}
-          statusMenuVisible={statusMenuVisible}
-          setStatusMenuVisible={setStatusMenuVisible}
-          showPropertyModal={showPropertyModal}
-          setShowPropertyModal={setShowPropertyModal}
-          showHouseModal={showHouseModal}
-          setShowHouseModal={setShowHouseModal}
-          showTenantModal={showTenantModal}
-          setShowTenantModal={setShowTenantModal}
-          houseSearch={houseSearch}
-          setHouseSearch={setHouseSearch}
-          existingContractsInfo={existingContractsInfo}
-          setExistingContractsInfo={setExistingContractsInfo}
           handleDocumentUpload={handleDocumentUpload}
           removeDocument={removeDocument}
-          selectProperty={selectProperty}
-          selectHouse={selectHouse}
-          selectTenant={selectTenant}
-          confirmSelectTenant={confirmSelectTenant}
         />
+
         <Button
           mode="contained"
           onPress={handleSubmit}
-          style={styles.submitButton}
+          style={styles.button}
           loading={saving}
           disabled={saving}
         >
@@ -363,8 +267,8 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  submitButton: {
-    marginTop: 20,
+  button: {
+    marginTop: 24,
     marginBottom: 40,
   },
 });
