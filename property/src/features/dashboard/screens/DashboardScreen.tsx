@@ -486,9 +486,17 @@ const Dashboard = function Dashboard() {
     propertiesById,
   ]);
 
+  if (accessLoading || isHydratingSelection) {
+    return (
+      <LoadingCard iconName="view-dashboard-variant" text="Loading workspace data..." />
+    );
+  }
+
+  if (!selectedBusiness) {
+    return <WelcomeDashboard />;
+  }
+
   if (
-    accessLoading ||
-    isHydratingSelection ||
     isWaitingForInitialSync ||
     isInitialSyncing ||
     isDashboardDataLoading ||
@@ -497,10 +505,6 @@ const Dashboard = function Dashboard() {
     return (
       <LoadingCard iconName="view-dashboard-variant" text="Loading workspace data..." />
     );
-  }
-
-  if (!selectedBusiness) {
-    return <WelcomeDashboard />;
   }
 
   return (

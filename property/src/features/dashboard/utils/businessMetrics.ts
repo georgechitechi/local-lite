@@ -242,7 +242,10 @@ export function useLiveDashboardStats(
   const scheduleFetch = useCoalescedRunner(fetchStats);
 
   useEffect(() => {
-    if (!client || !businessId) return;
+    if (!client || !businessId) {
+      setLoading(false);
+      return;
+    }
     fetchStats();
     const tables = ['receipts', 'expenses', 'contracts', 'houses'];
     const unsubs = tables.map(t => client.events.on(t, scheduleFetch));
@@ -323,7 +326,10 @@ export function useLiveExpiringContracts(
   const schedule = useCoalescedRunner(fetchContracts);
 
   useEffect(() => {
-    if (!client || !businessId) return;
+    if (!client || !businessId) {
+      setLoading(false);
+      return;
+    }
     fetchContracts();
     const unsubs = ['contracts', 'houses', 'tenants'].map(t => client.events.on(t, schedule));
     return () => unsubs.forEach(u => u());

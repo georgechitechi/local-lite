@@ -17,6 +17,7 @@ export interface ThemedHeaderProps {
   subtitle?: string;
   avatar?: React.ReactNode;
   extra?: React.ReactNode;
+  onBack?: () => void;
 }
 
 const ThemedHeader = React.memo(
@@ -27,11 +28,13 @@ const ThemedHeader = React.memo(
     subtitle,
     avatar,
     extra = <NetworkIndicator />,
+    onBack,
   }: ThemedHeaderProps) => {
     const colors = useThemeColors();
 
     return (
       <Appbar.Header style={{ backgroundColor: colors.surface }}>
+        {onBack && <Appbar.BackAction onPress={onBack} color={colors.onSurface} />}
         {avatar && <View style={{ marginLeft: 8, marginRight: 8 }}>{avatar}</View>}
         <Appbar.Content
           title={

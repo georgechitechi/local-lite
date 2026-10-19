@@ -88,13 +88,16 @@ function RootLayoutNav() {
   const deletionRequestedAt = user?.user_metadata?.deletion_requested_at;
   const isDeletionPending = !!deletionRequestedAt;
 
+  const isCloudSync = (segments as string[]).includes('cloud-sync');
+  const showDemoBanner = isDemoMode && !isCloudSync;
+
   return (
     <Portal.Host>
       <OfflineBanner />
-      {isDemoMode && <DemoModeBanner />}
+      {showDemoBanner && <DemoModeBanner />}
       {isDeletionPending ? (
         <DeletionBlocker />
-      ) : isDemoMode ? (
+      ) : showDemoBanner ? (
         <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
           <Slot />
         </SafeAreaInsetsContext.Provider>

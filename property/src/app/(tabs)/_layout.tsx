@@ -38,7 +38,8 @@ const HIDDEN_TAB_OPTIONS = {
 const TabLayout = function TabLayout() {
   const colors = useThemeColors();
   const { selectedBusiness, loading: businessLoading } = useBusiness();
-  const { user, confirmSignOut, loading: authLoading } = useAuth();
+  const { user, isOfflineAuthoritative, confirmSignOut, loading: authLoading } =
+    useAuth();
   const segments = useSegments();
   const { isAdmin, isAdminOrStaff, isTenant, isStaff, isTenantOnly, can } =
     useAccessControl();
@@ -166,23 +167,22 @@ const TabLayout = function TabLayout() {
           options={{
             title: 'Cloud Sync',
             ...HIDDEN_TAB_OPTIONS,
-            tabBarStyle: !user ? { display: 'none' } : undefined,
+            tabBarStyle: { display: 'none' },
             header: () => (
               <ThemedHeader
                 title="Cloud Sync"
                 subtitle="Sync your data to the cloud"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => {
-                      if (router.canGoBack()) {
-                        router.back();
-                      } else {
-                        router.replace(user ? '/(tabs)/settings' : '/(auth)/login');
-                      }
-                    },
-                  },
-                ]}
+                onBack={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace(
+                      user && !isOfflineAuthoritative
+                        ? '/(tabs)/settings'
+                        : '/(auth)/login',
+                    );
+                  }
+                }}
               />
             ),
           }}

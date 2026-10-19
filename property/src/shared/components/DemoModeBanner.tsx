@@ -15,7 +15,7 @@ export default function DemoModeBanner() {
     >
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() => router.push('/(tabs)/settings/cloud-sync')}
+        onPress={() => router.push('/settings/cloud-sync' as any)}
       >
         <View style={styles.content}>
           <MaterialCommunityIcons
