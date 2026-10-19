@@ -313,8 +313,7 @@ const TabLayout = function TabLayout() {
           name="properties/index"
           options={{
             title: 'Properties',
-            tabBarItemStyle: isAdmin ? undefined : { display: 'none' },
-            tabBarButton: isAdmin ? undefined : () => null,
+            ...(isAdmin ? {} : HIDDEN_TAB_OPTIONS),
             tabBarIcon: renderTabBarIcon('office-building'),
             header: () => (
               <ThemedHeader
@@ -343,8 +342,7 @@ const TabLayout = function TabLayout() {
           name="tenants/index"
           options={{
             title: 'Tenants',
-            tabBarItemStyle: isAdminOrStaff ? undefined : { display: 'none' },
-            tabBarButton: isAdminOrStaff ? undefined : () => null,
+            ...(isAdminOrStaff ? {} : HIDDEN_TAB_OPTIONS),
             tabBarIcon: renderTabBarIcon('account-group'),
             header: () => (
               <ThemedHeader
@@ -374,8 +372,7 @@ const TabLayout = function TabLayout() {
           name="contracts/index"
           options={{
             title: 'Contracts',
-            tabBarItemStyle: isAdmin ? undefined : { display: 'none' },
-            tabBarButton: isAdmin ? undefined : () => null,
+            ...(isAdmin ? {} : HIDDEN_TAB_OPTIONS),
             tabBarIcon: renderTabBarIcon('file'),
             header: () => (
               <ThemedHeader
@@ -405,8 +402,7 @@ const TabLayout = function TabLayout() {
           name="receipts/index"
           options={{
             title: isAdminOrStaff ? 'Receipts' : 'My Receipts',
-            tabBarItemStyle: isAdminOrStaff || isTenant ? undefined : { display: 'none' },
-            tabBarButton: isAdminOrStaff || isTenant ? undefined : () => null,
+            ...(isAdminOrStaff || isTenant ? {} : HIDDEN_TAB_OPTIONS),
             tabBarIcon: renderTabBarIcon('receipt-text-outline'),
             header: () => (
               <ThemedHeader
@@ -449,9 +445,7 @@ const TabLayout = function TabLayout() {
           name="maintenance/index"
           options={{
             title: 'Maintenance',
-            tabBarItemStyle:
-              !isAdmin && (isTenant || isStaff) ? undefined : { display: 'none' },
-            tabBarButton: !isAdmin && (isTenant || isStaff) ? undefined : () => null,
+            ...(!isAdmin && (isTenant || isStaff) ? {} : HIDDEN_TAB_OPTIONS),
             tabBarIcon: renderTabBarIcon('hammer-wrench'),
             header: () => (
               <ThemedHeader
