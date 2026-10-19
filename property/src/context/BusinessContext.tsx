@@ -12,7 +12,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { preCacheGallery } from '@/shared/components/CachedImage';
 import { useBusinesses } from '@/shared/hooks/useStore';
 import { OFFLINE_USER_ID } from '@/shared/services/auth';
-import { getSyncClient, getSyncClientSync } from '@/shared/services/sync/client';
+import { getSyncClient } from '@/shared/services/sync/client';
 import type { Business } from '@/shared/types/types';
 
 const isValidBusiness = (business: any): business is Business | { id: string } => {
@@ -80,28 +80,42 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
     }
   }, [selectedBusinessId, businesses, authLoading, storageLoading]);
 
-  // Pre-cache gallery images and update syncScope when business changes
+  // Pre-cache gallery images, update syncScope, and trigger immediate pull when business changes
   useEffect(() => {
-    const client = getSyncClientSync();
-    if (client && typeof client.setSyncScope === 'function') {
-      client.setSyncScope(
-        selectedBusiness ? { business_id: selectedBusiness.id } : undefined,
-      );
-    }
-    if (selectedBusiness && client) {
-      client
-        .findMany('gallery_images', {
-          where: { business_id: selectedBusiness.id },
-        })
-        .then(images => {
-          if (images && images.length > 0) {
-            preCacheGallery(images).catch(e =>
-              console.log('Pre-cache initial failed:', e.message),
-            );
+    let mounted = true;
+    getSyncClient()
+      .then(client => {
+        if (!mounted) return;
+        if (typeof client.setSyncScope === 'function') {
+          client.setSyncScope(
+            selectedBusiness ? { business_id: selectedBusiness.id } : undefined,
+          );
+        }
+        if (selectedBusiness) {
+          // Immediately pull any pending cloud changes for the selected business in background
+          if (typeof client.syncWorker?.pullRemoteChanges === 'function') {
+            client.syncWorker.pullRemoteChanges().catch(() => {});
           }
-        })
-        .catch(() => {});
-    }
+
+          client
+            .findMany('gallery_images', {
+              where: { business_id: selectedBusiness.id },
+            })
+            .then(images => {
+              if (mounted && images && images.length > 0) {
+                preCacheGallery(images).catch(e =>
+                  console.log('Pre-cache initial failed:', e.message),
+                );
+              }
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
   }, [selectedBusiness]);
 
   // Offline businesses remain claimable, but only after selection passed the
