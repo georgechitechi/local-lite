@@ -14,8 +14,9 @@
     "clean:audit": "npx ast-code-cleaner audit .",
     "test": "jest --runInBand",
     "test:coverage": "jest --runInBand --coverage --coverageDirectory=coverage",
-    "supabase:types": "npx supabase gen types typescript --project-id \"pklaiemezeenaywnnfxt\" --schema public > src/shared/types/database.types.ts && npm run supabase:index",
-    "supabase:index": "node -e \"import('local-lite/schema').then(m => m.generateSchemaIndexes('src/shared/types/database.types.ts', 'src/shared/services/sync/schemaIndexes.ts')).then(r => console.log('[schema-indexes] Generated ' + r.indexes.length + ' indexes'))\""
+    "supabase:types": "npx -s supabase gen types typescript --project-id \"pklaiemezeenaywnnfxt\" --schema public > src/shared/types/database.types.ts",
+    "supabase:index": "node -e \"import('local-lite/schema').then(m => m.generateSchemaIndexes('src/shared/types/database.types.ts', 'src/shared/services/sync/schemaIndexes.ts')).then(r => console.log('Generated ' + r.indexes.length + ' indexes'))\"",
+    "supabase": "npm run -s supabase:types && npm run -s supabase:index"
   },
   "dependencies": {
     "@expo/ui": "~58.0.20",

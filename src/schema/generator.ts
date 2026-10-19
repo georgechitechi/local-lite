@@ -104,7 +104,7 @@ export function parseSchemaIndexes(
       continue;
     }
     if (inRow) {
-      if (line.trim() === '};') {
+      if (line.trim() === '};' || line.trim() === '}') {
         inRow = false;
       } else if (currentTable) {
         const colMatch = line.match(/^\s{10}([a-z0-9_]+):/);
@@ -115,7 +115,7 @@ export function parseSchemaIndexes(
     }
 
     // Skip empty relationships
-    if (line.includes('Relationships: [];')) {
+    if (line.includes('Relationships: [];') || line.includes('Relationships: []')) {
       continue;
     }
 
@@ -126,7 +126,7 @@ export function parseSchemaIndexes(
     }
 
     if (inRelationships) {
-      if (line.trim() === '];') {
+      if (line.trim() === '];' || line.trim() === ']') {
         inRelationships = false;
         if (currentTable) {
           const block = relLines.join('\n');
