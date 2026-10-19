@@ -25,7 +25,7 @@ export function useLocalSync() {
   const isLoggedIn = authState.isLoggedIn;
   const isSyncActive = isCloudSyncEnabled && isLoggedIn;
   const isInitializing = cloudSync.isInitializing;
-  const isDemoMode = cloudSync.isDemoMode;
+  const isLocalMode = cloudSync.isLocalMode;
   const { showSnackbar } = useSnackbar();
 
   const requireCloudSync = (featureName: string): boolean => {
@@ -55,7 +55,7 @@ export function useLocalSync() {
     isCloudSyncEnabled,
     isSyncActive,
     isInitializing,
-    isDemoMode,
+    isLocalMode,
     enableSync,
     disableSync,
     requireCloudSync,

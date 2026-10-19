@@ -6,7 +6,7 @@ export interface CloudSyncState {
   isEnabled: boolean;
   isInitializing: boolean;
   wasEverConfigured: boolean;
-  isDemoMode: boolean;
+  isLocalMode: boolean;
 }
 
 export interface AuthStateSync {
@@ -17,7 +17,7 @@ let currentCloudSyncState: CloudSyncState = {
   isEnabled: false,
   isInitializing: true,
   wasEverConfigured: false,
-  isDemoMode: false,
+  isLocalMode: false,
 };
 
 let currentAuthStateSync: AuthStateSync = {
@@ -71,8 +71,10 @@ export const initializeSupabaseClient = async () => {
     const everConfigured =
       (await secureStorage.getItem('cloud_sync_ever_configured')) === true;
 
-    updateCloudSyncState({ wasEverConfigured: everConfigured });
-    updateCloudSyncState({ isDemoMode: !everConfigured });
+    updateCloudSyncState({
+      wasEverConfigured: everConfigured,
+      isLocalMode: !everConfigured,
+    });
 
     if (url && key) {
       supabase = createClient<Database>(url.trim(), key.trim(), {
@@ -144,7 +146,7 @@ export const disableCloudSync = async () => {
   supabase = null as unknown as SupabaseClient<Database>;
   updateCloudSyncState({ isEnabled: false });
   updateCloudSyncState({ wasEverConfigured: false });
-  updateCloudSyncState({ isDemoMode: true });
+  updateCloudSyncState({ isLocalMode: true });
   updateAuthStateSync({ isLoggedIn: false });
 };
 

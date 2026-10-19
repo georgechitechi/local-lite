@@ -176,22 +176,22 @@ export default function LoginScreen() {
     }
   };
 
-  const { isDemoMode } = useLocalSync();
+  const { isLocalMode } = useLocalSync();
 
   return (
     <KeyboardScroll
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        isDemoMode && styles.demoContentContainer,
+        isLocalMode && styles.localContentContainer,
       ]}
       safeAreaBackgroundColor={colors.background}
     >
       <View style={styles.header}>
-        {isDemoMode && (
+        {isLocalMode && (
           <View
             style={[
-              styles.demoIconContainer,
+              styles.localIconContainer,
               { backgroundColor: colors.primaryContainer || colors.surfaceVariant },
             ]}
           >
@@ -206,7 +206,7 @@ export default function LoginScreen() {
           variant="headlineLarge"
           style={[styles.title, { color: colors.onBackground }]}
         >
-          {isDemoMode ? 'Cloud Sync Setup' : 'Welcome Back'}
+          {isLocalMode ? 'Cloud Sync Setup' : 'Welcome Back'}
         </Text>
         <Text
           variant="bodyLarge"
@@ -215,8 +215,8 @@ export default function LoginScreen() {
             { color: colors.onSurfaceVariant, textAlign: 'center' },
           ]}
         >
-          {isDemoMode
-            ? 'Connect your Supabase cloud backend to enable authentication and sync across devices.'
+          {isLocalMode
+            ? 'Connect your cloud backend to enable authentication and sync across devices.'
             : 'Sign in to manage your businesses'}
         </Text>
       </View>
@@ -227,8 +227,8 @@ export default function LoginScreen() {
         </HelperText>
       ) : null}
 
-      {isDemoMode ? (
-        <View style={styles.demoContent}>
+      {isLocalMode ? (
+        <View style={styles.localContent}>
           <View style={styles.featureList}>
             <View style={styles.featureRow}>
               <MaterialCommunityIcons
@@ -280,8 +280,8 @@ export default function LoginScreen() {
             mode="contained"
             icon="cloud-cog"
             onPress={() => router.push('/settings/cloud-sync' as any)}
-            style={styles.demoModeButton}
-            contentStyle={styles.demoModeButtonContent}
+            style={styles.localModeButton}
+            contentStyle={styles.localModeButtonContent}
           >
             Configure Cloud Sync
           </Button>
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
-  demoContentContainer: {
+  localContentContainer: {
     justifyContent: 'flex-start',
     paddingTop: 48,
   },
@@ -472,11 +472,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
-  demoContent: {
+  localContent: {
     marginTop: 4,
     marginBottom: 16,
   },
-  demoIconContainer: {
+  localIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -501,11 +501,11 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  demoModeButton: {
+  localModeButton: {
     width: '100%',
     borderRadius: 12,
   },
-  demoModeButtonContent: {
+  localModeButtonContent: {
     paddingVertical: 6,
   },
 });

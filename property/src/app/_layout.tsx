@@ -20,7 +20,7 @@ import { SyncClientProvider } from '@/providers/SyncClientProvider';
 import { AppAccessProvider } from '@/shared/access/AppAccessProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
 import DeletionBlocker from '@/shared/components/DeletionBlocker';
-import DemoModeBanner from '@/shared/components/DemoModeBanner';
+import LocalModeBanner from '@/shared/components/LocalModeBanner';
 import { GlobalErrorFallback } from '@/shared/components/GlobalErrorFallback';
 import LoadingCard from '@/shared/components/LoadingCard';
 import LockScreen from '@/shared/components/LockScreen';
@@ -79,7 +79,7 @@ function RootLayoutNav() {
     }
   }, [loading, businessLoading, markInteractive]);
 
-  const { isDemoMode } = useLocalSync();
+  const { isLocalMode } = useLocalSync();
 
   if (loading || (user && businessLoading)) {
     return <LoadingCard text="Initialising application..." />;
@@ -89,15 +89,15 @@ function RootLayoutNav() {
   const isDeletionPending = !!deletionRequestedAt;
 
   const isCloudSync = (segments as string[]).includes('cloud-sync');
-  const showDemoBanner = isDemoMode && !isCloudSync;
+  const showLocalBanner = isLocalMode && !isCloudSync;
 
   return (
     <Portal.Host>
       <OfflineBanner />
-      {showDemoBanner && <DemoModeBanner />}
+      {showLocalBanner && <LocalModeBanner />}
       {isDeletionPending ? (
         <DeletionBlocker />
-      ) : showDemoBanner ? (
+      ) : showLocalBanner ? (
         <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
           <Slot />
         </SafeAreaInsetsContext.Provider>

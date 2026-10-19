@@ -4,7 +4,7 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function DemoModeBanner() {
+export default function LocalModeBanner() {
   const router = useRouter();
   const theme = useTheme();
 
@@ -28,7 +28,7 @@ export default function DemoModeBanner() {
             variant="labelSmall"
             style={[styles.text, { color: theme.colors.onErrorContainer }]}
           >
-            Demo Mode — Connect Cloud Sync to save real data.{'\n'}All data here will be
+            Local Mode — Connect Cloud Sync to save real data.{'\n'}All data here will be
             wiped on connect.
           </Text>
           <MaterialCommunityIcons

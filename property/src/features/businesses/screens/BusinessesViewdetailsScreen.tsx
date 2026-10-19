@@ -108,7 +108,7 @@ export default function BusinessView() {
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const isOwner = useAccessControl().isOwner;
   const { isOnline, checkOnline } = useOfflineCheck();
-  const { isDemoMode } = useLocalSync();
+  const { isLocalMode } = useLocalSync();
 
   const { pauseAutoLock, resumeAutoLock } = useIdleLock();
 
@@ -548,7 +548,7 @@ export default function BusinessView() {
 
           setDeleteProgress('Deleting business data...');
 
-          if (!isDemoMode && checkOnline('Delete Business')) {
+          if (!isLocalMode && checkOnline('Delete Business')) {
             const { error: rpcError } = await supabase.rpc('delete_business_data', {
               p_business_id: business.id,
             });

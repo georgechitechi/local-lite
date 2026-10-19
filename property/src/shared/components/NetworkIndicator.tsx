@@ -32,7 +32,7 @@ export const NetworkIndicator = ({
 }: NetworkIndicatorProps) => {
   const client = useLocalClient();
   const theme = useTheme();
-  const { isSyncActive: isCloudSyncEnabled, isDemoMode } = useLocalSync();
+  const { isSyncActive: isCloudSyncEnabled, isLocalMode } = useLocalSync();
   const isNetworkOnline = useNetworkStatus();
 
   const customRenderTrigger = useMemo(() => {
@@ -44,22 +44,22 @@ export const NetworkIndicator = ({
         const pendingCount = status?.pendingCount ?? 0;
         const isFullyOnline = isOnline && isCloudSyncEnabled;
 
-        // When not set to always visible, hide icon when no changes are pending (and fully online), or in demo mode
+        // When not set to always visible, hide icon when no changes are pending (and fully online), or in local mode
         if (!alwaysVisible) {
           if (pendingCount === 0 && isFullyOnline) return null;
-          if (isDemoMode) return null;
+          if (isLocalMode) return null;
         }
 
         let iconName = 'cloud-check';
         if (!isOnline) iconName = 'wifi-off';
-        else if (isDemoMode) iconName = 'cloud-off-outline';
+        else if (isLocalMode) iconName = 'cloud-off-outline';
         else if (!isCloudSyncEnabled) iconName = 'cloud-cog';
         else if (isSyncing) iconName = 'cloud-refresh';
         else if (pendingCount > 0) iconName = 'cloud-sync';
 
         let iconColor = theme.colors.primary;
         if (!isOnline) iconColor = theme.colors.error;
-        else if (isDemoMode || !isCloudSyncEnabled) iconColor = theme.colors.outline;
+        else if (isLocalMode || !isCloudSyncEnabled) iconColor = theme.colors.outline;
         else if (pendingCount === 0 && isFullyOnline) iconColor = '#10B981';
 
         return (
@@ -100,7 +100,7 @@ export const NetworkIndicator = ({
     renderTrigger,
     variant,
     isCloudSyncEnabled,
-    isDemoMode,
+    isLocalMode,
     theme.colors,
     isNetworkOnline,
     alwaysVisible,

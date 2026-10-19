@@ -7,10 +7,10 @@ export default function OfflineBanner() {
   const isOnline = useNetworkStatus();
   const { showSnackbar } = useSnackbar();
   const [wasOffline, setWasOffline] = useState(false);
-  const { isDemoMode } = useLocalSync();
+  const { isLocalMode } = useLocalSync();
 
   useEffect(() => {
-    if (isDemoMode) return;
+    if (isLocalMode) return;
 
     if (!isOnline && !wasOffline) {
       // We just went offline
@@ -21,7 +21,7 @@ export default function OfflineBanner() {
       showSnackbar('Back Online, Changes will sync in background', 'success');
       setWasOffline(false);
     }
-  }, [isOnline, wasOffline, showSnackbar, isDemoMode]);
+  }, [isOnline, wasOffline, showSnackbar, isLocalMode]);
 
   return null;
 }
