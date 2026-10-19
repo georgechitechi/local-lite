@@ -125,7 +125,6 @@ export default function TenantsScreen() {
   const {
     searchQuery,
     setSearchQuery,
-    deferredSearchQuery,
     expandedStatuses,
     toggleSection,
     deleteDialogVisible,

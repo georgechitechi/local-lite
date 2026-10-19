@@ -4,8 +4,8 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Checkbox, Divider, List, Surface, Text } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
-import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import type { IndexMap } from '@/shared/hooks/useStore';
+import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import type { Promotion, Tenant } from '@/shared/types/types';
 
 interface ApplyPromoModalProps {

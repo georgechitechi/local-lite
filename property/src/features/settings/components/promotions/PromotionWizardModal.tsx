@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 import {
   Button,
@@ -182,9 +183,7 @@ export default function PromotionWizardModal({
               <TextInput
                 label={promotion.type === 'percentage' ? 'Percentage (%)' : 'Amount'}
                 value={promotion.amount}
-                onChangeText={text =>
-                  setPromotion(prev => ({ ...prev, amount: text }))
-                }
+                onChangeText={text => setPromotion(prev => ({ ...prev, amount: text }))}
                 keyboardType="decimal-pad"
                 style={{ marginBottom: 16 }}
               />
@@ -372,9 +371,7 @@ export default function PromotionWizardModal({
                 <DatePicker
                   label="Starts From"
                   value={promotion.valid_from}
-                  onChange={date =>
-                    setPromotion(prev => ({ ...prev, valid_from: date }))
-                  }
+                  onChange={date => setPromotion(prev => ({ ...prev, valid_from: date }))}
                   maximumDate={null}
                 />
                 <DatePicker

@@ -20,9 +20,9 @@ import { SyncClientProvider } from '@/providers/SyncClientProvider';
 import { AppAccessProvider } from '@/shared/access/AppAccessProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
 import DeletionBlocker from '@/shared/components/DeletionBlocker';
-import LocalModeBanner from '@/shared/components/LocalModeBanner';
 import { GlobalErrorFallback } from '@/shared/components/GlobalErrorFallback';
 import LoadingCard from '@/shared/components/LoadingCard';
+import LocalModeBanner from '@/shared/components/LocalModeBanner';
 import LockScreen from '@/shared/components/LockScreen';
 import OfflineBanner from '@/shared/components/OfflineBanner';
 import { UpdatePrompt } from '@/shared/components/UpdatePrompt';
@@ -39,8 +39,7 @@ LogBox.ignoreLogs([
 ]);
 
 function RootLayoutNav() {
-  const { user, loading, isOfflineAuthoritative, isLocalModeAuthorized } =
-    useAuth();
+  const { user, loading, isOfflineAuthoritative, isLocalModeAuthorized } = useAuth();
   const { isLocalMode } = useLocalSync();
   const router = useRouter();
   const segments = useSegments();

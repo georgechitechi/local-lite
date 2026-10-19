@@ -1,16 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import {
-  Avatar,
-  Button,
-  Divider,
-  HelperText,
-  SegmentedButtons,
-  Surface,
-  Text,
-  TextInput,
-} from 'react-native-paper';
+import { Avatar, Button, Divider, Surface, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import PaymentMessageModal from '@/features/payments/components/PaymentMessageModal';
@@ -22,7 +13,6 @@ import {
 } from '@/features/receipts/utils/receiptHelper';
 import { useAuth } from '@/providers/AuthProvider';
 import { Protect } from '@/shared/access';
-import DatePicker from '@/shared/components/DatePicker';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import LoadingCard from '@/shared/components/LoadingCard';
 import { useCurrency } from '@/shared/hooks/useCurrency';
@@ -38,11 +28,7 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import type { PaymentMessage } from '@/shared/types/types';
-import {
-  formatDateForDB,
-  formatWithCurrency,
-  parseLocalDate,
-} from '@/shared/utils/formatters';
+import { formatDateForDB, formatWithCurrency } from '@/shared/utils/formatters';
 import { validateFields, validations } from '@/shared/utils/validations';
 
 interface FormData {
@@ -588,21 +574,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  input: {
-    marginBottom: 8,
-  },
   contractInfo: {
     padding: 12,
     marginBottom: 16,
     borderRadius: 12,
     borderWidth: 1,
-  },
-  label: {
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  segmentedButton: {
-    marginBottom: 16,
   },
   button: {
     marginTop: 20,

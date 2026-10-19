@@ -14,7 +14,7 @@ const setHouseFormPropertyName = (value: UIState['houseFormPropertyName']) =>
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { useRouter } from 'expo-router';
 import type { BatchMutation } from 'local-lite';
-import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Linking, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import { Divider, IconButton, Menu, Portal, Surface, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';

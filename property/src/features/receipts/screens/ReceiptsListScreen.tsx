@@ -298,7 +298,15 @@ export default function ReceiptsScreen() {
         router.setParams({ contract_id: undefined, search: undefined } as any);
       }
     }
-  }, [params.search, params.contract_id, searchQuery, contracts, tenants, router, setSearchQuery]);
+  }, [
+    params.search,
+    params.contract_id,
+    searchQuery,
+    contracts,
+    tenants,
+    router,
+    setSearchQuery,
+  ]);
 
   const handleEditReceipt = (receipt: Receipt) => {
     if (selectedBusiness) {

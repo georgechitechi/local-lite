@@ -1,9 +1,9 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { File } from 'expo-file-system';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import type { BatchMutation } from 'local-lite';
-import React, { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,

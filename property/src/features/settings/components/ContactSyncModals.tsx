@@ -1,13 +1,7 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import React from 'react';
+import type React from 'react';
 import { View } from 'react-native';
-import {
-  Card,
-  Checkbox,
-  List,
-  ProgressBar,
-  Text,
-} from 'react-native-paper';
+import { Card, Checkbox, List, ProgressBar, Text } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';
 import type { SyncProgressData } from '@/shared/services/contactsSync';
 import type { Tenant } from '@/shared/types/types';

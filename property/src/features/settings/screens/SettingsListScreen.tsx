@@ -4,33 +4,18 @@ const setContractSettingsModalVisible = (
 const setExpensesListModalVisible = (value: UIState['expensesListModalVisible']) =>
   setUIField('expensesListModalVisible', value);
 
-import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Linking,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   Avatar,
-  Button,
-  Card,
-  Checkbox,
   Divider,
-  HelperText,
   IconButton,
   List as PaperList,
   Portal,
-  ProgressBar,
   Switch,
-  Text,
-  TextInput,
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
@@ -505,7 +490,7 @@ export default function SettingsManager() {
       console.error('Update check error:', error);
       showSnackbar(
         'Could not check for updates. ' +
-        (error.message || 'Make sure you are connected to the internet.'),
+          (error.message || 'Make sure you are connected to the internet.'),
         'error',
       );
     } finally {
@@ -981,7 +966,7 @@ export default function SettingsManager() {
       {/* Success Reload Modal */}
       <BaseModal
         visible={!!successReloadData}
-        onDismiss={() => { }}
+        onDismiss={() => {}}
         title={successReloadData?.title || 'Success'}
         message={successReloadData?.message}
         mode="info"
@@ -999,11 +984,5 @@ export default function SettingsManager() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  input: {
-    marginBottom: 16,
-  },
-  compactModalContent: {
-    paddingVertical: 8,
   },
 });

@@ -25,7 +25,7 @@ export function isBusinessOwner(
   user: { id?: string | null; email?: string | null } | null | undefined,
   offlineUserId: string = OFFLINE_USER_ID,
 ): boolean {
-  if (!business || !user || !user.id) return false;
+  if (!business || !user?.id) return false;
   const bizUserId = normalizeIdentity(business.user_id);
   const userId = normalizeIdentity(user.id);
   const offlineId = normalizeIdentity(offlineUserId);
@@ -63,7 +63,7 @@ export function accessibleBusinesses(
   user: { id: string; email?: string } | null,
   offlineUserId: string = OFFLINE_USER_ID,
 ): Business[] {
-  if (!user || !user.id) return [];
+  if (!user?.id) return [];
   const email = normalizeIdentity(user.email);
   const normalizedUserId = normalizeIdentity(user.id);
   const offlineId = normalizeIdentity(offlineUserId);

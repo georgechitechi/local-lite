@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Divider, IconButton, Menu, Text } from 'react-native-paper';
 import SPressable from '@/shared/components/SlightPressable';

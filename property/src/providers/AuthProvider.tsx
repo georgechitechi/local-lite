@@ -18,6 +18,7 @@ import { ensureUserProfile } from '@/shared/services/auth';
 import { secureStorage } from '@/shared/services/secureStorage';
 import { supabase, updateAuthStateSync } from '@/shared/services/supabase';
 import {
+  authorizeLocalMode,
   confirmSignOut,
   getAuthStateSnapshot,
   hideSignOutDialog,
@@ -27,7 +28,6 @@ import {
   type SignUpData,
   setOfflineUser,
   setOnlineUser,
-  authorizeLocalMode,
   signIn,
   signOut,
   signUp,

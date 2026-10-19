@@ -1,11 +1,10 @@
-import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Divider, List, Surface, Text } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';
+import type { IndexMap } from '@/shared/hooks/useStore';
 import type { Promotion, Property, Tenant } from '@/shared/types/types';
 import { formatDateForDB } from '@/shared/utils/formatters';
 import { addOpacity, snakeCaseToTitleCase } from '@/shared/utils/helper';
-import type { IndexMap } from '@/shared/hooks/useStore';
 
 export interface ViewPromoModalProps {
   visible: boolean;
@@ -73,10 +72,7 @@ export default function ViewPromoModal({
             {!promotion.is_active && (
               <Surface
                 elevation={0}
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: colors.errorContainer },
-                ]}
+                style={[styles.statusBadge, { backgroundColor: colors.errorContainer }]}
               >
                 <Text variant="labelSmall" style={{ color: colors.onErrorContainer }}>
                   INACTIVE
@@ -124,10 +120,7 @@ export default function ViewPromoModal({
                   style={[
                     styles.statusBadge,
                     {
-                      backgroundColor: addOpacity(
-                        colors.success || '#16a34a',
-                        0.15,
-                      ),
+                      backgroundColor: addOpacity(colors.success || '#16a34a', 0.15),
                     },
                   ]}
                 >

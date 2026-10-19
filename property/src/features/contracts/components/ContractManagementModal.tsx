@@ -1,37 +1,18 @@
-import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import type { BatchMutation } from 'local-lite';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import {
-  Button,
-  Checkbox,
-  Chip,
-  Divider,
-  IconButton,
-  Menu,
-  Surface,
-  Text,
-  TextInput,
-} from 'react-native-paper';
+import { Button, Chip, Divider, Text, TextInput } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import ContractActionModal from '@/features/contracts/components/ContractActionModal';
 import MergeContractsModal from '@/features/contracts/components/MergeContractsModal';
-import BatchRenewModal from './management/BatchRenewModal';
-import ContractCard from './management/ContractCard';
-import ContractDrilldownModal from './management/ContractDrilldownModal';
-import ReinstateTenantsModal from './management/ReinstateTenantsModal';
 import type { Contract, ContractAction, Summary } from '@/features/contracts/types';
 import PendingRentHousekeepingModal from '@/features/properties/components/PendingRentHousekeepingModal';
 import SelectTenantModal from '@/features/tenants/components/SelectTenantModal';
 import BaseModal from '@/shared/components/BaseModal';
 import DatePicker from '@/shared/components/DatePicker';
-import EmptyState from '@/shared/components/EmptyState';
-import FilterButtons from '@/shared/components/FilterButtons';
-import KeyboardScroll from '@/shared/components/KeyboardScroll';
-import SPressable from '@/shared/components/SlightPressable';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useLocalSync } from '@/shared/hooks/useLocalSync';
 import { useOfflineCheck } from '@/shared/hooks/useOfflineCheck';
@@ -57,6 +38,9 @@ import {
 import { getAuthStateSnapshot } from '@/stores/authStore';
 import { generateContractPDF } from '@/templates/contractTemplate';
 import { generateTerminationPDF } from '@/templates/terminationTemplate';
+import BatchRenewModal from './management/BatchRenewModal';
+import ContractDrilldownModal from './management/ContractDrilldownModal';
+import ReinstateTenantsModal from './management/ReinstateTenantsModal';
 
 interface ContractManagementModalProps {
   visible: boolean;
@@ -558,8 +542,8 @@ export default function ContractManagementModal({
           const { error } = await supabase.functions.invoke('contract-management', {
             headers: getAuthStateSnapshot().session
               ? {
-                Authorization: `Bearer ${getAuthStateSnapshot().session?.access_token}`,
-              }
+                  Authorization: `Bearer ${getAuthStateSnapshot().session?.access_token}`,
+                }
               : undefined,
             body: {
               action: 'terminate',
@@ -728,15 +712,6 @@ export default function ContractManagementModal({
       });
     }
   }, [batchRenewDialogVisible, filteredContractsForBatch]);
-
-  const toggleBatchSelection = (id: string) => {
-    setSelectedBatchIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const executeBatchRenewal = async () => {
     if (selectedBatchIds.size === 0) {
@@ -1185,36 +1160,5 @@ const styles = StyleSheet.create({
   summaryChip: {
     width: '100%',
     paddingVertical: 2,
-  },
-  contractCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    paddingHorizontal: 4,
-  },
-  contractHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  tenantInfo: {
-    flex: 1,
-  },
-  tenantName: {
-    fontWeight: 'bold',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuButton: {
-    margin: -8,
-  },
-  reminderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  daysLeftText: {
-    fontWeight: 'bold',
   },
 });

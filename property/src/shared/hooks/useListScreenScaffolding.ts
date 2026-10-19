@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useDeferredValue, useEffect, useState } from 'react';
 
-export interface UseListScreenScaffoldingOptions<T = any> {
+export interface UseListScreenScaffoldingOptions<_T = any> {
   initialStatuses?: string[];
 }
 

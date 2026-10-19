@@ -9,10 +9,8 @@ import {
   Divider,
   HelperText,
   List,
-  SegmentedButtons,
   Surface,
   Text,
-  TextInput,
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
@@ -30,7 +28,6 @@ import {
 import { useAuth } from '@/providers/AuthProvider';
 import { Protect } from '@/shared/access';
 import BaseModal from '@/shared/components/BaseModal';
-import DatePicker from '@/shared/components/DatePicker';
 import EmptyState from '@/shared/components/EmptyState';
 import KeyboardScroll from '@/shared/components/KeyboardScroll';
 import { useCurrency } from '@/shared/hooks/useCurrency';
@@ -52,12 +49,7 @@ import type {
   Contract as StoreContract,
   PaymentMessage as StorePaymentMessage,
 } from '@/shared/types/types';
-import {
-  formatDateForDB,
-  formatWithCurrency,
-  MONTHS,
-  parseLocalDate,
-} from '@/shared/utils/formatters';
+import { formatDateForDB, formatWithCurrency, MONTHS } from '@/shared/utils/formatters';
 import {
   calculateEffectiveRent,
   generateUUID,
@@ -934,9 +926,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  input: {
-    marginBottom: 8,
-  },
   contractCard: {
     borderRadius: 12,
     borderWidth: 1,
@@ -965,13 +954,6 @@ const styles = StyleSheet.create({
   },
   rentAmount: {
     marginTop: 4,
-  },
-  label: {
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  segmentedButton: {
-    marginBottom: 16,
   },
   button: {
     marginTop: 20,

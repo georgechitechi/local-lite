@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Text, View } from 'react-native';
 import { Button, List, Switch } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';
@@ -87,10 +87,7 @@ export const LayoutSettingsModal: React.FC<LayoutSettingsModalProps> = ({
               <Text style={{ color: colors.onSurface, fontWeight: 'bold' }}>—</Text>
             </SlightPressable>
             <Text style={styles.stepValue}>{cols}</Text>
-            <SlightPressable
-              onPress={() => updateCols(cols + 1)}
-              style={styles.stepBtn}
-            >
+            <SlightPressable onPress={() => updateCols(cols + 1)} style={styles.stepBtn}>
               <Text style={{ color: colors.onSurface, fontWeight: 'bold' }}>+</Text>
             </SlightPressable>
           </View>
@@ -102,9 +99,7 @@ export const LayoutSettingsModal: React.FC<LayoutSettingsModalProps> = ({
             alignItems: 'center',
           }}
         >
-          <Text style={[styles.controlText, { color: colors.onSurface }]}>
-            Grid Rows
-          </Text>
+          <Text style={[styles.controlText, { color: colors.onSurface }]}>Grid Rows</Text>
           <View style={styles.stepper}>
             <SlightPressable
               onPress={() => updateRows(Math.max(1, rows - 1))}
@@ -113,10 +108,7 @@ export const LayoutSettingsModal: React.FC<LayoutSettingsModalProps> = ({
               <Text style={{ color: colors.onSurface, fontWeight: 'bold' }}>—</Text>
             </SlightPressable>
             <Text style={styles.stepValue}>{rows}</Text>
-            <SlightPressable
-              onPress={() => updateRows(rows + 1)}
-              style={styles.stepBtn}
-            >
+            <SlightPressable onPress={() => updateRows(rows + 1)} style={styles.stepBtn}>
               <Text style={{ color: colors.onSurface, fontWeight: 'bold' }}>+</Text>
             </SlightPressable>
           </View>

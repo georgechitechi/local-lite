@@ -353,8 +353,7 @@ export const initializeAuth = async (mountedCheck: () => boolean) => {
     await initializeSupabaseClient();
 
     if (!supabase) {
-      const authorized =
-        (await secureStorage.getItem('local_mode_authorized')) === true;
+      const authorized = (await secureStorage.getItem('local_mode_authorized')) === true;
       if (mountedCheck()) {
         setOfflineSession();
         updateAuthState({ isLocalModeAuthorized: authorized, loading: false });

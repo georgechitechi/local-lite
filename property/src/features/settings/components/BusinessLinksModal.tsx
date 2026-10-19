@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import React from 'react';
+import type React from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { Button, Card, HelperText, Text, TextInput } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';
@@ -60,10 +60,7 @@ export default function BusinessLinksModal({
     >
       <View style={styles.compactModalContent}>
         {/* Website */}
-        <Card
-          style={{ marginBottom: 12, backgroundColor: colors.surface }}
-          elevation={1}
-        >
+        <Card style={{ marginBottom: 12, backgroundColor: colors.surface }} elevation={1}>
           <Card.Content style={{ paddingVertical: 12 }}>
             <View
               style={{
@@ -131,10 +128,7 @@ export default function BusinessLinksModal({
         </Card>
 
         {/* WhatsApp Group */}
-        <Card
-          style={{ marginBottom: 12, backgroundColor: colors.surface }}
-          elevation={1}
-        >
+        <Card style={{ marginBottom: 12, backgroundColor: colors.surface }} elevation={1}>
           <Card.Content style={{ paddingVertical: 12 }}>
             <View
               style={{
@@ -157,14 +151,10 @@ export default function BusinessLinksModal({
               mode="outlined"
               placeholder="https://chat.whatsapp.com/..."
               value={links.whatsapp_group}
-              onChangeText={text =>
-                setLinks(prev => ({ ...prev, whatsapp_group: text }))
-              }
+              onChangeText={text => setLinks(prev => ({ ...prev, whatsapp_group: text }))}
               style={styles.input}
               outlineColor={links.whatsapp_group ? colors.success : undefined}
-              activeOutlineColor={
-                links.whatsapp_group ? colors.success : colors.primary
-              }
+              activeOutlineColor={links.whatsapp_group ? colors.success : colors.primary}
               dense
               right={
                 links.whatsapp_group ? (

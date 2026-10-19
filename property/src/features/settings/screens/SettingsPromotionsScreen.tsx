@@ -25,10 +25,7 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { formatDateForDB } from '@/shared/utils/formatters';
-import {
-  generateUUID,
-  safeParseJSON,
-} from '@/shared/utils/helper';
+import { generateUUID, safeParseJSON } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 import { generateAndSharePromoVoucher } from '@/templates/promoVoucherTemplate';
 
@@ -176,8 +173,7 @@ export default function PromotionsScreen() {
 
       const promoData = {
         code: newPromotion.code,
-        amount:
-          newPromotion.type === 'full_month' ? 0 : parseFloat(newPromotion.amount),
+        amount: newPromotion.type === 'full_month' ? 0 : parseFloat(newPromotion.amount),
         type: newPromotion.type,
         scope: newPromotion.scope,
         property_id: newPromotion.scope === 'property' ? newPromotion.property_id : null,

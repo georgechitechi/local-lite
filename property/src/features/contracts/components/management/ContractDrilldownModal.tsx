@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Surface, Text } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';

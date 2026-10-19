@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import React from 'react';
+import type React from 'react';
 import { View } from 'react-native';
 import { Button, Checkbox, Chip, Text } from 'react-native-paper';
 import BaseModal from '@/shared/components/BaseModal';
@@ -191,10 +191,7 @@ export default function BatchRenewModal({
                       color={colors.onSurfaceVariant}
                       style={{ marginRight: 4 }}
                     />
-                    <Text
-                      variant="bodySmall"
-                      style={{ color: colors.onSurfaceVariant }}
-                    >
+                    <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
                       {formatDate(c.end_date)}
                     </Text>
                   </View>

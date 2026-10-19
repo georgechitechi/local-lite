@@ -10,9 +10,7 @@ import React, { useMemo, useState } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Divider, Surface, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
-import ExpiringContractsCard, {
-  type ExpiringContract,
-} from '@/features/contracts/components/ExpiringContractsCard';
+import ExpiringContractsCard from '@/features/contracts/components/ExpiringContractsCard';
 import DailyFinanceCard from '@/features/dashboard/components/DailyFinanceCard';
 import { InsightsCard } from '@/features/dashboard/components/InsightsCard';
 import MaintenanceOverviewCard from '@/features/dashboard/components/MaintenanceOverviewCard';
@@ -335,7 +333,6 @@ const Dashboard = function Dashboard() {
       const contractReceipts = (receiptsByContractId.get(contract.id) || []).filter(r => {
         const p = safeParseJSON<{ month?: number; year?: number }>(
           r.payment_period as any,
-          {},
         );
         return p.month === targetMonth && p.year === targetYear;
       });

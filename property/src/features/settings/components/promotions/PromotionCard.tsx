@@ -1,12 +1,5 @@
-import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import {
-  Card,
-  IconButton,
-  Menu,
-  Surface,
-  Text,
-} from 'react-native-paper';
+import { Card, IconButton, Menu, Surface, Text } from 'react-native-paper';
 import type { Promotion } from '@/shared/types/types';
 import { formatDateForDB, formatDateRange } from '@/shared/utils/formatters';
 import { formatPromoAmount } from './promotionHelpers';
@@ -48,30 +41,18 @@ export default function PromotionCard({
             </Text>
             <Surface
               elevation={0}
-              style={[
-                styles.typeBadge,
-                { backgroundColor: colors.primaryContainer },
-              ]}
+              style={[styles.typeBadge, { backgroundColor: colors.primaryContainer }]}
             >
-              <Text
-                variant="labelSmall"
-                style={{ color: colors.onPrimaryContainer }}
-              >
+              <Text variant="labelSmall" style={{ color: colors.onPrimaryContainer }}>
                 {(item.type || '').replace('_', ' ').toUpperCase()}
               </Text>
             </Surface>
             {!item.is_active && (
               <Surface
                 elevation={0}
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: colors.errorContainer },
-                ]}
+                style={[styles.statusBadge, { backgroundColor: colors.errorContainer }]}
               >
-                <Text
-                  variant="labelSmall"
-                  style={{ color: colors.onErrorContainer }}
-                >
+                <Text variant="labelSmall" style={{ color: colors.onErrorContainer }}>
                   INACTIVE
                 </Text>
               </Surface>
@@ -79,15 +60,9 @@ export default function PromotionCard({
             {item.valid_until && item.valid_until < now && (
               <Surface
                 elevation={0}
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: colors.errorContainer },
-                ]}
+                style={[styles.statusBadge, { backgroundColor: colors.errorContainer }]}
               >
-                <Text
-                  variant="labelSmall"
-                  style={{ color: colors.onErrorContainer }}
-                >
+                <Text variant="labelSmall" style={{ color: colors.onErrorContainer }}>
                   EXPIRED
                 </Text>
               </Surface>
@@ -100,10 +75,7 @@ export default function PromotionCard({
                   { backgroundColor: colors.secondaryContainer },
                 ]}
               >
-                <Text
-                  variant="labelSmall"
-                  style={{ color: colors.onSecondaryContainer }}
-                >
+                <Text variant="labelSmall" style={{ color: colors.onSecondaryContainer }}>
                   UPCOMING
                 </Text>
               </Surface>
