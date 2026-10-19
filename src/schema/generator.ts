@@ -198,7 +198,7 @@ export function parseSchemaIndexes(
  * Generates TypeScript source code containing index definitions and an applicator helper.
  */
 export function formatSchemaIndexesCode(indexes: SchemaIndexDefinition[]): string {
-  const sqlLines = indexes.map(i => `  ${JSON.stringify(i.sql)},`).join('\n');
+  const sqlStatements = indexes.map(i => i.sql).join('\n');
 
   return `/**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY.
@@ -206,12 +206,18 @@ export function formatSchemaIndexesCode(indexes: SchemaIndexDefinition[]): strin
  */
 
 /**
- * Schema index SQL statements extracted from Supabase database types.
+ * Raw SQL index statements for Supabase / PostgreSQL.
+ * You can copy this block directly into the Supabase SQL Editor without syntax errors.
  * Total indexes: ${indexes.length}
  */
-export const SCHEMA_INDEXES: readonly string[] = [
-${sqlLines}
-] as const;
+export const SCHEMA_INDEXES_SQL = \`
+${sqlStatements}
+\`.trim();
+
+/**
+ * Parsed index statements for local SQLite execution.
+ */
+export const SCHEMA_INDEXES: readonly string[] = SCHEMA_INDEXES_SQL.split('\\n');
 
 /**
  * Applies all schema indexes into SQLite to ensure zero-latency local reads.
