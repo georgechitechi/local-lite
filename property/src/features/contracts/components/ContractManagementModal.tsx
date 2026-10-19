@@ -19,6 +19,10 @@ import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import ContractActionModal from '@/features/contracts/components/ContractActionModal';
 import MergeContractsModal from '@/features/contracts/components/MergeContractsModal';
+import BatchRenewModal from './management/BatchRenewModal';
+import ContractCard from './management/ContractCard';
+import ContractDrilldownModal from './management/ContractDrilldownModal';
+import ReinstateTenantsModal from './management/ReinstateTenantsModal';
 import type { Contract, ContractAction, Summary } from '@/features/contracts/types';
 import PendingRentHousekeepingModal from '@/features/properties/components/PendingRentHousekeepingModal';
 import SelectTenantModal from '@/features/tenants/components/SelectTenantModal';
@@ -88,199 +92,6 @@ const ActionButton = ({
   >
     {title}
   </Button>
-);
-
-const ContractCard = memo(
-  ({
-    contract,
-    colors,
-    isSelected,
-    isSelectionMode,
-    menuVisible,
-    onLongPress,
-    onPress,
-    onMenuVisible,
-    onMenuDismiss,
-    onViewContract,
-    onRenewContract,
-    onPauseContract,
-    onResumeContract,
-    onSendReminder,
-    onTerminateContract,
-  }: any) => {
-    const daysLeft = contract.daysUntilExpiry ?? null;
-    const isOverdue = daysLeft !== null && daysLeft < 0;
-    const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft < 14;
-    const dayColor = isOverdue || isUrgent ? colors.error : colors.warning;
-
-    let statusColor = colors.onSurfaceVariant;
-    let displayStatus = properCase(contract.status);
-
-    if (contract.isPaused) {
-      statusColor = colors.warning;
-      displayStatus = 'Paused';
-    } else if (contract.status === 'active' || contract.status === 'renewed') {
-      statusColor = colors.primary;
-    } else if (contract.status === 'expiring_soon') {
-      statusColor = colors.warning;
-    } else if (contract.status === 'terminated' || contract.status === 'expired') {
-      statusColor = colors.error;
-    }
-
-    return (
-      <SPressable
-        onLongPress={onLongPress}
-        onPress={onPress}
-        style={[styles.contractCard, { borderBottomColor: colors.outlineVariant }]}
-      >
-        <View style={styles.contractHeader}>
-          <View style={styles.tenantInfo}>
-            <Text variant="titleSmall" style={styles.tenantName}>
-              {contract.tenantName}
-            </Text>
-            {contract.tenantEmail && (
-              <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                {contract.tenantEmail}
-              </Text>
-            )}
-          </View>
-          <View style={styles.headerRight}>
-            {isSelectionMode ? (
-              <MaterialCommunityIcons
-                name={isSelected ? 'check-circle' : 'checkbox-blank-circle-outline'}
-                size={22}
-                color={isSelected ? colors.primary : colors.outline}
-                style={{ margin: 4 }}
-              />
-            ) : (
-              <Menu
-                visible={menuVisible}
-                onDismiss={onMenuDismiss}
-                anchor={
-                  <IconButton
-                    icon="dots-vertical"
-                    size={20}
-                    onPress={onMenuVisible}
-                    style={styles.menuButton}
-                  />
-                }
-              >
-                <Menu.Item
-                  onPress={onViewContract}
-                  title="View Contract"
-                  leadingIcon="eye"
-                />
-                <Menu.Item
-                  onPress={onRenewContract}
-                  title="Renew Contract"
-                  leadingIcon="refresh"
-                />
-                {!contract.isPaused ? (
-                  <Menu.Item
-                    onPress={onPauseContract}
-                    title="Pause Contract"
-                    leadingIcon="pause-circle-outline"
-                  />
-                ) : (
-                  <Menu.Item
-                    onPress={onResumeContract}
-                    title="Resume Contract"
-                    leadingIcon="play-circle-outline"
-                  />
-                )}
-                {contract.tenantEmail && (
-                  <Menu.Item
-                    onPress={onSendReminder}
-                    title="Send Reminder"
-                    leadingIcon="email-outline"
-                  />
-                )}
-                <Divider />
-                <Menu.Item
-                  onPress={onTerminateContract}
-                  title="Terminate Contract"
-                  titleStyle={{ color: colors.error }}
-                  leadingIcon="close-circle-outline"
-                />
-              </Menu>
-            )}
-          </View>
-        </View>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 4,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <MaterialCommunityIcons
-              name="office-building"
-              size={14}
-              color={colors.onSurfaceVariant}
-              style={{ marginRight: 4 }}
-            />
-            <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-              {contract.propertyName} - Unit {contract.houseNumber}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <MaterialCommunityIcons
-              name="calendar-clock"
-              size={14}
-              color={colors.onSurfaceVariant}
-              style={{ marginRight: 4 }}
-            />
-            <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-              {formatDate(contract.end_date)}
-            </Text>
-          </View>
-        </View>
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}
-        >
-          <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-            Status:{' '}
-            <Text style={{ color: statusColor, fontWeight: 'bold' }}>
-              {displayStatus}
-            </Text>
-          </Text>
-        </View>
-        <View style={styles.reminderRow}>
-          <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-            Last Reminder:{' '}
-            {contract.renewal_reminder_sent_at
-              ? formatDate(contract.renewal_reminder_sent_at)
-              : 'Never'}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {daysLeft !== null && (
-              <Text
-                variant="bodySmall"
-                style={[styles.daysLeftText, { color: dayColor }]}
-              >
-                {daysLeft >= 0
-                  ? `${daysLeft} days left`
-                  : `${Math.abs(daysLeft)} days overdue`}
-              </Text>
-            )}
-          </View>
-        </View>
-      </SPressable>
-    );
-  },
-  (prevProps: any, nextProps: any) => {
-    return (
-      prevProps.contract.id === nextProps.contract.id &&
-      prevProps.contract.status === nextProps.contract.status &&
-      prevProps.contract.isPaused === nextProps.contract.isPaused &&
-      prevProps.isSelected === nextProps.isSelected &&
-      prevProps.isSelectionMode === nextProps.isSelectionMode &&
-      prevProps.menuVisible === nextProps.menuVisible
-    );
-  },
 );
 
 export default function ContractManagementModal({
@@ -747,8 +558,8 @@ export default function ContractManagementModal({
           const { error } = await supabase.functions.invoke('contract-management', {
             headers: getAuthStateSnapshot().session
               ? {
-                  Authorization: `Bearer ${getAuthStateSnapshot().session?.access_token}`,
-                }
+                Authorization: `Bearer ${getAuthStateSnapshot().session?.access_token}`,
+              }
               : undefined,
             body: {
               action: 'terminate',
@@ -1215,361 +1026,52 @@ export default function ContractManagementModal({
         onConfirm={executeSendReminder}
         loading={actionLoading}
       />
-
-      <BaseModal
+      <BatchRenewModal
         visible={batchRenewDialogVisible}
         onDismiss={() => {
           setBatchRenewDialogVisible(false);
           setSelectedBatchIds(new Set());
         }}
-        title="Align Expiry Dates"
-        subtitle="Manage property contracts"
-        maxHeight="90%"
-        actions={[
-          {
-            label: 'Cancel',
-            onPress: () => setBatchRenewDialogVisible(false),
-            mode: 'outlined',
-          },
-          {
-            label: 'Update Selected',
-            onPress: executeBatchRenewal,
-            loading: actionLoading,
-            disabled: actionLoading,
-            mode: 'contained',
-          },
-        ]}
-      >
-        <View style={{ marginBottom: 16 }}>
-          <DatePicker
-            label="New End Date"
-            value={batchNewEndDate}
-            onChange={d => d && setBatchNewEndDate(d)}
-            maximumDate={null}
-          />
-        </View>
+        batchNewEndDate={batchNewEndDate}
+        setBatchNewEndDate={setBatchNewEndDate}
+        filterExpiringSoon={filterExpiringSoon}
+        setFilterExpiringSoon={setFilterExpiringSoon}
+        filteredContractsForBatch={filteredContractsForBatch}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        onExecuteBatchRenewal={executeBatchRenewal}
+        actionLoading={actionLoading}
+        colors={colors}
+      />
 
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Chip
-              selected={!filterExpiringSoon}
-              onPress={() => setFilterExpiringSoon(false)}
-              showSelectedCheck={false}
-              compact
-              style={{ width: '100%' }}
-              textStyle={{ textAlign: 'center', width: '100%' }}
-            >
-              All Active
-            </Chip>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Chip
-              selected={filterExpiringSoon}
-              onPress={() => setFilterExpiringSoon(true)}
-              showSelectedCheck={false}
-              compact
-              style={{ width: '100%' }}
-              textStyle={{ textAlign: 'center', width: '100%' }}
-            >
-              Expiring Soon
-            </Chip>
-          </View>
-        </View>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginVertical: 2,
-          }}
-        >
-          <Text variant="bodySmall">
-            Selected {selectedBatchIds.size} of {filteredContractsForBatch.length}{' '}
-            contracts
-          </Text>
-          <Button
-            compact
-            mode="text"
-            onPress={() => {
-              const visibleIds = filteredContractsForBatch.map(c => c.id);
-              const allVisibleSelected =
-                visibleIds.length > 0 && visibleIds.every(id => selectedBatchIds.has(id));
-
-              if (allVisibleSelected) {
-                setSelectedBatchIds(prev => {
-                  const next = new Set(prev);
-                  for (const id of visibleIds) next.delete(id);
-                  return next;
-                });
-              } else {
-                setSelectedBatchIds(prev => {
-                  const next = new Set(prev);
-                  for (const id of visibleIds) next.add(id);
-                  return next;
-                });
-              }
-            }}
-          >
-            {filteredContractsForBatch.length > 0 &&
-            filteredContractsForBatch.every(c => selectedBatchIds.has(c.id))
-              ? 'Deselect All'
-              : 'Select All'}
-          </Button>
-        </View>
-        <KeyboardScroll style={{ flex: 1 }} useSafeArea={false}>
-          {filteredContractsForBatch.length === 0 ? (
-            <EmptyState icon="file-document-outline" title="No contracts found" />
-          ) : (
-            filteredContractsForBatch.map(c => (
-              <SPressable
-                key={c.id}
-                onPress={() => toggleBatchSelection(c.id)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 8,
-                  paddingHorizontal: 4,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
-                    {c.tenantName}
-                  </Text>
-                  <View
-                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}
-                  >
-                    <View
-                      style={{ flexDirection: 'row', alignItems: 'center', width: '45%' }}
-                    >
-                      <MaterialCommunityIcons
-                        name="office-building"
-                        size={14}
-                        color={colors.onSurfaceVariant}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text
-                        variant="bodySmall"
-                        numberOfLines={1}
-                        style={{ color: colors.onSurfaceVariant }}
-                      >
-                        Unit {c.houseNumber}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <MaterialCommunityIcons
-                        name="calendar-clock"
-                        size={14}
-                        color={colors.onSurfaceVariant}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text
-                        variant="bodySmall"
-                        style={{ color: colors.onSurfaceVariant }}
-                      >
-                        {formatDate(c.end_date)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                <View pointerEvents="none">
-                  <Checkbox.Android
-                    status={selectedBatchIds.has(c.id) ? 'checked' : 'unchecked'}
-                  />
-                </View>
-              </SPressable>
-            ))
-          )}
-        </KeyboardScroll>
-      </BaseModal>
-
-      <BaseModal
-        visible={!!contractListModal}
-        onDismiss={() => {
-          setContractListModal(null);
-          setSelectedListIds(new Set());
-          setModalSearchQuery('');
-          setSelectedListProperty('all');
-          setSelectedListType('all');
+      <ContractDrilldownModal
+        contractListModal={contractListModal}
+        onDismiss={() => setContractListModal(null)}
+        modalSearchQuery={modalSearchQuery}
+        setModalSearchQuery={setModalSearchQuery}
+        selectedListProperty={selectedListProperty}
+        setSelectedListProperty={setSelectedListProperty}
+        selectedListType={selectedListType}
+        setSelectedListType={setSelectedListType}
+        propertyOptions={propertyOptions}
+        typeOptions={typeOptions}
+        selectedListIds={selectedListIds}
+        setSelectedListIds={setSelectedListIds}
+        menuVisible={menuVisible}
+        setMenuVisible={setMenuVisible}
+        onOpenActionDialog={(type, date) => {
+          setActionType(type);
+          setActionDate(date);
+          setActionDialogVisible(true);
         }}
-        title={contractListModal?.title ?? ''}
-        subtitle={contractListModal?.subtitle}
-        maxHeight="90%"
-        scrollable
-        search={{
-          value: modalSearchQuery,
-          onChangeText: setModalSearchQuery,
-          placeholder: 'Search by tenant, unit...',
-          onClear: () => setModalSearchQuery(''),
-        }}
-      >
-        <View>
-          <View
-            style={{
-              marginHorizontal: -8,
-              flexDirection: 'row',
-              borderBottomWidth: StyleSheet.hairlineWidth,
-              borderBottomColor: colors.outlineVariant,
-            }}
-          >
-            <FilterButtons
-              options={propertyOptions}
-              selectedValue={selectedListProperty}
-              onValueChange={val => {
-                setSelectedListProperty(val || 'all');
-                setSelectedListType('all');
-              }}
-              containerStyle={{
-                flex: selectedListProperty !== 'all' ? 0.5 : 1,
-                borderBottomWidth: 0,
-              }}
-            />
-            {selectedListProperty !== 'all' && (
-              <FilterButtons
-                options={typeOptions}
-                selectedValue={selectedListType}
-                onValueChange={val => setSelectedListType(val || 'all')}
-                containerStyle={{ flex: 0.5, borderBottomWidth: 0 }}
-              />
-            )}
-          </View>
-          {(() => {
-            if (selectedListIds.size === 0) return null;
-
-            const selectedContractsData = Array.from(selectedListIds).map(id =>
-              contractListModal?.data.find(c => c.id === id),
-            );
-            const isAllPaused =
-              selectedContractsData.length > 0 &&
-              selectedContractsData.every(c => c?.isPaused);
-            const batchActionType = isAllPaused ? 'batch_resume' : 'batch_pause';
-            const batchActionLabel = isAllPaused ? 'Resume' : 'Pause';
-
-            return (
-              <Surface
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 0,
-                  elevation: 2,
-                  backgroundColor: colors.surface,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.outlineVariant,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 0,
-                }}
-              >
-                <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>
-                  {selectedListIds.size} Selected
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 0 }}>
-                  <Button
-                    mode="text"
-                    compact
-                    contentStyle={{ paddingVertical: 0, marginVertical: 0 }}
-                    labelStyle={{ marginVertical: 4 }}
-                    onPress={() => setSelectedListIds(new Set())}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    mode="text"
-                    compact
-                    contentStyle={{ paddingVertical: 0, marginVertical: 0 }}
-                    labelStyle={{ marginVertical: 4 }}
-                    onPress={() => {
-                      setActionType(batchActionType);
-                      setActionDate(formatDateForDB(new Date()));
-                      setActionDialogVisible(true);
-                    }}
-                  >
-                    {batchActionLabel}
-                  </Button>
-                </View>
-              </Surface>
-            );
-          })()}
-
-          {(() => {
-            const listData = contractListModal?.data ?? [];
-            const filteredData = listData.filter((c: any) => {
-              if (selectedListProperty !== 'all' && c.propertyId !== selectedListProperty)
-                return false;
-              if (selectedListType !== 'all' && c.houseType !== selectedListType)
-                return false;
-              if (!modalSearchQuery) return true;
-              const q = modalSearchQuery.toLowerCase();
-              return (
-                c.tenantName?.toLowerCase().includes(q) ||
-                c.tenantEmail?.toLowerCase().includes(q) ||
-                c.houseNumber?.toString().toLowerCase().includes(q) ||
-                c.status?.toLowerCase().includes(q)
-              );
-            });
-
-            if (filteredData.length === 0) {
-              return (
-                <EmptyState icon="file-document-outline" title="No contracts found" />
-              );
-            }
-
-            return filteredData.map((contract: any) => {
-              return (
-                <ContractCard
-                  key={contract.id}
-                  contract={contract}
-                  colors={colors}
-                  isSelected={selectedListIds.has(contract.id)}
-                  isSelectionMode={selectedListIds.size > 0}
-                  menuVisible={menuVisible === contract.id}
-                  onLongPress={() => {
-                    if (selectedListIds.size === 0) {
-                      setSelectedListIds(new Set([contract.id]));
-                    }
-                  }}
-                  onPress={() => {
-                    if (selectedListIds.size > 0) {
-                      setSelectedListIds(prev => {
-                        const next = new Set(prev);
-                        if (next.has(contract.id)) next.delete(contract.id);
-                        else next.add(contract.id);
-                        return next;
-                      });
-                    }
-                  }}
-                  onMenuVisible={() => setMenuVisible(contract.id)}
-                  onMenuDismiss={() => setMenuVisible(null)}
-                  onViewContract={() => {
-                    setContractListModal(null);
-                    handleViewContract(contract);
-                  }}
-                  onRenewContract={() => {
-                    setContractListModal(null);
-                    handleRenewContract(contract);
-                  }}
-                  onPauseContract={() => {
-                    setContractListModal(null);
-                    handlePauseContract(contract);
-                  }}
-                  onResumeContract={() => {
-                    setContractListModal(null);
-                    handleResumeContract(contract);
-                  }}
-                  onSendReminder={() => {
-                    setContractListModal(null);
-                    handleSendReminder(contract);
-                  }}
-                  onTerminateContract={() => {
-                    setContractListModal(null);
-                    handleTerminateContract(contract);
-                  }}
-                />
-              );
-            });
-          })()}
-        </View>
-      </BaseModal>
+        onViewContract={handleViewContract}
+        onRenewContract={handleRenewContract}
+        onPauseContract={handlePauseContract}
+        onResumeContract={handleResumeContract}
+        onSendReminder={handleSendReminder}
+        onTerminateContract={handleTerminateContract}
+        colors={colors}
+      />
 
       <PendingRentHousekeepingModal
         visible={housekeepingModalVisible}
@@ -1644,80 +1146,15 @@ export default function ContractManagementModal({
         onCancel={() => setTerminateConfirmVisible(false)}
       />
 
-      <BaseModal
+      <ReinstateTenantsModal
         visible={reinstateModalVisible}
         onDismiss={() => setReinstateModalVisible(false)}
-        title="Former Tenants Management"
-        subtitle={
-          reinstateDaysFilter === 'all'
-            ? 'All recently deactivated tenants'
-            : `Recently deactivated tenants (past ${reinstateDaysFilter} days)`
-        }
-        maxHeight="90%"
-      >
-        <View style={{ marginHorizontal: -16, marginTop: -16, marginBottom: 10 }}>
-          <FilterButtons
-            options={[
-              { label: '1 Day', value: '1' },
-              { label: '10 Days', value: '10' },
-              { label: '30 Days', value: '30' },
-              { label: '60 Days', value: '60' },
-              { label: '90 Days', value: '90' },
-              { label: 'All', value: 'all' },
-            ]}
-            selectedValue={reinstateDaysFilter}
-            onValueChange={val => setReinstateDaysFilter(val || '30')}
-          />
-        </View>
-        <KeyboardScroll style={{ flex: 1 }} useSafeArea={false}>
-          {eligibleFormerTenants.length === 0 ? (
-            <EmptyState
-              icon="account-check-outline"
-              title="No eligible former tenants found"
-            />
-          ) : (
-            eligibleFormerTenants.map((t: any) => (
-              <Surface
-                key={t.id}
-                style={{
-                  padding: 12,
-                  marginBottom: 8,
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: colors.outlineVariant,
-                  borderRadius: 8,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>
-                    {t.name}
-                  </Text>
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    {t.email || 'No email'}
-                  </Text>
-                  <Text
-                    variant="bodySmall"
-                    style={{ color: colors.onSurfaceVariant, marginTop: 4 }}
-                  >
-                    Last Contract: Unit {t.houseNumber} ({t.propertyName})
-                  </Text>
-                </View>
-                <Button
-                  mode="contained"
-                  compact
-                  disabled={t.isHouseTaken}
-                  onPress={() => executeReinstate(t.id, t.latestContract.id)}
-                >
-                  {t.isHouseTaken ? 'House Taken' : 'Reinstate'}
-                </Button>
-              </Surface>
-            ))
-          )}
-        </KeyboardScroll>
-      </BaseModal>
+        reinstateDaysFilter={reinstateDaysFilter}
+        setReinstateDaysFilter={setReinstateDaysFilter}
+        eligibleFormerTenants={eligibleFormerTenants}
+        onExecuteReinstate={executeReinstate}
+        colors={colors}
+      />
     </BaseModal>
   );
 }

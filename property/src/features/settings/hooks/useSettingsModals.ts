@@ -11,13 +11,6 @@ export function useSettingsModals() {
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showDashboardModal, setShowDashboardModal] = useState(false);
 
-  // Sync related modals
-  const [syncModalVisible, setSyncModalVisible] = useState(false);
-  const [exclusionModalVisible, setExclusionModalVisible] = useState(false);
-  const [contactOptionsModalVisible, setContactOptionsModalVisible] = useState(false);
-  const [exportModalVisible, setExportModalVisible] = useState(false);
-  const [permissionModalVisible, setPermissionModalVisible] = useState(false);
-
   return {
     currentModal,
     setCurrentModal,
@@ -37,15 +30,5 @@ export function useSettingsModals() {
     setShowSupportModal,
     showDashboardModal,
     setShowDashboardModal,
-    syncModalVisible,
-    setSyncModalVisible,
-    exclusionModalVisible,
-    setExclusionModalVisible,
-    contactOptionsModalVisible,
-    setContactOptionsModalVisible,
-    exportModalVisible,
-    setExportModalVisible,
-    permissionModalVisible,
-    setPermissionModalVisible,
   };
 }

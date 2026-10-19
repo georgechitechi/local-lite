@@ -34,12 +34,17 @@ import {
 } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
+import BusinessLinksModal, {
+  type BusinessLinks,
+} from '@/features/settings/components/BusinessLinksModal';
 import BusinessSelectModal from '@/features/settings/components/BusinessSelectModal';
+import ContactSyncModals from '@/features/settings/components/ContactSyncModals';
 import DashboardCustomizationModal from '@/features/settings/components/DashboardCustomizationModal';
 import HelpModal from '@/features/settings/components/HelpModal';
 import ResetDataModal from '@/features/settings/components/ResetDataModal';
 import SupportModal from '@/features/settings/components/SupportModal';
 import ThemeModal from '@/features/settings/components/ThemeModal';
+import { useContactSync } from '@/features/settings/hooks/useContactSync';
 import { useSettingsModals } from '@/features/settings/hooks/useSettingsModals';
 import UtilityManagementModal from '@/features/utilities/components/UtilityManagementModal';
 import { useAuth } from '@/providers/AuthProvider';
@@ -66,18 +71,11 @@ import {
 import { useTheme, useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { ensureUserProfile, OFFLINE_USER_ID } from '@/shared/services/auth';
 import {
-  directSyncContacts,
-  type SyncProgressData,
-} from '@/shared/services/contactsSync';
-import {
   requestLocalNotificationPermissions,
   sendNotification,
 } from '@/shared/services/notifications';
-import { formatDateForDB } from '@/shared/utils/formatters';
 import { generateUUID } from '@/shared/utils/helper';
 import { safeReloadApp } from '@/shared/utils/safeReload';
-import { isActiveTenantStatus } from '@/shared/utils/statusHelper';
-import { exportAndDownloadTenantsVCF } from '@/shared/utils/vcfExport';
 import { clearAllPersistence } from '@/stores/syncHelper';
 import { setUIField, type UIState } from '@/stores/uiStore';
 
@@ -160,19 +158,6 @@ interface Settings {
   [key: string]: any;
 }
 
-interface Links {
-  whatsapp_group: string;
-  website: string;
-  facebook: string;
-  instagram: string;
-  twitter: string;
-}
-
-interface ExportResult {
-  success: boolean;
-  message?: string;
-}
-
 export default function SettingsManager() {
   const { isSyncActive: isCloudSyncEnabled } = useLocalSync();
   const colors = useThemeColors();
@@ -210,31 +195,10 @@ export default function SettingsManager() {
     setShowSupportModal,
     showDashboardModal,
     setShowDashboardModal,
-    syncModalVisible,
-    setSyncModalVisible,
-    exclusionModalVisible,
-    setExclusionModalVisible,
-    contactOptionsModalVisible,
-    setContactOptionsModalVisible,
-    exportModalVisible,
-    setExportModalVisible,
-    permissionModalVisible,
-    setPermissionModalVisible,
   } = useSettingsModals();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [syncCompleted, setSyncCompleted] = useState(false);
-  const [syncCancelled, setSyncCancelled] = useState(false);
-
-  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
-  const [syncProgress, setSyncProgress] = useState<SyncProgressData>({
-    currentStep: 0,
-    totalSteps: 0,
-    currentTenant: '',
-    stats: { created: 0, updated: 0, replaced: 0, duplicates: 0, errors: 0 },
-    progress: 0,
-  });
 
   const tenants = useTenants(selectedBusiness?.id);
   const contracts = useContracts(selectedBusiness?.id);
@@ -243,6 +207,18 @@ export default function SettingsManager() {
   const allSettings = useSettings(selectedBusiness?.id);
   const { insert, update } = useCoreMutations();
   const { refreshing, onRefresh } = useStoreRefresh();
+
+  const contactSync = useContactSync({
+    selectedBusiness,
+    tenants,
+    contracts,
+    houses,
+    properties,
+    pauseAutoLock,
+    resumeAutoLock,
+    setSaving,
+    showSnackbar,
+  });
 
   // Network status check with Snackbar
   const { isOnline } = useOfflineCheck();
@@ -304,15 +280,8 @@ export default function SettingsManager() {
     return s;
   }, [allSettings]);
 
-  const [syncTenants, setSyncTenants] = useState<any[]>([]);
-  const [syncSearchQuery, setSyncSearchQuery] = useState('');
-  const [excludedTenantIds, setExcludedTenantIds] = useState<string[]>([]);
-  const [contactActionType, setContactActionType] = useState<'sync' | 'export' | null>(
-    null,
-  );
-
   // Form States
-  const [links, setLinks] = useState<Links>({
+  const [links, setLinks] = useState<BusinessLinks>({
     whatsapp_group: '',
     website: '',
     facebook: '',
@@ -323,10 +292,6 @@ export default function SettingsManager() {
   // UI state
   const [processingReset, setProcessingReset] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [permissionModalData, setPermissionModalData] = useState<{
-    message: string;
-    permanentlyDenied: boolean;
-  } | null>(null);
   const [successReloadData, setSuccessReloadData] = useState<{
     title: string;
     message: string;
@@ -488,196 +453,8 @@ export default function SettingsManager() {
     }
   };
 
-  const handlePrepareContactSelection = (action: 'sync' | 'export') => {
-    if (!selectedBusiness?.id) {
-      showSnackbar('Please select a business first', 'error');
-      return;
-    }
-
-    try {
-      setContactActionType(action);
-      // Use local local-lite data instead of Supabase query
-      const filteredTenants = tenants
-        .filter(t => isActiveTenantStatus(t.status))
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-      if (!filteredTenants || filteredTenants.length === 0) {
-        showSnackbar('No active tenants found.', 'info');
-        return;
-      }
-
-      setSyncTenants(filteredTenants);
-      setSyncSearchQuery('');
-      // Automatically exclude common names if found (optional, e.g. "Self")
-      const autoExcluded = filteredTenants
-        .filter(
-          t =>
-            t.name?.toLowerCase().includes('self') ||
-            t.name?.toLowerCase().includes('admin'),
-        )
-        .map(t => t.id);
-      setExcludedTenantIds(autoExcluded);
-
-      setExclusionModalVisible(true);
-    } catch (error: any) {
-      console.error('Error preparing tenant selection:', error);
-      showSnackbar('Failed to prepare tenant selection.', 'error');
-    }
-  };
-
-  const handleExportContacts = () => handlePrepareContactSelection('export');
-  const handleDirectSyncContacts = () => handlePrepareContactSelection('sync');
-
-  const handleConfirmExport = async () => {
-    if (!selectedBusiness?.id) return;
-    try {
-      setSaving(true);
-      pauseAutoLock();
-      setExclusionModalVisible(false);
-
-      // Use local local-lite data for export
-      const tenantsToExport = tenants
-        .filter(t => isActiveTenantStatus(t.status))
-        .map(t => ({
-          ...t,
-          contracts: contracts
-            .filter(c => c.tenant_id === t.id)
-            .map(c => ({
-              ...c,
-              house: houses.find(h => h.id === c.house_id)
-                ? {
-                    ...(houses.find(h => h.id === c.house_id) as any),
-                    property: properties.find(
-                      p => p.id === houses.find(h => h.id === c.house_id)?.property_id,
-                    ),
-                  }
-                : undefined,
-            })),
-        }));
-
-      const filename = `${selectedBusiness.name.replace(/[^a-zA-Z0-9]/g, '_')}_tenant_contacts_${formatDateForDB(new Date())}.vcf`;
-      const result = await exportAndDownloadTenantsVCF(
-        tenantsToExport as any,
-        selectedBusiness.name,
-        filename,
-        excludedTenantIds,
-      );
-
-      setExportResult(result);
-      setExportModalVisible(true);
-    } catch (error: any) {
-      console.error('Error exporting contacts:', error);
-      setExportResult({
-        success: false,
-        message: error.message || 'Failed to export contacts. Please try again.',
-      });
-      setExportModalVisible(true);
-    } finally {
-      setSaving(false);
-      resumeAutoLock();
-    }
-  };
-
-  const openDeviceSettings = async () => {
-    try {
-      // Try to open app settings
-      await Linking.openSettings();
-    } catch (error) {
-      console.error('Error opening settings:', error);
-      showSnackbar('Please enable Contacts permission in your device settings.', 'error');
-    }
-  };
-
   const handleContactSupport = () => {
     setShowSupportModal(true);
-  };
-
-  const handleCancelSync = () => {
-    setSyncCancelled(true);
-    setSyncModalVisible(false);
-  };
-
-  const handleConfirmSync = async () => {
-    if (!selectedBusiness?.id) return;
-    try {
-      setSaving(true);
-      pauseAutoLock();
-
-      // Reset sync state
-      setSyncCancelled(false);
-      setSyncCompleted(false);
-      setSyncProgress({
-        currentStep: 0,
-        totalSteps: 0,
-        currentTenant: '',
-        stats: {
-          created: 0,
-          updated: 0,
-          replaced: 0,
-          duplicates: 0,
-          errors: 0,
-        },
-        progress: 0,
-      });
-
-      // Show progress modal
-      setSyncModalVisible(true);
-
-      // Start sync with progress tracking and excluded IDs
-      const result = await directSyncContacts(
-        syncTenants,
-        selectedBusiness.name,
-        (progressData: SyncProgressData) => {
-          if (!syncCancelled) {
-            setSyncProgress(progressData);
-          }
-        },
-        () => syncCancelled,
-        excludedTenantIds,
-        pauseAutoLock,
-        resumeAutoLock,
-      );
-
-      if (syncCancelled) {
-        setSyncModalVisible(false);
-        showSnackbar('Contact sync was cancelled by user.', 'info');
-        return;
-      }
-
-      if (result.success) {
-        setSyncCompleted(true);
-        sendNotification(
-          'Sync Completed',
-          'Contact synchronization has finished successfully.',
-          { type: 'system_sync' },
-        );
-      } else {
-        setSyncModalVisible(false);
-
-        if (result.permissionDenied) {
-          setPermissionModalData({
-            message: result.message || 'Contacts permission is required.',
-            permanentlyDenied: !!result.permanentlyDenied,
-          });
-          setPermissionModalVisible(true);
-        } else {
-          showSnackbar(
-            result.message || 'Failed to sync contacts directly. Please try again.',
-            'error',
-          );
-        }
-      }
-    } catch (error: any) {
-      console.error('Error in direct sync:', error);
-      setSyncModalVisible(false);
-      showSnackbar(
-        error.message || 'Failed to sync contacts directly. Please try again.',
-        'error',
-      );
-    } finally {
-      setSaving(false);
-      resumeAutoLock();
-    }
   };
 
   const handleResetAllData = () => {
@@ -728,7 +505,7 @@ export default function SettingsManager() {
       console.error('Update check error:', error);
       showSnackbar(
         'Could not check for updates. ' +
-          (error.message || 'Make sure you are connected to the internet.'),
+        (error.message || 'Make sure you are connected to the internet.'),
         'error',
       );
     } finally {
@@ -1006,7 +783,7 @@ export default function SettingsManager() {
                       <IconButton {...props} icon="chevron-right" />
                     )
                   }
-                  onPress={() => setContactOptionsModalVisible(true)}
+                  onPress={() => contactSync.setContactOptionsModalVisible(true)}
                   disabled={saving}
                 />
                 <List.Item
@@ -1167,268 +944,16 @@ export default function SettingsManager() {
         colors={colors}
       />
       <Portal>
-        {/* Links Modal */}
-        <BaseModal
+        <BusinessLinksModal
           visible={currentModal === 'links'}
           onDismiss={() => setCurrentModal(null)}
-          title="Business Links"
-          scrollable={true}
-          subtitle="Add your business social media links and website."
-          maxHeight="80%"
-          actions={[
-            {
-              label: 'Cancel',
-              mode: 'outlined',
-              onPress: () => setCurrentModal(null),
-              style: { flex: 1 },
-            },
-            {
-              label: 'Save Links',
-              mode: 'contained',
-              onPress: handleSaveLinks,
-              loading: saving,
-              disabled: saving,
-              style: { flex: 1 },
-            },
-          ]}
-        >
-          <View style={styles.compactModalContent}>
-            {/* Website */}
-            <Card
-              style={{ marginBottom: 12, backgroundColor: colors.surface }}
-              elevation={1}
-            >
-              <Card.Content style={{ paddingVertical: 12 }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name="web"
-                    size={20}
-                    color={colors.primary}
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text variant="titleSmall" style={{ flex: 1, fontWeight: '600' }}>
-                    Website / Booking Portal
-                  </Text>
-                </View>
-                <TextInput
-                  mode="outlined"
-                  placeholder="https://yourwebsite.com"
-                  value={links.website}
-                  onChangeText={text => setLinks(prev => ({ ...prev, website: text }))}
-                  style={styles.input}
-                  outlineColor={links.website ? (colors as any).success : undefined}
-                  activeOutlineColor={
-                    links.website ? (colors as any).success : colors.primary
-                  }
-                  dense
-                  right={
-                    links.website ? (
-                      <TextInput.Icon
-                        icon="close-circle"
-                        onPress={() => setLinks(prev => ({ ...prev, website: '' }))}
-                      />
-                    ) : null
-                  }
-                />
-                <HelperText type="info" style={{ marginTop: 4, fontSize: 11 }}>
-                  📌 Used in tenant conversion emails for profile access
-                </HelperText>
-                {links.website && (
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                    <Button
-                      mode="outlined"
-                      compact
-                      icon="content-copy"
-                      onPress={() => {
-                        // Copy to clipboard functionality
-                        showSnackbar('Website link copied to clipboard', 'success');
-                      }}
-                      style={{ flex: 1 }}
-                    >
-                      Copy
-                    </Button>
-                    <Button
-                      mode="contained-tonal"
-                      compact
-                      icon="open-in-new"
-                      onPress={() => Linking.openURL(links.website)}
-                      style={{ flex: 1 }}
-                    >
-                      Open
-                    </Button>
-                  </View>
-                )}
-              </Card.Content>
-            </Card>
-
-            {/* WhatsApp Group */}
-            <Card
-              style={{ marginBottom: 12, backgroundColor: colors.surface }}
-              elevation={1}
-            >
-              <Card.Content style={{ paddingVertical: 12 }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name="whatsapp"
-                    size={20}
-                    color="#25D366"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text variant="titleSmall" style={{ flex: 1, fontWeight: '600' }}>
-                    WhatsApp Group
-                  </Text>
-                </View>
-                <TextInput
-                  mode="outlined"
-                  placeholder="https://chat.whatsapp.com/..."
-                  value={links.whatsapp_group}
-                  onChangeText={text =>
-                    setLinks(prev => ({ ...prev, whatsapp_group: text }))
-                  }
-                  style={styles.input}
-                  outlineColor={
-                    links.whatsapp_group ? (colors as any).success : undefined
-                  }
-                  activeOutlineColor={
-                    links.whatsapp_group ? (colors as any).success : colors.primary
-                  }
-                  dense
-                  right={
-                    links.whatsapp_group ? (
-                      <TextInput.Icon
-                        icon="close-circle"
-                        onPress={() =>
-                          setLinks(prev => ({ ...prev, whatsapp_group: '' }))
-                        }
-                      />
-                    ) : null
-                  }
-                />
-                <HelperText type="info" style={{ marginTop: 4, fontSize: 11 }}>
-                  📌 For tenant community group invitations
-                </HelperText>
-                {links.whatsapp_group && (
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                    <Button
-                      mode="outlined"
-                      compact
-                      icon="content-copy"
-                      onPress={() => {
-                        showSnackbar('WhatsApp link copied to clipboard', 'success');
-                      }}
-                      style={{ flex: 1 }}
-                    >
-                      Copy
-                    </Button>
-                    <Button
-                      mode="contained-tonal"
-                      compact
-                      icon="open-in-new"
-                      onPress={() => Linking.openURL(links.whatsapp_group)}
-                      style={{ flex: 1 }}
-                    >
-                      Open
-                    </Button>
-                  </View>
-                )}
-              </Card.Content>
-            </Card>
-
-            {/* Social Media Section */}
-            <Text
-              variant="titleSmall"
-              style={{ marginTop: 8, marginBottom: 12, fontWeight: '600' }}
-            >
-              Social Media Links
-            </Text>
-
-            {/* Social Media Links */}
-            <View style={{ marginBottom: 12 }}>
-              <TextInput
-                mode="outlined"
-                label="Facebook"
-                placeholder="https://facebook.com/yourpage"
-                value={links.facebook}
-                onChangeText={text => setLinks(prev => ({ ...prev, facebook: text }))}
-                style={styles.input}
-                outlineColor={links.facebook ? (colors as any).success : undefined}
-                activeOutlineColor={
-                  links.facebook ? (colors as any).success : colors.primary
-                }
-                dense
-                left={<TextInput.Icon icon="facebook" color="#1877F2" />}
-                right={
-                  links.facebook ? (
-                    <TextInput.Icon
-                      icon="close-circle"
-                      onPress={() => setLinks(prev => ({ ...prev, facebook: '' }))}
-                    />
-                  ) : null
-                }
-              />
-            </View>
-
-            <View style={{ marginBottom: 12 }}>
-              <TextInput
-                mode="outlined"
-                label="Instagram"
-                placeholder="https://instagram.com/youraccount"
-                value={links.instagram}
-                onChangeText={text => setLinks(prev => ({ ...prev, instagram: text }))}
-                style={styles.input}
-                outlineColor={links.instagram ? (colors as any).success : undefined}
-                activeOutlineColor={
-                  links.instagram ? (colors as any).success : colors.primary
-                }
-                dense
-                left={<TextInput.Icon icon="instagram" color="#E4405F" />}
-                right={
-                  links.instagram ? (
-                    <TextInput.Icon
-                      icon="close-circle"
-                      onPress={() => setLinks(prev => ({ ...prev, instagram: '' }))}
-                    />
-                  ) : null
-                }
-              />
-            </View>
-
-            <View style={{ marginBottom: 12 }}>
-              <TextInput
-                mode="outlined"
-                label="Twitter / X"
-                placeholder="https://twitter.com/youraccount"
-                value={links.twitter}
-                onChangeText={text => setLinks(prev => ({ ...prev, twitter: text }))}
-                style={styles.input}
-                outlineColor={links.twitter ? colors.success : undefined}
-                activeOutlineColor={links.twitter ? colors.success : colors.primary}
-                dense
-                left={<TextInput.Icon icon="twitter" color="#1DA1F2" />}
-                right={
-                  links.twitter ? (
-                    <TextInput.Icon
-                      icon="close-circle"
-                      onPress={() => setLinks(prev => ({ ...prev, twitter: '' }))}
-                    />
-                  ) : null
-                }
-              />
-            </View>
-          </View>
-        </BaseModal>
+          links={links}
+          setLinks={setLinks}
+          onSave={handleSaveLinks}
+          saving={saving}
+          colors={colors}
+          showSnackbar={showSnackbar}
+        />
         {/* Dashboard Customization Modal */}
         <DashboardCustomizationModal
           visible={showDashboardModal}
@@ -1437,333 +962,7 @@ export default function SettingsManager() {
           saveSettings={saveSettings}
         />
       </Portal>
-      {/* Contact Sync Progress Modal */}
-      <BaseModal
-        visible={syncModalVisible}
-        onDismiss={() => {
-          setSyncModalVisible(false);
-          setSyncCompleted(false);
-        }}
-        title={syncCompleted ? 'Sync Completed!' : 'Syncing Contacts'}
-        subtitle={
-          syncCompleted
-            ? 'All contacts have been processed.'
-            : 'Please wait while we sync your contacts.'
-        }
-        actions={
-          syncCompleted
-            ? [
-                {
-                  label: 'Close',
-                  mode: 'contained',
-                  onPress: () => {
-                    setSyncModalVisible(false);
-                    setSyncCompleted(false);
-                  },
-                  buttonColor: colors.success,
-                  style: { flex: 1 },
-                },
-              ]
-            : [
-                {
-                  label: 'Cancel',
-                  mode: 'outlined',
-                  onPress: handleCancelSync,
-                  style: { flex: 1 },
-                },
-              ]
-        }
-      >
-        <View style={{ marginBottom: 20 }}>
-          <Text variant="bodyMedium" style={{ textAlign: 'center', marginBottom: 10 }}>
-            {syncCompleted
-              ? `All ${syncProgress.totalSteps} contacts processed`
-              : `${syncProgress.currentStep} of ${syncProgress.totalSteps} contacts processed`}
-          </Text>
-          <ProgressBar
-            progress={
-              syncProgress.totalSteps > 0
-                ? syncProgress.progress / syncProgress.totalSteps
-                : 0
-            }
-            style={{ height: 8, borderRadius: 4, marginBottom: 5 }}
-            color={syncCompleted ? colors.success : colors.primary}
-          />
-          <Text
-            variant="bodySmall"
-            style={{
-              textAlign: 'center',
-              fontWeight: 'bold',
-              color: syncCompleted ? colors.success : colors.primary,
-            }}
-          >
-            {Math.round(
-              syncProgress.totalSteps > 0
-                ? (syncProgress.progress / syncProgress.totalSteps) * 100
-                : 0,
-            )}
-            %
-          </Text>
-        </View>
-
-        {syncProgress.stats && (
-          <View
-            style={{
-              backgroundColor: colors.surfaceVariant,
-              padding: 15,
-              borderRadius: 8,
-              marginBottom: 20,
-            }}
-          >
-            <Text
-              variant="bodyMedium"
-              style={{
-                fontWeight: 'bold',
-                marginBottom: 10,
-                color: colors.onSurface,
-              }}
-            >
-              {syncCompleted ? 'Final Results:' : 'Current Results:'}
-            </Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginBottom: 5,
-              }}
-            >
-              <Text variant="bodySmall">Created: {syncProgress.stats.created || 0}</Text>
-              <Text variant="bodySmall">Updated: {syncProgress.stats.updated || 0}</Text>
-            </View>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginBottom: 5,
-              }}
-            >
-              <Text variant="bodySmall">
-                Replaced: {syncProgress.stats.replaced || 0}
-              </Text>
-              <Text variant="bodySmall">
-                Duplicates: {syncProgress.stats.duplicates || 0}
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text variant="bodySmall">Errors: {syncProgress.stats.errors || 0}</Text>
-            </View>
-          </View>
-        )}
-      </BaseModal>
-      {/* Contact Exclusion Selection Modal */}
-      <BaseModal
-        visible={exclusionModalVisible}
-        onDismiss={() => setExclusionModalVisible(false)}
-        edgeToEdge
-        title={
-          contactActionType === 'sync'
-            ? 'Select Contacts to Sync'
-            : 'Select Contacts to Export'
-        }
-        subtitle="Uncheck contacts you want to exclude."
-        maxHeight="85%"
-        scrollable={true}
-        search={{
-          placeholder: 'Search tenants...',
-          value: syncSearchQuery,
-          onChangeText: setSyncSearchQuery,
-          onClear: () => setSyncSearchQuery(''),
-        }}
-        actions={[
-          {
-            label: 'Cancel',
-            mode: 'outlined',
-            onPress: () => setExclusionModalVisible(false),
-            style: { flex: 1 },
-          },
-          {
-            label: contactActionType === 'sync' ? 'Confirm Sync' : 'Confirm Export',
-            mode: 'contained',
-            onPress: () => {
-              setExclusionModalVisible(false);
-              if (contactActionType === 'sync') {
-                handleConfirmSync();
-              } else {
-                handleConfirmExport();
-              }
-            },
-            style: { flex: 1 },
-          },
-        ]}
-      >
-        <View>
-          {syncTenants
-            .filter(
-              tenant =>
-                tenant.name.toLowerCase().includes(syncSearchQuery.toLowerCase()) ||
-                tenant.phone?.includes(syncSearchQuery) ||
-                tenant.email?.toLowerCase().includes(syncSearchQuery.toLowerCase()),
-            )
-            .map((tenant: any) => (
-              <List.Item
-                key={tenant.id}
-                title={tenant.name}
-                description={tenant.phone || tenant.email}
-                left={props => <List.Icon {...props} icon="account" />}
-                right={() => (
-                  <Checkbox.Android
-                    status={
-                      excludedTenantIds.includes(tenant.id) ? 'unchecked' : 'checked'
-                    }
-                    onPress={() => {
-                      setExcludedTenantIds((prev: string[]) =>
-                        prev.includes(tenant.id)
-                          ? prev.filter(id => id !== tenant.id)
-                          : [...prev, tenant.id],
-                      );
-                    }}
-                  />
-                )}
-                onPress={() => {
-                  setExcludedTenantIds((prev: string[]) =>
-                    prev.includes(tenant.id)
-                      ? prev.filter(id => id !== tenant.id)
-                      : [...prev, tenant.id],
-                  );
-                }}
-              />
-            ))}
-        </View>
-      </BaseModal>
-      {/* Contact Options Selection Modal */}
-      <BaseModal
-        visible={contactOptionsModalVisible}
-        onDismiss={() => setContactOptionsModalVisible(false)}
-        title="Manage Contacts"
-        subtitle="Choose how you want to manage tenant contacts"
-      >
-        <View style={{ gap: 12 }}>
-          <Card
-            mode="outlined"
-            onPress={() => {
-              setContactOptionsModalVisible(false);
-              // Small timeout to allow modal to close smoothly before opening the next one
-              setTimeout(() => handleExportContacts(), 100);
-            }}
-            style={{ borderColor: colors.outline }}
-          >
-            <Card.Content style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MaterialCommunityIcons
-                name="export"
-                size={24}
-                color={colors.primary}
-                style={{ marginRight: 16 }}
-              />
-              <View style={{ flex: 1 }}>
-                <Text variant="titleMedium">Export to File</Text>
-                <Text variant="bodyMedium" style={{ color: colors.onSurfaceVariant }}>
-                  Download contacts as a .vcf file
-                </Text>
-              </View>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={24}
-                color={colors.onSurfaceVariant}
-              />
-            </Card.Content>
-          </Card>
-
-          <Card
-            mode="outlined"
-            onPress={() => {
-              setContactOptionsModalVisible(false);
-              // Small timeout to allow modal to close smoothly before opening the next one
-              setTimeout(() => handleDirectSyncContacts(), 100);
-            }}
-            style={{ borderColor: colors.outline }}
-          >
-            <Card.Content style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MaterialCommunityIcons
-                name="sync"
-                size={24}
-                color={colors.primary}
-                style={{ marginRight: 16 }}
-              />
-              <View style={{ flex: 1 }}>
-                <Text variant="titleMedium">Sync to Device</Text>
-                <Text variant="bodyMedium" style={{ color: colors.onSurfaceVariant }}>
-                  Add contacts directly to your phone
-                </Text>
-              </View>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={24}
-                color={colors.onSurfaceVariant}
-              />
-            </Card.Content>
-          </Card>
-        </View>
-      </BaseModal>
-      {/* Export Contacts Modal */}
-      <BaseModal
-        visible={exportModalVisible}
-        onDismiss={() => {
-          setExportModalVisible(false);
-          setExportResult(null);
-        }}
-        title={
-          exportResult
-            ? exportResult.success
-              ? 'Export Successful!'
-              : 'Export Failed'
-            : 'Export Contacts'
-        }
-        subtitle={
-          exportResult
-            ? exportResult.success
-              ? 'Your contacts are ready.'
-              : 'There was an error.'
-            : 'Create a VCF file of your contacts.'
-        }
-        actions={
-          exportResult
-            ? [
-                {
-                  label: 'Close',
-                  mode: 'contained',
-                  onPress: () => {
-                    setExportModalVisible(false);
-                    setExportResult(null);
-                  },
-                  buttonColor: exportResult.success ? colors.success : colors.error,
-                  style: { flex: 1 },
-                },
-              ]
-            : [
-                {
-                  label: 'Cancel',
-                  mode: 'outlined',
-                  onPress: () => setExportModalVisible(false),
-                  style: { flex: 1 },
-                },
-                {
-                  label: 'Export',
-                  mode: 'contained',
-                  onPress: handleConfirmExport,
-                  buttonColor: colors.primary,
-                  style: { flex: 1 },
-                },
-              ]
-        }
-      >
-        <Text variant="bodyMedium" style={{ lineHeight: 24 }}>
-          {exportResult
-            ? exportResult.success
-              ? 'Contacts exported successfully! You can now import the VCF file into your phone contacts.'
-              : exportResult.message || 'Failed to export contacts. Please try again.'
-            : 'This will export all tenant contacts as a VCF file that you can import into your phone contacts.\n Continue?'}
-        </Text>
-      </BaseModal>
+      <ContactSyncModals {...contactSync} colors={colors} />
       <BusinessSelectModal
         visible={showBusinessModal}
         onDismiss={() => setShowBusinessModal(false)}
@@ -1779,29 +978,10 @@ export default function SettingsManager() {
         selectedBusiness={selectedBusiness}
         colors={colors}
       />
-      {/* Permission Modal */}
-      <BaseModal
-        visible={permissionModalVisible}
-        onDismiss={() => setPermissionModalVisible(false)}
-        title="Permission Required"
-        message={permissionModalData?.message}
-        mode="confirm"
-        confirmText={
-          permissionModalData?.permanentlyDenied ? 'Open Settings' : 'Try Again'
-        }
-        onConfirm={() => {
-          setPermissionModalVisible(false);
-          if (permissionModalData?.permanentlyDenied) {
-            openDeviceSettings();
-          } else {
-            handleDirectSyncContacts();
-          }
-        }}
-      />
       {/* Success Reload Modal */}
       <BaseModal
         visible={!!successReloadData}
-        onDismiss={() => {}}
+        onDismiss={() => { }}
         title={successReloadData?.title || 'Success'}
         message={successReloadData?.message}
         mode="info"

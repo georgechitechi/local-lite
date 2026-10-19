@@ -1,27 +1,12 @@
-import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import type { BatchMutation } from 'local-lite';
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, ScrollView, Share, StyleSheet, View } from 'react-native';
-import {
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  IconButton,
-  List,
-  Menu,
-  SegmentedButtons,
-  Surface,
-  Switch,
-  Text,
-  TextInput,
-} from 'react-native-paper';
+import { FlatList, Share, StyleSheet, View } from 'react-native';
+import { Button, Divider, List, Text } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import SelectTenantModal from '@/features/tenants/components/SelectTenantModal';
 import { useAuth } from '@/providers/AuthProvider';
 import BaseModal from '@/shared/components/BaseModal';
-import DatePicker from '@/shared/components/DatePicker';
 import EmptyState from '@/shared/components/EmptyState';
 import {
   type Promotion,
@@ -39,19 +24,27 @@ import {
   useTenantsById,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
-import { formatDateForDB, formatDateRange } from '@/shared/utils/formatters';
+import { formatDateForDB } from '@/shared/utils/formatters';
 import {
-  addOpacity,
   generateUUID,
   safeParseJSON,
-  snakeCaseToTitleCase,
 } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 import { generateAndSharePromoVoucher } from '@/templates/promoVoucherTemplate';
 
+import ApplyPromoModal from '../components/promotions/ApplyPromoModal';
+import PromotionCard from '../components/promotions/PromotionCard';
+import PromotionWizardModal from '../components/promotions/PromotionWizardModal';
+import {
+  calculateAdjustment,
+  formatPromoAmount,
+  type PromotionFormData,
+} from '../components/promotions/promotionHelpers';
+import SharePromoModal from '../components/promotions/SharePromoModal';
+import ViewPromoModal from '../components/promotions/ViewPromoModal';
+
 export default function PromotionsScreen() {
   const { user } = useAuth();
-
   const { selectedBusiness } = useBusiness();
   const [loading, setLoading] = useState(false);
   const colors = useThemeColors();
@@ -75,18 +68,7 @@ export default function PromotionsScreen() {
   const [promoModalVisible, setPromoModalVisible] = useState(false);
   const [applyPromoModalVisible, setApplyPromoModalVisible] = useState(false);
   const [applyPromoStep, setApplyPromoStep] = useState(1);
-  const [newPromotion, setNewPromotion] = useState<{
-    code: string;
-    amount: string;
-    type: 'fixed' | 'percentage' | 'full_month';
-    scope: 'business' | 'property' | 'tenant';
-    property_id?: string | null;
-    tenant_id?: string | null;
-    description: string;
-    valid_from: string | null;
-    valid_until: string | null;
-    is_active: boolean;
-  }>({
+  const [newPromotion, setNewPromotion] = useState<PromotionFormData>({
     code: '',
     amount: '',
     type: 'fixed',
@@ -98,7 +80,6 @@ export default function PromotionsScreen() {
     valid_until: null,
     is_active: true,
   });
-  const [promoStep, setPromoStep] = useState(1);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
@@ -114,7 +95,6 @@ export default function PromotionsScreen() {
   });
 
   const [applyLoading, setApplyLoading] = useState(false);
-  const [adjustmentTypeMenuVisible, setAdjustmentTypeMenuVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [sharingPromo, setSharingPromo] = useState<Promotion | null>(null);
   const [shareSelectedTenantId, setShareSelectedTenantId] = useState('');
@@ -129,6 +109,8 @@ export default function PromotionsScreen() {
   >(null);
   const [viewModalVisible, setViewModalVisible] = useState(false);
   const [viewingPromotion, setViewingPromotion] = useState<Promotion | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePromoId, setDeletePromoId] = useState<string | null>(null);
 
   const eligibleTenants = useMemo(() => {
     if (!allTenants || allTenants.length === 0) return [];
@@ -193,9 +175,9 @@ export default function PromotionsScreen() {
       setLoading(true);
 
       const promoData = {
-        code: newPromotion.code.toUpperCase(),
+        code: newPromotion.code,
         amount:
-          newPromotion.type === 'full_month' ? null : parseFloat(newPromotion.amount),
+          newPromotion.type === 'full_month' ? 0 : parseFloat(newPromotion.amount),
         type: newPromotion.type,
         scope: newPromotion.scope,
         property_id: newPromotion.scope === 'property' ? newPromotion.property_id : null,
@@ -217,7 +199,6 @@ export default function PromotionsScreen() {
 
       setPromoModalVisible(false);
       setEditingPromoId(null);
-      setPromoStep(1);
       resetNewPromotion();
       showSnackbar(
         `Adjustment template ${editingPromoId ? 'updated' : 'created'} successfully`,
@@ -254,10 +235,9 @@ export default function PromotionsScreen() {
       valid_until: promo.valid_until || null,
       is_active: promo.is_active ?? true,
     });
-    setPromoStep(1);
     setPromoModalVisible(true);
     setMenuVisibleId(null);
-    setViewModalVisible(false); // Close view modal if editing from there
+    setViewModalVisible(false);
   };
 
   const handleViewPromo = (promo: Promotion) => {
@@ -373,7 +353,6 @@ export default function PromotionsScreen() {
           // 2. Transfer their Rent Receipts from Source to Target Month
           const periodRentReceipts = (receiptsByTenant.get(tenant.id) || []).filter(
             (r: any) => {
-              // Check if it's conceptually rent
               const p = safeParseJSON<{ month?: number; year?: number }>(
                 r.payment_period as any,
                 {},
@@ -409,6 +388,7 @@ export default function PromotionsScreen() {
         setSelectedPromotion(null);
         setSelectedTenantIds([]);
         setApplyPromoStep(1);
+        setApplyPromoModalVisible(false);
       } catch (error: any) {
         console.error('Error applying promos:', error);
         showSnackbar(error.message || 'Failed to apply adjustments.', 'error');
@@ -427,7 +407,6 @@ export default function PromotionsScreen() {
     try {
       setApplyLoading(true);
 
-      // Find active contract for tenant
       const contract = (contractsByTenant.get(selectedTenantId) || []).find((c: any) =>
         isActiveContractStatus(c.status),
       );
@@ -437,7 +416,6 @@ export default function PromotionsScreen() {
         return;
       }
 
-      // Enforce scope restrictions
       if (
         selectedPromotion.scope === 'tenant' &&
         selectedPromotion.tenant_id !== selectedTenantId
@@ -468,7 +446,6 @@ export default function PromotionsScreen() {
       const sourceMonth = new Date(sourceDate).getMonth() + 1;
       const sourceYear = new Date(sourceDate).getFullYear();
 
-      // Find existing receipts for this period to check if we should update statuses
       const periodReceipts = (receiptsByTenant.get(selectedTenantId) || []).filter(
         (r: any) => {
           if (r.contract_id !== contract.id) return false;
@@ -484,7 +461,7 @@ export default function PromotionsScreen() {
         (sum, r) => sum + (parseFloat(String(r.amount)) || 0),
         0,
       );
-      const isNowFullyPaid = existingPaidAmount + calculatedAmount >= rentAmount - 0.1; // Tolerance
+      const isNowFullyPaid = existingPaidAmount + calculatedAmount >= rentAmount - 0.1;
 
       const mutations: BatchMutation[] = [];
       const receiptId = generateUUID();
@@ -510,7 +487,6 @@ export default function PromotionsScreen() {
         },
       });
 
-      // Update partial receipts to paid if balance is cleared
       if (isNowFullyPaid) {
         (receiptsByContract.get(contract.id) || []).forEach((r: any) => {
           if (r.status === 'partial') {
@@ -542,9 +518,6 @@ export default function PromotionsScreen() {
     setDeletePromoId(id);
     setShowDeleteConfirm(true);
   };
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deletePromoId, setDeletePromoId] = useState<string | null>(null);
 
   const handleSharePromo = async () => {
     const promo = sharingPromo || selectedPromotion;
@@ -596,161 +569,27 @@ export default function PromotionsScreen() {
           extraData={allPromotions}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
-            <Card
-              style={styles.card}
-              mode="outlined"
-              onPress={() => handleViewPromo(item)}
-            >
-              <Card.Content style={styles.cardContent}>
-                <View style={styles.tenantInfo}>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
-                      {item.code}
-                    </Text>
-                    <Surface
-                      elevation={0}
-                      style={[
-                        styles.typeBadge,
-                        { backgroundColor: colors.primaryContainer },
-                      ]}
-                    >
-                      <Text
-                        variant="labelSmall"
-                        style={{ color: colors.onPrimaryContainer }}
-                      >
-                        {(item.type || '').replace('_', ' ').toUpperCase()}
-                      </Text>
-                    </Surface>
-                    {!item.is_active && (
-                      <Surface
-                        elevation={0}
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: colors.errorContainer },
-                        ]}
-                      >
-                        <Text
-                          variant="labelSmall"
-                          style={{ color: colors.onErrorContainer }}
-                        >
-                          INACTIVE
-                        </Text>
-                      </Surface>
-                    )}
-                    {(() => {
-                      const now = formatDateForDB(new Date());
-                      if (item.valid_until && item.valid_until < now) {
-                        return (
-                          <Surface
-                            elevation={0}
-                            style={[
-                              styles.statusBadge,
-                              { backgroundColor: colors.errorContainer },
-                            ]}
-                          >
-                            <Text
-                              variant="labelSmall"
-                              style={{ color: colors.onErrorContainer }}
-                            >
-                              EXPIRED
-                            </Text>
-                          </Surface>
-                        );
-                      }
-                      if (item.valid_from && item.valid_from > now) {
-                        return (
-                          <Surface
-                            elevation={0}
-                            style={[
-                              styles.statusBadge,
-                              { backgroundColor: colors.secondaryContainer },
-                            ]}
-                          >
-                            <Text
-                              variant="labelSmall"
-                              style={{ color: colors.onSecondaryContainer }}
-                            >
-                              UPCOMING
-                            </Text>
-                          </Surface>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </View>
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    {formatPromoAmount(item)}
-                  </Text>
-                  {(item.valid_from || item.valid_until) && (
-                    <Text
-                      variant="bodySmall"
-                      style={{ color: colors.outline, fontSize: 10 }}
-                    >
-                      {formatDateRange(item.valid_from, item.valid_until, ' • ')}
-                    </Text>
-                  )}
-                  {item.description && (
-                    <Text
-                      variant="bodySmall"
-                      style={{ color: colors.onSurfaceVariant, fontStyle: 'italic' }}
-                    >
-                      {item.description}
-                    </Text>
-                  )}
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Menu
-                    visible={menuVisibleId === item.id}
-                    onDismiss={() => setMenuVisibleId(null)}
-                    anchor={
-                      <IconButton
-                        icon="dots-vertical"
-                        onPress={() => setMenuVisibleId(item.id)}
-                      />
-                    }
-                  >
-                    <Menu.Item
-                      onPress={() => {
-                        setSelectedPromotion(item);
-                        setApplyPromoModalVisible(true);
-                        setMenuVisibleId(null);
-                      }}
-                      leadingIcon="check-circle-outline"
-                      title="Apply Adjustment"
-                    />
-                    <Menu.Item
-                      onPress={() => {
-                        setSharingPromo(item);
-                        setShareSelectedTenantId(
-                          item.scope === 'tenant' ? item.tenant_id || '' : '',
-                        );
-                        setShareModalVisible(true);
-                        setMenuVisibleId(null);
-                      }}
-                      leadingIcon="share-variant"
-                      title="Share Promo"
-                    />
-                    <Menu.Item
-                      onPress={() => handleEditPromo(item)}
-                      leadingIcon="pencil"
-                      title="Edit Template"
-                    />
-                    <Menu.Item
-                      onPress={() => handleDeletePromo(item.id)}
-                      leadingIcon="delete"
-                      title="Delete Template"
-                      titleStyle={{ color: colors.error }}
-                    />
-                  </Menu>
-                </View>
-              </Card.Content>
-            </Card>
+            <PromotionCard
+              item={item}
+              colors={colors}
+              menuVisible={menuVisibleId === item.id}
+              onOpenMenu={() => setMenuVisibleId(item.id)}
+              onDismissMenu={() => setMenuVisibleId(null)}
+              onView={() => handleViewPromo(item)}
+              onApply={() => {
+                setSelectedPromotion(item);
+                setApplyPromoModalVisible(true);
+              }}
+              onShare={() => {
+                setSharingPromo(item);
+                setShareSelectedTenantId(
+                  item.scope === 'tenant' ? item.tenant_id || '' : '',
+                );
+                setShareModalVisible(true);
+              }}
+              onEdit={() => handleEditPromo(item)}
+              onDelete={() => handleDeletePromo(item.id)}
+            />
           )}
           ListEmptyComponent={
             <EmptyState icon="ticket-outline" title="No promo codes created yet" />
@@ -759,1039 +598,99 @@ export default function PromotionsScreen() {
       </View>
 
       {/* View Promo Modal */}
-      <BaseModal
+      <ViewPromoModal
         visible={viewModalVisible}
+        promotion={viewingPromotion}
         onDismiss={() => {
           setViewModalVisible(false);
           setViewingPromotion(null);
         }}
-        title="Adjustment Template Details"
-        subtitle={viewingPromotion?.code}
-        actions={[
-          {
-            label: 'Edit',
-            onPress: () => viewingPromotion && handleEditPromo(viewingPromotion),
-            mode: 'outlined',
-            icon: 'pencil',
-          },
-          {
-            label: 'Apply',
-            onPress: () => {
-              if (viewingPromotion) {
-                setSelectedPromotion(viewingPromotion);
-                setApplyPromoModalVisible(true);
-                setViewModalVisible(false);
-              }
-            },
-            mode: 'contained',
-            icon: 'check-circle-outline',
-          },
-        ]}
-      >
-        {viewingPromotion && (
-          <View>
-            {/* Type & Status Header */}
-            <View
-              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
-            >
-              <Surface
-                elevation={0}
-                style={[
-                  styles.typeBadge,
-                  { backgroundColor: colors.primaryContainer, marginLeft: 0 },
-                ]}
-              >
-                <Text
-                  variant="labelMedium"
-                  style={{ color: colors.onPrimaryContainer, paddingHorizontal: 4 }}
-                >
-                  {snakeCaseToTitleCase(viewingPromotion.type).toUpperCase()}
-                </Text>
-              </Surface>
+        onEdit={handleEditPromo}
+        onApply={promo => {
+          setSelectedPromotion(promo);
+          setApplyPromoModalVisible(true);
+          setViewModalVisible(false);
+        }}
+        colors={colors}
+        propertiesById={propertiesById}
+        tenantsById={tenantsById}
+      />
 
-              <View style={{ flexDirection: 'row', marginLeft: 'auto' }}>
-                {!viewingPromotion.is_active && (
-                  <Surface
-                    elevation={0}
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: colors.errorContainer },
-                    ]}
-                  >
-                    <Text variant="labelSmall" style={{ color: colors.onErrorContainer }}>
-                      INACTIVE
-                    </Text>
-                  </Surface>
-                )}
-                {(() => {
-                  const now = formatDateForDB(new Date());
-                  if (
-                    viewingPromotion.valid_until &&
-                    viewingPromotion.valid_until < now
-                  ) {
-                    return (
-                      <Surface
-                        elevation={0}
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: colors.errorContainer },
-                        ]}
-                      >
-                        <Text
-                          variant="labelSmall"
-                          style={{ color: colors.onErrorContainer }}
-                        >
-                          EXPIRED
-                        </Text>
-                      </Surface>
-                    );
-                  }
-                  if (viewingPromotion.valid_from && viewingPromotion.valid_from > now) {
-                    return (
-                      <Surface
-                        elevation={0}
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: colors.secondaryContainer },
-                        ]}
-                      >
-                        <Text
-                          variant="labelSmall"
-                          style={{ color: colors.onSecondaryContainer }}
-                        >
-                          UPCOMING
-                        </Text>
-                      </Surface>
-                    );
-                  }
-                  return (
-                    <Surface
-                      elevation={0}
-                      style={[
-                        styles.statusBadge,
-                        {
-                          backgroundColor: addOpacity(
-                            (colors as any).success || '#16a34a',
-                            0.15,
-                          ),
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="labelSmall"
-                        style={{ color: (colors as any).success, fontWeight: 'bold' }}
-                      >
-                        ACTIVE
-                      </Text>
-                    </Surface>
-                  );
-                })()}
-              </View>
-            </View>
-
-            {/* Value Highlight */}
-            <Surface
-              style={{
-                padding: 20,
-                borderRadius: 12,
-                backgroundColor: colors.surfaceVariant,
-                alignItems: 'center',
-                marginBottom: 20,
-              }}
-              elevation={0}
-            >
-              <Text
-                variant="labelSmall"
-                style={{
-                  color: colors.onSurfaceVariant,
-                  letterSpacing: 1,
-                  marginBottom: 4,
-                }}
-              >
-                ADJUSTMENT VALUE
-              </Text>
-              <Text
-                variant="displaySmall"
-                style={{ fontWeight: 'bold', color: colors.primary }}
-              >
-                {viewingPromotion.type === 'full_month'
-                  ? '100%'
-                  : viewingPromotion.type === 'percentage'
-                    ? `${viewingPromotion.amount}%`
-                    : `KES ${viewingPromotion.amount?.toLocaleString()}`}
-              </Text>
-              <Text
-                variant="bodyMedium"
-                style={{ color: colors.onSurfaceVariant, marginTop: 4 }}
-              >
-                {viewingPromotion.type === 'full_month'
-                  ? 'Full Month Rent Waiver'
-                  : viewingPromotion.type === 'percentage'
-                    ? 'Off Total Rent'
-                    : 'Fixed Deduction'}
-              </Text>
-            </Surface>
-
-            {/* Details List */}
-            <List.Section>
-              <List.Item
-                title="Target Scope"
-                description={
-                  viewingPromotion.scope === 'business'
-                    ? 'Global Adjustment (All Tenants)'
-                    : viewingPromotion.scope === 'property'
-                      ? `Restricted to Property: ${propertiesById.get(viewingPromotion.property_id as string)?.name || 'Unknown'}`
-                      : `Personalized for Tenant: ${tenantsById.get(viewingPromotion.tenant_id as string)?.name || 'Unknown'}`
-                }
-                left={props => (
-                  <List.Icon
-                    {...props}
-                    icon={
-                      viewingPromotion.scope === 'business'
-                        ? 'office-building'
-                        : viewingPromotion.scope === 'property'
-                          ? 'home-city'
-                          : 'account'
-                    }
-                  />
-                )}
-              />
-              <Divider style={{ marginHorizontal: 16 }} />
-              <List.Item
-                title="Validity Period"
-                description={
-                  viewingPromotion.valid_from || viewingPromotion.valid_until
-                    ? `${viewingPromotion.valid_from ? `From ${new Date(viewingPromotion.valid_from).toLocaleDateString()}` : 'Indefinite'}${viewingPromotion.valid_until ? ` until ${new Date(viewingPromotion.valid_until).toLocaleDateString()}` : ''}`
-                    : 'Always Valid'
-                }
-                left={props => <List.Icon {...props} icon="calendar-clock" />}
-              />
-              <Divider style={{ marginHorizontal: 16 }} />
-              {viewingPromotion.description && (
-                <List.Item
-                  title="Description"
-                  description={viewingPromotion.description}
-                  descriptionNumberOfLines={4}
-                  left={props => <List.Icon {...props} icon="text-box-outline" />}
-                />
-              )}
-            </List.Section>
-          </View>
-        )}
-      </BaseModal>
-
-      {/* Create Promo Modal */}
-      <BaseModal
+      {/* Promotion Wizard Modal (Create & Edit) */}
+      <PromotionWizardModal
         visible={promoModalVisible}
+        isEditing={!!editingPromoId}
+        loading={loading}
+        promotion={newPromotion}
+        setPromotion={setNewPromotion}
         onDismiss={() => {
           setPromoModalVisible(false);
           setEditingPromoId(null);
-          setPromoStep(1);
           resetNewPromotion();
         }}
-        title={editingPromoId ? 'Edit Template' : 'Create Template'}
-        scrollable={true}
-        subtitle={`Step ${promoStep} of 3: ${
-          promoStep === 1 ? 'Details' : promoStep === 2 ? 'Targeting' : 'Finalize'
-        }`}
-        actions={
-          promoStep === 1
-            ? [
-                {
-                  label: 'Cancel',
-                  onPress: () => setPromoModalVisible(false),
-                  mode: 'outlined',
-                },
-                {
-                  label: 'Next',
-                  onPress: () => {
-                    if (!newPromotion.code) {
-                      showSnackbar('Please enter a template code', 'error');
-                      return;
-                    }
-                    setPromoStep(2);
-                  },
-                  mode: 'contained',
-                },
-              ]
-            : promoStep === 2
-              ? [
-                  {
-                    label: 'Back',
-                    onPress: () => setPromoStep(1),
-                    mode: 'outlined',
-                  },
-                  {
-                    label: 'Next',
-                    onPress: () => {
-                      if (
-                        newPromotion.scope === 'property' &&
-                        !newPromotion.property_id
-                      ) {
-                        showSnackbar('Please select a property', 'error');
-                        return;
-                      }
-                      if (newPromotion.scope === 'tenant' && !newPromotion.tenant_id) {
-                        showSnackbar('Please select a tenant', 'error');
-                        return;
-                      }
-                      setPromoStep(3);
-                    },
-                    mode: 'contained',
-                  },
-                ]
-              : [
-                  {
-                    label: 'Back',
-                    onPress: () => setPromoStep(2),
-                    mode: 'outlined',
-                  },
-                  {
-                    label: editingPromoId ? 'Update' : 'Create',
-                    onPress: handleCreatePromo,
-                    mode: 'contained',
-                    loading: loading,
-                    disabled: loading,
-                  },
-                ]
-        }
-      >
-        <View style={{ paddingTop: 16 }}>
-          {promoStep === 1 && (
-            <View>
-              <View style={{ marginBottom: 16 }}>
-                <Text variant="labelMedium" style={{ marginBottom: 8 }}>
-                  Adjustment Type
-                </Text>
-                <Menu
-                  visible={adjustmentTypeMenuVisible}
-                  onDismiss={() => setAdjustmentTypeMenuVisible(false)}
-                  anchor={
-                    <Button
-                      mode="outlined"
-                      onPress={() => setAdjustmentTypeMenuVisible(true)}
-                      icon="chevron-down"
-                      contentStyle={{ flexDirection: 'row-reverse' }}
-                    >
-                      {newPromotion.type.replace('_', ' ').toUpperCase()}
-                    </Button>
-                  }
-                >
-                  <Menu.Item
-                    onPress={() => {
-                      setNewPromotion(prev => ({ ...prev, type: 'fixed' }));
-                      setAdjustmentTypeMenuVisible(false);
-                    }}
-                    title="Fixed Amount"
-                  />
-                  <Menu.Item
-                    onPress={() => {
-                      setNewPromotion(prev => ({ ...prev, type: 'percentage' }));
-                      setAdjustmentTypeMenuVisible(false);
-                    }}
-                    title="Percentage (%)"
-                  />
-                  <Menu.Item
-                    onPress={() => {
-                      setNewPromotion(prev => ({ ...prev, type: 'full_month' }));
-                      setAdjustmentTypeMenuVisible(false);
-                    }}
-                    title="Full Month Rent"
-                  />
-                </Menu>
-              </View>
-
-              <TextInput
-                label="Template Code (e.g. EBIRD500)"
-                value={newPromotion.code}
-                onChangeText={text => setNewPromotion(prev => ({ ...prev, code: text }))}
-                autoCapitalize="characters"
-                placeholder="Unique identifier"
-                style={{ marginBottom: 16 }}
-              />
-
-              {newPromotion.type !== 'full_month' && (
-                <TextInput
-                  label={newPromotion.type === 'percentage' ? 'Percentage (%)' : 'Amount'}
-                  value={newPromotion.amount}
-                  onChangeText={text =>
-                    setNewPromotion(prev => ({ ...prev, amount: text }))
-                  }
-                  keyboardType="decimal-pad"
-                  style={{ marginBottom: 16 }}
-                />
-              )}
-            </View>
-          )}
-
-          {promoStep === 2 && (
-            <View>
-              <View style={{ marginBottom: 16 }}>
-                <Text variant="labelMedium" style={{ marginBottom: 8 }}>
-                  Adjustment Scope
-                </Text>
-                <SegmentedButtons
-                  value={newPromotion.scope}
-                  onValueChange={value =>
-                    setNewPromotion(prev => ({
-                      ...prev,
-                      scope: value as 'business' | 'property' | 'tenant',
-                      property_id: value === 'property' ? prev.property_id : null,
-                      tenant_id: value === 'tenant' ? prev.tenant_id : null,
-                    }))
-                  }
-                  buttons={[
-                    { value: 'business', label: 'Business', icon: 'office-building' },
-                    { value: 'property', label: 'Property', icon: 'home-city' },
-                    { value: 'tenant', label: 'Tenant', icon: 'account' },
-                  ]}
-                />
-              </View>
-
-              {newPromotion.scope === 'property' && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text
-                    variant="labelMedium"
-                    style={{ marginBottom: 8, color: colors.primary }}
-                  >
-                    Select Linked Property:
-                  </Text>
-                  <Button
-                    mode="outlined"
-                    onPress={() => {
-                      setPropertySearch('');
-                      setShowPropertyModal(true);
-                    }}
-                    style={{ backgroundColor: colors.surface }}
-                    icon="home-city-outline"
-                  >
-                    {newPromotion.property_id
-                      ? propertiesById.get(newPromotion.property_id as string)?.name
-                      : 'Choose Property'}
-                  </Button>
-                </View>
-              )}
-
-              {newPromotion.scope === 'tenant' && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text
-                    variant="labelMedium"
-                    style={{ marginBottom: 8, color: colors.primary }}
-                  >
-                    Select Linked Tenant:
-                  </Text>
-                  <Button
-                    mode="outlined"
-                    onPress={() => {
-                      setModalSource('create');
-                      setShowTenantModal(true);
-                    }}
-                    style={{ backgroundColor: colors.surface }}
-                    icon="account-outline"
-                  >
-                    {newPromotion.tenant_id
-                      ? tenantsById.get(newPromotion.tenant_id as string)?.name
-                      : 'Choose Tenant'}
-                  </Button>
-                </View>
-              )}
-
-              {newPromotion.scope === 'business' && (
-                <View
-                  style={{
-                    padding: 16,
-                    backgroundColor: colors.surfaceVariant,
-                    borderRadius: 8,
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name="information-outline"
-                    size={20}
-                    color={colors.primary}
-                  />
-                  <Text variant="bodySmall" style={{ marginTop: 4 }}>
-                    This adjustment will be available for all tenants in your business.
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {promoStep === 3 && (
-            <View>
-              <TextInput
-                label="Internal Description"
-                value={newPromotion.description}
-                onChangeText={text =>
-                  setNewPromotion(prev => ({ ...prev, description: text }))
-                }
-                placeholder="e.g. Early bird discount for 2024"
-                multiline
-                style={{ marginBottom: 16 }}
-              />
-
-              <Surface
-                style={{
-                  padding: 16,
-                  borderRadius: 8,
-                  backgroundColor: colors.surfaceVariant,
-                  marginBottom: 16,
-                }}
-                elevation={0}
-              >
-                <Text variant="titleSmall" style={{ marginBottom: 8 }}>
-                  Configuration
-                </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    marginBottom: 4,
-                  }}
-                >
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    Code:
-                  </Text>
-                  <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>
-                    {newPromotion.code || 'N/A'}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    marginBottom: 4,
-                  }}
-                >
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    Type:
-                  </Text>
-                  <Text variant="bodySmall" style={{ textTransform: 'uppercase' }}>
-                    {newPromotion.type.replace('_', ' ')}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    marginBottom: 4,
-                  }}
-                >
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    Value:
-                  </Text>
-                  <Text variant="bodySmall">
-                    {newPromotion.type === 'full_month'
-                      ? 'Full Month Waiver'
-                      : newPromotion.type === 'percentage'
-                        ? `${newPromotion.amount}% Discount`
-                        : `KES ${newPromotion.amount} Deduction`}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    Target:
-                  </Text>
-                  <Text variant="bodySmall" style={{ textTransform: 'capitalize' }}>
-                    {newPromotion.scope}
-                    {newPromotion.scope === 'property' &&
-                      ` (${propertiesById.get(newPromotion.property_id as string)?.name || 'None'})`}
-                    {newPromotion.scope === 'tenant' &&
-                      ` (${tenantsById.get(newPromotion.tenant_id as string)?.name || 'None'})`}
-                  </Text>
-                </View>
-              </Surface>
-
-              <View style={{ marginBottom: 16 }}>
-                <Text variant="labelMedium" style={{ marginBottom: 8 }}>
-                  Validity Period (Optional)
-                </Text>
-                <View style={{ gap: 8 }}>
-                  <DatePicker
-                    label="Starts From"
-                    value={newPromotion.valid_from}
-                    onChange={date =>
-                      setNewPromotion(prev => ({ ...prev, valid_from: date }))
-                    }
-                    maximumDate={null}
-                  />
-                  <DatePicker
-                    label="Expires On"
-                    value={newPromotion.valid_until}
-                    onChange={date =>
-                      setNewPromotion(prev => ({ ...prev, valid_until: date }))
-                    }
-                    maximumDate={null}
-                  />
-                </View>
-              </View>
-
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 16,
-                }}
-              >
-                <View>
-                  <Text variant="bodyMedium">Active Status</Text>
-                  <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
-                    Allow this template to be applied
-                  </Text>
-                </View>
-                <Switch
-                  value={newPromotion.is_active}
-                  onValueChange={value =>
-                    setNewPromotion(prev => ({ ...prev, is_active: value }))
-                  }
-                />
-              </View>
-            </View>
-          )}
-        </View>
-      </BaseModal>
+        onSubmit={handleCreatePromo}
+        propertiesById={propertiesById}
+        tenantsById={tenantsById}
+        onOpenPropertyPicker={() => setShowPropertyModal(true)}
+        onOpenTenantPicker={() => {
+          setModalSource('create');
+          setShowTenantModal(true);
+        }}
+        colors={colors}
+        showSnackbar={showSnackbar}
+      />
 
       {/* Apply Promo Modal */}
-      <BaseModal
+      <ApplyPromoModal
         visible={applyPromoModalVisible}
-        onDismiss={() => {
-          setApplyPromoModalVisible(false);
-          setSelectedTenantId('');
-          setSelectedTenantIds([]);
-          setApplyPromoStep(1);
+        onDismiss={() => setApplyPromoModalVisible(false)}
+        selectedPromotion={selectedPromotion}
+        applyPromoStep={applyPromoStep}
+        setApplyPromoStep={setApplyPromoStep}
+        selectedTenantId={selectedTenantId}
+        setSelectedTenantId={setSelectedTenantId}
+        selectedTenantIds={selectedTenantIds}
+        setSelectedTenantIds={setSelectedTenantIds}
+        sourceDate={sourceDate}
+        setSourceDate={setSourceDate}
+        targetDate={targetDate}
+        setTargetDate={setTargetDate}
+        eligibleTenants={eligibleTenants}
+        allHouses={allHouses}
+        allProperties={allProperties}
+        tenantsById={tenantsById}
+        onSelectTenant={() => {
+          setModalSource('apply');
+          setShowTenantModal(true);
         }}
-        title={`Apply ${selectedPromotion?.code || 'Adjustment'}`}
-        scrollable={true}
-        subtitle={
-          selectedPromotion?.type === 'full_month'
-            ? `Step ${applyPromoStep} of 3: ${applyPromoStep === 1 ? 'Source Month' : applyPromoStep === 2 ? 'Select Tenants' : 'Transfer'}`
-            : 'Select a tenant and period'
-        }
-        actions={
-          selectedPromotion?.type === 'full_month'
-            ? applyPromoStep === 1
-              ? [
-                  {
-                    label: 'Cancel',
-                    onPress: () => {
-                      setApplyPromoModalVisible(false);
-                      setSelectedTenantId('');
-                      setSelectedTenantIds([]);
-                      setApplyPromoStep(1);
-                    },
-                    mode: 'outlined' as any,
-                  },
-                  {
-                    label: 'Next',
-                    onPress: () => {
-                      if (selectedTenantIds.length === 0) {
-                        setSelectedTenantIds(eligibleTenants.map(t => t.tenant.id));
-                      }
-                      setApplyPromoStep(2);
-                    },
-                    mode: 'contained' as any,
-                  },
-                ]
-              : applyPromoStep === 2
-                ? [
-                    {
-                      label: 'Back',
-                      onPress: () => setApplyPromoStep(1),
-                      mode: 'outlined' as any,
-                    },
-                    {
-                      label: 'Next',
-                      onPress: () => {
-                        if (selectedTenantIds.length === 0) {
-                          showSnackbar('Please select at least one tenant', 'error');
-                          return;
-                        }
-                        setApplyPromoStep(3);
-                      },
-                      mode: 'contained' as any,
-                    },
-                  ]
-                : [
-                    {
-                      label: 'Back',
-                      onPress: () => setApplyPromoStep(2),
-                      mode: 'outlined' as any,
-                    },
-                    {
-                      label: 'Apply Promo',
-                      onPress: handleApplyPromo,
-                      mode: 'contained' as any,
-                      loading: applyLoading,
-                    },
-                  ]
-            : [
-                {
-                  label: 'Cancel',
-                  onPress: () => {
-                    setApplyPromoModalVisible(false);
-                    setSelectedTenantId('');
-                    setSelectedTenantIds([]);
-                    setApplyPromoStep(1);
-                  },
-                  mode: 'outlined' as any,
-                },
-                {
-                  label: 'Apply Promo',
-                  onPress: handleApplyPromo,
-                  mode: 'contained' as any,
-                  loading: applyLoading,
-                  disabled: !selectedTenantId,
-                },
-              ]
-        }
-      >
-        {selectedPromotion && (
-          <Surface
-            style={[
-              styles.card,
-              { padding: 16, marginBottom: 16, marginHorizontal: 0, borderRadius: 0 },
-            ]}
-            elevation={1}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <View>
-                <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                  {selectedPromotion.type === 'full_month'
-                    ? 'Full Month Rent Waiver'
-                    : selectedPromotion.type === 'percentage'
-                      ? `${selectedPromotion.amount}% Discount`
-                      : `KES ${selectedPromotion.amount} Deduction`}
-                </Text>
-                {selectedPromotion.description && (
-                  <Text
-                    variant="bodyMedium"
-                    style={{ color: colors.onSurfaceVariant, marginTop: 4 }}
-                  >
-                    {selectedPromotion.description}
-                  </Text>
-                )}
-              </View>
-              <MaterialCommunityIcons
-                name="ticket-percent"
-                size={32}
-                color={colors.primary}
-              />
-            </View>
-          </Surface>
-        )}
-        <ScrollView>
-          {(selectedPromotion?.type !== 'full_month' || applyPromoStep === 1) && (
-            <View style={{ marginBottom: 16 }}>
-              <DatePicker
-                label={
-                  selectedPromotion?.type === 'full_month'
-                    ? 'Waive Rent For (Source Month)'
-                    : 'Apply To Month'
-                }
-                value={sourceDate}
-                onChange={date => date && setSourceDate(date)}
-                mode="month"
-              />
-            </View>
-          )}
-
-          {selectedPromotion?.type === 'full_month' && applyPromoStep === 3 && (
-            <View style={{ marginBottom: 24 }}>
-              <DatePicker
-                label="Transfer Future Payments To"
-                value={targetDate}
-                onChange={date => date && setTargetDate(date)}
-                mode="month"
-              />
-            </View>
-          )}
-
-          {selectedPromotion?.type === 'full_month' && applyPromoStep === 2 && (
-            <View style={{ marginBottom: 16 }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 8,
-                }}
-              >
-                <Text variant="labelMedium" style={{ color: colors.primary }}>
-                  Select Tenants:
-                </Text>
-                {eligibleTenants.length > 0 && (
-                  <Button
-                    mode="text"
-                    compact
-                    onPress={() => {
-                      if (selectedTenantIds.length === eligibleTenants.length) {
-                        setSelectedTenantIds([]);
-                      } else {
-                        setSelectedTenantIds(eligibleTenants.map(t => t.tenant.id));
-                      }
-                    }}
-                  >
-                    {selectedTenantIds.length === eligibleTenants.length
-                      ? 'Deselect All'
-                      : 'Select All'}
-                  </Button>
-                )}
-              </View>
-              {eligibleTenants.length === 0 ? (
-                <Surface
-                  style={[styles.card, { padding: 16, alignItems: 'center' }]}
-                  elevation={0}
-                >
-                  <Text
-                    variant="bodyMedium"
-                    style={{ color: colors.onSurfaceVariant, fontStyle: 'italic' }}
-                  >
-                    No active tenants found.
-                  </Text>
-                </Surface>
-              ) : (
-                <View style={{ overflow: 'hidden' }}>
-                  {eligibleTenants.map(({ tenant, contract, paidAmount }, index) => {
-                    const house = allHouses?.find(h => h.id === contract.house_id);
-                    const property = house
-                      ? allProperties?.find(p => p.id === house.property_id)
-                      : null;
-
-                    let description: React.ReactNode;
-                    const propertyDescription =
-                      property && house
-                        ? `${property.name} • ${house.house_number}`
-                        : 'Active Contract';
-
-                    if (paidAmount > 0) {
-                      description = `${propertyDescription} • Paid: KES ${paidAmount.toLocaleString()}`;
-                    } else {
-                      description = (
-                        <Text variant="bodyMedium" style={{ color: colors.error }}>
-                          {propertyDescription} • Unpaid
-                        </Text>
-                      );
-                    }
-
-                    const isSelected = selectedTenantIds.includes(tenant.id);
-
-                    return (
-                      <React.Fragment key={tenant.id}>
-                        <List.Item
-                          title={tenant.name}
-                          description={description}
-                          left={() => (
-                            <Checkbox.Android
-                              status={isSelected ? 'checked' : 'unchecked'}
-                              onPress={() => {
-                                setSelectedTenantIds(prev =>
-                                  isSelected
-                                    ? prev.filter(id => id !== tenant.id)
-                                    : [...prev, tenant.id],
-                                );
-                              }}
-                            />
-                          )}
-                          onPress={() => {
-                            setSelectedTenantIds(prev =>
-                              isSelected
-                                ? prev.filter(id => id !== tenant.id)
-                                : [...prev, tenant.id],
-                            );
-                          }}
-                        />
-                        {index < eligibleTenants.length - 1 && <Divider />}
-                      </React.Fragment>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          )}
-
-          {selectedPromotion?.type !== 'full_month' && (
-            <View style={{ marginBottom: 16 }}>
-              <Text
-                variant="labelMedium"
-                style={{ marginBottom: 8, color: colors.primary }}
-              >
-                Target Tenant:
-              </Text>
-              <Button
-                mode="outlined"
-                onPress={() => {
-                  setModalSource('apply');
-                  setShowTenantModal(true);
-                }}
-                style={{ backgroundColor: colors.surface }}
-                icon="account-outline"
-              >
-                {selectedTenantId
-                  ? tenantsById.get(selectedTenantId as string)?.name
-                  : 'Choose Tenant to Apply To'}
-              </Button>
-            </View>
-          )}
-        </ScrollView>
-      </BaseModal>
+        onApply={handleApplyPromo}
+        loading={applyLoading}
+        showSnackbar={showSnackbar}
+      />
 
       {/* Share Promo Modal */}
-      <BaseModal
+      <SharePromoModal
         visible={shareModalVisible}
         onDismiss={() => {
           setShareModalVisible(false);
           setShareSelectedTenantId('');
         }}
-        title="Share Promo Code"
-        subtitle="Send this code to your tenants"
-        actions={[
-          {
-            label: 'Share PDF',
-            onPress: handleShareAsPDF,
-            mode: 'outlined',
-          },
-          {
-            label: 'Share Now',
-            onPress: handleSharePromo,
-            mode: 'contained',
-          },
-        ]}
-      >
-        <View>
-          <Text
-            variant="bodySmall"
-            style={{ marginBottom: 8, color: colors.onSurfaceVariant }}
-          >
-            Personalize for a tenant (Optional):
-          </Text>
-          <Button
-            mode="outlined"
-            onPress={() => {
-              setModalSource('share');
-              setShowTenantModal(true);
-            }}
-            style={{ backgroundColor: colors.surface, marginBottom: 16 }}
-            icon="account-outline"
-          >
-            {shareSelectedTenantId
-              ? tenantsById.get(shareSelectedTenantId as string)?.name
-              : 'None (General Share)'}
-          </Button>
+        sharingPromo={sharingPromo}
+        shareSelectedTenantId={shareSelectedTenantId}
+        onSelectTenant={() => {
+          setModalSource('share');
+          setShowTenantModal(true);
+        }}
+        onSharePDF={handleShareAsPDF}
+        onShareNow={handleSharePromo}
+        tenantsById={tenantsById}
+        contractsByTenant={contractsByTenant}
+        housesById={housesById}
+        propertiesById={propertiesById}
+        selectedBusiness={selectedBusiness}
+      />
 
-          {sharingPromo && (
-            <View style={styles.shareCardContainer}>
-              <View
-                style={[
-                  styles.promoVisualCard,
-                  { elevation: 4, backgroundColor: colors.primary },
-                ]}
-              >
-                <View style={styles.cardPattern}>
-                  <MaterialCommunityIcons
-                    name="ticket-percent"
-                    size={80}
-                    color="rgba(255,255,255,0.2)"
-                  />
-                </View>
-                <View style={styles.cardHeader}>
-                  <View>
-                    <Text variant="labelLarge" style={styles.cardLabel}>
-                      OFFICIAL PROMO
-                    </Text>
-                    {shareSelectedTenantId && (
-                      <Text
-                        variant="labelSmall"
-                        style={{ color: colors.onPrimary, opacity: 0.8 }}
-                      >
-                        For: {tenantsById.get(shareSelectedTenantId as string)?.name}
-                      </Text>
-                    )}
-                  </View>
-                  <MaterialCommunityIcons
-                    name="rhombus-split"
-                    size={24}
-                    color={colors.onPrimary}
-                  />
-                </View>
-                <View style={styles.cardMain}>
-                  <Text
-                    variant="displaySmall"
-                    style={[styles.cardCode, { color: colors.onPrimary }]}
-                  >
-                    {sharingPromo.code}
-                  </Text>
-                  <Text
-                    variant="headlineSmall"
-                    style={[styles.cardAmount, { color: colors.onPrimary }]}
-                  >
-                    {formatPromoAmount(sharingPromo)}
-                  </Text>
-                  {shareSelectedTenantId &&
-                    (() => {
-                      const tenant = tenantsById.get(shareSelectedTenantId as string);
-                      const contract = tenant
-                        ? (contractsByTenant.get(tenant.id) || []).find((c: any) =>
-                            isActiveContractStatus(c.status),
-                          )
-                        : null;
-                      const house = contract
-                        ? housesById.get(contract.house_id as string)
-                        : null;
-                      const property = house
-                        ? propertiesById.get(house.property_id as string)
-                        : null;
-                      return property ? (
-                        <Text
-                          variant="labelSmall"
-                          style={{
-                            color: colors.onPrimary,
-                            marginTop: 4,
-                            opacity: 0.7,
-                          }}
-                        >
-                          Valid at {property.name}{' '}
-                          {house ? `(${house.house_number})` : ''}
-                        </Text>
-                      ) : null;
-                    })()}
-                  <View
-                    style={[
-                      styles.dashLine,
-                      { backgroundColor: addOpacity(colors.onPrimary, 0.3) },
-                    ]}
-                  />
-                  <Text
-                    variant="bodySmall"
-                    style={[
-                      styles.cardDescription,
-                      { color: colors.onPrimary, opacity: 0.7 },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {sharingPromo.description ||
-                      'Apply this code for a discount on your next rent payment!'}
-                  </Text>
-                </View>
-                <View style={styles.cardFooter}>
-                  <Text
-                    variant="labelSmall"
-                    style={[styles.footerNote, { color: colors.onPrimary, opacity: 0.5 }]}
-                  >
-                    {selectedBusiness?.name} Promo • {new Date().toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-      </BaseModal>
+      {/* Property Selection Modal */}
       <BaseModal
         visible={showPropertyModal}
         onDismiss={() => setShowPropertyModal(false)}
@@ -1822,6 +721,7 @@ export default function PromotionsScreen() {
         </View>
       </BaseModal>
 
+      {/* Tenant Selection Modal */}
       <SelectTenantModal
         visible={showTenantModal}
         onDismiss={() => setShowTenantModal(false)}
@@ -1831,7 +731,7 @@ export default function PromotionsScreen() {
         properties={allProperties}
         includeNone={modalSource === 'share' || modalSource === 'create'}
         onSelect={selection => {
-          if (Array.isArray(selection)) return; // Should not happen in single-select modes
+          if (Array.isArray(selection)) return;
 
           const tenant = selection as any;
           if (modalSource === 'share') {
@@ -1854,6 +754,7 @@ export default function PromotionsScreen() {
         }
       />
 
+      {/* Delete Confirmation Modal */}
       <BaseModal
         mode="confirm"
         visible={showDeleteConfirm}
@@ -1884,30 +785,6 @@ export default function PromotionsScreen() {
   );
 }
 
-function formatPromoAmount(promo: Promotion): string {
-  switch (promo.type) {
-    case 'full_month':
-      return 'Full Month Rent';
-    case 'percentage':
-      return `${promo.amount}% Discount`;
-    default:
-      return `${promo.amount?.toLocaleString()} Fixed`;
-  }
-}
-
-function calculateAdjustment(promo: Promotion, rentAmount: number): number {
-  switch (promo.type) {
-    case 'full_month':
-      return rentAmount;
-    case 'percentage': {
-      const pct = (promo.amount || 0) / 100;
-      return rentAmount * pct;
-    }
-    default:
-      return promo.amount || 0;
-  }
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1915,12 +792,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
+    paddingTop: 16,
   },
   listContent: {
     paddingBottom: 100,
-  },
-  card: {
-    marginBottom: 10,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1930,74 +805,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  cardContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  tenantInfo: {
-    flex: 1,
-  },
-  typeBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  statusBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  shareCardContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  promoVisualCard: {
-    width: '100%',
-    aspectRatio: 1.6,
-    borderRadius: 20,
-    overflow: 'hidden',
-    padding: 24,
-    justifyContent: 'space-between',
-  },
-  cardPattern: {
-    position: 'absolute',
-    right: -20,
-    top: -20,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardLabel: {
-    letterSpacing: 2,
-  },
-  cardMain: {
-    alignItems: 'center',
-  },
-  cardCode: {
-    fontWeight: 'bold',
-    letterSpacing: 4,
-  },
-  cardAmount: {
-    marginTop: 8,
-  },
-  dashLine: {
-    width: '80%',
-    height: 1,
-    marginVertical: 12,
-  },
-  cardDescription: {
-    textAlign: 'center',
-  },
-  cardFooter: {
-    alignItems: 'center',
-  },
-  footerNote: {
-    fontStyle: 'italic',
   },
 });
