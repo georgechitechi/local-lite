@@ -1,6 +1,7 @@
 import { createSyncClient, type LocalFirstClient } from 'local-lite/config';
 import { syncConfig } from './syncConfig';
 import { BUSINESS_COLLECTIONS } from './tables';
+import { ensureSchemaForeignIndexes } from './schemaIndexes';
 
 let clientInstance: LocalFirstClient | null = null;
 let clientPromise: Promise<LocalFirstClient> | null = null;
@@ -61,6 +62,9 @@ export async function getSyncClient(): Promise<LocalFirstClient> {
           'CREATE INDEX IF NOT EXISTS "idx_bookings_biz_house" ON "bookings" ("business_id", "house_id", "deleted");',
         );
       } catch {}
+
+      // Apply all foreign-key indexes extracted from database.types.ts
+      await ensureSchemaForeignIndexes(client.db);
 
       // Clean up any unrecoverable unique constraint / duplicate key violations from the outbox queue
       await client.clearFailedMutations().catch(() => {});
