@@ -94,12 +94,12 @@ export async function fetchDashboardStatsFromDB(
   const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
   const todayStr = now.toISOString().split('T')[0];
 
-  const [[housesRow], [contractsRow], [expiringRow], [receiptsRow], [expensesRow]] =
+  const [[housesRow], [contractsRow], [tenantsRow], [expiringRow], [receiptsRow], [expensesRow]] =
     await Promise.all([
       client.query<{ total_rooms: number; maintenance_rooms: number }>(
         `SELECT 
          COUNT(*) AS total_rooms,
-         COALESCE(SUM(CASE WHEN "status" = 'maintenance' THEN 1 ELSE 0 END), 0) AS maintenance_rooms
+         COALESCE(SUM(CASE WHEN LOWER("status") = 'maintenance' THEN 1 ELSE 0 END), 0) AS maintenance_rooms
        FROM "houses"
        WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);`,
         [businessId],
@@ -115,17 +115,21 @@ export async function fetchDashboardStatsFromDB(
          COALESCE(SUM("rent_amount"), 0) AS projected_revenue
        FROM "contracts"
        WHERE "business_id" = ? 
-         AND "status" = 'ACTIVE' 
-         AND "start_date" <= ? 
-         AND ("end_date" IS NULL OR "end_date" >= ?)
+         AND LOWER("status") IN ('active', 'expiring_soon', 'renewed')
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [businessId, todayStr, currentMonthStart],
+        [businessId],
+      ),
+      client.query<{ total_tenants: number }>(
+        `SELECT COUNT(*) AS total_tenants
+       FROM "tenants"
+       WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);`,
+        [businessId],
       ),
       client.query<{ expiring_contracts: number }>(
         `SELECT COUNT(*) AS expiring_contracts
        FROM "contracts"
        WHERE "business_id" = ?
-         AND ("status" = 'ACTIVE' OR "status" = 'expiring_soon')
+         AND LOWER("status") IN ('active', 'expiring_soon', 'renewed')
          AND "end_date" >= ? AND "end_date" <= ?
          AND ("deleted" IS NULL OR "deleted" != 1);`,
         [businessId, todayStr, thirtyDaysStr],
@@ -137,13 +141,15 @@ export async function fetchDashboardStatsFromDB(
         total_revenue: number;
       }>(
         `SELECT 
-         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS monthly_revenue,
-         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS last_month_revenue,
-         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - "refunded_amount" ELSE 0 END), 0) AS annual_revenue,
-         COALESCE(SUM("amount" - "refunded_amount"), 0) AS total_revenue
+         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - COALESCE("refunded_amount", 0) ELSE 0 END), 0) AS monthly_revenue,
+         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - COALESCE("refunded_amount", 0) ELSE 0 END), 0) AS last_month_revenue,
+         COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - COALESCE("refunded_amount", 0) ELSE 0 END), 0) AS annual_revenue,
+         COALESCE(SUM("amount" - COALESCE("refunded_amount", 0)), 0) AS total_revenue
        FROM "receipts"
        WHERE "business_id" = ? 
-         AND "payment_method" != 'promo' AND "type" != 'promo'
+         AND ("payment_method" IS NULL OR LOWER("payment_method") != 'promo')
+         AND ("type" IS NULL OR LOWER("type") != 'promo')
+         AND ("status" IS NULL OR LOWER("status") != 'promo')
          AND ("deleted" IS NULL OR "deleted" != 1);`,
         [
           currentMonthStart,
@@ -186,6 +192,7 @@ export async function fetchDashboardStatsFromDB(
   const occupiedRooms = Number(contractsRow?.occupied_rooms) || 0;
   const vacantRooms = Math.max(0, totalRooms - occupiedRooms);
   const activeTenants = Number(contractsRow?.active_tenants) || 0;
+  const totalTenants = Number(tenantsRow?.total_tenants) || activeTenants;
   const projectedRevenue = Number(contractsRow?.projected_revenue) || 0;
   const expiringContracts = Number(expiringRow?.expiring_contracts) || 0;
 
@@ -210,7 +217,7 @@ export async function fetchDashboardStatsFromDB(
     totalRooms,
     occupiedRooms,
     vacantRooms,
-    totalTenants: activeTenants,
+    totalTenants,
     totalRevenue,
     monthlyRevenue,
     occupancyRate,
@@ -260,7 +267,7 @@ export function useLiveDashboardStats(
       return;
     }
     fetchStats();
-    const tables = ['receipts', 'expenses', 'contracts', 'houses'];
+    const tables = ['receipts', 'expenses', 'contracts', 'houses', 'tenants'];
     const unsubs = tables.map(t => client.events.on(t, scheduleFetch));
     return () => {
       for (const u of unsubs) {
@@ -280,24 +287,25 @@ export async function fetchExpiringContractsFromDB(
   const todayStr = now.toISOString().split('T')[0];
   const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
 
-  const rows = await client
-    .from('contracts')
-    .leftJoin('houses', 'houses.id', 'contracts.house_id')
-    .leftJoin('properties', 'properties.id', 'houses.property_id')
-    .leftJoin('tenants', 'tenants.id', 'contracts.tenant_id')
-    .where('contracts.business_id', '=', businessId)
-    .where('contracts.status', '=', 'ACTIVE')
-    .where('contracts.end_date', '>=', todayStr)
-    .where('contracts.end_date', '<=', thirtyDaysStr)
-    .select([
-      'contracts.id AS id',
-      'contracts.end_date AS end_date',
-      'houses.house_number AS house_number',
-      'properties.name AS property_name',
-      'tenants.name AS tenant_name',
-    ])
-    .orderBy('contracts.end_date', 'ASC')
-    .execute();
+  const rows = await client.query<any>(
+    `SELECT 
+       contracts.id AS id,
+       contracts.end_date AS end_date,
+       houses.house_number AS house_number,
+       properties.name AS property_name,
+       tenants.name AS tenant_name
+     FROM "contracts"
+     LEFT JOIN "houses" ON houses.id = contracts.house_id
+     LEFT JOIN "properties" ON properties.id = houses.property_id
+     LEFT JOIN "tenants" ON tenants.id = contracts.tenant_id
+     WHERE contracts.business_id = ?
+       AND LOWER(contracts.status) IN ('active', 'expiring_soon', 'renewed')
+       AND contracts.end_date >= ?
+       AND contracts.end_date <= ?
+       AND (contracts.deleted IS NULL OR contracts.deleted != 1)
+     ORDER BY contracts.end_date ASC;`,
+    [businessId, todayStr, thirtyDaysStr],
+  );
 
   return rows.map((r: any) => {
     const endDate = new Date(r.end_date);
