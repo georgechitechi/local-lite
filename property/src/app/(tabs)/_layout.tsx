@@ -38,8 +38,13 @@ const HIDDEN_TAB_OPTIONS = {
 const TabLayout = function TabLayout() {
   const colors = useThemeColors();
   const { selectedBusiness, loading: businessLoading } = useBusiness();
-  const { user, isOfflineAuthoritative, confirmSignOut, loading: authLoading } =
-    useAuth();
+  const {
+    user,
+    isOfflineAuthoritative,
+    isLocalModeAuthorized,
+    confirmSignOut,
+    loading: authLoading,
+  } = useAuth();
   const segments = useSegments();
   const { isAdmin, isAdminOrStaff, isTenant, isStaff, isTenantOnly, can } =
     useAccessControl();
@@ -177,7 +182,7 @@ const TabLayout = function TabLayout() {
                     router.back();
                   } else {
                     router.replace(
-                      user && !isOfflineAuthoritative
+                      (user && !isOfflineAuthoritative) || isLocalModeAuthorized
                         ? '/(tabs)/settings'
                         : '/(auth)/login',
                     );

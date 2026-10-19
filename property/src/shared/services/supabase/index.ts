@@ -109,6 +109,7 @@ export const configureSupabaseClient = async (url: string, key: string) => {
   await secureStorage.removeItem('userEmail');
   await secureStorage.removeItem('lastUser');
   await secureStorage.removeItem('biometricEnabled');
+  await secureStorage.removeItem('local_mode_authorized');
   await SupabaseStorage.removeItem('supabase.auth.token');
   if (supabase) {
     await supabase.auth.signOut().catch(() => {});
@@ -132,6 +133,7 @@ export const disableCloudSync = async () => {
   await secureStorage.removeItem('userEmail');
   await secureStorage.removeItem('lastUser');
   await secureStorage.removeItem('biometricEnabled');
+  await secureStorage.removeItem('local_mode_authorized');
   await SupabaseStorage.removeItem('supabase.auth.token');
 
   // Clear any existing session to be safe

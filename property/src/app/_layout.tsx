@@ -39,7 +39,9 @@ LogBox.ignoreLogs([
 ]);
 
 function RootLayoutNav() {
-  const { user, loading, isOfflineAuthoritative } = useAuth();
+  const { user, loading, isOfflineAuthoritative, isLocalModeAuthorized } =
+    useAuth();
+  const { isLocalMode } = useLocalSync();
   const router = useRouter();
   const segments = useSegments();
   const { loading: businessLoading } = useBusiness();
@@ -61,7 +63,8 @@ function RootLayoutNav() {
       (segments as string[])[1] === 'reset-password';
     const isCloudSyncScreen = (segments as string[]).includes('cloud-sync');
 
-    const isAuthenticated = !!user && !isOfflineAuthoritative;
+    const isAuthenticated =
+      (!!user && !isOfflineAuthoritative) || (isLocalMode && isLocalModeAuthorized);
 
     // Only navigate if conditions are met and we're not already on the target route
     if (!isAuthenticated && !inAuthGroup && !isCloudSyncScreen) {
@@ -71,15 +74,22 @@ function RootLayoutNav() {
         router.replace('/(tabs)');
       }
     }
-  }, [user, loading, businessLoading, segments, router, isOfflineAuthoritative]);
+  }, [
+    user,
+    loading,
+    businessLoading,
+    segments,
+    router,
+    isOfflineAuthoritative,
+    isLocalMode,
+    isLocalModeAuthorized,
+  ]);
 
   useEffect(() => {
     if (!loading && !businessLoading) {
       markInteractive();
     }
   }, [loading, businessLoading, markInteractive]);
-
-  const { isLocalMode } = useLocalSync();
 
   if (loading || (user && businessLoading)) {
     return <LoadingCard text="Initialising application..." />;

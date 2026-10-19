@@ -53,7 +53,7 @@ import {
   testSupabaseConnection,
 } from '@/shared/services/supabase';
 import { safeReloadApp } from '@/shared/utils/safeReload';
-import { clearAllPersistence } from '@/stores/syncHelper';
+import { backupToCloudBeforeClear, clearAllPersistence } from '@/stores/syncHelper';
 
 const SUPABASE_PAT_KEY = 'supabase_mgmt_pat';
 
@@ -590,6 +590,14 @@ export default function CloudSyncSettings() {
       setShowLoadingCard(true);
       // Allow LoadingCard to render before async work begins
       await new Promise(resolve => setTimeout(resolve, 80));
+      if (isCloudSyncEnabled) {
+        try {
+          showSnackbar('Backing up data to cloud before switching...', 'info');
+          await backupToCloudBeforeClear();
+        } catch (backupErr) {
+          console.warn('Backup before switch failed:', backupErr);
+        }
+      }
       const keys = await getApiKeys(pat, targetRef);
       const targetUrl = `https://${targetRef}.supabase.co`;
       await enableSync(targetUrl, keys.publishableKey);
@@ -617,6 +625,14 @@ export default function CloudSyncSettings() {
     pauseAutoLock();
     try {
       setDeployLoading(true);
+      if (isCloudSyncEnabled) {
+        try {
+          showSnackbar('Backing up data to cloud before reconnecting...', 'info');
+          await backupToCloudBeforeClear();
+        } catch (backupErr) {
+          console.warn('Backup before reconnect failed:', backupErr);
+        }
+      }
       const keys = await getApiKeys(token.trim(), selectedRef);
       const targetUrl = `https://${selectedRef}.supabase.co`;
       await secureStorage.setItem(SUPABASE_PAT_KEY, token.trim());
@@ -839,9 +855,17 @@ export default function CloudSyncSettings() {
       pauseAutoLock();
       try {
         setLoading(true);
+        if (isCloudSyncEnabled) {
+          try {
+            showSnackbar('Backing up data to cloud before disconnecting...', 'info');
+            await backupToCloudBeforeClear();
+          } catch (backupErr) {
+            console.warn('Backup before sync disable failed:', backupErr);
+          }
+        }
         await disableSync();
         await signOut();
-        showSnackbar('Cloud sync disabled. Operating in offline mode.', 'success');
+        showSnackbar('Cloud sync disabled. Operating in local mode.', 'success');
       } catch (_e) {
         showSnackbar('Failed to disable cloud sync', 'error');
       } finally {
@@ -1002,6 +1026,14 @@ export default function CloudSyncSettings() {
     pauseAutoLock();
     try {
       setLoading(true);
+      if (isCloudSyncEnabled) {
+        try {
+          showSnackbar('Backing up data to cloud before connecting...', 'info');
+          await backupToCloudBeforeClear();
+        } catch (backupErr) {
+          console.warn('Backup before connect failed:', backupErr);
+        }
+      }
       const client = await enableSync(targetUrl, targetKey);
       if (client) {
         showSnackbar('Cloud sync configured! Restarting app...', 'success');
@@ -1088,6 +1120,14 @@ export default function CloudSyncSettings() {
             onInspectSqlite={() => setSqliteInspectorVisible(true)}
             onResetProject={async () => {
               try {
+                if (isCloudSyncEnabled) {
+                  try {
+                    showSnackbar('Backing up data to cloud before reset...', 'info');
+                    await backupToCloudBeforeClear();
+                  } catch (backupErr) {
+                    console.warn('Backup before reset failed:', backupErr);
+                  }
+                }
                 await clearAllPersistence();
                 await safeReloadApp();
               } catch (e) {

@@ -31,6 +31,7 @@ export interface AuthState {
   session: Session | null;
   loading: boolean;
   isOfflineAuthoritative: boolean;
+  isLocalModeAuthorized: boolean;
   isSigningOut: boolean;
   isSignOutDialogVisible: boolean;
 }
@@ -40,6 +41,7 @@ let authState: AuthState = {
   session: null,
   loading: true,
   isOfflineAuthoritative: false,
+  isLocalModeAuthorized: false,
   isSigningOut: false,
   isSignOutDialogVisible: false,
 };
@@ -83,6 +85,17 @@ export const setOfflineSession = () => {
     isOfflineAuthoritative: true,
   });
   updateAuthStateSync({ isLoggedIn: false });
+};
+
+export const authorizeLocalMode = async () => {
+  await secureStorage.setItem('local_mode_authorized', true);
+  setOfflineSession();
+  updateAuthState({ isLocalModeAuthorized: true });
+};
+
+export const clearLocalModeAuthorization = async () => {
+  await secureStorage.removeItem('local_mode_authorized');
+  updateAuthState({ isLocalModeAuthorized: false });
 };
 
 export const setOnlineSession = async (
@@ -231,11 +244,16 @@ export const signOut = async (options?: { clearLocalData?: boolean }) => {
       }
     }
 
+    try {
+      await secureStorage.removeItem('local_mode_authorized');
+    } catch {}
+
     // Set auth state to logged out: null user & session
     updateAuthState({
       user: null,
       session: null,
       isOfflineAuthoritative: false,
+      isLocalModeAuthorized: false,
     });
     updateAuthStateSync({ isLoggedIn: false });
 
@@ -335,9 +353,11 @@ export const initializeAuth = async (mountedCheck: () => boolean) => {
     await initializeSupabaseClient();
 
     if (!supabase) {
+      const authorized =
+        (await secureStorage.getItem('local_mode_authorized')) === true;
       if (mountedCheck()) {
         setOfflineSession();
-        updateAuthState({ loading: false });
+        updateAuthState({ isLocalModeAuthorized: authorized, loading: false });
       }
       await SplashScreen.hideAsync();
       return;

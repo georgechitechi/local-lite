@@ -22,7 +22,7 @@ interface FormErrors {
 export default function LoginScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { signIn } = useAuth();
+  const { signIn, authorizeLocalMode } = useAuth();
   const {
     isBiometricSupported,
     isBiometricEnabled,
@@ -176,6 +176,20 @@ export default function LoginScreen() {
     }
   };
 
+  const handleContinueLocally = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      await authorizeLocalMode();
+      router.replace('/(tabs)');
+    } catch (e) {
+      console.error('Failed to continue in local mode:', e);
+      setError('Failed to activate local mode.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const { isLocalMode } = useLocalSync();
 
   return (
@@ -284,6 +298,18 @@ export default function LoginScreen() {
             contentStyle={styles.localModeButtonContent}
           >
             Configure Cloud Sync
+          </Button>
+
+          <Button
+            mode="outlined"
+            icon="database"
+            onPress={handleContinueLocally}
+            loading={loading}
+            disabled={loading}
+            style={styles.localModeOutlineButton}
+            contentStyle={styles.localModeButtonContent}
+          >
+            Continue in Local Mode
           </Button>
         </View>
       ) : (
@@ -504,6 +530,11 @@ const styles = StyleSheet.create({
   localModeButton: {
     width: '100%',
     borderRadius: 12,
+  },
+  localModeOutlineButton: {
+    width: '100%',
+    borderRadius: 12,
+    marginTop: 12,
   },
   localModeButtonContent: {
     paddingVertical: 6,

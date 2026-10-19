@@ -27,6 +27,7 @@ import {
   type SignUpData,
   setOfflineUser,
   setOnlineUser,
+  authorizeLocalMode,
   signIn,
   signOut,
   signUp,
@@ -41,6 +42,8 @@ export interface AuthContextValue {
   session: Session | null;
   loading: boolean;
   isOfflineAuthoritative: boolean;
+  isLocalModeAuthorized: boolean;
+  authorizeLocalMode: () => Promise<void>;
   signUp: (data: SignUpData) => Promise<{ user: User | null; error: Error | null }>;
   signIn: (data: SignInData) => Promise<{ user: User | null; error: Error | null }>;
   signOut: (options?: { clearLocalData?: boolean }) => Promise<void>;
@@ -180,6 +183,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       session: authState.session,
       loading: authState.loading,
       isOfflineAuthoritative: authState.isOfflineAuthoritative,
+      isLocalModeAuthorized: authState.isLocalModeAuthorized,
+      authorizeLocalMode,
       signUp,
       signIn,
       signOut,
@@ -193,6 +198,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       authState.session,
       authState.loading,
       authState.isOfflineAuthoritative,
+      authState.isLocalModeAuthorized,
     ],
   );
 
@@ -230,6 +236,8 @@ export const useAuth = (): AuthContextValue => {
       session: snapshot.session,
       loading: snapshot.loading,
       isOfflineAuthoritative: snapshot.isOfflineAuthoritative,
+      isLocalModeAuthorized: snapshot.isLocalModeAuthorized,
+      authorizeLocalMode,
       signUp,
       signIn,
       signOut,
