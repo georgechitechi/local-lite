@@ -28,18 +28,19 @@ import SPressable from '@/shared/components/SlightPressable';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useCurrency } from '@/shared/hooks/useCurrency';
 import {
-  useContractsWithLoading,
-  useCoreIndexMap,
+  useContracts,
+  useContractsById,
   useCoreMutations,
-  useHousesWithLoading,
+  useHousesById,
   useIsInitialSyncing,
-  usePaymentMessageReceiptsWithLoading,
-  usePaymentMessagesWithLoading,
-  usePropertiesWithLoading,
-  useReceiptRefundsWithLoading,
-  useReceiptsWithLoading,
+  usePaymentMessageReceipts,
+  usePaymentMessages,
+  usePropertiesById,
+  useReceiptRefunds,
+  useReceipts,
   useStoreRefresh,
-  useTenantsWithLoading,
+  useTenants,
+  useTenantsById,
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendReceiptEmail } from '@/shared/services/emailService';
@@ -118,48 +119,21 @@ export default function ReceiptsScreen() {
   const colors = useThemeColors() as any;
 
   // Core Table Live Queries & Mutations (local-lite)
-  const { data: rawReceipts, loading: receiptsLoading } = useReceiptsWithLoading(
-    selectedBusiness?.id,
-  );
-  const { data: tenants, loading: tenantsLoading } = useTenantsWithLoading(
-    selectedBusiness?.id,
-  );
-  const { data: contracts, loading: contractsLoading } = useContractsWithLoading(
-    selectedBusiness?.id,
-  );
-  const { data: houses, loading: housesLoading } = useHousesWithLoading(
-    selectedBusiness?.id,
-  );
-  const { data: properties, loading: propertiesLoading } = usePropertiesWithLoading(
-    selectedBusiness?.id,
-  );
+  const rawReceipts = useReceipts(selectedBusiness?.id);
+  const tenants = useTenants(selectedBusiness?.id);
+  const contracts = useContracts(selectedBusiness?.id);
+  const paymentMessages = usePaymentMessages(selectedBusiness?.id);
+  const paymentMessageReceipts = usePaymentMessageReceipts(selectedBusiness?.id);
+  const receiptRefunds = useReceiptRefunds(selectedBusiness?.id);
   const { delete: deleteRecord, update } = useCoreMutations();
-
-  const { data: paymentMessages } = usePaymentMessagesWithLoading(selectedBusiness?.id);
-  const { data: paymentMessageReceipts } = usePaymentMessageReceiptsWithLoading(
-    selectedBusiness?.id,
-  );
-
-  // Core refunds query
-  const { data: receiptRefunds, loading: refundsLoading } = useReceiptRefundsWithLoading(
-    selectedBusiness?.id,
-  );
   const { refreshing, onRefresh } = useStoreRefresh();
   const isInitialSyncing = useIsInitialSyncing();
 
   // Index maps for instantaneous O(1) relational lookups
-  const housesById = useCoreIndexMap(houses);
-  const propertiesById = useCoreIndexMap(properties);
-  const tenantsById = useCoreIndexMap(tenants);
-  const contractsById = useCoreIndexMap(contracts);
-
-  const isTablesLoading =
-    receiptsLoading ||
-    tenantsLoading ||
-    contractsLoading ||
-    housesLoading ||
-    propertiesLoading ||
-    refundsLoading;
+  const housesById = useHousesById(selectedBusiness?.id);
+  const propertiesById = usePropertiesById(selectedBusiness?.id);
+  const tenantsById = useTenantsById(selectedBusiness?.id);
+  const contractsById = useContractsById(selectedBusiness?.id);
 
   const params = useLocalSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
@@ -901,7 +875,7 @@ export default function ReceiptsScreen() {
 
   const totalMonths = totalFilteredMonths;
 
-  if (accessLoading || isTablesLoading) {
+  if (accessLoading) {
     return <LoadingCard iconName="receipt" text="Loading receipts..." />;
   }
 
