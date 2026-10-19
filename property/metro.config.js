@@ -1,12 +1,24 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '..');
 
-// Add .wasm to asset extensions to support expo-sqlite on web/export
+const config = getDefaultConfig(projectRoot);
+
+// 1. Watch all files in the project and the local-lite workspace root
+config.watchFolders = [workspaceRoot];
+
+// 2. Add .wasm to asset extensions to support expo-sqlite on web/export
 config.resolver.assetExts.push('wasm');
 
-// Force Metro to resolve singleton/peer packages from this project's node_modules
+// 3. Let Metro resolve packages in project's node_modules first, then workspace
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
+
+// 4. Force Metro to resolve singleton/peer packages from this project's node_modules
 // to prevent duplicate React runtime instances when using linked/monorepo packages (e.g. local-lite).
 const PINNED_PACKAGES = [
   'react',
@@ -24,7 +36,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return context.resolveRequest(
       {
         ...context,
-        originModulePath: path.resolve(__dirname, 'package.json'),
+        originModulePath: path.resolve(projectRoot, 'package.json'),
       },
       moduleName,
       platform
@@ -36,11 +48,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
-  react: path.resolve(__dirname, 'node_modules/react'),
-  'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
-  'react-native': path.resolve(__dirname, 'node_modules/react-native'),
-  'expo-sqlite': path.resolve(__dirname, 'node_modules/expo-sqlite'),
-  '@supabase/supabase-js': path.resolve(__dirname, 'node_modules/@supabase/supabase-js'),
+  'local-lite': workspaceRoot,
+  react: path.resolve(projectRoot, 'node_modules/react'),
+  'react-dom': path.resolve(projectRoot, 'node_modules/react-dom'),
+  'react-native': path.resolve(projectRoot, 'node_modules/react-native'),
+  'expo-sqlite': path.resolve(projectRoot, 'node_modules/expo-sqlite'),
+  '@supabase/supabase-js': path.resolve(projectRoot, 'node_modules/@supabase/supabase-js'),
 };
 
 module.exports = config;
