@@ -94,22 +94,28 @@ export async function fetchDashboardStatsFromDB(
   const thirtyDaysStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
   const todayStr = now.toISOString().split('T')[0];
 
-  const [[housesRow], [contractsRow], [tenantsRow], [expiringRow], [receiptsRow], [expensesRow]] =
-    await Promise.all([
-      client.query<{ total_rooms: number; maintenance_rooms: number }>(
-        `SELECT 
+  const [
+    [housesRow],
+    [contractsRow],
+    [tenantsRow],
+    [expiringRow],
+    [receiptsRow],
+    [expensesRow],
+  ] = await Promise.all([
+    client.query<{ total_rooms: number; maintenance_rooms: number }>(
+      `SELECT 
          COUNT(*) AS total_rooms,
          COALESCE(SUM(CASE WHEN LOWER("status") = 'maintenance' THEN 1 ELSE 0 END), 0) AS maintenance_rooms
        FROM "houses"
        WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [businessId],
-      ),
-      client.query<{
-        occupied_rooms: number;
-        active_tenants: number;
-        projected_revenue: number;
-      }>(
-        `SELECT 
+      [businessId],
+    ),
+    client.query<{
+      occupied_rooms: number;
+      active_tenants: number;
+      projected_revenue: number;
+    }>(
+      `SELECT 
          COUNT(DISTINCT "house_id") AS occupied_rooms,
          COUNT(DISTINCT "tenant_id") AS active_tenants,
          COALESCE(SUM("rent_amount"), 0) AS projected_revenue
@@ -117,30 +123,30 @@ export async function fetchDashboardStatsFromDB(
        WHERE "business_id" = ? 
          AND LOWER("status") IN ('active', 'expiring_soon', 'renewed')
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [businessId],
-      ),
-      client.query<{ total_tenants: number }>(
-        `SELECT COUNT(*) AS total_tenants
+      [businessId],
+    ),
+    client.query<{ total_tenants: number }>(
+      `SELECT COUNT(*) AS total_tenants
        FROM "tenants"
        WHERE "business_id" = ? AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [businessId],
-      ),
-      client.query<{ expiring_contracts: number }>(
-        `SELECT COUNT(*) AS expiring_contracts
+      [businessId],
+    ),
+    client.query<{ expiring_contracts: number }>(
+      `SELECT COUNT(*) AS expiring_contracts
        FROM "contracts"
        WHERE "business_id" = ?
          AND LOWER("status") IN ('active', 'expiring_soon', 'renewed')
          AND "end_date" >= ? AND "end_date" <= ?
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [businessId, todayStr, thirtyDaysStr],
-      ),
-      client.query<{
-        monthly_revenue: number;
-        last_month_revenue: number;
-        annual_revenue: number;
-        total_revenue: number;
-      }>(
-        `SELECT 
+      [businessId, todayStr, thirtyDaysStr],
+    ),
+    client.query<{
+      monthly_revenue: number;
+      last_month_revenue: number;
+      annual_revenue: number;
+      total_revenue: number;
+    }>(
+      `SELECT 
          COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - COALESCE("refunded_amount", 0) ELSE 0 END), 0) AS monthly_revenue,
          COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - COALESCE("refunded_amount", 0) ELSE 0 END), 0) AS last_month_revenue,
          COALESCE(SUM(CASE WHEN "payment_date" >= ? AND "payment_date" <= ? THEN "amount" - COALESCE("refunded_amount", 0) ELSE 0 END), 0) AS annual_revenue,
@@ -151,23 +157,23 @@ export async function fetchDashboardStatsFromDB(
          AND ("type" IS NULL OR LOWER("type") != 'promo')
          AND ("status" IS NULL OR LOWER("status") != 'promo')
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [
-          currentMonthStart,
-          currentMonthEnd,
-          lastMonthStart,
-          lastMonthEnd,
-          yearStart,
-          yearEnd,
-          businessId,
-        ],
-      ),
-      client.query<{
-        monthly_expenses: number;
-        last_month_expenses: number;
-        annual_expenses: number;
-        total_expenses: number;
-      }>(
-        `SELECT 
+      [
+        currentMonthStart,
+        currentMonthEnd,
+        lastMonthStart,
+        lastMonthEnd,
+        yearStart,
+        yearEnd,
+        businessId,
+      ],
+    ),
+    client.query<{
+      monthly_expenses: number;
+      last_month_expenses: number;
+      annual_expenses: number;
+      total_expenses: number;
+    }>(
+      `SELECT 
          COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS monthly_expenses,
          COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS last_month_expenses,
          COALESCE(SUM(CASE WHEN "date" >= ? AND "date" <= ? THEN "amount" ELSE 0 END), 0) AS annual_expenses,
@@ -175,17 +181,17 @@ export async function fetchDashboardStatsFromDB(
        FROM "expenses"
        WHERE "business_id" = ? 
          AND ("deleted" IS NULL OR "deleted" != 1);`,
-        [
-          currentMonthStart,
-          currentMonthEnd,
-          lastMonthStart,
-          lastMonthEnd,
-          yearStart,
-          yearEnd,
-          businessId,
-        ],
-      ),
-    ]);
+      [
+        currentMonthStart,
+        currentMonthEnd,
+        lastMonthStart,
+        lastMonthEnd,
+        yearStart,
+        yearEnd,
+        businessId,
+      ],
+    ),
+  ]);
 
   const totalRooms = Number(housesRow?.total_rooms) || 0;
   const maintenanceRooms = Number(housesRow?.maintenance_rooms) || 0;

@@ -1,8 +1,8 @@
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { router, Tabs, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
-import { Avatar } from 'react-native-paper';
 import { Pressable } from 'react-native';
+import { Avatar } from 'react-native-paper';
 import { useBusiness } from '@/context/BusinessContext';
 import { useAuth } from '@/providers/AuthProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
@@ -289,7 +289,12 @@ const TabLayout = function TabLayout() {
                 {...props}
                 ref={ref as any}
                 android_ripple={null}
-                style={props.style}
+                style={[
+                  props.style,
+                  {
+                    cursor: 'default',
+                  } as any,
+                ]}
               />
             );
           },
