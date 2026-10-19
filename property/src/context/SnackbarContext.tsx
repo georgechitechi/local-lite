@@ -8,8 +8,7 @@ import {
   getSnackbarSnapshot,
   hideSnackbar,
   type SnackbarState,
-  showSnackbar,
-  subscribeSnackbar,
+subscribeSnackbar,
 } from '@/stores/snackbarStore';
 
 export const SnackbarProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
