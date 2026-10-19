@@ -17,3 +17,4 @@ export type * from './react/index.js';
 export * from './utils/uuid.js';
 export * from './utils/sql.js';
 export * from './utils/logger.js';
+export * from './schema/index.js';
