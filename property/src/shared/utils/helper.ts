@@ -1,11 +1,7 @@
 import 'react-native-get-random-values';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { v4 as uuidv4 } from 'uuid';
-
-interface NextOfKin {
-  is_primary?: boolean;
-  [key: string]: unknown;
-}
+import type { NextOfKin } from '@/shared/types/types';
 
 export const generateUUID = () => uuidv4();
 

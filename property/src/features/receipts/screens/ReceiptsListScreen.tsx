@@ -45,6 +45,7 @@ import {
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendReceiptEmail } from '@/shared/services/emailService';
 import type {
+  NextOfKin,
   Receipt as StoreReceipt,
   Tenant as StoreTenant,
 } from '@/shared/types/types';
@@ -55,14 +56,6 @@ import {
   generateAndShareReceipt,
   generateReceiptHTML,
 } from '@/templates/receiptTemplate';
-
-interface NextOfKin {
-  name?: string;
-  phone?: string;
-  email?: string;
-  relationship?: string;
-  [key: string]: any;
-}
 
 interface LinkedPaymentMessage {
   id: string;

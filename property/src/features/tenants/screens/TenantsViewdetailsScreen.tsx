@@ -26,6 +26,7 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import type {
+  NextOfKin,
   Contract as StoreContract,
   House as StoreHouse,
   Receipt as StoreReceipt,
@@ -40,15 +41,6 @@ import {
 import { addOpacity, getPrimaryNextOfKin, properCase } from '@/shared/utils/helper';
 import { isActiveContractStatus } from '@/shared/utils/statusHelper';
 import { generateUserData } from '@/templates/basicDataTemplate';
-
-interface NextOfKin {
-  name?: string;
-  relationship?: string;
-  phone?: string;
-  email?: string;
-  is_primary?: boolean;
-  [key: string]: unknown;
-}
 
 interface Tenant extends Omit<StoreTenant, 'next_of_kin' | 'metadata'> {
   next_of_kin?: NextOfKin[];

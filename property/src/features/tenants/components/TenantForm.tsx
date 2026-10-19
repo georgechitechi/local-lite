@@ -12,13 +12,9 @@ import Select from '@/shared/components/Select';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { capitalizeEachWord } from '@/shared/utils/helper';
 
-export interface NextOfKin {
-  id?: string;
-  name: string;
-  relationship: string;
-  phone: string;
-  is_primary: boolean;
-}
+import type { NextOfKin } from '@/shared/types/types';
+
+export type { NextOfKin };
 
 export interface TenantFormData {
   name: string;
@@ -229,7 +225,7 @@ export default function TenantForm({
                 style={styles.input}
               />
               <ContactPicker
-                value={kin.phone}
+                value={kin.phone || ''}
                 onChangeText={text => updateNextOfKin(idx, 'phone', text)}
                 onNameChange={nameData => {
                   const fullName = `${nameData.firstName} ${nameData.lastName}`;

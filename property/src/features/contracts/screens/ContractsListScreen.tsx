@@ -43,6 +43,7 @@ import {
 } from '@/shared/hooks/useStore';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendContractEmail } from '@/shared/services/emailService';
+import type { Contract as StoreContract } from '@/shared/types/types';
 import {
   formatDate,
   formatDateForDB,
@@ -59,13 +60,9 @@ import {
 } from '@/shared/utils/statusHelper';
 import { generateContractPDF } from '@/templates/contractTemplate';
 
-interface Contract {
-  id: string;
+interface DecoratedContract
+  extends Omit<StoreContract, 'house' | 'tenant' | 'status' | 'metadata'> {
   status: string;
-  start_date: string;
-  end_date: string;
-  house_id?: string;
-  tenant_id: string;
   monthlyRent?: number | string;
   tenantName?: string;
   propertyName?: string;
@@ -83,6 +80,8 @@ interface Contract {
   };
   metadata?: Record<string, any>;
 }
+
+type Contract = DecoratedContract;
 
 interface ContractSection {
   title: string;

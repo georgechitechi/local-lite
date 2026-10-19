@@ -1,3 +1,18 @@
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
+import { router, Tabs, useSegments } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Avatar } from 'react-native-paper';
+import { useBusiness } from '@/context/BusinessContext';
+import { useAuth } from '@/providers/AuthProvider';
+import { useOfflineImageSync } from '@/shared/components/CachedImage';
+import { GlobalModals } from '@/shared/components/GlobalModals';
+import NetworkIndicator from '@/shared/components/NetworkIndicator';
+import SPressable from '@/shared/components/SlightPressable';
+import ThemedHeader from '@/shared/components/ThemedHeader';
+import { useAccessControl } from '@/shared/hooks/useAccessControl';
+import { useThemeColors } from '@/shared/hooks/useThemeProvider';
+import { setUIField, type UIState } from '@/stores/uiStore';
+
 const setBusinessSelectModalVisible = (value: UIState['businessSelectModalVisible']) =>
   setUIField('businessSelectModalVisible', value);
 const setPropertyFormModalVisible = (value: UIState['propertyFormModalVisible']) =>
@@ -15,25 +30,23 @@ const setPaymentMessagesListModalVisible = (
 const setMpesaPaymentModalVisible = (value: UIState['mpesaPaymentModalVisible']) =>
   setUIField('mpesaPaymentModalVisible', value);
 
-import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
-import { router, Tabs, useSegments } from 'expo-router';
-import React, { useEffect } from 'react';
-import { Avatar } from 'react-native-paper';
-import { useBusiness } from '@/context/BusinessContext';
-import { useAuth } from '@/providers/AuthProvider';
-import { useOfflineImageSync } from '@/shared/components/CachedImage';
-import { GlobalModals } from '@/shared/components/GlobalModals';
-import NetworkIndicator from '@/shared/components/NetworkIndicator';
-import SPressable from '@/shared/components/SlightPressable';
-import ThemedHeader from '@/shared/components/ThemedHeader';
-import { useAccessControl } from '@/shared/hooks/useAccessControl';
-import { useThemeColors } from '@/shared/hooks/useThemeProvider';
-import { setUIField, type UIState } from '@/stores/uiStore';
-
 const HIDDEN_TAB_OPTIONS = {
   tabBarItemStyle: { display: 'none' as const },
   tabBarButton: () => null,
 };
+
+interface HiddenTabDefinition {
+  name: string;
+  title: string;
+  subtitle?: string;
+  backTo?: string;
+  tabBarStyle?: Record<string, any>;
+  onBack?: () => void;
+  customBack?: () => void;
+  customHeader?: (helpers: {
+    renderBusinessHeader: (title?: string) => React.ReactNode;
+  }) => React.ReactNode;
+}
 
 const TabLayout = function TabLayout() {
   const colors = useThemeColors();
@@ -49,17 +62,14 @@ const TabLayout = function TabLayout() {
   const { isAdmin, isAdminOrStaff, isTenant, isStaff, isTenantOnly, can } =
     useAccessControl();
 
-  // Show offline warning when authoritative offline
   const { localUri: businessLogoUri } = useOfflineImageSync(
     selectedBusiness?.logo_url || undefined,
   );
 
-  // Redirect to Dashboard if no business is configured
   useEffect(() => {
     if (authLoading || businessLoading) return;
 
     if (!selectedBusiness && router) {
-      // Check if we are already on the dashboard or businesses selection list
       const currentPath = segments.join('/');
       const isOnDashboard =
         currentPath === '' ||
@@ -68,7 +78,6 @@ const TabLayout = function TabLayout() {
         currentPath.includes('cloud-sync') ||
         currentPath.includes('settings');
       if (!isOnDashboard) {
-        // Use a small delay to ensure navigation is ready
         const timer = setTimeout(() => {
           router.replace('/(tabs)');
         }, 100);
@@ -122,6 +131,147 @@ const TabLayout = function TabLayout() {
     return TabBarIcon;
   };
 
+  const hiddenScreens: HiddenTabDefinition[] = [
+    {
+      name: 'settings/profile',
+      title: 'Profile',
+      subtitle: 'Manage your account settings',
+    },
+    {
+      name: 'settings/cloud-sync',
+      title: 'Cloud Sync',
+      subtitle: 'Sync your data to the cloud',
+      tabBarStyle: { display: 'none' },
+      onBack: () => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace(
+            (user && !isOfflineAuthoritative) || isLocalModeAuthorized
+              ? '/(tabs)/settings'
+              : '/(auth)/login',
+          );
+        }
+      },
+    },
+    {
+      name: 'settings/transactions',
+      title: 'Transactions',
+      subtitle: 'Track payments and transaction history',
+    },
+    {
+      name: 'maintenance/create',
+      title: 'Report Issue',
+      subtitle: 'Report a new maintenance issue',
+      backTo: '/(tabs)/maintenance',
+    },
+    {
+      name: 'maintenance/view/[id]',
+      title: 'Request Details',
+      subtitle: 'View maintenance request details',
+      backTo: '/(tabs)/maintenance',
+    },
+    {
+      name: 'maintenance/edit/[id]',
+      title: 'Edit Request',
+      subtitle: 'Edit maintenance request details',
+      backTo: '/(tabs)/maintenance',
+    },
+    {
+      name: 'reports/index',
+      title: 'Reports',
+      subtitle: 'View reports',
+    },
+    {
+      name: 'settings/index',
+      title: 'Settings',
+      subtitle: 'Manage application settings and preferences',
+      customBack: () => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.navigate('/(tabs)');
+        }
+      },
+    },
+    { name: 'settings/layout-builder', title: 'Layout Builder' },
+    { name: 'settings/business-gallery', title: 'Business Gallery' },
+    { name: 'settings/holidays', title: 'Holiday Breaks' },
+    {
+      name: 'businesses/view/[id]',
+      title: 'View Business',
+      customHeader: ({ renderBusinessHeader: rbh }) =>
+        rbh(`${selectedBusiness?.name || 'Select Business'}`),
+    },
+    {
+      name: 'properties/view/[id]',
+      title: 'View Property',
+      backTo: '/(tabs)/properties',
+    },
+    {
+      name: 'tenants/create',
+      title: 'Create Tenant',
+      backTo: '/(tabs)/tenants',
+    },
+    {
+      name: 'tenants/edit/[id]',
+      title: 'Edit Tenant',
+      backTo: '/(tabs)/tenants',
+    },
+    {
+      name: 'tenants/view/[id]',
+      title: 'View Tenant',
+      backTo: '/(tabs)/tenants',
+    },
+    {
+      name: 'contracts/create',
+      title: 'Create Contract',
+      backTo: '/(tabs)/contracts',
+    },
+    {
+      name: 'contracts/edit/[id]',
+      title: 'Edit Contract',
+      backTo: '/(tabs)/contracts',
+    },
+    {
+      name: 'contracts/view/[id]',
+      title: 'View Contract',
+      backTo: '/(tabs)/contracts',
+    },
+    {
+      name: 'receipts/create',
+      title: 'Create Receipt',
+      backTo: '/(tabs)/receipts',
+    },
+    {
+      name: 'receipts/edit/[id]',
+      title: 'Edit Receipt',
+      backTo: '/(tabs)/receipts',
+    },
+    {
+      name: 'receipts/view/[id]',
+      title: 'View Receipt',
+      backTo: '/(tabs)/receipts',
+    },
+    { name: 'settings/currency', title: 'Currency Settings' },
+    { name: 'settings/schedules', title: 'Schedule Management' },
+    { name: 'settings/documentation', title: 'Documentation' },
+    { name: 'settings/promotions', title: 'Promotions' },
+    { name: 'settings/templates', title: 'Message Templates' },
+    {
+      name: 'settings/change-password',
+      title: 'Change Password',
+      subtitle: 'Update your account password',
+    },
+    { name: 'settings/delete-account', title: 'Delete Account' },
+    { name: 'settings/api-keys', title: 'API Keys' },
+    { name: 'backup/index', title: 'Backup & Restore' },
+    { name: 'settings/data-integrity', title: 'Data Integrity' },
+    { name: 'settings/configurations', title: 'Property Configurations' },
+    { name: 'settings/payments', title: 'Payment Methods' },
+    { name: 'reminders/index', title: 'Reminders & Notifications' },
+  ];
+
   return (
     <React.Fragment>
       <Tabs
@@ -144,72 +294,6 @@ const TabLayout = function TabLayout() {
             title: 'Dashboard',
             tabBarIcon: renderTabBarIcon('home'),
             header: () => renderBusinessHeader(),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/profile"
-          options={{
-            title: 'Profile',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Settings"
-                subtitle="Manage your account settings"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/cloud-sync"
-          options={{
-            title: 'Cloud Sync',
-            ...HIDDEN_TAB_OPTIONS,
-            tabBarStyle: { display: 'none' },
-            header: () => (
-              <ThemedHeader
-                title="Cloud Sync"
-                subtitle="Sync your data to the cloud"
-                onBack={() => {
-                  if (router.canGoBack()) {
-                    router.back();
-                  } else {
-                    router.replace(
-                      (user && !isOfflineAuthoritative) || isLocalModeAuthorized
-                        ? '/(tabs)/settings'
-                        : '/(auth)/login',
-                    );
-                  }
-                }}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/transactions"
-          options={{
-            title: 'Transactions',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Transactions"
-                subtitle="Track payments and transaction history"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
           }}
         />
 
@@ -353,7 +437,8 @@ const TabLayout = function TabLayout() {
           name="maintenance/index"
           options={{
             title: 'Maintenance',
-            tabBarItemStyle: !isAdmin && (isTenant || isStaff) ? undefined : { display: 'none' },
+            tabBarItemStyle:
+              !isAdmin && (isTenant || isStaff) ? undefined : { display: 'none' },
             tabBarButton: !isAdmin && (isTenant || isStaff) ? undefined : () => null,
             tabBarIcon: renderTabBarIcon('hammer-wrench'),
             header: () => (
@@ -371,600 +456,42 @@ const TabLayout = function TabLayout() {
           }}
         />
 
-        <Tabs.Screen
-          name="maintenance/create"
-          options={{
-            title: 'Report Issue',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Report Issue"
-                subtitle="Report a new maintenance issue"
-                actions={[
-                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/maintenance') },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="maintenance/view/[id]"
-          options={{
-            title: 'Request Details',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Request Details"
-                subtitle="View maintenance request details"
-                actions={[
-                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/maintenance') },
-                ]}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="maintenance/edit/[id]"
-          options={{
-            title: 'Edit Request',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Edit Request"
-                subtitle="Edit maintenance request details"
-                actions={[
-                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/maintenance') },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="reports/index"
-          options={{
-            title: 'Reports',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Reports"
-                subtitle="View reports"
-                actions={[
-                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/settings') },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/index"
-          options={{
-            title: 'Settings',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Settings"
-                subtitle="Manage application settings and preferences"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => {
-                      if (router.canGoBack()) {
-                        router.back();
-                      } else {
-                        router.navigate('/(tabs)');
+        {/* Declarative Hidden Tabs */}
+        {hiddenScreens.map(screen => (
+          <Tabs.Screen
+            key={screen.name}
+            name={screen.name}
+            options={{
+              title: screen.title,
+              ...HIDDEN_TAB_OPTIONS,
+              ...(screen.tabBarStyle ? { tabBarStyle: screen.tabBarStyle } : {}),
+              header: screen.customHeader
+                ? () => screen.customHeader?.({ renderBusinessHeader })
+                : () => (
+                    <ThemedHeader
+                      title={screen.title}
+                      subtitle={screen.subtitle}
+                      actions={
+                        screen.onBack
+                          ? undefined
+                          : [
+                              {
+                                icon: 'arrow-left',
+                                onPress: screen.customBack
+                                  ? screen.customBack
+                                  : () =>
+                                      router.navigate(
+                                        (screen.backTo || '/(tabs)/settings') as any,
+                                      ),
+                              },
+                            ]
                       }
-                    },
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/layout-builder"
-          options={{
-            title: 'Layout Builder',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Layout Builder"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/business-gallery"
-          options={{
-            title: 'Business Gallery',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Business Gallery"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        {/* Holiday Break Page - Admin, Staff */}
-        <Tabs.Screen
-          name="settings/holidays"
-          options={{
-            title: 'Holiday Breaks',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Holiday Breaks"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="businesses/view/[id]"
-          options={{
-            title: 'View Business',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () =>
-              renderBusinessHeader(`${selectedBusiness?.name || 'Select Business'}`),
-          }}
-        />
-        <Tabs.Screen
-          name="properties/view/[id]"
-          options={{
-            title: 'View Property',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="View Property"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/properties'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="tenants/create"
-          options={{
-            title: 'Create Tenant',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Create Tenant"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/tenants'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="tenants/edit/[id]"
-          options={{
-            title: 'Edit Tenant',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Edit Tenant"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/tenants'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="tenants/view/[id]"
-          options={{
-            title: 'View Tenant',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="View Tenant"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/tenants'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="contracts/create"
-          options={{
-            title: 'Create Contract',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Create Contract"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/contracts'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="contracts/edit/[id]"
-          options={{
-            title: 'Edit Contract',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Edit Contract"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/contracts'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="contracts/view/[id]"
-          options={{
-            title: 'View Contract',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="View Contract"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/contracts'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="receipts/create"
-          options={{
-            title: 'Create Receipt',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Create Receipt"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/receipts'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="receipts/edit/[id]"
-          options={{
-            title: 'Edit Receipt',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Edit Receipt"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/receipts'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="receipts/view/[id]"
-          options={{
-            title: 'View Receipt',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="View Receipt"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/receipts'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/currency"
-          options={{
-            title: 'Currency Settings',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Currency Settings"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/schedules"
-          options={{
-            title: 'Schedule Management',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Schedule Management"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/documentation"
-          options={{
-            title: 'Documentation',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Documentation"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/promotions"
-          options={{
-            title: 'Promotions',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Promotions"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/templates"
-          options={{
-            title: 'Message Templates',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Message Templates"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/change-password"
-          options={{
-            title: 'Change Password',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Change Password"
-                subtitle="Update your account password"
-                actions={[
-                  { icon: 'arrow-left', onPress: () => router.navigate('/(tabs)/settings') },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/delete-account"
-          options={{
-            title: 'Delete Account',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Delete Account"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/api-keys"
-          options={{
-            title: 'API Keys',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="API Keys"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="backup/index"
-          options={{
-            title: 'Backup & Restore',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Backup & Restore"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/data-integrity"
-          options={{
-            title: 'Data Integrity',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Data Integrity"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/configurations"
-          options={{
-            title: 'Property Configurations',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Property Configurations"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="settings/payments"
-          options={{
-            title: 'Payment Methods',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Payment Methods"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="reminders/index"
-          options={{
-            title: 'Reminders & Notifications',
-            ...HIDDEN_TAB_OPTIONS,
-            header: () => (
-              <ThemedHeader
-                title="Reminders & Notifications"
-                actions={[
-                  {
-                    icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
-                  },
-                ]}
-              />
-            ),
-          }}
-        />
+                      {...(screen.onBack ? { onBack: screen.onBack } : {})}
+                    />
+                  ),
+            }}
+          />
+        ))}
       </Tabs>
 
       <GlobalModals />

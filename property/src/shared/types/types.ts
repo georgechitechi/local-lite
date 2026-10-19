@@ -208,6 +208,15 @@ export interface PaymentMethodDisplayInfo {
   type: string;
 }
 
+export interface NextOfKin {
+  id?: string;
+  name?: string;
+  relationship?: string;
+  phone?: string;
+  email?: string;
+  is_primary?: boolean;
+}
+
 // Reminders and Tenants
 export interface Tenant extends SyncedRow<DBTenant> {
   pendingRentAmount?: number;

@@ -21,87 +21,109 @@ export const GlobalModals = () => {
 
   return (
     <React.Fragment>
-      <BusinessSelectModal
-        visible={ui.businessSelectModalVisible}
-        onDismiss={() => setUIField('businessSelectModalVisible', false)}
-      />
-      <ContractSettingsModal
-        visible={ui.contractSettingsModalVisible}
-        onDismiss={() => setUIField('contractSettingsModalVisible', false)}
-      />
-      <ContractManagementModal
-        visible={ui.contractManagementModalVisible}
-        onDismiss={() => setUIField('contractManagementModalVisible', false)}
-      />
-      <PaymentMessagesListModal
-        visible={ui.paymentMessagesListModalVisible}
-        onDismiss={() => setUIField('paymentMessagesListModalVisible', false)}
-      />
-      <PropertyFormModal
-        visible={ui.propertyFormModalVisible}
-        onDismiss={() => {
-          setUIState({
-            propertyFormModalVisible: false,
-            propertyFormPropertyId: null,
-          });
-        }}
-        propertyId={ui.propertyFormPropertyId}
-      />
-      <HouseFormModal
-        visible={ui.houseFormModalVisible}
-        onDismiss={() => {
-          setUIState({
-            houseFormModalVisible: false,
-            houseFormHouseId: null,
-            houseFormPropertyId: null,
-            houseFormPropertyName: null,
-          });
-        }}
-        houseId={ui.houseFormHouseId}
-        propertyId={ui.houseFormPropertyId}
-        propertyName={ui.houseFormPropertyName}
-      />
-      <HouseFormModal
-        visible={ui.bulkHouseFormModalVisible}
-        onDismiss={() => {
-          setUIState({
-            bulkHouseFormModalVisible: false,
-            bulkHouseFormPropertyId: null,
-            bulkHouseFormPropertyName: null,
-          });
-        }}
-        propertyId={ui.bulkHouseFormPropertyId}
-        propertyName={ui.bulkHouseFormPropertyName}
-        mode="bulk"
-      />
-      <HouseViewModal
-        visible={ui.houseViewModalVisible}
-        onDismiss={() => {
-          setUIState({
-            houseViewModalVisible: false,
-            houseViewHouseId: null,
-          });
-        }}
-        houseId={ui.houseViewHouseId}
-      />
-      <BookingsListModal
-        visible={ui.bookingsListModalVisible}
-        onDismiss={() => setUIField('bookingsListModalVisible', false)}
-      />
-      <ExpensesListModal
-        visible={ui.expensesListModalVisible}
-        onDismiss={() => setUIField('expensesListModalVisible', false)}
-      />
-      <ExpenseModal
-        visible={ui.expenseModalVisible}
-        onDismiss={() => {
-          setUIState({
-            expenseModalVisible: false,
-            expenseModalInitialData: null,
-          });
-        }}
-        initialData={ui.expenseModalInitialData}
-      />
+      {ui.businessSelectModalVisible && (
+        <BusinessSelectModal
+          visible={true}
+          onDismiss={() => setUIField('businessSelectModalVisible', false)}
+        />
+      )}
+      {ui.contractSettingsModalVisible && (
+        <ContractSettingsModal
+          visible={true}
+          onDismiss={() => setUIField('contractSettingsModalVisible', false)}
+        />
+      )}
+      {ui.contractManagementModalVisible && (
+        <ContractManagementModal
+          visible={true}
+          onDismiss={() => setUIField('contractManagementModalVisible', false)}
+        />
+      )}
+      {ui.paymentMessagesListModalVisible && (
+        <PaymentMessagesListModal
+          visible={true}
+          onDismiss={() => setUIField('paymentMessagesListModalVisible', false)}
+        />
+      )}
+      {ui.propertyFormModalVisible && (
+        <PropertyFormModal
+          visible={true}
+          onDismiss={() => {
+            setUIState({
+              propertyFormModalVisible: false,
+              propertyFormPropertyId: null,
+            });
+          }}
+          propertyId={ui.propertyFormPropertyId}
+        />
+      )}
+      {ui.houseFormModalVisible && (
+        <HouseFormModal
+          visible={true}
+          onDismiss={() => {
+            setUIState({
+              houseFormModalVisible: false,
+              houseFormHouseId: null,
+              houseFormPropertyId: null,
+              houseFormPropertyName: null,
+            });
+          }}
+          houseId={ui.houseFormHouseId}
+          propertyId={ui.houseFormPropertyId}
+          propertyName={ui.houseFormPropertyName}
+        />
+      )}
+      {ui.bulkHouseFormModalVisible && (
+        <HouseFormModal
+          visible={true}
+          onDismiss={() => {
+            setUIState({
+              bulkHouseFormModalVisible: false,
+              bulkHouseFormPropertyId: null,
+              bulkHouseFormPropertyName: null,
+            });
+          }}
+          propertyId={ui.bulkHouseFormPropertyId}
+          propertyName={ui.bulkHouseFormPropertyName}
+          mode="bulk"
+        />
+      )}
+      {ui.houseViewModalVisible && (
+        <HouseViewModal
+          visible={true}
+          onDismiss={() => {
+            setUIState({
+              houseViewModalVisible: false,
+              houseViewHouseId: null,
+            });
+          }}
+          houseId={ui.houseViewHouseId}
+        />
+      )}
+      {ui.bookingsListModalVisible && (
+        <BookingsListModal
+          visible={true}
+          onDismiss={() => setUIField('bookingsListModalVisible', false)}
+        />
+      )}
+      {ui.expensesListModalVisible && (
+        <ExpensesListModal
+          visible={true}
+          onDismiss={() => setUIField('expensesListModalVisible', false)}
+        />
+      )}
+      {ui.expenseModalVisible && (
+        <ExpenseModal
+          visible={true}
+          onDismiss={() => {
+            setUIState({
+              expenseModalVisible: false,
+              expenseModalInitialData: null,
+            });
+          }}
+          initialData={ui.expenseModalInitialData}
+        />
+      )}
     </React.Fragment>
   );
 };

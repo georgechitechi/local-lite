@@ -51,6 +51,7 @@ import {
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
 import { sendBookingApprovalNotification } from '@/shared/services/emailService';
 import type {
+  NextOfKin,
   Booking as StoreBooking,
   Contract as StoreContract,
   Tenant as StoreTenant,
@@ -60,14 +61,6 @@ import {
   isActiveContractStatus,
   resolveHouseStatusFromContracts,
 } from '@/shared/utils/statusHelper';
-
-interface NextOfKin {
-  name?: string;
-  phone?: string;
-  email?: string;
-  relationship?: string;
-  [key: string]: any;
-}
 
 interface Tenant extends Omit<StoreTenant, 'next_of_kin' | 'contracts'> {
   propertyName?: string;

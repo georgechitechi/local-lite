@@ -23,20 +23,13 @@ import {
   sendBookingConfirmationEmail,
 } from '@/shared/services/emailService';
 import { pickDocument, uploadBookingDocument } from '@/shared/services/fileUpload';
+import type { NextOfKin } from '@/shared/types/types';
 import {
   capitalizeEachWord,
   generateUUID,
   normalizePhoneNumber,
 } from '@/shared/utils/helper';
 import { validateFields, validations } from '@/shared/utils/validations';
-
-interface NextOfKin {
-  id?: string;
-  name: string;
-  relationship: string;
-  phone: string;
-  is_primary: boolean;
-}
 
 interface FormData {
   name: string;
@@ -548,7 +541,7 @@ export default function BookingModal({
               dense
             />
             <ContactPicker
-              value={kin.phone}
+              value={kin.phone || ''}
               onChangeText={t => updateNextOfKin(idx, 'phone', t)}
               label="Phone"
             />
