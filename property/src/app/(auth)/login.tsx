@@ -181,21 +181,43 @@ export default function LoginScreen() {
   return (
     <KeyboardScroll
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[
+        styles.content,
+        isDemoMode && styles.demoContentContainer,
+      ]}
       safeAreaBackgroundColor={colors.background}
     >
       <View style={styles.header}>
+        {isDemoMode && (
+          <View
+            style={[
+              styles.demoIconContainer,
+              { backgroundColor: colors.primaryContainer || colors.surfaceVariant },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="cloud-sync-outline"
+              size={40}
+              color={colors.primary}
+            />
+          </View>
+        )}
         <Text
           variant="headlineLarge"
           style={[styles.title, { color: colors.onBackground }]}
         >
-          Welcome Back
+          {isDemoMode ? 'Cloud Sync Setup' : 'Welcome Back'}
         </Text>
         <Text
           variant="bodyLarge"
-          style={[styles.subtitle, { color: colors.onSurfaceVariant }]}
+          style={[
+            styles.subtitle,
+            { color: colors.onSurfaceVariant, textAlign: 'center' },
+          ]}
         >
-          Sign in to manage your Businesses
+          {isDemoMode
+            ? 'Connect your Supabase cloud backend to enable authentication and sync across devices.'
+            : 'Sign in to manage your businesses'}
         </Text>
       </View>
 
@@ -206,19 +228,62 @@ export default function LoginScreen() {
       ) : null}
 
       {isDemoMode ? (
-        <View style={styles.demoModeContainer}>
-          <Text
-            variant="bodyLarge"
-            style={[styles.demoModeText, { color: colors.onSurface }]}
-          >
-            To use this app, you need to set up Cloud Sync first.
-          </Text>
+        <View style={styles.demoContent}>
+          <View style={styles.featureList}>
+            <View style={styles.featureRow}>
+              <MaterialCommunityIcons
+                name="shield-check-outline"
+                size={20}
+                color={colors.primary}
+                style={styles.featureIcon}
+              />
+              <Text
+                variant="bodySmall"
+                style={[styles.featureText, { color: colors.onSurfaceVariant }]}
+              >
+                Secure authentication & encrypted local storage
+              </Text>
+            </View>
+
+            <View style={styles.featureRow}>
+              <MaterialCommunityIcons
+                name="database-sync-outline"
+                size={20}
+                color={colors.primary}
+                style={styles.featureIcon}
+              />
+              <Text
+                variant="bodySmall"
+                style={[styles.featureText, { color: colors.onSurfaceVariant }]}
+              >
+                Instant offline-first SQLite synchronization
+              </Text>
+            </View>
+
+            <View style={styles.featureRow}>
+              <MaterialCommunityIcons
+                name="cellphone-link"
+                size={20}
+                color={colors.primary}
+                style={styles.featureIcon}
+              />
+              <Text
+                variant="bodySmall"
+                style={[styles.featureText, { color: colors.onSurfaceVariant }]}
+              >
+                Multi-device access for your team & tenants
+              </Text>
+            </View>
+          </View>
+
           <Button
             mode="contained"
+            icon="cloud-cog"
             onPress={() => router.push('/settings/cloud-sync' as any)}
             style={styles.demoModeButton}
+            contentStyle={styles.demoModeButtonContent}
           >
-            Set Up Cloud Sync
+            Configure Cloud Sync
           </Button>
         </View>
       ) : (
@@ -348,8 +413,12 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
+  demoContentContainer: {
+    justifyContent: 'flex-start',
+    paddingTop: 48,
+  },
   header: {
-    marginBottom: 32,
+    marginBottom: 24,
     alignItems: 'center',
   },
   title: {
@@ -403,16 +472,40 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
-  demoModeContainer: {
-    alignItems: 'center',
-    marginVertical: 24,
-    padding: 16,
-  },
-  demoModeText: {
-    textAlign: 'center',
+  demoContent: {
+    marginTop: 4,
     marginBottom: 16,
   },
+  demoIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  featureList: {
+    width: '100%',
+    gap: 14,
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featureIcon: {
+    marginRight: 12,
+  },
+  featureText: {
+    flex: 1,
+    lineHeight: 18,
+  },
   demoModeButton: {
+    width: '100%',
+    borderRadius: 12,
+  },
+  demoModeButtonContent: {
     paddingVertical: 6,
   },
 });
