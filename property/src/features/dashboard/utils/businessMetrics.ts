@@ -263,7 +263,9 @@ export function useLiveDashboardStats(
     const tables = ['receipts', 'expenses', 'contracts', 'houses'];
     const unsubs = tables.map(t => client.events.on(t, scheduleFetch));
     return () => {
-      unsubs.forEach(u => u());
+      for (const u of unsubs) {
+        u();
+      }
     };
   }, [client, businessId, fetchStats, scheduleFetch]);
 
@@ -347,7 +349,11 @@ export function useLiveExpiringContracts(
     const unsubs = ['contracts', 'houses', 'tenants'].map(t =>
       client.events.on(t, schedule),
     );
-    return () => unsubs.forEach(u => u());
+    return () => {
+      for (const u of unsubs) {
+        u();
+      }
+    };
   }, [client, businessId, fetchContracts, schedule]);
 
   return { contracts, loading };
