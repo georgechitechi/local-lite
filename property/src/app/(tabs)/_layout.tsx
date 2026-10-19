@@ -2,12 +2,12 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { router, Tabs, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Avatar } from 'react-native-paper';
+import { Pressable } from 'react-native';
 import { useBusiness } from '@/context/BusinessContext';
 import { useAuth } from '@/providers/AuthProvider';
 import { useOfflineImageSync } from '@/shared/components/CachedImage';
 import { GlobalModals } from '@/shared/components/GlobalModals';
 import NetworkIndicator from '@/shared/components/NetworkIndicator';
-import SPressable from '@/shared/components/SlightPressable';
 import ThemedHeader from '@/shared/components/ThemedHeader';
 import { useAccessControl } from '@/shared/hooks/useAccessControl';
 import { useThemeColors } from '@/shared/hooks/useThemeProvider';
@@ -284,7 +284,14 @@ const TabLayout = function TabLayout() {
             borderTopWidth: 0.5,
           },
           tabBarButton: function TabBarButton({ ref, ...props }: any) {
-            return <SPressable {...props} ref={ref as any} />;
+            return (
+              <Pressable
+                {...props}
+                ref={ref as any}
+                android_ripple={null}
+                style={props.style}
+              />
+            );
           },
         }}
       >
