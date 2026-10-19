@@ -4,12 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ExpiringContract } from '@/features/contracts/components/ExpiringContractsCard';
 import { isCommissionedAsOf } from '@/features/reports/utils/helpers';
 import {
-  isActiveContractStatus,
-  isActiveTenantStatus,
-  isFormerTenantStatus,
-} from '@/shared/utils/statusHelper';
-
-import {
   calculateCollectionRate,
   calculateGrowthPercentage,
   calculateNetProfit,
@@ -17,6 +11,11 @@ import {
   computeNetReceipt as computeNet,
   isDateInRange,
 } from '@/shared/utils/financialCalculations';
+import {
+  isActiveContractStatus,
+  isActiveTenantStatus,
+  isFormerTenantStatus,
+} from '@/shared/utils/statusHelper';
 
 export interface DashboardStats {
   totalRooms: number;

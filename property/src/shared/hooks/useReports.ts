@@ -5,14 +5,6 @@ import { useState } from 'react';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import { calculateBusinessOverview } from '@/features/dashboard/utils/businessMetrics';
-import {
-  calculateNetProfit,
-  computeNetReceipt,
-  formatMonthKey,
-  formatMonthLabel,
-  generateMonthRangeKeys,
-  isDateInRange,
-} from '@/shared/utils/financialCalculations';
 import { EXPENSE_CATEGORY } from '@/features/expenses/utils/expenseUtils';
 import {
   generateCSV,
@@ -35,6 +27,14 @@ import {
   useReceipts,
   useTenants,
 } from '@/shared/hooks/useStore';
+import {
+  calculateNetProfit,
+  computeNetReceipt,
+  formatMonthKey,
+  formatMonthLabel,
+  generateMonthRangeKeys,
+  isDateInRange,
+} from '@/shared/utils/financialCalculations';
 import { formatDateForDB, formatPeriod, parsePeriod } from '@/shared/utils/formatters';
 import { calculateEffectiveRent } from '@/shared/utils/helper';
 import { isActiveContractStatus, isContractPaused } from '@/shared/utils/statusHelper';
@@ -500,7 +500,8 @@ export function useReports() {
           data = months.map(mk => {
             const rev = pReceipts
               .filter(
-                r => formatMonthKey(r.payment_date as string) === mk && r.status !== 'promo',
+                r =>
+                  formatMonthKey(r.payment_date as string) === mk && r.status !== 'promo',
               )
               .reduce((s, r) => s + computeNetReceipt(r), 0);
             const exp = pExpenses

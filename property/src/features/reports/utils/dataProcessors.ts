@@ -1,4 +1,5 @@
 import { EXPENSE_CATEGORY } from '@/features/expenses/utils/expenseUtils';
+import { calculateOccupancyRate } from '@/shared/utils/financialCalculations';
 import {
   formatDate,
   formatDateForDB,
@@ -13,7 +14,6 @@ import {
   isActiveTenantStatus,
   isFormerTenantStatus,
 } from '@/shared/utils/statusHelper';
-import { calculateOccupancyRate } from '@/shared/utils/financialCalculations';
 import {
   findEarliestContractDate,
   findEarliestDate,
