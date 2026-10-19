@@ -56,3 +56,9 @@ export const hideSnackbar = () => {
     cb(currentState);
   });
 };
+
+export const useSnackbar = () => ({
+  showSnackbar,
+  hideSnackbar,
+});
+

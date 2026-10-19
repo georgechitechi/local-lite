@@ -13,6 +13,7 @@ import {
   isActiveTenantStatus,
   isFormerTenantStatus,
 } from '@/shared/utils/statusHelper';
+import { calculateOccupancyRate } from '@/shared/utils/financialCalculations';
 import {
   findEarliestContractDate,
   findEarliestDate,
@@ -1222,7 +1223,7 @@ export const processReportData = (
             );
             if (hasActiveContract) occupied++;
           });
-          const rate = total > 0 ? ((occupied / total) * 100).toFixed(1) : '0.0';
+          const rate = calculateOccupancyRate(occupied, total).toFixed(1);
           return {
             period: label,
             total_units: String(total),
@@ -1259,7 +1260,9 @@ export const processReportData = (
             occupied: String(p.occupiedCount),
             vacant: String(p.total - p.occupiedCount),
             occupancy_rate:
-              p.total > 0 ? `${((p.occupiedCount / p.total) * 100).toFixed(1)}%` : '0%',
+              p.total > 0
+                ? `${calculateOccupancyRate(p.occupiedCount, p.total).toFixed(1)}%`
+                : '0%',
           }))
           .sort((a, b) => a.property.localeCompare(b.property));
         headers = ['property', 'total_units', 'occupied', 'vacant', 'occupancy_rate'];

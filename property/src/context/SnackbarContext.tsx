@@ -79,7 +79,5 @@ export const SnackbarProvider: React.FC<{ children: ReactNode }> = ({ children }
   );
 };
 
-export const useSnackbar = () => ({
-  showSnackbar,
-  hideSnackbar,
-});
+export { useSnackbar } from '@/stores/snackbarStore';
+

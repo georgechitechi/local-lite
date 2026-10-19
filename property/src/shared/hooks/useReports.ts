@@ -5,6 +5,14 @@ import { useState } from 'react';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSnackbar } from '@/context/SnackbarContext';
 import { calculateBusinessOverview } from '@/features/dashboard/utils/businessMetrics';
+import {
+  calculateNetProfit,
+  computeNetReceipt,
+  formatMonthKey,
+  formatMonthLabel,
+  generateMonthRangeKeys,
+  isDateInRange,
+} from '@/shared/utils/financialCalculations';
 import { EXPENSE_CATEGORY } from '@/features/expenses/utils/expenseUtils';
 import {
   generateCSV,
@@ -468,15 +476,7 @@ export function useReports() {
           extraOptions.expenseCategories || EXPENSE_CATEGORY.map(c => c.key);
         const groupByMonth: boolean = extraOptions.groupByMonth ?? false;
 
-        const inRange = (dateStr: string) => {
-          const d = new Date(dateStr);
-          d.setHours(0, 0, 0, 0);
-          const start = new Date(startD);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(endD);
-          end.setHours(23, 59, 59, 999);
-          return d >= start && d <= end;
-        };
+        const inRange = (dateStr: string) => isDateInRange(dateStr, startD, endD);
 
         const pReceipts = storeReceipts.filter(r => {
           if (!r.payment_date || !inRange(r.payment_date)) return false;
@@ -494,54 +494,29 @@ export function useReports() {
           return true;
         });
 
-        const netAmount = (r: any) =>
-          parseFloat(String(r.amount || 0)) - parseFloat(String(r.refunded_amount || 0));
-        const monthKey = (dateStr: string) => {
-          const d = new Date(dateStr);
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        };
-        const monthLabel = (key: string) => {
-          const [y, m] = key.split('-');
-          return new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1).toLocaleString(
-            'default',
-            {
-              month: 'long',
-              year: 'numeric',
-            },
-          );
-        };
-
         if (groupByMonth) {
-          const months: string[] = [];
-          const cur = new Date(startD.getFullYear(), startD.getMonth(), 1);
-          const last = new Date(endD.getFullYear(), endD.getMonth(), 1);
-          while (cur <= last) {
-            months.push(
-              `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`,
-            );
-            cur.setMonth(cur.getMonth() + 1);
-          }
+          const months = generateMonthRangeKeys(startD, endD);
 
           data = months.map(mk => {
             const rev = pReceipts
               .filter(
-                r => monthKey(r.payment_date as string) === mk && r.status !== 'promo',
+                r => formatMonthKey(r.payment_date as string) === mk && r.status !== 'promo',
               )
-              .reduce((s, r) => s + netAmount(r), 0);
+              .reduce((s, r) => s + computeNetReceipt(r), 0);
             const exp = pExpenses
-              .filter(e => monthKey(e.date as string) === mk)
+              .filter(e => formatMonthKey(e.date as string) === mk)
               .reduce((s, e) => s + parseFloat(String(e.amount || 0)), 0);
             return {
-              period: monthLabel(mk),
+              period: formatMonthLabel(mk),
               total_revenue: rev,
               total_expenses: exp,
-              net_profit: rev - exp,
+              net_profit: calculateNetProfit(rev, exp),
             };
           });
         } else {
           const totalRevenue = pReceipts
             .filter(r => r.status !== 'promo')
-            .reduce((s, r) => s + netAmount(r), 0);
+            .reduce((s, r) => s + computeNetReceipt(r), 0);
           const totalExpenses = pExpenses.reduce(
             (s, e) => s + parseFloat(String(e.amount || 0)),
             0,
@@ -551,7 +526,7 @@ export function useReports() {
               period: `${startD.toLocaleDateString()} - ${endD.toLocaleDateString()}`,
               total_revenue: totalRevenue,
               total_expenses: totalExpenses,
-              net_profit: totalRevenue - totalExpenses,
+              net_profit: calculateNetProfit(totalRevenue, totalExpenses),
             },
           ];
         }

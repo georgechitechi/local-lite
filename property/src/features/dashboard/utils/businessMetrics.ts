@@ -9,11 +9,14 @@ import {
   isFormerTenantStatus,
 } from '@/shared/utils/statusHelper';
 
-function computeNet(receipt: any): number {
-  const amount = parseFloat(String(receipt?.amount || 0));
-  const refunded = parseFloat(String(receipt?.refunded_amount || 0));
-  return Math.max(0, amount - refunded);
-}
+import {
+  calculateCollectionRate,
+  calculateGrowthPercentage,
+  calculateNetProfit,
+  calculateOccupancyRate,
+  computeNetReceipt as computeNet,
+  isDateInRange,
+} from '@/shared/utils/financialCalculations';
 
 export interface DashboardStats {
   totalRooms: number;
@@ -197,18 +200,12 @@ export async function fetchDashboardStatsFromDB(
   const annualExpenses = Number(expensesRow?.annual_expenses) || 0;
   const totalExpenses = Number(expensesRow?.total_expenses) || 0;
 
-  const revenueGrowth = lastMonthRevenue
-    ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
-    : 0;
-
-  const expenseGrowth = lastMonthExpenses
-    ? ((monthlyExpenses - lastMonthExpenses) / lastMonthExpenses) * 100
-    : 0;
+  const revenueGrowth = calculateGrowthPercentage(monthlyRevenue, lastMonthRevenue);
+  const expenseGrowth = calculateGrowthPercentage(monthlyExpenses, lastMonthExpenses);
 
   const rentableRooms = totalRooms - maintenanceRooms;
-  const occupancyRate = rentableRooms > 0 ? (occupiedRooms / rentableRooms) * 100 : 0;
-  const rentCollectionRate =
-    projectedRevenue > 0 ? (monthlyRevenue / projectedRevenue) * 100 : 0;
+  const occupancyRate = calculateOccupancyRate(occupiedRooms, rentableRooms);
+  const rentCollectionRate = calculateCollectionRate(monthlyRevenue, projectedRevenue);
 
   return {
     totalRooms,
@@ -380,16 +377,7 @@ export const calculateBusinessOverview = (
   const startD = new Date(options.startDate);
   const endD = new Date(options.endDate);
 
-  const inRange = (dateStr: string) => {
-    if (allTime) return true;
-    const d = new Date(dateStr);
-    d.setHours(0, 0, 0, 0);
-    const start = new Date(startD);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endD);
-    end.setHours(23, 59, 59, 999);
-    return d >= start && d <= end;
-  };
+  const inRange = (dateStr: string) => isDateInRange(dateStr, startD, endD, allTime);
 
   const periodLabel = allTime
     ? 'All Time'
@@ -448,7 +436,7 @@ export const calculateBusinessOverview = (
         total_houses: pHouses.length,
         occupied_houses: pOccupied,
         available_houses: pHouses.length - pOccupied,
-        occupancy_rate: pHouses.length > 0 ? (pOccupied / pHouses.length) * 100 : 0,
+        occupancy_rate: calculateOccupancyRate(pOccupied, pHouses.length),
         revenue: pRevenue,
       };
     })
@@ -515,11 +503,11 @@ export const calculateBusinessOverview = (
       summary: {
         total_houses: totalHouses,
         occupied_houses: occupiedHouses,
-        occupancy_rate: totalHouses > 0 ? (occupiedHouses / totalHouses) * 100 : 0,
+        occupancy_rate: calculateOccupancyRate(occupiedHouses, totalHouses),
         total_revenue: totalRevenue,
         total_gross_revenue: totalGrossRevenue,
         total_expenses: totalExpenses,
-        net_profit: totalRevenue - totalExpenses,
+        net_profit: calculateNetProfit(totalRevenue, totalExpenses),
         expiring_soon: expiringSoonCount,
       },
       properties: propertyStats,
