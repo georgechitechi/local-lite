@@ -38,7 +38,7 @@ const HIDDEN_TAB_OPTIONS = {
 const TabLayout = function TabLayout() {
   const colors = useThemeColors();
   const { selectedBusiness, loading: businessLoading } = useBusiness();
-  const { confirmSignOut, loading: authLoading } = useAuth();
+  const { user, confirmSignOut, loading: authLoading } = useAuth();
   const segments = useSegments();
   const { isAdmin, isAdminOrStaff, isTenant, isStaff, isTenantOnly, can } =
     useAccessControl();
@@ -166,6 +166,7 @@ const TabLayout = function TabLayout() {
           options={{
             title: 'Cloud Sync',
             ...HIDDEN_TAB_OPTIONS,
+            tabBarStyle: !user ? { display: 'none' } : undefined,
             header: () => (
               <ThemedHeader
                 title="Cloud Sync"
@@ -173,7 +174,13 @@ const TabLayout = function TabLayout() {
                 actions={[
                   {
                     icon: 'arrow-left',
-                    onPress: () => router.navigate('/(tabs)/settings'),
+                    onPress: () => {
+                      if (router.canGoBack()) {
+                        router.back();
+                      } else {
+                        router.replace(user ? '/(tabs)/settings' : '/(auth)/login');
+                      }
+                    },
                   },
                 ]}
               />

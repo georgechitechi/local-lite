@@ -59,11 +59,12 @@ function RootLayoutNav() {
     const isPasswordResetScreen =
       (segments as string[])[1] === 'new-password' ||
       (segments as string[])[1] === 'reset-password';
+    const isCloudSyncScreen = (segments as string[]).includes('cloud-sync');
 
     const isAuthenticated = !!user && !isOfflineAuthoritative;
 
     // Only navigate if conditions are met and we're not already on the target route
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!isAuthenticated && !inAuthGroup && !isCloudSyncScreen) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated) {
       if (inAuthGroup && !isPasswordResetScreen) {

@@ -215,7 +215,7 @@ export default function LoginScreen() {
           </Text>
           <Button
             mode="contained"
-            onPress={() => router.push('/(tabs)/settings/cloud-sync')}
+            onPress={() => router.push('/settings/cloud-sync' as any)}
             style={styles.demoModeButton}
           >
             Set Up Cloud Sync
