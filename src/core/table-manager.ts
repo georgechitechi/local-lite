@@ -6,6 +6,15 @@ import { SchemaManager, formatValueForStorage } from './schema-manager.js';
 export interface TableMutationOptions {
   autoSchema?: boolean;
   schemaManager?: SchemaManager;
+  /**
+   * Column to stamp with `touchValue` on local writes (e.g. 'updated_at').
+   * - UPDATE: always overwritten (mirrors what remote adapters do on push).
+   * - INSERT: only set when the payload does not already provide a value.
+   * Skipped when the column does not exist and autoSchema is disabled.
+   */
+  touchColumn?: string | null;
+  /** Value written to `touchColumn`. Default: current time as an ISO string. */
+  touchValue?: any;
 }
 
 const defaultSchemaManager = new SchemaManager();
@@ -18,6 +27,24 @@ function formatPayload(payload: Record<string, any> | null): Record<string, any>
     }
   }
   return formatted;
+}
+
+async function withTouchedColumn(
+  tx: LocalTransaction,
+  sm: SchemaManager,
+  tableName: string,
+  operation: SyncOp,
+  payload: Record<string, any> | null,
+  options: TableMutationOptions
+): Promise<Record<string, any> | null> {
+  const col = options.touchColumn as string;
+  if (operation === 'INSERT' && payload && payload[col] !== undefined && payload[col] !== null) {
+    return payload;
+  }
+  if (!options.autoSchema && !(await sm.tableHasColumn(tx, tableName, col))) {
+    return payload;
+  }
+  return { ...(payload || {}), [col]: options.touchValue ?? new Date().toISOString() };
 }
 
 export class TableManager {
@@ -46,6 +73,10 @@ export class TableManager {
     if (operation === 'DELETE') {
       await tx.execute(`DELETE FROM ${safeTable} WHERE ${safePk} = ?`, [rowId]);
       return;
+    }
+
+    if (options?.touchColumn) {
+      payload = await withTouchedColumn(tx, sm, tableName, operation, payload, options);
     }
 
     const formatted = options?.autoSchema

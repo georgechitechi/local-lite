@@ -218,4 +218,14 @@ export interface LocalLiteConfig {
    * Scoped synchronization filter (e.g. { org_id: '...' } or dynamic resolver callback).
    */
   syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+
+  /**
+   * Stamp an "updated at" column on every local INSERT/UPDATE so reactive queries
+   * (which compare rows by `id` + `updated_at`/`updatedAt`) re-render after offline edits.
+   * Only the local SQLite row is stamped; payloads pushed to the remote are unchanged.
+   * - `true` (default): column inferred from the remote adapter's `updatedAtColumn`, else 'updated_at'
+   * - `string`: explicit column name
+   * - `false`: disabled
+   */
+  touchUpdatedAt?: boolean | string;
 }

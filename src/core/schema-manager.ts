@@ -42,6 +42,29 @@ export class SchemaManager {
   }
 
   /**
+   * Returns whether `column` exists on `tableName`, introspecting via PRAGMA table_info
+   * at most once per table (cached). Unlike ensureTableIntrospected, this has no
+   * side effects (no auto-indexing), so it is safe on hand-written schemas.
+   */
+  async tableHasColumn(db: DBExecutable, tableName: string, column: string): Promise<boolean> {
+    if (this.hasColumn(tableName, column)) return true;
+    const probeKey = `${tableName}:__probed__`;
+    if (!this.knownColumns.has(probeKey)) {
+      try {
+        const tableInfo = await db.execute(`PRAGMA table_info(${escapeIdentifier(tableName)});`);
+        if (Array.isArray(tableInfo) && tableInfo.length > 0) {
+          // Only cache once the table exists, so tables created later get re-probed.
+          this.knownColumns.add(probeKey);
+          for (const col of tableInfo) {
+            if (col?.name) this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
+          }
+        }
+      } catch {}
+    }
+    return this.hasColumn(tableName, column);
+  }
+
+  /**
    * Introspects table columns via PRAGMA table_info if not previously cached.
    */
   async ensureTableIntrospected(db: DBExecutable, tableName: string): Promise<void> {

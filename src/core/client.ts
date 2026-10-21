@@ -49,6 +49,15 @@ export interface LocalFirstClientConfig {
   autoHydrateJSON?: boolean;
   syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
   autoPauseOnBackground?: boolean;
+  /**
+   * Stamp an "updated at" column on every local INSERT/UPDATE write so reactive
+   * queries (which compare rows by `id` + `updated_at`/`updatedAt`) detect offline edits.
+   * Only the local SQLite row is stamped; outbox payloads sent to the remote are unchanged.
+   * - `true` (default): column inferred from the remote adapter's `updatedAtColumn`, else 'updated_at'
+   * - `string`: explicit column name
+   * - `false`: disabled
+   */
+  touchUpdatedAt?: boolean | string;
 }
 
 function hasFunctionFilter(value: any): boolean {
@@ -126,10 +135,15 @@ export class TransactionalClient {
     const pk = options.primaryKey ?? this.parent.getPrimaryKey();
     const timestamp = options.customTimestamp ?? Date.now();
 
-    await TableManager.applyMutation(this.tx, tableName, rowId, operation, payload, pk, {
-      autoSchema: this.parent.autoSchema,
-      schemaManager: this.parent.schemaManager,
-    });
+    await TableManager.applyMutation(
+      this.tx,
+      tableName,
+      rowId,
+      operation,
+      payload,
+      pk,
+      this.parent.localMutationOptions(timestamp)
+    );
 
     if (!options.skipOutbox) {
       const outboxId = await this.parent.recordOutboxMutation(
@@ -255,6 +269,8 @@ export class LocalFirstClient {
   public tables: string[];
   public jsonColumns: Record<string, string[]>;
   public autoHydrateJSON: boolean;
+  /** Local column stamped on INSERT/UPDATE writes, or null when disabled. */
+  public touchColumn: string | null;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -272,6 +288,13 @@ export class LocalFirstClient {
     this.autoStart = config.autoStart ?? true;
     this.jsonColumns = config.jsonColumns ?? {};
     this.autoHydrateJSON = config.autoHydrateJSON ?? false;
+    const touch = config.touchUpdatedAt ?? true;
+    this.touchColumn =
+      touch === false
+        ? null
+        : typeof touch === 'string'
+          ? touch
+          : ((this.remote as any)?.updatedAtColumn as string | undefined) || 'updated_at';
     this.schemaManager = new SchemaManager();
 
     const workerOptions: SyncWorkerOptions = {
@@ -296,6 +319,20 @@ export class LocalFirstClient {
 
   getPrimaryKey(): string {
     return this.primaryKey;
+  }
+
+  /**
+   * Options for TableManager.applyMutation on locally-originated writes.
+   * The touch value uses the mutation timestamp so it matches what remote
+   * adapters (e.g. Supabase) write for the same operation on push.
+   */
+  localMutationOptions(timestamp: number) {
+    return {
+      autoSchema: this.autoSchema,
+      schemaManager: this.schemaManager,
+      touchColumn: this.touchColumn,
+      touchValue: new Date(timestamp).toISOString(),
+    };
   }
 
   /**
@@ -468,10 +505,15 @@ export class LocalFirstClient {
 
     const executeInTransaction = async (tx: LocalTransaction) => {
       // 1. Mutate local table
-      await TableManager.applyMutation(tx, tableName, rowId, operation, payload, pk, {
-        autoSchema: this.autoSchema,
-        schemaManager: this.schemaManager,
-      });
+      await TableManager.applyMutation(
+        tx,
+        tableName,
+        rowId,
+        operation,
+        payload,
+        pk,
+        this.localMutationOptions(timestamp)
+      );
 
       // 2. Insert into sync_outbox (if not skipped)
       if (!options.skipOutbox) {
@@ -536,15 +578,20 @@ export class LocalFirstClient {
             ? String(payload[pk])
             : generateUUID());
         generatedIds.push(rowId);
+        const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
 
-        await TableManager.applyMutation(tx, m.tableName, rowId, m.operation, payload, pk, {
-          autoSchema: this.autoSchema,
-          schemaManager: this.schemaManager,
-        });
+        await TableManager.applyMutation(
+          tx,
+          m.tableName,
+          rowId,
+          m.operation,
+          payload,
+          pk,
+          this.localMutationOptions(timestamp)
+        );
 
         const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
         if (!skipOutbox) {
-          const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
           if (this.coalesceOutbox && m.operation !== 'INSERT') {
             const outboxId = await this.recordOutboxMutation(
               tx,
