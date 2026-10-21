@@ -249,6 +249,40 @@ export function TodoScreen() {
 To synchronize with Supabase using zero-clock-skew delta queries and `deleted: true` soft deletes, execute the following script in your Supabase project (**Dashboard → SQL Editor**):
 
 ```sql
+-- Ensure every application table has the soft-delete column expected by local-lite.
+DO $$
+DECLARE
+  table_record RECORD;
+BEGIN
+  FOR table_record IN
+    SELECT table_schema, table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_type = 'BASE TABLE'
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS deleted BOOLEAN',
+      table_record.table_schema,
+      table_record.table_name
+    );
+    EXECUTE format(
+      'UPDATE %I.%I SET deleted = FALSE WHERE deleted IS NULL',
+      table_record.table_schema,
+      table_record.table_name
+    );
+    EXECUTE format(
+      'ALTER TABLE %I.%I ALTER COLUMN deleted SET DEFAULT FALSE',
+      table_record.table_schema,
+      table_record.table_name
+    );
+    EXECUTE format(
+      'ALTER TABLE %I.%I ALTER COLUMN deleted SET NOT NULL',
+      table_record.table_schema,
+      table_record.table_name
+    );
+  END LOOP;
+END $$;
+
 -- 1. Automatic Timestamp Trigger
 CREATE OR REPLACE FUNCTION public.set_sync_updated_at()
 RETURNS TRIGGER AS $$
