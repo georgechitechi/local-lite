@@ -65,6 +65,152 @@ export interface AggregateResult {
   max?: Record<string, any>;
 }
 
+// ---------------------------------------------------------------------------
+// Module-scoped SQL compilation helpers (defined once, reused on every query)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compiles a single column comparison value into one or more SQL fragments.
+ * Supports null, boolean, scalar, and operator-object forms ($eq, $gt, $in, …).
+ */
+function compileComparison(safeCol: string, val: any, params: any[]): string | null {
+  if (val === null) {
+    return `${safeCol} IS NULL`;
+  }
+  if (typeof val === 'boolean') {
+    params.push(val ? 1 : 0);
+    return `${safeCol} = ?`;
+  }
+  if (typeof val === 'string' || typeof val === 'number') {
+    params.push(val);
+    return `${safeCol} = ?`;
+  }
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    const ops = val as any;
+    const subClauses: string[] = [];
+
+    const eqVal = ops.$eq !== undefined ? ops.$eq : ops.eq;
+    if (eqVal !== undefined) {
+      subClauses.push(`${safeCol} = ?`);
+      params.push(typeof eqVal === 'boolean' ? (eqVal ? 1 : 0) : eqVal);
+    }
+    const neVal = ops.$ne !== undefined ? ops.$ne : ops.ne;
+    if (neVal !== undefined) {
+      subClauses.push(`${safeCol} != ?`);
+      params.push(typeof neVal === 'boolean' ? (neVal ? 1 : 0) : neVal);
+    }
+    const gtVal = ops.$gt !== undefined ? ops.$gt : ops.gt;
+    if (gtVal !== undefined) {
+      subClauses.push(`${safeCol} > ?`);
+      params.push(gtVal);
+    }
+    const gteVal = ops.$gte !== undefined ? ops.$gte : ops.gte;
+    if (gteVal !== undefined) {
+      subClauses.push(`${safeCol} >= ?`);
+      params.push(gteVal);
+    }
+    const ltVal = ops.$lt !== undefined ? ops.$lt : ops.lt;
+    if (ltVal !== undefined) {
+      subClauses.push(`${safeCol} < ?`);
+      params.push(ltVal);
+    }
+    const lteVal = ops.$lte !== undefined ? ops.$lte : ops.lte;
+    if (lteVal !== undefined) {
+      subClauses.push(`${safeCol} <= ?`);
+      params.push(lteVal);
+    }
+    const inVal = ops.$in !== undefined ? ops.$in : ops.in;
+    if (Array.isArray(inVal) && inVal.length > 0) {
+      const placeholders = inVal.map(() => '?').join(', ');
+      subClauses.push(`${safeCol} IN (${placeholders})`);
+      params.push(...inVal);
+    }
+    const ninVal = ops.$nin !== undefined ? ops.$nin : ops.nin;
+    if (Array.isArray(ninVal) && ninVal.length > 0) {
+      const placeholders = ninVal.map(() => '?').join(', ');
+      subClauses.push(`${safeCol} NOT IN (${placeholders})`);
+      params.push(...ninVal);
+    }
+    const containsVal = ops.$contains !== undefined ? ops.$contains : ops.contains;
+    if (containsVal !== undefined) {
+      subClauses.push(`${safeCol} LIKE ?`);
+      params.push(`%${containsVal}%`);
+    }
+    const startsWithVal = ops.$startsWith !== undefined ? ops.$startsWith : ops.startsWith;
+    if (startsWithVal !== undefined) {
+      subClauses.push(`${safeCol} LIKE ?`);
+      params.push(`${startsWithVal}%`);
+    }
+    const endsWithVal = ops.$endsWith !== undefined ? ops.$endsWith : ops.endsWith;
+    if (endsWithVal !== undefined) {
+      subClauses.push(`${safeCol} LIKE ?`);
+      params.push(`%${endsWithVal}`);
+    }
+    const nullVal = ops.$null !== undefined ? ops.$null : ops.null;
+    if (nullVal !== undefined) {
+      subClauses.push(nullVal ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
+    }
+
+    if (subClauses.length > 0) {
+      return subClauses.join(' AND ');
+    }
+  }
+  return null;
+}
+
+/**
+ * Recursively compiles a where-conditions object (including $or / $and) into SQL clauses.
+ */
+function compileWhereConditions(where: Record<string, any>, params: any[]): string[] {
+  const clauses: string[] = [];
+
+  // Handle $or — compile each branch, join with OR
+  if (Array.isArray(where.$or) && where.$or.length > 0) {
+    const orClauses: string[] = [];
+    for (const sub of where.$or) {
+      if (typeof sub === 'object' && sub !== null) {
+        const subList = compileWhereConditions(sub, params);
+        if (subList.length > 0) {
+          orClauses.push(`(${subList.join(' AND ')})`);
+        }
+      }
+    }
+    if (orClauses.length > 0) {
+      clauses.push(`(${orClauses.join(' OR ')})`);
+    }
+  }
+
+  // Handle $and — compile each branch, join with AND
+  if (Array.isArray(where.$and) && where.$and.length > 0) {
+    const andClauses: string[] = [];
+    for (const sub of where.$and) {
+      if (typeof sub === 'object' && sub !== null) {
+        const subList = compileWhereConditions(sub, params);
+        if (subList.length > 0) {
+          andClauses.push(`(${subList.join(' AND ')})`);
+        }
+      }
+    }
+    if (andClauses.length > 0) {
+      clauses.push(`(${andClauses.join(' AND ')})`);
+    }
+  }
+
+  // Handle regular column conditions
+  for (const [col, val] of Object.entries(where)) {
+    if (col === '$or' || col === '$and') continue;
+    const safeCol = formatColumnIdentifier(col);
+    const clause = compileComparison(safeCol, val, params);
+    if (clause) {
+      clauses.push(clause);
+    }
+  }
+
+  return clauses;
+}
+
+// ---------------------------------------------------------------------------
+
 /**
  * Fluent, type-safe SQL Query Builder for local-first SQLite operations.
  * Allows writing expressive JavaScript code that compiles and executes high-performance SQL under the hood.
@@ -211,6 +357,7 @@ export class QueryBuilder<T = any> {
 
   /**
    * Compiles the current builder state into an executable SQL string and parameter list.
+   * Uses module-scoped compileComparison / compileWhereConditions helpers (defined once).
    */
   toSQL(): { sql: string; params: any[] } {
     const params: any[] = [];
@@ -226,76 +373,10 @@ export class QueryBuilder<T = any> {
       sql += ` ${j.type} JOIN ${joinTable} ON ${col1} = ${col2}`;
     }
 
-    // Build WHERE clauses
+    // Build WHERE clauses (delegates to module-scoped helpers)
     const whereClauses: string[] = [];
     if (this.whereConditions && typeof this.whereConditions === 'object') {
-      for (const [col, val] of Object.entries(this.whereConditions)) {
-        if (col === '$or' || col === '$and') continue;
-        const safeCol = formatColumnIdentifier(col);
-
-        if (val === null) {
-          whereClauses.push(`${safeCol} IS NULL`);
-        } else if (typeof val === 'boolean') {
-          whereClauses.push(`${safeCol} = ?`);
-          params.push(val ? 1 : 0);
-        } else if (typeof val === 'string' || typeof val === 'number') {
-          whereClauses.push(`${safeCol} = ?`);
-          params.push(val);
-        } else if (typeof val === 'object' && !Array.isArray(val)) {
-          const ops = val as any;
-          const eqVal = ops.$eq !== undefined ? ops.$eq : ops.eq;
-          if (eqVal !== undefined) {
-            whereClauses.push(`${safeCol} = ?`);
-            params.push(typeof eqVal === 'boolean' ? (eqVal ? 1 : 0) : eqVal);
-          }
-          const neVal = ops.$ne !== undefined ? ops.$ne : ops.ne;
-          if (neVal !== undefined) {
-            whereClauses.push(`${safeCol} != ?`);
-            params.push(typeof neVal === 'boolean' ? (neVal ? 1 : 0) : neVal);
-          }
-          const gtVal = ops.$gt !== undefined ? ops.$gt : ops.gt;
-          if (gtVal !== undefined) {
-            whereClauses.push(`${safeCol} > ?`);
-            params.push(gtVal);
-          }
-          const gteVal = ops.$gte !== undefined ? ops.$gte : ops.gte;
-          if (gteVal !== undefined) {
-            whereClauses.push(`${safeCol} >= ?`);
-            params.push(gteVal);
-          }
-          const ltVal = ops.$lt !== undefined ? ops.$lt : ops.lt;
-          if (ltVal !== undefined) {
-            whereClauses.push(`${safeCol} < ?`);
-            params.push(ltVal);
-          }
-          const lteVal = ops.$lte !== undefined ? ops.$lte : ops.lte;
-          if (lteVal !== undefined) {
-            whereClauses.push(`${safeCol} <= ?`);
-            params.push(lteVal);
-          }
-          const inVal = ops.$in !== undefined ? ops.$in : ops.in;
-          if (Array.isArray(inVal) && inVal.length > 0) {
-            const placeholders = inVal.map(() => '?').join(', ');
-            whereClauses.push(`${safeCol} IN (${placeholders})`);
-            params.push(...inVal);
-          }
-          const ninVal = ops.$nin !== undefined ? ops.$nin : ops.nin;
-          if (Array.isArray(ninVal) && ninVal.length > 0) {
-            const placeholders = ninVal.map(() => '?').join(', ');
-            whereClauses.push(`${safeCol} NOT IN (${placeholders})`);
-            params.push(...ninVal);
-          }
-          const containsVal = ops.$contains !== undefined ? ops.$contains : ops.contains;
-          if (containsVal !== undefined) {
-            whereClauses.push(`${safeCol} LIKE ?`);
-            params.push(`%${containsVal}%`);
-          }
-          const nullVal = ops.$null !== undefined ? ops.$null : ops.null;
-          if (nullVal !== undefined) {
-            whereClauses.push(nullVal ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
-          }
-        }
-      }
+      whereClauses.push(...compileWhereConditions(this.whereConditions, params));
     }
 
     // Push down soft-deletion check on primary table if deleted column exists and not explicitly overridden

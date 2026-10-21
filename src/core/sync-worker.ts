@@ -713,13 +713,13 @@ export class SyncWorker {
       const queuedEvents: Array<{ event: string; data: any }> = [];
 
       await this.db.transaction(async (tx) => {
+        // Pre-fetch active pending outbox records in 1 query for this chunk to eliminate N+1 bridge roundtrips
+        const pendingOutboxMap = await OutboxStore.getActivePendingMap(tx);
+
         for (const change of chunk) {
-          // 1. Check for pending local mutations for this (table_name, row_id)
-          const localPendingRecord = await OutboxStore.findPendingByRow(
-            tx,
-            change.tableName,
-            change.rowId
-          );
+          const outboxKey = `${change.tableName}:${change.rowId}`;
+          // 1. Check in-memory map for pending local mutations for this (table_name, row_id)
+          const localPendingRecord = pendingOutboxMap.get(outboxKey);
 
           // 2. Conflict resolution if there is a pending local change
           if (localPendingRecord) {
@@ -759,10 +759,12 @@ export class SyncWorker {
             if (resolution === 'apply-remote') {
               // Remote change wins: remove the superseded local pending outbox mutation
               await OutboxStore.deleteRecord(tx, localPendingRecord.id);
+              pendingOutboxMap.delete(outboxKey);
             } else if (typeof resolution === 'object' && resolution.mergePayload) {
               // Merge scenario
               change.payload = resolution.mergePayload;
               await OutboxStore.updatePayload(tx, localPendingRecord.id, resolution.mergePayload);
+              localPendingRecord.payload = resolution.mergePayload;
             }
           }
 

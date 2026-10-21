@@ -16,16 +16,16 @@ function areRowsEqual<T>(a: T, b: T): boolean {
     return false;
   }
 
-  // Fast path: if both records have an identical updated_at timestamp, they are equal.
-  // This bypasses expensive Object.keys loops and JSON.stringify on large metadata columns.
+  const aTs = aObj.updated_at ?? aObj.updatedAt;
+  const bTs = bObj.updated_at ?? bObj.updatedAt;
   if (
     aObj.id !== undefined &&
     bObj.id !== undefined &&
     aObj.id === bObj.id &&
-    aObj.updated_at !== undefined &&
-    bObj.updated_at !== undefined
+    aTs !== undefined &&
+    bTs !== undefined
   ) {
-    return aObj.updated_at === bObj.updated_at;
+    return aTs === bTs;
   }
 
   const aKeys = Object.keys(aObj);
@@ -69,8 +69,47 @@ function areRowArraysEqual<T>(a: T[] | undefined | null, b: T[] | undefined | nu
   return true;
 }
 
-// In-memory query result cache to eliminate initial render latency and flickering
-const queryCache = new Map<string, any[]>();
+const MAX_QUERY_CACHE_SIZE = 100;
+
+class LRUQueryCache {
+  private map = new Map<string, any[]>();
+
+  get(key: string): any[] | undefined {
+    const val = this.map.get(key);
+    if (val !== undefined) {
+      this.map.delete(key);
+      this.map.set(key, val);
+    }
+    return val;
+  }
+
+  set(key: string, val: any[]): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= MAX_QUERY_CACHE_SIZE) {
+      const oldestKey = this.map.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.map.delete(oldestKey);
+      }
+    }
+    this.map.set(key, val);
+  }
+
+  has(key: string): boolean {
+    return this.map.has(key);
+  }
+
+  delete(key: string): boolean {
+    return this.map.delete(key);
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
+// In-memory query result cache capped with LRU eviction to prevent memory leaks
+const queryCache = new LRUQueryCache();
 const inFlightQueries = new Map<string, Promise<any[]>>();
 
 /**

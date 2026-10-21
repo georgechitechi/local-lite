@@ -256,25 +256,25 @@ export class SchemaManager {
           }
         }
       }
-    }
 
-    // Auto-create high performance composite index for foreign keys with soft-deletion
-    if (this.knownColumns.has(`${tableName}:deleted`)) {
-      for (const key of keys) {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey.endsWith('_id') && lowerKey !== 'id') {
-          const compositeKey = `${tableName}:${lowerKey}_deleted`;
-          if (!this.knownIndexes.has(compositeKey)) {
-            this.knownIndexes.add(compositeKey);
-            try {
-              const idxName = escapeIdentifier(`idx_${tableName}_${lowerKey}_del`);
-              const safeFk = escapeIdentifier(key);
-              const safeDel = escapeIdentifier('deleted');
-              await db.execute(
-                `CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeFk}, ${safeDel});`
-              );
-            } catch {
-              // Ignore
+      // Auto-create composite FK+deleted index only on first schema discovery
+      if (this.knownColumns.has(`${tableName}:deleted`)) {
+        for (const key of keys) {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.endsWith('_id') && lowerKey !== 'id') {
+            const compositeKey = `${tableName}:${lowerKey}_deleted`;
+            if (!this.knownIndexes.has(compositeKey)) {
+              this.knownIndexes.add(compositeKey);
+              try {
+                const idxName = escapeIdentifier(`idx_${tableName}_${lowerKey}_del`);
+                const safeFk = escapeIdentifier(key);
+                const safeDel = escapeIdentifier('deleted');
+                await db.execute(
+                  `CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeFk}, ${safeDel});`
+                );
+              } catch {
+                // Ignore
+              }
             }
           }
         }

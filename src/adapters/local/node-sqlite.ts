@@ -18,28 +18,45 @@ export interface NodeSqliteDatabaseSync {
  */
 export class NodeSQLiteAdapter implements LocalDBAdapter {
   private db: NodeSqliteDatabaseSync;
-  private queue: Promise<any> = Promise.resolve();
+  private txQueue: Promise<any> = Promise.resolve();
+  private statementCache: Map<string, NodeSqliteStatement> = new Map();
+  private readonly maxCacheSize = 100;
 
   constructor(nodeSqliteDb: any) {
     this.db = nodeSqliteDb as NodeSqliteDatabaseSync;
   }
 
-  async execute(query: string, params: any[] = []): Promise<any[]> {
-    const run = async (): Promise<any[]> => {
-      const trimmed = query.trim();
-      const stmt = this.db.prepare(trimmed);
-
-      // Queries that return rows (SELECT, PRAGMA)
-      if (/^SELECT|^PRAGMA/i.test(trimmed)) {
-        return stmt.all(...params);
+  private getStatement(sql: string): NodeSqliteStatement {
+    let stmt = this.statementCache.get(sql);
+    if (!stmt) {
+      if (this.statementCache.size >= this.maxCacheSize) {
+        const oldestKey = this.statementCache.keys().next().value;
+        if (oldestKey) this.statementCache.delete(oldestKey);
       }
+      stmt = this.db.prepare(sql);
+      this.statementCache.set(sql, stmt);
+    }
+    return stmt;
+  }
 
+  async execute(query: string, params: any[] = []): Promise<any[]> {
+    const trimmed = query.trim();
+    const isReader = /^SELECT|^PRAGMA/i.test(trimmed);
+
+    // Fast-path: Readers execute directly and synchronously without queuing delay
+    if (isReader) {
+      const stmt = this.getStatement(trimmed);
+      return stmt.all(...params);
+    }
+
+    const run = async (): Promise<any[]> => {
+      const stmt = this.getStatement(trimmed);
       const res = stmt.run(...params);
       return [res];
     };
 
-    const next = this.queue.then(run, run);
-    this.queue = next.catch(() => {});
+    const next = this.txQueue.then(run, run);
+    this.txQueue = next.catch(() => {});
     return await next;
   }
 
@@ -50,7 +67,7 @@ export class NodeSQLiteAdapter implements LocalDBAdapter {
         const txWrapper: LocalTransaction = {
           execute: async (q, p = []) => {
             const trimmed = q.trim();
-            const stmt = this.db.prepare(trimmed);
+            const stmt = this.getStatement(trimmed);
             if (/^SELECT|^PRAGMA/i.test(trimmed)) {
               return stmt.all(...p);
             }
@@ -70,8 +87,8 @@ export class NodeSQLiteAdapter implements LocalDBAdapter {
       }
     };
 
-    const next = this.queue.then(run, run);
-    this.queue = next.catch(() => {});
+    const next = this.txQueue.then(run, run);
+    this.txQueue = next.catch(() => {});
     return await next;
   }
 

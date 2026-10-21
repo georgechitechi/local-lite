@@ -350,53 +350,97 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         continue;
       }
 
-      // Handle UPDATE
+      // Batch consecutive UPDATEs for the same table
       if (op.operation === 'UPDATE') {
-        try {
-          const patch: Record<string, any> = {
-            ...(op.payload || {}),
+        const batch: SyncOperation[] = [];
+        while (
+          i < operations.length &&
+          operations[i].operation === 'UPDATE' &&
+          operations[i].tableName === op.tableName
+        ) {
+          batch.push(operations[i]);
+          i++;
+        }
+
+        const buildUpdateRowData = (item: SyncOperation) => {
+          const row: Record<string, any> = {
+            ...(item.payload || {}),
+            [this.primaryKey]: item.rowId,
             [this.deletedColumn]: false,
           };
-          if (this.updatedAtColumn) {
-            patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
+          if (this.updatedAtColumn && !row[this.updatedAtColumn]) {
+            row[this.updatedAtColumn] = new Date(item.timestamp).toISOString();
           }
+          return row;
+        };
 
-          const { error, data } = await client
-            .from(op.tableName)
-            .update(patch)
-            .eq(this.primaryKey, op.rowId)
-            .select(this.primaryKey);
+        if (batch.length === 1) {
+          const item = batch[0];
+          try {
+            const patch = buildUpdateRowData(item);
+            const { error, data } = await client
+              .from(op.tableName)
+              .update(patch)
+              .eq(this.primaryKey, item.rowId)
+              .select(this.primaryKey);
 
-          if (error) {
-            const msg = formatSupabaseError(error, { table: op.tableName, operation: 'UPDATE' });
-            this.logger.error(msg);
-            failedIds.push(op.id);
-            errors[op.id] = msg;
-          } else if (!data || data.length === 0) {
-            // If row did not exist remotely, fallback to upsert
-            const rowData = {
-              ...patch,
-              [this.primaryKey]: op.rowId,
-            };
-            const { error: upsertErr } = await client.from(op.tableName).upsert(rowData);
-            if (upsertErr) {
-              const msg = formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' });
+            if (error) {
+              const msg = formatSupabaseError(error, { table: op.tableName, operation: 'UPDATE' });
               this.logger.error(msg);
-              failedIds.push(op.id);
-              errors[op.id] = msg;
+              failedIds.push(item.id);
+              errors[item.id] = msg;
+            } else if (!data || data.length === 0) {
+              const { error: upsertErr } = await client.from(op.tableName).upsert(patch);
+              if (upsertErr) {
+                const msg = formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' });
+                this.logger.error(msg);
+                failedIds.push(item.id);
+                errors[item.id] = msg;
+              } else {
+                successfulIds.push(item.id);
+              }
             } else {
-              successfulIds.push(op.id);
+              successfulIds.push(item.id);
             }
-          } else {
-            successfulIds.push(op.id);
+          } catch (err: any) {
+            const msg = formatSupabaseError(err, { table: op.tableName, operation: 'UPDATE' });
+            this.logger.error(msg);
+            failedIds.push(item.id);
+            errors[item.id] = msg;
           }
-        } catch (err: any) {
-          const msg = formatSupabaseError(err, { table: op.tableName, operation: 'UPDATE' });
-          this.logger.error(msg);
-          failedIds.push(op.id);
-          errors[op.id] = msg;
+        } else {
+          // Bulk upsert for multiple consecutive updates (merges fields by primaryKey in 1 HTTP call)
+          const rows = batch.map(buildUpdateRowData);
+          try {
+            const { error } = await client.from(op.tableName).upsert(rows);
+            if (!error) {
+              for (const item of batch) successfulIds.push(item.id);
+            } else {
+              // Fallback to individual updates if bulk upsert has a schema conflict
+              for (const item of batch) {
+                try {
+                  const singleRow = buildUpdateRowData(item);
+                  const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
+                  if (singleErr) {
+                    const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'UPDATE' });
+                    failedIds.push(item.id);
+                    errors[item.id] = msg;
+                  } else {
+                    successfulIds.push(item.id);
+                  }
+                } catch (singleErr: any) {
+                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'UPDATE' });
+                  failedIds.push(item.id);
+                  errors[item.id] = msg;
+                }
+              }
+            }
+          } catch {
+            for (const item of batch) {
+              failedIds.push(item.id);
+            }
+          }
         }
-        i++;
         continue;
       }
 

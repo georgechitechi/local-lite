@@ -143,23 +143,36 @@ export function hasExplicitDeletedFilter(where?: WhereFilter): boolean {
  */
 export function applyQueryOptions<T = any>(rows: T[], options?: QueryOptions): T[] {
   if (!rows || rows.length === 0) return [];
-  let result = [...rows];
 
-  // 0. Automatic soft-delete filtering: omit deleted records unless includeDeleted is true
-  // or the where filter explicitly targets 'deleted'.
-  if (!options?.includeDeleted && !hasExplicitDeletedFilter(options?.where)) {
+  const needsDeleteFilter = !options?.includeDeleted && !hasExplicitDeletedFilter(options?.where);
+  const needsWhere = Boolean(options?.where);
+  const needsSort = Boolean(options?.orderBy);
+  const needsSlice = (options?.offset !== undefined && options.offset > 0) ||
+                     (options?.limit !== undefined && options.limit > 0);
+  const needsSelect = Array.isArray(options?.select) && (options!.select as string[]).length > 0;
+
+  // Fast-path: nothing to do
+  if (!needsDeleteFilter && !needsWhere && !needsSort && !needsSlice && !needsSelect) {
+    return rows;
+  }
+
+  let result = rows as any[];
+
+  // 0. Soft-delete filtering
+  if (needsDeleteFilter) {
     result = result.filter((row: any) => !isDeletedRecord(row));
   }
 
   // 1. Where filtering
-  if (options?.where) {
-    result = result.filter((row: any) => matchesWhere(row, options.where));
+  if (needsWhere) {
+    result = result.filter((row: any) => matchesWhere(row, options!.where));
   }
 
   // 2. Order by
-  if (options?.orderBy) {
-    const key = options.orderBy;
-    const isAsc = (options.order || 'asc').toLowerCase() === 'asc';
+  if (needsSort) {
+    result = [...result]; // copy only before sort mutation
+    const key = options!.orderBy!;
+    const isAsc = (options!.order || 'asc').toLowerCase() === 'asc';
     result.sort((a: any, b: any) => {
       const valA = a[key];
       const valB = b[key];
@@ -177,22 +190,19 @@ export function applyQueryOptions<T = any>(rows: T[], options?: QueryOptions): T
   }
 
   // 3. Offset and Limit
-  if (options?.offset !== undefined && options.offset > 0) {
-    result = result.slice(options.offset);
-  }
-  if (options?.limit !== undefined && options.limit > 0) {
-    result = result.slice(0, options.limit);
+  if (needsSlice) {
+    const offset = options?.offset && options.offset > 0 ? options.offset : 0;
+    const limit = options?.limit && options.limit > 0 ? options.limit : undefined;
+    result = limit !== undefined ? result.slice(offset, offset + limit) : result.slice(offset);
   }
 
-  // 4. Column Projection
-  if (options?.select && Array.isArray(options.select) && options.select.length > 0) {
-    const fields = options.select;
+  // 4. Column projection
+  if (needsSelect) {
+    const fields = options!.select as string[];
     result = result.map((row: any) => {
       const projected: Record<string, any> = {};
       for (const field of fields) {
-        if (field in row) {
-          projected[field] = row[field];
-        }
+        if (field in row) projected[field] = row[field];
       }
       return projected as any;
     });

@@ -17,6 +17,11 @@ export interface UseSyncStatusResult {
 /**
  * Consolidated hook that tracks real-time sync connectivity, sync worker activity
  * (pushing/pulling/syncing), and pending items in the local SQLite outbox queue.
+ *
+ * Performance notes:
+ * - sync:status events update isOnline/isPushing/isPulling/pendingCount in-place (no DB query).
+ * - The 50-record outbox fetch (pendingRecords) only runs on mount and on explicit refresh().
+ * - sync:push / sync:pull only trigger a lightweight pendingCount update via sync:status.
  */
 export function useSyncStatus(client: LocalFirstClient | null | undefined): UseSyncStatusResult {
   const [isOnline, setIsOnline] = useState(true);
@@ -55,13 +60,14 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
     }
   }, [client]);
 
-  const scheduleRefresh = useCoalescedRunner(refresh);
-
   useEffect(() => {
     if (!client || !client.db) return;
 
+    // Initial full fetch on mount
     refresh();
 
+    // sync:status fires after every push/pull cycle — update scalar fields directly,
+    // no DB round-trip needed. pendingCount comes from the event payload.
     const unsubStatus = client.events.on('sync:status', (e: SyncStatusEvent) => {
       setIsOnline(e.isOnline);
       setIsPushing(e.isPushing);
@@ -69,25 +75,23 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
       setPendingCount(e.pendingCount);
     });
 
-    const unsubOutbox = client.events.on('sync_outbox', () => {
-      scheduleRefresh();
-    });
-
-    const unsubPush = client.events.on('sync:push', () => {
-      scheduleRefresh();
-    });
-
-    const unsubPull = client.events.on('sync:pull', () => {
-      scheduleRefresh();
+    // Only refresh lastSyncedAt after a completed pull (lightweight meta query only)
+    const unsubPull = client.events.on('sync:pull', async (e: any) => {
+      if (e?.success) {
+        try {
+          const ts = await client.getLastSyncedAt().catch(() => null);
+          if (ts !== null && ts !== undefined) {
+            setLastSyncedAt(ts > 0 ? ts : null);
+          }
+        } catch { /* ignored */ }
+      }
     });
 
     return () => {
       unsubStatus();
-      unsubOutbox();
-      unsubPush();
       unsubPull();
     };
-  }, [client, refresh, scheduleRefresh]);
+  }, [client, refresh]);
 
   return {
     isOnline,

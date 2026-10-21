@@ -18,6 +18,7 @@ import {
   RetryConfig,
   SyncMetrics,
   SyncOp,
+  SyncOperation,
   TableChangeEvent,
   WhereFilter,
 } from './types.js';
@@ -376,6 +377,15 @@ export class LocalFirstClient {
   }
 
   private async initializeStorage(): Promise<void> {
+    try {
+      await this.db.execute('PRAGMA journal_mode = WAL;');
+      await this.db.execute('PRAGMA synchronous = NORMAL;');
+      await this.db.execute('PRAGMA busy_timeout = 5000;');
+      await this.db.execute('PRAGMA cache_size = -64000;');
+    } catch {
+      // Ignored for drivers, mock DBs, or in-memory modes that do not support PRAGMAs
+    }
+
     await OutboxStore.ensureSchema(this.db);
     await MetaStore.ensureSchema(this.db);
     await OutboxStore.resetStaleProcessing(this.db);
@@ -467,6 +477,7 @@ export class LocalFirstClient {
     const generatedIds: string[] = [];
     const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
     const queuedOutboxIds: string[] = [];
+    const pendingOutboxOps: SyncOperation[] = [];
 
     const executeInTx = async (tx: LocalTransaction) => {
       for (const m of mutations) {
@@ -487,15 +498,28 @@ export class LocalFirstClient {
         const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
         if (!skipOutbox) {
           const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
-          const outboxId = await this.recordOutboxMutation(
-            tx,
-            m.tableName,
-            rowId,
-            m.operation,
-            payload,
-            timestamp
-          );
-          if (outboxId) {
+          if (this.coalesceOutbox && m.operation !== 'INSERT') {
+            const outboxId = await this.recordOutboxMutation(
+              tx,
+              m.tableName,
+              rowId,
+              m.operation,
+              payload,
+              timestamp
+            );
+            if (outboxId) {
+              queuedOutboxIds.push(outboxId);
+            }
+          } else {
+            const outboxId = generateUUID();
+            pendingOutboxOps.push({
+              id: outboxId,
+              tableName: m.tableName,
+              rowId,
+              operation: m.operation,
+              payload,
+              timestamp,
+            });
             queuedOutboxIds.push(outboxId);
           }
         }
@@ -509,6 +533,10 @@ export class LocalFirstClient {
             source: 'local',
           },
         });
+      }
+
+      if (pendingOutboxOps.length > 0) {
+        await OutboxStore.insertRecords(tx, pendingOutboxOps);
       }
     };
 

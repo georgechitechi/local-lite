@@ -230,48 +230,57 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
       let maxServerTimestamp = sinceTimestamp;
       const changes: DeltaChange[] = [];
 
-      for (const table of this.tables) {
-        let docs: any[] = [];
+      const CHUNK_SIZE = 5;
+      for (let i = 0; i < this.tables.length; i += CHUNK_SIZE) {
+        const chunk = this.tables.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.all(
+          chunk.map(async (table) => {
+            let docs: any[] = [];
 
-        if (isCompat) {
-          const snapshot = await this.db
-            .collection(table)
-            .where(this.updatedAtColumn, '>', sinceTimestamp)
-            .get();
-          docs = snapshot.docs || [];
-        } else if (mod && typeof mod.getDocs === 'function') {
-          const q = mod.query(
-            mod.collection(this.db, table),
-            mod.where(this.updatedAtColumn, '>', sinceTimestamp)
-          );
-          const snapshot = await mod.getDocs(q);
-          docs = snapshot.docs || [];
-        }
+            if (isCompat) {
+              const snapshot = await this.db
+                .collection(table)
+                .where(this.updatedAtColumn, '>', sinceTimestamp)
+                .get();
+              docs = snapshot.docs || [];
+            } else if (mod && typeof mod.getDocs === 'function') {
+              const q = mod.query(
+                mod.collection(this.db, table),
+                mod.where(this.updatedAtColumn, '>', sinceTimestamp)
+              );
+              const snapshot = await mod.getDocs(q);
+              docs = snapshot.docs || [];
+            }
+            return { table, docs };
+          })
+        );
 
-        for (const doc of docs) {
-          const data = typeof doc.data === 'function' ? doc.data() : doc;
-          const isSoftDeleted = Boolean(
-            data[this.deletedColumn] === true ||
-            data[this.deletedColumn] === 1 ||
-            (data[this.deletedColumn] &&
-              !['false', '0', 'null', 'undefined'].includes(String(data[this.deletedColumn]).toLowerCase()))
-          );
+        for (const { table, docs } of results) {
+          for (const doc of docs) {
+            const data = typeof doc.data === 'function' ? doc.data() : doc;
+            const isSoftDeleted = Boolean(
+              data[this.deletedColumn] === true ||
+              data[this.deletedColumn] === 1 ||
+              (data[this.deletedColumn] &&
+                !['false', '0', 'null', 'undefined'].includes(String(data[this.deletedColumn]).toLowerCase()))
+            );
 
-          const rowTime = extractTimestamp(data[this.updatedAtColumn]);
-          if (rowTime > maxServerTimestamp) {
-            maxServerTimestamp = rowTime;
+            const rowTime = extractTimestamp(data[this.updatedAtColumn]);
+            if (rowTime > maxServerTimestamp) {
+              maxServerTimestamp = rowTime;
+            }
+
+            const rowId = String(data[this.primaryKey] || doc.id || data.id);
+            const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
+
+            changes.push({
+              tableName: table,
+              operation,
+              rowId,
+              payload: isSoftDeleted ? null : data,
+              timestamp: rowTime,
+            });
           }
-
-          const rowId = String(data[this.primaryKey] || doc.id || data.id);
-          const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
-
-          changes.push({
-            tableName: table,
-            operation,
-            rowId,
-            payload: isSoftDeleted ? null : data,
-            timestamp: rowTime,
-          });
         }
       }
 

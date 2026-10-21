@@ -17,18 +17,18 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
   }
 
   async execute(query: string, params: any[] = []): Promise<any[]> {
-    const run = async (): Promise<any[]> => {
-      const trimmed = query.trim();
-      const isSelect = /^SELECT\b/i.test(trimmed) || /^PRAGMA\b/i.test(trimmed);
+    const trimmed = query.trim();
+    const isRead = /^SELECT\b/i.test(trimmed) || /^PRAGMA\b/i.test(trimmed);
 
-      // Parameterless DDL/write statements can bypass statement preparation
-      // to avoid NativeStatement SharedObject allocation race conditions on Android
-      if (!isSelect && (!params || params.length === 0) && typeof this.db.execAsync === 'function') {
+    // Fast-path: reads bypass the write queue entirely
+    if (isRead) return this.db.getAllAsync(trimmed, params);
+
+    const run = async (): Promise<any[]> => {
+      if ((!params || params.length === 0) && typeof this.db.execAsync === 'function') {
         await this.db.execAsync(query);
         return [];
       }
-
-      return await this.db.getAllAsync(query, params);
+      return this.db.getAllAsync(query, params);
     };
 
     const next = this.queue.then(run, run);

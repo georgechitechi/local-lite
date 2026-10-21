@@ -42,6 +42,9 @@ export class OutboxStore {
       `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_ts ON sync_outbox (status, timestamp);`
     );
     await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_retry ON sync_outbox (status, retry_count, timestamp);`
+    );
+    await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_sync_outbox_row ON sync_outbox (table_name, row_id, timestamp);`
     );
   }
@@ -142,6 +145,32 @@ export class OutboxStore {
     if (!rows || rows.length === 0) return undefined;
 
     return mapOutboxRow(rows[0]);
+  }
+
+  /**
+   * Retrieves active (non-FAILED) pending outbox records indexed by `${table_name}:${row_id}`.
+   * Enables O(1) in-memory conflict lookup during delta ingestion, eliminating N+1 queries.
+   */
+  static async getActivePendingMap(tx: LocalTransaction): Promise<Map<string, OutboxRecord>> {
+    const map = new Map<string, OutboxRecord>();
+    try {
+      const rows = await tx.execute(
+        `SELECT * FROM sync_outbox WHERE status != 'FAILED' ORDER BY timestamp DESC`
+      );
+      if (!rows || rows.length === 0) return map;
+
+      for (const r of rows) {
+        const record = mapOutboxRow(r);
+        const key = `${record.tableName}:${record.rowId}`;
+        // Preserve the latest record for each table_name:row_id
+        if (!map.has(key)) {
+          map.set(key, record);
+        }
+      }
+      return map;
+    } catch {
+      return map;
+    }
   }
 
   /**
@@ -294,8 +323,8 @@ export class OutboxStore {
         );
         return ids.length;
       } else {
-        const failedRecords = await db.execute(`SELECT id FROM sync_outbox WHERE status = 'FAILED'`);
-        const count = failedRecords?.length || 0;
+        const rows = await db.execute(`SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'FAILED'`);
+        const count = Number(rows?.[0]?.count ?? (Array.isArray(rows) ? rows.length : 0));
         if (count > 0) {
           await db.execute(
             `UPDATE sync_outbox SET status = 'PENDING', retry_count = 0, last_error = NULL WHERE status = 'FAILED'`
@@ -321,8 +350,8 @@ export class OutboxStore {
         );
         return ids.length;
       } else {
-        const failedRecords = await db.execute(`SELECT id FROM sync_outbox WHERE status = 'FAILED'`);
-        const count = failedRecords?.length || 0;
+        const rows = await db.execute(`SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'FAILED'`);
+        const count = Number(rows?.[0]?.count ?? (Array.isArray(rows) ? rows.length : 0));
         if (count > 0) {
           await db.execute(`DELETE FROM sync_outbox WHERE status = 'FAILED'`);
         }

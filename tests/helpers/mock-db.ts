@@ -77,6 +77,14 @@ export class MockDB implements LocalDBAdapter {
       return rows.has(id) ? [{ 1: 1 }] : [];
     }
 
+    // Active outbox records (non-FAILED)
+    if (lowerQ.includes('from sync_outbox') && lowerQ.includes("status != 'failed'") && !lowerQ.includes('table_name = ?')) {
+      const rows = Array.from(this.getTable('sync_outbox').values());
+      const filtered = rows.filter((r) => r.status !== 'FAILED');
+      filtered.sort((a, b) => b.timestamp - a.timestamp);
+      return filtered;
+    }
+
     // Outbox find pending by row
     if (normQ.includes('FROM sync_outbox') && normQ.includes('table_name = ? AND row_id = ?')) {
       const rows = Array.from(this.getTable('sync_outbox').values());
@@ -169,6 +177,13 @@ export class MockDB implements LocalDBAdapter {
         this.getTable(table).set(id, obj);
       }
       return [];
+    }
+
+    // Select count from sync_outbox where status = 'FAILED'
+    if (lowerQ.startsWith('select count') && lowerQ.includes('from sync_outbox') && lowerQ.includes("status = 'failed'")) {
+      const rows = Array.from(this.getTable('sync_outbox').values());
+      const count = rows.filter((r) => r.status === 'FAILED').length;
+      return [{ count }];
     }
 
     // Select id from sync_outbox where status = 'FAILED'
