@@ -111,6 +111,17 @@ class LRUQueryCache {
 // In-memory query result cache capped with LRU eviction to prevent memory leaks
 const queryCache = new LRUQueryCache();
 const inFlightQueries = new Map<string, Promise<any>>();
+const tableVersions = new Map<string, number>();
+
+function getTableVersion(tableName: string): number {
+  return tableVersions.get(tableName) || 0;
+}
+
+function advanceTableVersion(tableName: string): number {
+  const nextVersion = getTableVersion(tableName) + 1;
+  tableVersions.set(tableName, nextVersion);
+  return nextVersion;
+}
 
 async function fetchDeduped<T>(key: string, fn: () => Promise<T>): Promise<T> {
   let inFlight = inFlightQueries.get(key);
@@ -127,6 +138,7 @@ async function fetchDeduped<T>(key: string, fn: () => Promise<T>): Promise<T> {
 export function clearLiveQueryCache(): void {
   queryCache.clear();
   inFlightQueries.clear();
+  tableVersions.clear();
 }
 
 /**
@@ -156,8 +168,8 @@ export function useLiveQuery<T = any>(
     typeof queryOrOptions === 'object' && queryOrOptions !== null
       ? JSON.stringify(queryOrOptions)
       : typeof queryOrOptions === 'function'
-      ? 'custom'
-      : 'all';
+        ? 'custom'
+        : 'all';
   const cacheKey = `${tableName}:${queryKey}`;
 
   // Read-through cache: return instant cached rows on mount (0ms latency, zero flicker)
@@ -168,14 +180,16 @@ export function useLiveQuery<T = any>(
 
   const refetch = useCallback(async () => {
     if (!client || !client.db) return;
+    const versionAtStart = getTableVersion(tableName);
     try {
-      const res = await fetchDeduped(cacheKey, async () => {
+      const res = await fetchDeduped(cacheKey + ':v' + versionAtStart, async () => {
         const param = queryParamRef.current;
         if (typeof param === 'function') return (await param(client)) || [];
         if (typeof param === 'object' && param !== null) return await client.findMany<T>(tableName, param);
         return await client.findMany<T>(tableName);
       });
 
+      if (versionAtStart !== getTableVersion(tableName)) return;
       queryCache.set(cacheKey, res);
       setData((prev) => (areRowArraysEqual(prev, res) ? prev : res));
     } catch (err: any) {
@@ -199,6 +213,7 @@ export function useLiveQuery<T = any>(
     refetch();
 
     const unsubscribe = client.events.on(tableName, () => {
+      advanceTableVersion(tableName);
       scheduleRefetch();
     });
 
@@ -354,11 +369,13 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
       const results = await Promise.all(
         items.map(async (item) => {
           try {
-            const rows = await fetchDeduped(item.cacheKey, async () => {
+            const versionAtStart = getTableVersion(item.table);
+            const rows = await fetchDeduped(item.cacheKey + ':v' + versionAtStart, async () => {
               if (item.fn) return (await item.fn(client)) || [];
               if (item.options) return await client.findMany(item.table, item.options);
               return await client.findMany(item.table);
             });
+            if (versionAtStart !== getTableVersion(item.table)) return null;
             queryCache.set(item.cacheKey, rows);
             return { key: item.key, rows };
           } catch (err: any) {
@@ -376,6 +393,7 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
         let changed = false;
         const next = { ...prev } as Record<string, any[]>;
         for (const res of results) {
+          if (!res) continue;
           if (!areRowArraysEqual(prev[res.key], res.rows)) {
             next[res.key] = res.rows;
             changed = true;
@@ -398,6 +416,7 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
     const tables = Array.from(new Set(items.map((i) => i.table).filter(Boolean)));
     const unsubs = tables.map((tbl) =>
       client.events.on(tbl, () => {
+        advanceTableVersion(tbl);
         scheduleRefetch();
       })
     );
@@ -437,10 +456,12 @@ export function useLiveRow<T = any>(
       return;
     }
     try {
-      const res = await fetchDeduped(cacheKey, async () => {
+      const versionAtStart = getTableVersion(tableName);
+      const res = await fetchDeduped(cacheKey + ':v' + versionAtStart, async () => {
         const r = await client.findById<T>(tableName, rowId, options);
         return r ? [r] : [];
       });
+      if (versionAtStart !== getTableVersion(tableName)) return;
       const row = res.length > 0 ? (res[0] as T) : null;
       if (row) {
         queryCache.set(cacheKey, [row]);
@@ -468,6 +489,7 @@ export function useLiveRow<T = any>(
     refetch();
 
     const unsubscribe = client.events.on(tableName, (event: any) => {
+      advanceTableVersion(tableName);
       // Precise row-level invalidation: only refetch if event affects this rowId or is a bulk event
       if (!event || !event.rowId || event.rowId === rowId || event.rowId === 'batch') {
         scheduleRefetch();
@@ -520,6 +542,7 @@ export function useLiveInfiniteQuery<T = any>(
     if (!client || !client.db) return;
     if (isNextPage) setIsFetchingNextPage(true);
 
+    const versionAtStart = getTableVersion(tableName);
     try {
       const currentOpts = optionsRef.current;
       const fetchLimit = pages * pageSize + 1; // +1 to check for hasNextPage
@@ -529,6 +552,7 @@ export function useLiveInfiniteQuery<T = any>(
         offset: currentOpts.offset || 0,
       });
 
+      if (versionAtStart !== getTableVersion(tableName)) return;
       if (rows.length > pages * pageSize) {
         setHasNextPage(true);
         setData(rows.slice(0, pages * pageSize));
@@ -569,6 +593,7 @@ export function useLiveInfiniteQuery<T = any>(
     loadData(1, false);
 
     const unsubscribe = client.events.on(tableName, () => {
+      advanceTableVersion(tableName);
       scheduleRefetch();
     });
 
