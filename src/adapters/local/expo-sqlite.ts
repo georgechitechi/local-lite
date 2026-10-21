@@ -1,7 +1,11 @@
 import { LocalDBAdapter, LocalTransaction } from './index.js';
 
-interface ExpoDatabase {
+// Pre-compiled RegExp hoisted to module scope — 0 regex allocations per query
+const READ_QUERY_REGEX = /^(?:SELECT|PRAGMA)\b/i;
+
+export interface ExpoDatabase {
   getAllAsync(query: string, params: any[]): Promise<any[]>;
+  runAsync?(query: string, params: any[]): Promise<any>;
   execAsync?(query: string): Promise<void>;
   withTransactionAsync(action: () => Promise<void>): Promise<void>;
   closeAsync?(): Promise<void>;
@@ -10,7 +14,7 @@ interface ExpoDatabase {
 
 export class ExpoSQLiteAdapter implements LocalDBAdapter {
   private db: ExpoDatabase;
-  private queue: Promise<any> = Promise.resolve();
+  private writeQueue: Promise<any> = Promise.resolve();
 
   constructor(expoDbInstance: any) {
     this.db = expoDbInstance as ExpoDatabase;
@@ -18,21 +22,31 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
 
   async execute(query: string, params: any[] = []): Promise<any[]> {
     const trimmed = query.trim();
-    const isRead = /^SELECT\b/i.test(trimmed) || /^PRAGMA\b/i.test(trimmed);
+    const isRead = READ_QUERY_REGEX.test(trimmed);
 
-    // Fast-path: reads bypass the write queue entirely
-    if (isRead) return this.db.getAllAsync(trimmed, params);
+    // Fast-path: reads bypass the write queue entirely for zero-latency reactive queries
+    if (isRead) {
+      return this.db.getAllAsync(trimmed, params);
+    }
 
     const run = async (): Promise<any[]> => {
+      // Parameterless DDL statements bypass statement preparation
       if ((!params || params.length === 0) && typeof this.db.execAsync === 'function') {
-        await this.db.execAsync(query);
+        await this.db.execAsync(trimmed);
         return [];
       }
-      return this.db.getAllAsync(query, params);
+
+      // Modern Expo SQLite (SDK 51+): runAsync is optimized for writes without dummy row allocation
+      if (typeof this.db.runAsync === 'function') {
+        const res = await this.db.runAsync(trimmed, params);
+        return [res];
+      }
+
+      return this.db.getAllAsync(trimmed, params);
     };
 
-    const next = this.queue.then(run, run);
-    this.queue = next.catch(() => {});
+    const next = this.writeQueue.then(run, run);
+    this.writeQueue = next.catch(() => {});
     return await next;
   }
 
@@ -43,30 +57,36 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
         const txWrapper: LocalTransaction = {
           execute: async (q, p = []) => {
             const trimmed = q.trim();
-            const isSelect = /^SELECT\b/i.test(trimmed) || /^PRAGMA\b/i.test(trimmed);
-            if (!isSelect && (!p || p.length === 0) && typeof this.db.execAsync === 'function') {
-              await this.db.execAsync(q);
+            if (READ_QUERY_REGEX.test(trimmed)) {
+              return this.db.getAllAsync(trimmed, p);
+            }
+            if ((!p || p.length === 0) && typeof this.db.execAsync === 'function') {
+              await this.db.execAsync(trimmed);
               return [];
             }
-            return await this.db.getAllAsync(q, p);
-          }
+            if (typeof this.db.runAsync === 'function') {
+              const res = await this.db.runAsync(trimmed, p);
+              return [res];
+            }
+            return this.db.getAllAsync(trimmed, p);
+          },
         };
         result = await action(txWrapper);
       });
       return result;
     };
 
-    // Serialize transactions and queries to prevent SQLite concurrency crashes
-    const next = this.queue.then(run, run);
-    this.queue = next.catch(() => {});
+    // Serialize transactions to prevent SQLite concurrency crashes
+    const next = this.writeQueue.then(run, run);
+    this.writeQueue = next.catch(() => {});
     return await next;
   }
 
   /**
-   * Waits for pending queries/transactions to finish and closes the underlying SQLite database connection.
+   * Waits for pending writes/transactions to finish and closes the underlying SQLite connection.
    */
   async close(): Promise<void> {
-    await this.queue;
+    await this.writeQueue;
     if (typeof this.db.closeAsync === 'function') {
       await this.db.closeAsync();
     } else if (typeof this.db.closeSync === 'function') {

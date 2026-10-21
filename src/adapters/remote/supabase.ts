@@ -250,21 +250,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           i++;
         }
 
-        const buildRowData = (item: SyncOperation) => {
-          const row: Record<string, any> = {
-            ...(item.payload || {}),
-            [this.primaryKey]: item.rowId,
-            [this.deletedColumn]: false,
-          };
-          if (this.updatedAtColumn && !row[this.updatedAtColumn]) {
-            row[this.updatedAtColumn] = new Date(item.timestamp).toISOString();
-          }
-          return row;
-        };
-
         if (batch.length === 1) {
           try {
-            const rowData = buildRowData(batch[0]);
+            const rowData = this.buildRowData(batch[0]);
             const { error } = await client.from(op.tableName).upsert(rowData);
             if (error) {
               const msg = formatSupabaseError(error, { table: op.tableName, operation: 'INSERT' });
@@ -285,7 +273,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           const retryIndividually = async () => {
             for (const item of batch) {
               try {
-                const singleRow = buildRowData(item);
+                const singleRow = this.buildRowData(item);
                 const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
                 if (singleErr) {
                   const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
@@ -303,7 +291,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           };
 
           try {
-            const rows = batch.map(buildRowData);
+            const rows = batch.map((item) => this.buildRowData(item));
             const { error } = await client.from(op.tableName).upsert(rows);
             if (!error) {
               for (const item of batch) successfulIds.push(item.id);
@@ -317,36 +305,83 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         continue;
       }
 
-      // Handle DELETE
+      // Batch consecutive DELETEs for the same table
       if (op.operation === 'DELETE') {
-        try {
-          const patch: Record<string, any> = {
-            [this.deletedColumn]: this.deletedValue,
-          };
-          if (this.updatedAtColumn) {
-            patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
-          }
+        const batch: SyncOperation[] = [];
+        while (
+          i < operations.length &&
+          operations[i].operation === 'DELETE' &&
+          operations[i].tableName === op.tableName
+        ) {
+          batch.push(operations[i]);
+          i++;
+        }
 
-          const { error } = await client
-            .from(op.tableName)
-            .update(patch)
-            .eq(this.primaryKey, op.rowId);
+        const patch: Record<string, any> = {
+          [this.deletedColumn]: this.deletedValue,
+        };
+        if (this.updatedAtColumn) {
+          patch[this.updatedAtColumn] = new Date(op.timestamp).toISOString();
+        }
 
-          if (error) {
-            const msg = formatSupabaseError(error, { table: op.tableName, operation: 'DELETE' });
+        if (batch.length === 1) {
+          try {
+            const { error } = await client
+              .from(op.tableName)
+              .update(patch)
+              .eq(this.primaryKey, op.rowId);
+
+            if (error) {
+              const msg = formatSupabaseError(error, { table: op.tableName, operation: 'DELETE' });
+              this.logger.error(msg);
+              failedIds.push(op.id);
+              errors[op.id] = msg;
+            } else {
+              successfulIds.push(op.id);
+            }
+          } catch (err: any) {
+            const msg = formatSupabaseError(err, { table: op.tableName, operation: 'DELETE' });
             this.logger.error(msg);
             failedIds.push(op.id);
             errors[op.id] = msg;
-          } else {
-            successfulIds.push(op.id);
           }
-        } catch (err: any) {
-          const msg = formatSupabaseError(err, { table: op.tableName, operation: 'DELETE' });
-          this.logger.error(msg);
-          failedIds.push(op.id);
-          errors[op.id] = msg;
+        } else {
+          // Bulk soft-delete using .in() to collapse N round-trips into 1
+          const rowIds = batch.map((item) => item.rowId);
+          try {
+            const { error } = await client
+              .from(op.tableName)
+              .update(patch)
+              .in(this.primaryKey, rowIds);
+
+            if (!error) {
+              for (const item of batch) successfulIds.push(item.id);
+            } else {
+              // Fallback to individual updates if .in() fails
+              for (const item of batch) {
+                try {
+                  const { error: singleErr } = await client
+                    .from(op.tableName)
+                    .update(patch)
+                    .eq(this.primaryKey, item.rowId);
+                  if (singleErr) {
+                    const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'DELETE' });
+                    failedIds.push(item.id);
+                    errors[item.id] = msg;
+                  } else {
+                    successfulIds.push(item.id);
+                  }
+                } catch (singleErr: any) {
+                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'DELETE' });
+                  failedIds.push(item.id);
+                  errors[item.id] = msg;
+                }
+              }
+            }
+          } catch {
+            for (const item of batch) failedIds.push(item.id);
+          }
         }
-        i++;
         continue;
       }
 
@@ -362,22 +397,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           i++;
         }
 
-        const buildUpdateRowData = (item: SyncOperation) => {
-          const row: Record<string, any> = {
-            ...(item.payload || {}),
-            [this.primaryKey]: item.rowId,
-            [this.deletedColumn]: false,
-          };
-          if (this.updatedAtColumn && !row[this.updatedAtColumn]) {
-            row[this.updatedAtColumn] = new Date(item.timestamp).toISOString();
-          }
-          return row;
-        };
-
         if (batch.length === 1) {
           const item = batch[0];
           try {
-            const patch = buildUpdateRowData(item);
+            const patch = this.buildRowData(item);
             const { error, data } = await client
               .from(op.tableName)
               .update(patch)
@@ -410,7 +433,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           }
         } else {
           // Bulk upsert for multiple consecutive updates (merges fields by primaryKey in 1 HTTP call)
-          const rows = batch.map(buildUpdateRowData);
+          const rows = batch.map((item) => this.buildRowData(item));
           try {
             const { error } = await client.from(op.tableName).upsert(rows);
             if (!error) {
@@ -419,7 +442,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               // Fallback to individual updates if bulk upsert has a schema conflict
               for (const item of batch) {
                 try {
-                  const singleRow = buildUpdateRowData(item);
+                  const singleRow = this.buildRowData(item);
                   const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
                   if (singleErr) {
                     const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'UPDATE' });
@@ -612,6 +635,21 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   }
 
   /**
+   * Formats a row payload for remote Supabase storage (adds primaryKey, deleted: false, updated_at).
+   */
+  private buildRowData(item: SyncOperation): Record<string, any> {
+    const row: Record<string, any> = {
+      ...(item.payload || {}),
+      [this.primaryKey]: item.rowId,
+      [this.deletedColumn]: false,
+    };
+    if (this.updatedAtColumn && !row[this.updatedAtColumn]) {
+      row[this.updatedAtColumn] = new Date(item.timestamp).toISOString();
+    }
+    return row;
+  }
+
+  /**
    * Helper to determine if a record represents a soft delete.
    */
   private isSoftDeleted(record: Record<string, any> | null | undefined): boolean {
@@ -626,6 +664,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
   /**
    * Subscribes to live realtime postgres_changes from Supabase.
+   * Batches rapid burst events in the same microtask turn into a single SQLite sync transaction.
    */
   subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): (() => void) | void {
     this.activeLiveCallback = callback;
@@ -654,6 +693,25 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     }
 
     const channel = client.channel(this.channelName);
+    let pendingLiveChanges: DeltaChange[] = [];
+    let isScheduled = false;
+
+    const flushLiveChanges = () => {
+      isScheduled = false;
+      if (pendingLiveChanges.length === 0) return;
+      const toSend = pendingLiveChanges;
+      pendingLiveChanges = [];
+      const maxTimestamp = Math.max(...toSend.map((c) => c.timestamp || 0), Date.now());
+      callback({
+        timestamp: maxTimestamp,
+        changes: toSend,
+      });
+    };
+
+    const scheduleFlush =
+      typeof queueMicrotask === 'function'
+        ? queueMicrotask
+        : (fn: () => void) => setTimeout(fn, 0);
 
     for (const table of this.tables) {
       channel.on(
@@ -675,18 +733,18 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             ? new Date(record[this.updatedAtColumn]).getTime()
             : Date.now();
 
-          callback({
+          pendingLiveChanges.push({
+            tableName: table,
+            operation: finalOp,
+            rowId,
+            payload: finalOp === 'DELETE' ? null : record,
             timestamp,
-            changes: [
-              {
-                tableName: table,
-                operation: finalOp,
-                rowId,
-                payload: finalOp === 'DELETE' ? null : record,
-                timestamp,
-              },
-            ],
           });
+
+          if (!isScheduled) {
+            isScheduled = true;
+            scheduleFlush(flushLiveChanges);
+          }
         }
       );
     }
@@ -700,6 +758,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.activeChannel = channel;
 
     return () => {
+      flushLiveChanges();
       this.activeLiveCallback = undefined;
       this.destroy();
     };

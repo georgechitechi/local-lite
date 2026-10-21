@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   OpSQLiteAdapter,
   BetterSQLite3Adapter,
   LibSQLAdapter,
   SqlJsAdapter,
   NodeSQLiteAdapter,
+  ExpoSQLiteAdapter,
 } from '../src/adapters/local/index.js';
 import { detectSQLiteType } from '../src/core/schema-manager.js';
 
@@ -106,5 +107,45 @@ describe('Multi-Driver SQLite Adapters', () => {
     const adapter = new NodeSQLiteAdapter(mockNodeDb);
     const rows = await adapter.execute('SELECT * FROM test');
     expect(rows).toEqual([{ id: 'node-1', runtime: 'node:sqlite' }]);
+  });
+
+  it('ExpoSQLiteAdapter executes reads directly, uses runAsync for writes, and supports transactions', async () => {
+    const getAllSpy = vi.fn().mockResolvedValue([{ id: 'expo-1', title: 'Task' }]);
+    const runAsyncSpy = vi.fn().mockResolvedValue({ changes: 1, lastInsertRowId: 10 });
+    const execAsyncSpy = vi.fn().mockResolvedValue(undefined);
+    const withTxSpy = vi.fn().mockImplementation(async (cb: () => Promise<void>) => {
+      await cb();
+    });
+
+    const mockExpoDb = {
+      getAllAsync: getAllSpy,
+      runAsync: runAsyncSpy,
+      execAsync: execAsyncSpy,
+      withTransactionAsync: withTxSpy,
+    };
+
+    const adapter = new ExpoSQLiteAdapter(mockExpoDb);
+
+    // 1. Read query (SELECT) uses getAllAsync directly
+    const readRows = await adapter.execute('SELECT * FROM tasks WHERE id = ?', ['expo-1']);
+    expect(readRows).toEqual([{ id: 'expo-1', title: 'Task' }]);
+    expect(getAllSpy).toHaveBeenCalledWith('SELECT * FROM tasks WHERE id = ?', ['expo-1']);
+
+    // 2. Write query with parameters uses runAsync (faster, no dummy rows)
+    const writeRows = await adapter.execute('INSERT INTO tasks (title) VALUES (?)', ['New']);
+    expect(runAsyncSpy).toHaveBeenCalledWith('INSERT INTO tasks (title) VALUES (?)', ['New']);
+    expect(writeRows).toEqual([{ changes: 1, lastInsertRowId: 10 }]);
+
+    // 3. Parameterless DDL uses execAsync
+    await adapter.execute('CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY)');
+    expect(execAsyncSpy).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY)');
+
+    // 4. Atomic transaction execution
+    const txResult = await adapter.transaction(async (tx) => {
+      await tx.execute('UPDATE tasks SET title = ? WHERE id = ?', ['Done', 'expo-1']);
+      return 'tx-success';
+    });
+    expect(withTxSpy).toHaveBeenCalledTimes(1);
+    expect(txResult).toBe('tx-success');
   });
 });

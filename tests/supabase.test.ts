@@ -56,6 +56,38 @@ describe('SupabaseRemoteAdapter', () => {
     );
   });
 
+  it('batches consecutive soft-deletes using .in() to avoid N round-trips', async () => {
+    const inSpy = vi.fn().mockResolvedValue({ error: null });
+    const updateSpy = vi.fn().mockReturnValue({
+      in: inSpy,
+    });
+    const upsertSpy = vi.fn().mockResolvedValue({ error: null });
+
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        update: updateSpy,
+        upsert: upsertSpy,
+      }),
+    };
+
+    const adapter = new SupabaseRemoteAdapter(mockSupabase as any, {
+      tables: ['tasks'],
+      deletedColumn: 'deleted',
+    });
+
+    const success = await adapter.pushChanges([
+      { id: 'del-1', tableName: 'tasks', rowId: 't-1', operation: 'DELETE', payload: null, timestamp: 1000 },
+      { id: 'del-2', tableName: 'tasks', rowId: 't-2', operation: 'DELETE', payload: null, timestamp: 2000 },
+      { id: 'del-3', tableName: 'tasks', rowId: 't-3', operation: 'DELETE', payload: null, timestamp: 3000 },
+    ]);
+
+    expect(success).toBe(true);
+    // All 3 consecutive deletes collapse into a single .update().in() call!
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(inSpy).toHaveBeenCalledTimes(1);
+    expect(inSpy).toHaveBeenCalledWith('id', ['t-1', 't-2', 't-3']);
+  });
+
   it('fetches delta changes using updated_at cursor and extracts max server timestamp', async () => {
     const mockData = [
       { id: 't1', title: 'Task 1', updated_at: '2026-10-13T06:00:00.000Z', deleted: false },
