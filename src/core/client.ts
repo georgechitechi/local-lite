@@ -51,6 +51,52 @@ export interface LocalFirstClientConfig {
   autoPauseOnBackground?: boolean;
 }
 
+async function executeFindById<T>(
+  db: DBExecutable,
+  tableName: string,
+  id: string,
+  primaryKey: string,
+  hydrateRow: (t: string, r: any) => T,
+  includeDeleted?: boolean
+): Promise<T | null> {
+  const safeTable = escapeIdentifier(tableName);
+  const safePk = escapeIdentifier(primaryKey);
+  try {
+    const rows = await db.execute(`SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`, [id]);
+    if (!rows || rows.length === 0) return null;
+    const row = hydrateRow(tableName, rows[0]);
+    return !includeDeleted && isDeletedRecord(row) ? null : row;
+  } catch (err: any) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('no such table') || msg.includes('no such column')) return null;
+    throw err;
+  }
+}
+
+async function executeFindByIds<T>(
+  db: DBExecutable,
+  tableName: string,
+  ids: string[],
+  primaryKey: string,
+  hydrateRow: (t: string, r: any) => T,
+  includeDeleted?: boolean
+): Promise<T[]> {
+  if (!ids || ids.length === 0) return [];
+  const safeTable = escapeIdentifier(tableName);
+  const safePk = escapeIdentifier(primaryKey);
+  const placeholders = ids.map(() => '?').join(', ');
+  try {
+    const rows = await db.execute(`SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`, ids);
+    if (!rows || rows.length === 0) return [];
+    const hydrated = rows.map((r) => hydrateRow(tableName, r));
+    return !includeDeleted ? hydrated.filter((r) => !isDeletedRecord(r)) : hydrated;
+  } catch (err: any) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('no such table') || msg.includes('no such column')) return [];
+    throw err;
+  }
+}
+
 export class TransactionalClient {
   constructor(
     private parent: LocalFirstClient,
@@ -155,22 +201,7 @@ export class TransactionalClient {
     id: string,
     options?: { includeDeleted?: boolean }
   ): Promise<T | null> {
-    const safeTable = escapeIdentifier(tableName);
-    const safePk = escapeIdentifier(this.parent.getPrimaryKey());
-    try {
-      const rows = await this.tx.execute(
-        `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-        [id]
-      );
-      if (!rows || rows.length === 0) return null;
-      const row = this.parent.hydrateRow<T>(tableName, rows[0]);
-      if (!options?.includeDeleted && isDeletedRecord(row)) {
-        return null;
-      }
-      return row;
-    } catch {
-      return null;
-    }
+    return executeFindById<T>(this.tx, tableName, id, this.parent.getPrimaryKey(), (t, r) => this.parent.hydrateRow<T>(t, r), options?.includeDeleted);
   }
 
   async findByIds<T = any>(
@@ -178,24 +209,7 @@ export class TransactionalClient {
     ids: string[],
     options?: { includeDeleted?: boolean }
   ): Promise<T[]> {
-    if (!ids || ids.length === 0) return [];
-    const safeTable = escapeIdentifier(tableName);
-    const safePk = escapeIdentifier(this.parent.getPrimaryKey());
-    const placeholders = ids.map(() => '?').join(', ');
-    try {
-      const rows = await this.tx.execute(
-        `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
-        ids
-      );
-      if (!rows || rows.length === 0) return [];
-      const hydrated = rows.map((r) => this.parent.hydrateRow<T>(tableName, r));
-      if (!options?.includeDeleted) {
-        return hydrated.filter((r) => !isDeletedRecord(r));
-      }
-      return hydrated;
-    } catch {
-      return [];
-    }
+    return executeFindByIds<T>(this.tx, tableName, ids, this.parent.getPrimaryKey(), (t, r) => this.parent.hydrateRow<T>(t, r), options?.includeDeleted);
   }
 
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
@@ -851,65 +865,15 @@ export class LocalFirstClient {
     id: string,
     options?: { includeDeleted?: boolean }
   ): Promise<T | null> {
-    // Primary-key lookup in SQLite instead of loading the whole table into JS.
-    const safeTable = escapeIdentifier(tableName);
-    const safePk = escapeIdentifier(this.primaryKey);
-    try {
-      const rows = await this.db.execute(
-        `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-        [id]
-      );
-      if (!rows || rows.length === 0) return null;
-      const row = this.hydrateRow<T>(tableName, rows[0]);
-      if (!options?.includeDeleted && isDeletedRecord(row)) {
-        return null;
-      }
-      return row;
-    } catch (err: any) {
-      const msg = String(err?.message || err || '');
-      if (msg.includes('no such table') || msg.includes('no such column')) {
-        return null;
-      }
-      throw err;
-    }
+    return executeFindById<T>(this.db, tableName, id, this.primaryKey, (t, r) => this.hydrateRow<T>(t, r), options?.includeDeleted);
   }
 
-  /**
-   * Finds multiple records by primary keys in a single batched SQL query.
-   * Eliminates the N-roundtrip bridge overhead of multiple findById calls.
-   * Automatically omits soft-deleted records unless includeDeleted: true.
-   *
-   * Example:
-   * const tenants = await client.findByIds('tenants', ['ten-1', 'ten-2', 'ten-3']);
-   */
   async findByIds<T = any>(
     tableName: string,
     ids: string[],
     options?: { includeDeleted?: boolean }
   ): Promise<T[]> {
-    if (!ids || ids.length === 0) return [];
-    const safeTable = escapeIdentifier(tableName);
-    const safePk = escapeIdentifier(this.primaryKey);
-    const placeholders = ids.map(() => '?').join(', ');
-    try {
-      const rows = await this.db.execute(
-        `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
-        ids
-      );
-      if (!rows || rows.length === 0) return [];
-      const hasJsonConfig = Boolean(this.jsonColumns[tableName] || this.autoHydrateJSON);
-      const hydrated = hasJsonConfig ? rows.map((r) => this.hydrateRow<T>(tableName, r)) : (rows as T[]);
-      if (!options?.includeDeleted) {
-        return hydrated.filter((r) => !isDeletedRecord(r));
-      }
-      return hydrated;
-    } catch (err: any) {
-      const msg = String(err?.message || err || '');
-      if (msg.includes('no such table') || msg.includes('no such column')) {
-        return [];
-      }
-      throw err;
-    }
+    return executeFindByIds<T>(this.db, tableName, ids, this.primaryKey, (t, r) => this.hydrateRow<T>(t, r), options?.includeDeleted);
   }
 
   /**

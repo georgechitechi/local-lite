@@ -54,28 +54,11 @@ export function matchesField(fieldValue: any, filter: FieldFilter): boolean {
     return false;
   }
 
-  if (ops.$contains !== undefined) {
-    const str = fieldValue === null || fieldValue === undefined ? '' : String(fieldValue).toLowerCase();
-    const search = String(ops.$contains).toLowerCase();
-    if (!str.includes(search)) {
-      return false;
-    }
-  }
-
-  if (ops.$startsWith !== undefined) {
-    const str = fieldValue === null || fieldValue === undefined ? '' : String(fieldValue).toLowerCase();
-    const prefix = String(ops.$startsWith).toLowerCase();
-    if (!str.startsWith(prefix)) {
-      return false;
-    }
-  }
-
-  if (ops.$endsWith !== undefined) {
-    const str = fieldValue === null || fieldValue === undefined ? '' : String(fieldValue).toLowerCase();
-    const suffix = String(ops.$endsWith).toLowerCase();
-    if (!str.endsWith(suffix)) {
-      return false;
-    }
+  if (ops.$contains !== undefined || ops.$startsWith !== undefined || ops.$endsWith !== undefined) {
+    const str = fieldValue == null ? '' : String(fieldValue).toLowerCase();
+    if (ops.$contains !== undefined && !str.includes(String(ops.$contains).toLowerCase())) return false;
+    if (ops.$startsWith !== undefined && !str.startsWith(String(ops.$startsWith).toLowerCase())) return false;
+    if (ops.$endsWith !== undefined && !str.endsWith(String(ops.$endsWith).toLowerCase())) return false;
   }
 
   if (ops.$null !== undefined) {

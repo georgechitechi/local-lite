@@ -6,43 +6,11 @@ export interface DBExecutable {
 
 /**
  * Detects the appropriate SQLite column type affinity from a JavaScript runtime value.
- *
- * Mapping:
- * - boolean -> INTEGER (0 or 1)
- * - integer -> INTEGER
- * - float/double -> REAL
- * - string -> TEXT
- * - object/array -> TEXT (JSON formatted)
- * - Uint8Array -> BLOB
- * - null/undefined -> TEXT (flexible SQLite type affinity)
  */
 export function detectSQLiteType(value: any): 'INTEGER' | 'REAL' | 'TEXT' | 'BLOB' {
-  if (value === null || value === undefined) {
-    return 'TEXT';
-  }
-
-  const type = typeof value;
-
-  if (type === 'boolean') {
-    return 'INTEGER';
-  }
-
-  if (type === 'number') {
-    return Number.isInteger(value) ? 'INTEGER' : 'REAL';
-  }
-
-  if (type === 'string') {
-    return 'TEXT';
-  }
-
-  if (value instanceof Uint8Array) {
-    return 'BLOB';
-  }
-
-  if (type === 'object') {
-    return 'TEXT';
-  }
-
+  if (typeof value === 'boolean') return 'INTEGER';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'INTEGER' : 'REAL';
+  if (value instanceof Uint8Array) return 'BLOB';
   return 'TEXT';
 }
 
@@ -52,18 +20,9 @@ export function detectSQLiteType(value: any): 'INTEGER' | 'REAL' | 'TEXT' | 'BLO
  * - Plain objects and arrays are JSON serialized
  */
 export function formatValueForStorage(value: any): any {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === 'boolean') {
-    return value ? 1 : 0;
-  }
-
-  if (typeof value === 'object' && !(value instanceof Uint8Array)) {
-    return JSON.stringify(value);
-  }
-
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'object' && !(value instanceof Uint8Array)) return JSON.stringify(value);
   return value;
 }
 
@@ -72,18 +31,12 @@ export class SchemaManager {
   private knownColumns: Set<string> = new Set();
   private knownIndexes: Set<string> = new Set();
 
-  /**
-   * Resets the schema cache (useful for testing or full database resets).
-   */
   clearCache(): void {
     this.knownTables.clear();
     this.knownColumns.clear();
     this.knownIndexes.clear();
   }
 
-  /**
-   * Checks whether a column is known to exist on the specified table.
-   */
   hasColumn(tableName: string, column: string): boolean {
     return this.knownColumns.has(`${tableName}:${column.toLowerCase()}`);
   }
@@ -95,51 +48,54 @@ export class SchemaManager {
     const cacheKey = `${tableName}:__introspected__`;
     if (this.knownColumns.has(cacheKey)) return;
     this.knownColumns.add(cacheKey);
+
     const safeTable = escapeIdentifier(tableName);
     try {
       const tableInfo = await db.execute(`PRAGMA table_info(${safeTable});`);
+      const cols: string[] = [];
       if (Array.isArray(tableInfo)) {
         for (const col of tableInfo) {
-          if (col && col.name) {
+          if (col?.name) {
             this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
+            cols.push(String(col.name));
           }
         }
       }
+      await this.autoIndexColumns(db, tableName, safeTable, cols);
+    } catch {}
+  }
 
-      // Auto-create high performance single and composite indexes for foreign keys (_id) and soft-deletes (deleted)
-      const hasDeleted = this.knownColumns.has(`${tableName}:deleted`);
-      for (const entry of this.knownColumns) {
-        if (!entry.startsWith(`${tableName}:`)) continue;
-        const colName = entry.slice(tableName.length + 1);
-        if (colName.endsWith('_id') && colName !== 'id') {
-          const fkIndexKey = `${tableName}:${colName}`;
-          if (!this.knownIndexes.has(fkIndexKey)) {
-            this.knownIndexes.add(fkIndexKey);
-            try {
-              const idxName = escapeIdentifier(`idx_${tableName}_${colName}`);
-              const safeFk = escapeIdentifier(colName);
-              await db.execute(`CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeFk});`);
-            } catch {}
-          }
-
-          if (hasDeleted) {
-            const compositeKey = `${tableName}:${colName}_deleted`;
-            if (!this.knownIndexes.has(compositeKey)) {
-              this.knownIndexes.add(compositeKey);
-              try {
-                const idxName = escapeIdentifier(`idx_${tableName}_${colName}_del`);
-                const safeFk = escapeIdentifier(colName);
-                const safeDel = escapeIdentifier('deleted');
-                await db.execute(
-                  `CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeFk}, ${safeDel});`
-                );
-              } catch {}
-            }
-          }
+  /**
+   * Automatically creates single-column and composite FK+deleted indexes for given columns.
+   */
+  private async autoIndexColumns(
+    db: DBExecutable,
+    tableName: string,
+    safeTable: string,
+    columns: string[]
+  ): Promise<void> {
+    const hasDeleted = this.knownColumns.has(`${tableName}:deleted`);
+    for (const key of columns) {
+      const lower = key.toLowerCase();
+      if (lower.endsWith('_id') || lower === 'deleted' || lower === 'created_at' || lower === 'updated_at') {
+        const indexKey = `${tableName}:${lower}`;
+        if (!this.knownIndexes.has(indexKey)) {
+          this.knownIndexes.add(indexKey);
+          try {
+            await db.execute(`CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${tableName}_${key}`)} ON ${safeTable} (${escapeIdentifier(key)});`);
+          } catch {}
         }
       }
-    } catch {
-      // Ignore
+
+      if (hasDeleted && lower.endsWith('_id') && lower !== 'id') {
+        const compositeKey = `${tableName}:${lower}_deleted`;
+        if (!this.knownIndexes.has(compositeKey)) {
+          this.knownIndexes.add(compositeKey);
+          try {
+            await db.execute(`CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${tableName}_${lower}_del`)} ON ${safeTable} (${escapeIdentifier(key)}, "deleted");`);
+          } catch {}
+        }
+      }
     }
   }
 
@@ -151,9 +107,7 @@ export class SchemaManager {
     tableName: string,
     primaryKey: string = 'id'
   ): Promise<void> {
-    if (this.knownTables.has(tableName)) {
-      return;
-    }
+    if (this.knownTables.has(tableName)) return;
 
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(primaryKey);
@@ -178,115 +132,51 @@ export class SchemaManager {
   ): Promise<Record<string, any>> {
     await this.ensureTable(db, tableName, primaryKey);
 
-    if (!payload || typeof payload !== 'object') {
-      return {};
-    }
-
+    if (!payload || typeof payload !== 'object') return {};
     const keys = Object.keys(payload);
-    if (keys.length === 0) {
-      return {};
-    }
+    if (keys.length === 0) return {};
 
     const safeTable = escapeIdentifier(tableName);
     let cacheMiss = false;
 
     for (const key of keys) {
-      if (key === primaryKey) continue;
-      const cacheKey = `${tableName}:${key.toLowerCase()}`;
-      if (!this.knownColumns.has(cacheKey)) {
+      if (key !== primaryKey && !this.knownColumns.has(`${tableName}:${key.toLowerCase()}`)) {
         cacheMiss = true;
         break;
       }
     }
 
     if (cacheMiss) {
-      // Query PRAGMA table_info to discover existing columns from SQLite
       try {
         const tableInfo = await db.execute(`PRAGMA table_info(${safeTable});`);
         if (Array.isArray(tableInfo)) {
           for (const col of tableInfo) {
-            if (col && col.name) {
+            if (col?.name) {
               this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
             }
           }
         }
-      } catch (err) {
-        // Fallback for mocks or custom drivers where PRAGMA table_info might not be supported
-      }
+      } catch {}
 
-      // Check for columns that still do not exist, and alter table
       for (const key of keys) {
         if (key === primaryKey) continue;
         const cacheKey = `${tableName}:${key.toLowerCase()}`;
         if (!this.knownColumns.has(cacheKey)) {
           const detectedType = detectSQLiteType(payload[key]);
-          const safeCol = escapeIdentifier(key);
-
           try {
-            await db.execute(`ALTER TABLE ${safeTable} ADD COLUMN ${safeCol} ${detectedType};`);
-          } catch (err: any) {
-            // Ignore if column already exists (e.g. concurrent race)
-            const msg = String(err?.message || err || '');
-            if (!msg.toLowerCase().includes('duplicate column')) {
-              // Ignore or rethrow
-            }
-          }
-
+            await db.execute(`ALTER TABLE ${safeTable} ADD COLUMN ${escapeIdentifier(key)} ${detectedType};`);
+          } catch {}
           this.knownColumns.add(cacheKey);
         }
-
-        // Auto-index foreign keys and common query columns
-        const lowerKey = key.toLowerCase();
-        if (
-          lowerKey.endsWith('_id') ||
-          lowerKey === 'deleted' ||
-          lowerKey === 'created_at' ||
-          lowerKey === 'updated_at'
-        ) {
-          const indexKey = `${tableName}:${lowerKey}`;
-          if (!this.knownIndexes.has(indexKey)) {
-            this.knownIndexes.add(indexKey);
-            try {
-              const idxName = escapeIdentifier(`idx_${tableName}_${key}`);
-              const safeCol = escapeIdentifier(key);
-              await db.execute(`CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeCol});`);
-            } catch {
-              // Ignore if indexes are not supported by adapter or already exist
-            }
-          }
-        }
       }
 
-      // Auto-create composite FK+deleted index only on first schema discovery
-      if (this.knownColumns.has(`${tableName}:deleted`)) {
-        for (const key of keys) {
-          const lowerKey = key.toLowerCase();
-          if (lowerKey.endsWith('_id') && lowerKey !== 'id') {
-            const compositeKey = `${tableName}:${lowerKey}_deleted`;
-            if (!this.knownIndexes.has(compositeKey)) {
-              this.knownIndexes.add(compositeKey);
-              try {
-                const idxName = escapeIdentifier(`idx_${tableName}_${lowerKey}_del`);
-                const safeFk = escapeIdentifier(key);
-                const safeDel = escapeIdentifier('deleted');
-                await db.execute(
-                  `CREATE INDEX IF NOT EXISTS ${idxName} ON ${safeTable} (${safeFk}, ${safeDel});`
-                );
-              } catch {
-                // Ignore
-              }
-            }
-          }
-        }
-      }
+      await this.autoIndexColumns(db, tableName, safeTable, keys);
     }
 
-    // Format all values for SQLite storage
     const formatted: Record<string, any> = {};
     for (const key of keys) {
       formatted[key] = formatValueForStorage(payload[key]);
     }
-
     return formatted;
   }
 }

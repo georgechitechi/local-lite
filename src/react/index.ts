@@ -110,7 +110,16 @@ class LRUQueryCache {
 
 // In-memory query result cache capped with LRU eviction to prevent memory leaks
 const queryCache = new LRUQueryCache();
-const inFlightQueries = new Map<string, Promise<any[]>>();
+const inFlightQueries = new Map<string, Promise<any>>();
+
+async function fetchDeduped<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  let inFlight = inFlightQueries.get(key);
+  if (!inFlight) {
+    inFlight = fn().finally(() => inFlightQueries.delete(key));
+    inFlightQueries.set(key, inFlight);
+  }
+  return inFlight;
+}
 
 /**
  * Clears the in-memory live query cache.
@@ -160,26 +169,13 @@ export function useLiveQuery<T = any>(
   const refetch = useCallback(async () => {
     if (!client || !client.db) return;
     try {
-      // De-duplicate simultaneous identical in-flight queries
-      let inFlight = inFlightQueries.get(cacheKey);
-      if (!inFlight) {
-        inFlight = (async () => {
-          const param = queryParamRef.current;
-          if (typeof param === 'function') {
-            return (await param(client)) || [];
-          } else if (typeof param === 'object' && param !== null) {
-            return await client.findMany<T>(tableName, param);
-          } else {
-            return await client.findMany<T>(tableName);
-          }
-        })();
-        inFlightQueries.set(cacheKey, inFlight);
-        inFlight.finally(() => {
-          inFlightQueries.delete(cacheKey);
-        });
-      }
+      const res = await fetchDeduped(cacheKey, async () => {
+        const param = queryParamRef.current;
+        if (typeof param === 'function') return (await param(client)) || [];
+        if (typeof param === 'object' && param !== null) return await client.findMany<T>(tableName, param);
+        return await client.findMany<T>(tableName);
+      });
 
-      const res: T[] = (await inFlight) || [];
       queryCache.set(cacheKey, res);
       setData((prev) => (areRowArraysEqual(prev, res) ? prev : res));
     } catch (err: any) {
@@ -357,25 +353,12 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
     try {
       const results = await Promise.all(
         items.map(async (item) => {
-          let inFlight = inFlightQueries.get(item.cacheKey);
-          if (!inFlight) {
-            inFlight = (async () => {
-              if (item.fn) {
-                return (await item.fn(client)) || [];
-              } else if (item.options) {
-                return await client.findMany(item.table, item.options);
-              } else {
-                return await client.findMany(item.table);
-              }
-            })();
-            inFlightQueries.set(item.cacheKey, inFlight);
-            inFlight.finally(() => {
-              inFlightQueries.delete(item.cacheKey);
-            });
-          }
-
           try {
-            const rows = (await inFlight) || [];
+            const rows = await fetchDeduped(item.cacheKey, async () => {
+              if (item.fn) return (await item.fn(client)) || [];
+              if (item.options) return await client.findMany(item.table, item.options);
+              return await client.findMany(item.table);
+            });
             queryCache.set(item.cacheKey, rows);
             return { key: item.key, rows };
           } catch (err: any) {
@@ -454,13 +437,10 @@ export function useLiveRow<T = any>(
       return;
     }
     try {
-      let inFlight = inFlightQueries.get(cacheKey);
-      if (!inFlight) {
-        inFlight = client.findById<T>(tableName, rowId, options).then((r) => (r ? [r] : []));
-        inFlightQueries.set(cacheKey, inFlight);
-        inFlight.finally(() => inFlightQueries.delete(cacheKey));
-      }
-      const res = await inFlight;
+      const res = await fetchDeduped(cacheKey, async () => {
+        const r = await client.findById<T>(tableName, rowId, options);
+        return r ? [r] : [];
+      });
       const row = res.length > 0 ? (res[0] as T) : null;
       if (row) {
         queryCache.set(cacheKey, [row]);
