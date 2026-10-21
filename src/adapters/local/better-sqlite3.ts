@@ -16,6 +16,7 @@ export interface BetterSqliteDatabase {
  * Adapter for better-sqlite3 in Node.js, Electron, Next.js, and server environments.
  */
 export class BetterSQLite3Adapter implements LocalDBAdapter {
+  readonly supportsSqlPushdown = true;
   private db: BetterSqliteDatabase;
   private txQueue: Promise<any> = Promise.resolve();
   private statementCache: Map<string, BetterSqliteStatement> = new Map();

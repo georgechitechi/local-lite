@@ -19,6 +19,7 @@ export interface SqlJsDatabase {
  * Adapter for sql.js (WebAssembly SQLite in Web Browsers, PWAs, and Expo Web).
  */
 export class SqlJsAdapter implements LocalDBAdapter {
+  readonly supportsSqlPushdown = true;
   private db: SqlJsDatabase;
 
   constructor(sqlJsDatabase: any) {

@@ -51,6 +51,17 @@ export interface LocalFirstClientConfig {
   autoPauseOnBackground?: boolean;
 }
 
+function hasFunctionFilter(value: any): boolean {
+  if (typeof value === 'function') return true;
+  if (Array.isArray(value)) return value.some(hasFunctionFilter);
+  if (value && typeof value === 'object') return Object.values(value).some(hasFunctionFilter);
+  return false;
+}
+
+function shouldUseClientSideQuery(options?: QueryOptions): boolean {
+  return hasFunctionFilter(options?.where);
+}
+
 async function executeFindById<T>(
   db: DBExecutable,
   tableName: string,
@@ -213,8 +224,11 @@ export class TransactionalClient {
   }
 
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    const rows = await this.from<T>(tableName).applyOptions(options).execute();
-    return applyQueryOptions<T>(rows, options);
+    if (!this.parent.db.supportsSqlPushdown || shouldUseClientSideQuery(options)) {
+      const rows = await this.from<T>(tableName).execute();
+      return applyQueryOptions<T>(rows, options);
+    }
+    return this.from<T>(tableName).applyOptions(options).execute();
   }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -338,39 +352,54 @@ export class LocalFirstClient {
     rowId: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    timestamp: number
+    timestamp: number,
+    pendingOutboxMap?: Map<string, OutboxRecord>
   ): Promise<string | undefined> {
+    const pendingKey = tableName + ':' + rowId;
     if (this.coalesceOutbox) {
-      const existing = await OutboxStore.findPendingByRow(tx, tableName, rowId);
+      const existing = pendingOutboxMap
+        ? pendingOutboxMap.get(pendingKey)
+        : await OutboxStore.findPendingByRow(tx, tableName, rowId);
       if (existing && existing.status === 'PENDING') {
         if (operation === 'DELETE') {
           if (existing.operation === 'INSERT') {
-            // Created offline and deleted offline before ever being pushed to server: clean up outbox completely
             await OutboxStore.deleteRecord(tx, existing.id);
+            pendingOutboxMap?.delete(pendingKey);
             return undefined;
-          } else {
-            await OutboxStore.updateOperation(tx, existing.id, 'DELETE', null, timestamp);
-            return existing.id;
           }
-        } else if (operation === 'UPDATE') {
+          await OutboxStore.updateOperation(tx, existing.id, 'DELETE', null, timestamp);
+          if (pendingOutboxMap) {
+            existing.operation = 'DELETE';
+            existing.payload = null;
+            existing.timestamp = timestamp;
+          }
+          return existing.id;
+        }
+        if (operation === 'UPDATE') {
           const merged = { ...(existing.payload || {}), ...(payload || {}) };
           await OutboxStore.updatePayload(tx, existing.id, merged, timestamp);
+          if (pendingOutboxMap) {
+            existing.payload = merged;
+            existing.timestamp = timestamp;
+          }
           return existing.id;
-        } else if (operation === 'INSERT') {
+        }
+        if (operation === 'INSERT') {
           await OutboxStore.updateOperation(tx, existing.id, 'INSERT', payload, timestamp);
+          if (pendingOutboxMap) {
+            existing.operation = 'INSERT';
+            existing.payload = payload;
+            existing.timestamp = timestamp;
+          }
           return existing.id;
         }
       }
     }
-
     const outboxId = generateUUID();
-    await OutboxStore.insertRecord(tx, {
-      id: outboxId,
-      tableName,
-      rowId,
-      operation,
-      payload,
-      timestamp,
+    await OutboxStore.insertRecord(tx, { id: outboxId, tableName, rowId, operation, payload, timestamp });
+    pendingOutboxMap?.set(pendingKey, {
+      id: outboxId, tableName, rowId, operation, payload, timestamp,
+      status: 'PENDING', retryCount: 0, lastError: null,
     });
     return outboxId;
   }
@@ -492,8 +521,12 @@ export class LocalFirstClient {
     const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
     const queuedOutboxIds: string[] = [];
     const pendingOutboxOps: SyncOperation[] = [];
+    let pendingOutboxMap: Map<string, OutboxRecord> | undefined;
 
     const executeInTx = async (tx: LocalTransaction) => {
+      if (this.coalesceOutbox && mutations.length > 1) {
+        pendingOutboxMap = await OutboxStore.getActivePendingMap(tx);
+      }
       for (const m of mutations) {
         const pk = m.primaryKey ?? options.primaryKey ?? this.primaryKey;
         const payload = m.payload ?? null;
@@ -519,7 +552,8 @@ export class LocalFirstClient {
               rowId,
               m.operation,
               payload,
-              timestamp
+              timestamp,
+              pendingOutboxMap
             );
             if (outboxId) {
               queuedOutboxIds.push(outboxId);
@@ -850,8 +884,11 @@ export class LocalFirstClient {
   }
 
   async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    const rows = await this.from<T>(tableName).applyOptions(options).execute();
-    return applyQueryOptions<T>(rows, options);
+    if (!this.db.supportsSqlPushdown || shouldUseClientSideQuery(options)) {
+      const rows = await this.from<T>(tableName).execute();
+      return applyQueryOptions<T>(rows, options);
+    }
+    return this.from<T>(tableName).applyOptions(options).execute();
   }
 
   /**

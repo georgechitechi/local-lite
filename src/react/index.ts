@@ -111,15 +111,38 @@ class LRUQueryCache {
 // In-memory query result cache capped with LRU eviction to prevent memory leaks
 const queryCache = new LRUQueryCache();
 const inFlightQueries = new Map<string, Promise<any>>();
-const tableVersions = new Map<string, number>();
+const tableVersions = new WeakMap<object, Map<string, number>>();
+const clientIds = new WeakMap<object, number>();
+let nextClientId = 1;
 
-function getTableVersion(tableName: string): number {
-  return tableVersions.get(tableName) || 0;
+function getClientScope(client: LocalFirstClient | null | undefined): string {
+  if (!client) return 'no-client';
+  let id = clientIds.get(client);
+  if (!id) {
+    id = nextClientId++;
+    clientIds.set(client, id);
+  }
+  return 'client-' + id;
 }
 
-function advanceTableVersion(tableName: string): number {
-  const nextVersion = getTableVersion(tableName) + 1;
-  tableVersions.set(tableName, nextVersion);
+function getScopedCacheKey(client: LocalFirstClient | null | undefined, key: string): string {
+  return getClientScope(client) + ':' + key;
+}
+
+function getTableVersion(client: LocalFirstClient | null | undefined, tableName: string): number {
+  if (!client) return 0;
+  return tableVersions.get(client)?.get(tableName) || 0;
+}
+
+function advanceTableVersion(client: LocalFirstClient | null | undefined, tableName: string): number {
+  if (!client) return 0;
+  let versions = tableVersions.get(client);
+  if (!versions) {
+    versions = new Map<string, number>();
+    tableVersions.set(client, versions);
+  }
+  const nextVersion = getTableVersion(client, tableName) + 1;
+  versions.set(tableName, nextVersion);
   return nextVersion;
 }
 
@@ -138,7 +161,6 @@ async function fetchDeduped<T>(key: string, fn: () => Promise<T>): Promise<T> {
 export function clearLiveQueryCache(): void {
   queryCache.clear();
   inFlightQueries.clear();
-  tableVersions.clear();
 }
 
 /**
@@ -170,7 +192,7 @@ export function useLiveQuery<T = any>(
       : typeof queryOrOptions === 'function'
         ? 'custom'
         : 'all';
-  const cacheKey = `${tableName}:${queryKey}`;
+  const cacheKey = getScopedCacheKey(client, `${tableName}:${queryKey}`);
 
   // Read-through cache: return instant cached rows on mount (0ms latency, zero flicker)
   const [data, setData] = useState<T[]>(() => (queryCache.get(cacheKey) as T[]) || []);
@@ -180,7 +202,7 @@ export function useLiveQuery<T = any>(
 
   const refetch = useCallback(async () => {
     if (!client || !client.db) return;
-    const versionAtStart = getTableVersion(tableName);
+    const versionAtStart = getTableVersion(client, tableName);
     try {
       const res = await fetchDeduped(cacheKey + ':v' + versionAtStart, async () => {
         const param = queryParamRef.current;
@@ -189,7 +211,7 @@ export function useLiveQuery<T = any>(
         return await client.findMany<T>(tableName);
       });
 
-      if (versionAtStart !== getTableVersion(tableName)) return;
+      if (versionAtStart !== getTableVersion(client, tableName)) return;
       queryCache.set(cacheKey, res);
       setData((prev) => (areRowArraysEqual(prev, res) ? prev : res));
     } catch (err: any) {
@@ -213,7 +235,7 @@ export function useLiveQuery<T = any>(
     refetch();
 
     const unsubscribe = client.events.on(tableName, () => {
-      advanceTableVersion(tableName);
+      advanceTableVersion(client, tableName);
       scheduleRefetch();
     });
 
@@ -346,10 +368,11 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
 
   const items = useMemo(() => normalizeMultiQueries(queries), [signature]);
 
+  const clientScope = getClientScope(client);
   const [data, setData] = useState<T>(() => {
     const initial: Record<string, any[]> = {};
     for (const item of items) {
-      const cached = queryCache.get(item.cacheKey);
+      const cached = queryCache.get(clientScope + ':' + item.cacheKey);
       initial[item.key] = cached ? cached : [];
     }
     return initial as T;
@@ -358,7 +381,7 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
   const [loading, setLoading] = useState(() => {
     if (items.length === 0) return false;
     for (const item of items) {
-      if (!queryCache.has(item.cacheKey)) return true;
+      if (!queryCache.has(clientScope + ':' + item.cacheKey)) return true;
     }
     return false;
   });
@@ -369,14 +392,15 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
       const results = await Promise.all(
         items.map(async (item) => {
           try {
-            const versionAtStart = getTableVersion(item.table);
-            const rows = await fetchDeduped(item.cacheKey + ':v' + versionAtStart, async () => {
+            const versionAtStart = getTableVersion(client, item.table);
+            const scopedCacheKey = clientScope + ':' + item.cacheKey;
+            const rows = await fetchDeduped(scopedCacheKey + ':v' + versionAtStart, async () => {
               if (item.fn) return (await item.fn(client)) || [];
               if (item.options) return await client.findMany(item.table, item.options);
               return await client.findMany(item.table);
             });
-            if (versionAtStart !== getTableVersion(item.table)) return null;
-            queryCache.set(item.cacheKey, rows);
+            if (versionAtStart !== getTableVersion(client, item.table)) return null;
+            queryCache.set(scopedCacheKey, rows);
             return { key: item.key, rows };
           } catch (err: any) {
             const msg = String(err?.message || err || '');
@@ -416,7 +440,7 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
     const tables = Array.from(new Set(items.map((i) => i.table).filter(Boolean)));
     const unsubs = tables.map((tbl) =>
       client.events.on(tbl, () => {
-        advanceTableVersion(tbl);
+        advanceTableVersion(client, tbl);
         scheduleRefetch();
       })
     );
@@ -441,7 +465,7 @@ export function useLiveRow<T = any>(
   rowId: string | null | undefined,
   options?: { includeDeleted?: boolean }
 ): { data: T | null; refetch: () => Promise<void>; loading: boolean } {
-  const cacheKey = `${tableName}:row:${rowId || 'null'}:${Boolean(options?.includeDeleted)}`;
+  const cacheKey = getScopedCacheKey(client, `${tableName}:row:${rowId || 'null'}:${Boolean(options?.includeDeleted)}`);
   const [data, setData] = useState<T | null>(() => {
     if (!rowId) return null;
     const cached = queryCache.get(cacheKey);
@@ -456,12 +480,12 @@ export function useLiveRow<T = any>(
       return;
     }
     try {
-      const versionAtStart = getTableVersion(tableName);
+      const versionAtStart = getTableVersion(client, tableName);
       const res = await fetchDeduped(cacheKey + ':v' + versionAtStart, async () => {
         const r = await client.findById<T>(tableName, rowId, options);
         return r ? [r] : [];
       });
-      if (versionAtStart !== getTableVersion(tableName)) return;
+      if (versionAtStart !== getTableVersion(client, tableName)) return;
       const row = res.length > 0 ? (res[0] as T) : null;
       if (row) {
         queryCache.set(cacheKey, [row]);
@@ -489,7 +513,7 @@ export function useLiveRow<T = any>(
     refetch();
 
     const unsubscribe = client.events.on(tableName, (event: any) => {
-      advanceTableVersion(tableName);
+      advanceTableVersion(client, tableName);
       // Precise row-level invalidation: only refetch if event affects this rowId or is a bulk event
       if (!event || !event.rowId || event.rowId === rowId || event.rowId === 'batch') {
         scheduleRefetch();
@@ -542,7 +566,7 @@ export function useLiveInfiniteQuery<T = any>(
     if (!client || !client.db) return;
     if (isNextPage) setIsFetchingNextPage(true);
 
-    const versionAtStart = getTableVersion(tableName);
+    const versionAtStart = getTableVersion(client, tableName);
     try {
       const currentOpts = optionsRef.current;
       const fetchLimit = pages * pageSize + 1; // +1 to check for hasNextPage
@@ -552,7 +576,7 @@ export function useLiveInfiniteQuery<T = any>(
         offset: currentOpts.offset || 0,
       });
 
-      if (versionAtStart !== getTableVersion(tableName)) return;
+      if (versionAtStart !== getTableVersion(client, tableName)) return;
       if (rows.length > pages * pageSize) {
         setHasNextPage(true);
         setData(rows.slice(0, pages * pageSize));
@@ -593,7 +617,7 @@ export function useLiveInfiniteQuery<T = any>(
     loadData(1, false);
 
     const unsubscribe = client.events.on(tableName, () => {
-      advanceTableVersion(tableName);
+      advanceTableVersion(client, tableName);
       scheduleRefetch();
     });
 

@@ -46,6 +46,7 @@ function normalizeRows(res: LibSQLResultSet): any[] {
  * Supports local SQLite files, embedded replicas, in-memory databases, and server/edge deployments.
  */
 export class LibSQLAdapter implements LocalDBAdapter {
+  readonly supportsSqlPushdown = true;
   private client: LibSQLClient;
 
   constructor(libsqlClient: any) {

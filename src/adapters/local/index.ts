@@ -4,6 +4,8 @@ export interface LocalTransaction {
 
 export interface LocalDBAdapter {
   execute(query: string, params?: any[]): Promise<any[]>;
+  /** True when execute runs real SQL with filtering, ordering, paging, and projection. */
+  readonly supportsSqlPushdown?: boolean;
   transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T>;
   close?(): Promise<void> | void;
 }

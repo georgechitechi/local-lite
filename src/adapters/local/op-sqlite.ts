@@ -38,6 +38,7 @@ function extractRows(res: any): any[] {
  * Enables ultra-fast C++ JSI SQLite in bare React Native.
  */
 export class OpSQLiteAdapter implements LocalDBAdapter {
+  readonly supportsSqlPushdown = true;
   private db: OpSQLiteDatabase;
   private txMutex: Promise<any> = Promise.resolve();
 

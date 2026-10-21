@@ -13,6 +13,7 @@ export interface ExpoDatabase {
 }
 
 export class ExpoSQLiteAdapter implements LocalDBAdapter {
+  readonly supportsSqlPushdown = true;
   private db: ExpoDatabase;
   private writeQueue: Promise<any> = Promise.resolve();
 

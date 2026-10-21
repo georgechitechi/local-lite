@@ -17,6 +17,7 @@ export interface NodeSqliteDatabaseSync {
  * Provides zero-dependency, native SQLite on modern Node.js runtimes.
  */
 export class NodeSQLiteAdapter implements LocalDBAdapter {
+  readonly supportsSqlPushdown = true;
   private db: NodeSqliteDatabaseSync;
   private txQueue: Promise<any> = Promise.resolve();
   private statementCache: Map<string, NodeSqliteStatement> = new Map();
