@@ -1,6 +1,6 @@
 {
   "name": "local-lite",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Never let a lost connection break a promise. Local-first sync that faithfully keeps data safe until you're back online.",
   "license": "MIT",
   "main": "dist/index.js",
