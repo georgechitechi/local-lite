@@ -171,3 +171,102 @@ export class CustomSQLiteAdapter implements LocalDBAdapter {
   }
 }
 ```
+
+## Database Backups
+
+The `local-lite/backups` entry point creates SQLite snapshots from database bytes supplied
+by your platform adapter. Its Google Drive backup client handles OAuth authorization-code
++ PKCE, code exchange, token refresh, and file storage.
+The app supplies its OAuth client ID, callback URI/browser authorization, and secure token
+storage; these platform-specific capabilities cannot safely be assumed by a
+framework-neutral package. Backups do not alter or replace the remote adapter used for
+live synchronization.
+
+```typescript
+import {
+  createDatabaseBackup,
+  GoogleDriveBackupClient,
+  createGoogleDriveTokenStore,
+} from 'local-lite/backups';
+
+const tokenStore = createGoogleDriveTokenStore(secureKeyValueStorage);
+const drive = new GoogleDriveBackupClient({
+  clientId: googleOAuthClientId,
+  redirectUri,
+  authorize: openAuthorizationUrlInSystemBrowser,
+  tokenStore,
+});
+
+await drive.connect();
+await createDatabaseBackup(database, drive);
+```
+
+The `authorize` callback opens the supplied `authorizationUrl` and returns the
+authorization `code` and `state` from the registered `redirectUri`, or `null` if the user
+cancels. The client validates the OAuth state and performs the PKCE code exchange.
+`tokenStore` implements `get`, `set`, and `remove`; use your platform's secure credential
+storage, not plain preferences. The client refreshes expired tokens automatically, and its
+`list()` method returns backup metadata for restore-selection screens. For apps that
+already manage OAuth, `GoogleDriveBackupStorage` remains available and accepts an
+access-token callback.
+
+For example, an Expo app can provide the browser and secure-store bridges:
+
+```typescript
+const tokenStore = createGoogleDriveTokenStore(secureStorage, 'drive-backup-tokens');
+const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_DRIVE_CLIENT_ID;
+if (!googleClientId) throw new Error('Google Drive OAuth client ID is required.');
+
+const drive = new GoogleDriveBackupClient({
+  clientId: googleClientId,
+  redirectUri: makeRedirectUri({ scheme: 'myapp', path: 'oauth' }),
+  tokenStore,
+  authorize: async ({ authorizationUrl, redirectUri }) => {
+    const result = await WebBrowser.openAuthSessionAsync(
+      authorizationUrl,
+      redirectUri,
+    );
+    if (result.type !== 'success') return null;
+
+    const callback = new URL(result.url);
+    return {
+      code: callback.searchParams.get('code') ?? '',
+      state: callback.searchParams.get('state') ?? '',
+    };
+  },
+});
+```
+
+Register the exact redirect URI with the Google OAuth client. OAuth client IDs and
+redirect behavior differ by target platform; no generic library can register the app or
+create those provider credentials on the developer's behalf.
+
+```typescript
+import {
+  createDatabaseBackup,
+  restoreDatabaseBackup,
+  type BackupDatabase,
+  type BackupStorage,
+} from 'local-lite/backups';
+
+const database: BackupDatabase = {
+  exportDatabase: () => sqliteDatabase.serializeAsync(),
+  importDatabase: async bytes => {
+    // Validate and restore using the SQLite driver's platform-specific backup APIs.
+    await restoreSQLiteSnapshot(sqliteDatabase, bytes);
+  },
+};
+
+const storage: BackupStorage = {
+  save: async (name, bytes) => writeIntoPrivateBackupsDirectory(name, bytes),
+  read: async name => readFromPrivateBackupsDirectory(name),
+};
+
+const name = await createDatabaseBackup(database, storage);
+await restoreDatabaseBackup(database, storage, name);
+```
+
+Backups are stored as plain `.db` files, so anyone with access to the cloud file can read
+the database. Use this only when that exposure is acceptable and protect access through
+the cloud account. Stop concurrent writes and synchronization before restoring, and use
+the platform's database backup API rather than replacing a live SQLite file directly.

@@ -46,6 +46,11 @@
       "import": "./dist/adapters/remote/firestore.js",
       "default": "./dist/adapters/remote/firestore.js"
     },
+    "./backups": {
+      "types": "./dist/backups/index.d.ts",
+      "import": "./dist/backups/index.js",
+      "default": "./dist/backups/index.js"
+    },
     "./expo-sqlite": {
       "types": "./dist/adapters/local/expo-sqlite.d.ts",
       "import": "./dist/adapters/local/expo-sqlite.js",
@@ -139,6 +144,7 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "uuid": "^14.0.3"
   }
 }

@@ -19,6 +19,7 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 * **[Configuration Reference](https://georgechitechi.github.io/local-lite/#/configuration)** - Options for `defineSyncConfig()`, retries, and loggers
 * **[Local SQLite Adapters](https://georgechitechi.github.io/local-lite/#/adapters-local)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
 * **[Remote Cloud Adapters](https://georgechitechi.github.io/local-lite/#/adapters-remote)** - Supabase, Convex, Cloud Firestore, and custom adapters
+* **[Database Backups](https://georgechitechi.github.io/local-lite/#/adapters-local?id=database-backups)** - SQLite snapshots with a Google Drive OAuth/PKCE client
 * **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()` and `useSyncStatus()`
 * **[Conflict Resolution](https://georgechitechi.github.io/local-lite/#/conflict-resolution)** - LWW, Client-Wins, Server-Wins, and custom resolvers
 
@@ -85,6 +86,7 @@ This recovers sync state; it does not repair corrupt SQLite files or cancel hung
 * **🛡️ Conflict Resolution:** Built-in strategies including **Last-Write-Wins (LWW)**, Server-Wins, Client-Wins, or custom resolver functions.
 * **📶 Network-Aware:** Automatically pauses polling when offline and triggers immediate sync flushes the instant connectivity is restored.
 * **🔄 Infinite-Loop Safe:** Incoming remote deltas update local tables and fire reactive UI listeners without echoing back into the outbox.
+* **☁️ Database Backups:** Export and restore SQLite snapshots independently of your live sync backend.
 
 ---
 
