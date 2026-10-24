@@ -5,6 +5,8 @@
 * [💾 Local SQLite Adapters](adapters-local.md)
 * [☁️ Remote Cloud Adapters](adapters-remote.md)
 * [⚛️ React & Expo Hooks](react-hooks.md)
-* [🔑 Authentication (Google, OneDrive, GitHub)](auth.md)
-* [🔀 Conflict Resolution](conflict-resolution.md)
+* [🔑 Authentication (Google, Microsoft, GitHub, Apple)](auth.md)
+* [🔀 Conflict Resolution & Field Merge](conflict-resolution.md)
+* [📦 Cloud Backups & Zero-Knowledge Encryption](backups.md)
+* [🧹 Maintenance & Universal Data Portability](maintenance-portability.md)
 

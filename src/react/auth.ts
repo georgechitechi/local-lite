@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import type { GoogleAuthClient, GoogleUser } from '../auth/google.js';
 import type { MicrosoftAuthClient, MicrosoftUser } from '../auth/microsoft.js';
 import type { GitHubAuthClient, GitHubUser } from '../auth/github.js';
+import type { AppleAuthClient, AppleUser, AppleNativeCredential } from '../auth/apple.js';
 
 // ----------------------------------------------------
 // Google Auth Hook
@@ -296,6 +297,117 @@ export function useGitHubAuth(
       setLoading(false);
     }
   }, [client]);
+
+  const signOut = useCallback(async () => {
+    if (!client) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await client.signOut();
+      setUser(null);
+    } catch (err: any) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      setError(e);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [client]);
+
+  const refetchUser = useCallback(async () => {
+    if (!client) return null;
+    const res = await client.getUser();
+    setUser(res);
+    return res;
+  }, [client]);
+
+  return {
+    user,
+    isSignedIn: Boolean(user),
+    loading,
+    error,
+    signIn,
+    signOut,
+    refetchUser,
+  };
+}
+
+// ----------------------------------------------------
+// Apple Auth Hook
+// ----------------------------------------------------
+
+export interface UseAppleAuthResult {
+  user: AppleUser | null;
+  isSignedIn: boolean;
+  loading: boolean;
+  error: Error | null;
+  signIn: (nativeCredential?: AppleNativeCredential) => Promise<AppleUser | null>;
+  signOut: () => Promise<void>;
+  refetchUser: () => Promise<AppleUser | null>;
+}
+
+export function useAppleAuth(
+  client: AppleAuthClient | null | undefined,
+): UseAppleAuthResult {
+  const [user, setUser] = useState<AppleUser | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!client) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    client
+      .getUser()
+      .then(currentUser => {
+        if (isMounted) {
+          setUser(currentUser);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        if (isMounted) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setLoading(false);
+        }
+      });
+
+    const unsubscribe = client.onAuthStateChange(updatedUser => {
+      if (isMounted) {
+        setUser(updatedUser);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [client]);
+
+  const signIn = useCallback(
+    async (nativeCredential?: AppleNativeCredential) => {
+      if (!client) throw new Error('AppleAuthClient is not initialized.');
+      setError(null);
+      setLoading(true);
+      try {
+        const res = await client.signIn(nativeCredential);
+        setUser(res);
+        return res;
+      } catch (err: any) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        setError(e);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client]
+  );
 
   const signOut = useCallback(async () => {
     if (!client) return;

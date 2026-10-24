@@ -19,9 +19,11 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 * **[Configuration Reference](https://georgechitechi.github.io/local-lite/#/configuration)** - Options for `defineSyncConfig()`, retries, and loggers
 * **[Local SQLite Adapters](https://georgechitechi.github.io/local-lite/#/adapters-local)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
 * **[Remote Cloud Adapters](https://georgechitechi.github.io/local-lite/#/adapters-remote)** - Supabase, Convex, Cloud Firestore, and custom adapters
-* **[Database Backups](https://georgechitechi.github.io/local-lite/#/adapters-local?id=database-backups)** - SQLite snapshots with a Google Drive OAuth/PKCE client
-* **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()` and `useSyncStatus()`
-* **[Conflict Resolution](https://georgechitechi.github.io/local-lite/#/conflict-resolution)** - LWW, Client-Wins, Server-Wins, and custom resolvers
+* **[Authentication (Google, Microsoft, GitHub, Apple)](https://georgechitechi.github.io/local-lite/#/auth)** - Direct PKCE & native Apple authentication clients & hooks
+* **[Database Backups & Encryption](https://georgechitechi.github.io/local-lite/#/backups)** - Google Drive, OneDrive, and Zero-Knowledge AES-256-GCM snapshots
+* **[Conflict Resolution & Field Merge](https://georgechitechi.github.io/local-lite/#/conflict-resolution)** - 3-Way field merging, LWW, Client-Wins, and Server-Wins
+* **[Maintenance & Data Portability](https://georgechitechi.github.io/local-lite/#/maintenance-portability)** - VACUUM, WAL checkpoints, outbox pruning, and JSON/CSV export/import
+* **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()`, `useSyncStatus()`, and auth hooks
 
 ---
 

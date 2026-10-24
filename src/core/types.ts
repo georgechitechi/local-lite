@@ -6,7 +6,7 @@ export interface SyncOperation {
   tableName: string;
   rowId: string;
   operation: SyncOp;
-  payload: Record<string, any> | null;
+  payload?: Record<string, any> | null;
   timestamp: number;
 }
 
@@ -19,7 +19,7 @@ export interface PushResult {
 
 export interface OutboxRecord extends SyncOperation {
   status: OutboxStatus;
-  retryCount: number;
+  retryCount?: number;
   lastError?: string | null;
 }
 
@@ -27,7 +27,7 @@ export interface DeltaChange {
   tableName: string;
   operation: SyncOp;
   rowId: string;
-  payload: Record<string, any> | null;
+  payload?: Record<string, any> | null;
   timestamp?: number;
 }
 
@@ -47,7 +47,47 @@ export interface ConflictContext {
 }
 
 export type ConflictResolver = (context: ConflictContext) => ConflictResolution | Promise<ConflictResolution>;
-export type ConflictStrategy = 'last-write-wins' | 'server-wins' | 'client-wins';
+export type ConflictStrategy = 'last-write-wins' | 'server-wins' | 'client-wins' | 'field-merge';
+
+export type FieldMergeWinner = 'remote' | 'local' | 'newer' | 'max' | 'min';
+
+export type FieldMergeCustomResolver = (
+  localVal: any,
+  remoteVal: any,
+  context: ConflictContext
+) => any;
+
+export type FieldMergeRule = FieldMergeWinner | FieldMergeCustomResolver;
+
+export interface FieldMergeResolverOptions {
+  /**
+   * Default resolution strategy when both local and remote updated the exact same field.
+   * 'newer' (default) uses timestamp to pick the newer field; 'remote' or 'local' picks fixed side.
+   */
+  defaultWinner?: 'remote' | 'local' | 'newer';
+
+  /**
+   * Field-level merge rules by table and column.
+   * e.g.
+   * {
+   *   notes: {
+   *     tags: (local, remote) => Array.from(new Set([...(local ?? []), ...(remote ?? [])])),
+   *     view_count: 'max',
+   *   },
+   *   '*': {
+   *     updated_at: 'newer'
+   *   }
+   * }
+   */
+  fieldRules?: Record<string, Record<string, FieldMergeRule>>;
+
+  /**
+   * Strategy when one side deleted the row while the other side updated fields.
+   * 'delete-wins' (default) preserves the deletion.
+   * 'update-wins' resurrects the row with the updated fields.
+   */
+  deleteHandling?: 'delete-wins' | 'update-wins';
+}
 
 export interface NetworkStatusProvider {
   isOnline(): boolean | Promise<boolean>;

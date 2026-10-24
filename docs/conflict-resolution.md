@@ -10,7 +10,7 @@ Specify your strategy directly in `defineSyncConfig`:
 
 ```typescript
 export const config = defineSyncConfig({
-  conflictResolver: 'last-write-wins', // Options: 'last-write-wins' | 'server-wins' | 'client-wins'
+  conflictResolver: 'field-merge', // Options: 'last-write-wins' | 'server-wins' | 'client-wins' | 'field-merge'
 });
 ```
 
@@ -18,15 +18,49 @@ export const config = defineSyncConfig({
 
 | Strategy | Description | Best For |
 | :--- | :--- | :--- |
-| **`last-write-wins`** (Default) | Compares timestamps (`updatedAt` / `updated_at`). The mutation with the most recent timestamp wins. | Most collaborative apps (todos, notes, rentals). |
+| **`field-merge`** (Recommended) | 3-Way field-level merge. Merges disjoint fields from both local and remote offline edits, and uses timestamps or custom rules for conflicting fields. | Collaborative apps where multiple users edit different properties of the same item. |
+| **`last-write-wins`** (Default) | Compares mutation timestamps. The mutation with the most recent timestamp wins the entire record. | Standard apps where record replacement is acceptable. |
 | **`server-wins`** | Any incoming remote record overrides uncommitted local edits. | Authoritative server data (banking, ticket inventory). |
 | **`client-wins`** | Local changes always override incoming remote changes. | Personal draft tools, private preferences. |
 
 ---
 
-## 2. Custom Conflict Resolvers
+## 2. Smart 3-Way Field-Level Conflict Resolver (`createFieldMergeResolver`)
 
-For field-level merging or business logic, pass a custom resolver function:
+Instead of picking all-local or all-remote, `createFieldMergeResolver` intelligently inspects individual columns:
+* **Disjoint edits preserved:** If user A modifies `title` offline and user B modifies `notes` on the server, both changes are preserved in the merged row.
+* **Granular field rules:** Apply `max`, `min`, `newer`, `local`, `remote`, or custom functions per table and column.
+* **Custom delete handling:** Choose whether deletions win (`delete-wins`) or offline edits take precedence (`update-wins`).
+
+```typescript
+import { createFieldMergeResolver } from 'local-lite';
+import { defineSyncConfig } from 'local-lite/config';
+
+export const config = defineSyncConfig({
+  conflictResolver: createFieldMergeResolver({
+    defaultWinner: 'newer', // Default for overlapping fields without explicit rules
+    deleteHandling: 'delete-wins',
+    fieldRules: {
+      notes: {
+        // Automatically union tag arrays
+        tags: (localTags, remoteTags) =>
+          Array.from(new Set([...(localTags ?? []), ...(remoteTags ?? [])])),
+        // Highest counter wins
+        view_count: 'max',
+      },
+      '*': {
+        updated_at: 'newer',
+      },
+    },
+  }),
+});
+```
+
+---
+
+## 3. Low-Level Custom Conflict Resolvers
+
+You can also provide a completely custom resolver function:
 
 ```typescript
 import { defineSyncConfig } from 'local-lite/config';
@@ -34,31 +68,11 @@ import { ConflictContext } from 'local-lite';
 
 export const config = defineSyncConfig({
   conflictResolver: (context: ConflictContext) => {
-    const { localRecord, remoteRecord, tableName } = context;
+    const { localOutboxRecord, remoteChange, localRow } = context;
 
-    // Example: For a 'tasks' table, merge tags and preserve the latest title
-    if (tableName === 'tasks') {
-      const mergedTags = Array.from(
-        new Set([
-          ...(localRecord?.tags || []),
-          ...(remoteRecord?.tags || []),
-        ])
-      );
-
-      const latestDoc = (localRecord.updatedAt > remoteRecord.updatedAt)
-        ? localRecord
-        : remoteRecord;
-
-      return {
-        ...latestDoc,
-        tags: mergedTags,
-      };
-    }
-
-    // Default to last-write-wins for other tables
-    return (localRecord?.updatedAt ?? 0) >= (remoteRecord?.updatedAt ?? 0)
-      ? localRecord
-      : remoteRecord;
+    // Return 'apply-remote' | 'keep-local' | { mergePayload: Record<string, any> }
+    return 'apply-remote';
   },
 });
 ```
+

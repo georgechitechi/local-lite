@@ -12,6 +12,22 @@ export {
   createGoogleDriveTokenStore,
 } from './cloud-storage.js';
 
+export {
+  MICROSOFT_GRAPH_DRIVE,
+  OneDriveBackupStorage,
+  OneDriveBackupClient,
+} from './onedrive.js';
+
+export {
+  type EncryptedBackupOptions,
+  type RestoreEncryptedBackupOptions,
+  isEncryptedBackup,
+  encryptBackupData,
+  decryptBackupData,
+  createEncryptedDatabaseBackup,
+  restoreEncryptedDatabaseBackup,
+} from './encryption.js';
+
 export interface BackupDatabase {
   exportDatabase(): Promise<Uint8Array>;
   importDatabase(data: Uint8Array): Promise<void>;

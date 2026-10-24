@@ -1,9 +1,10 @@
-# 🔑 Authentication (Google, Microsoft / OneDrive & GitHub)
+# 🔑 Authentication (Google, Microsoft / OneDrive, GitHub & Apple)
 
-`local-lite` provides zero-backend, PKCE-secured authentication clients and React hooks out of the box for the three most popular identity providers:
+`local-lite` provides zero-backend, PKCE-secured authentication clients and React hooks out of the box for the four most popular identity providers:
 * **Google** (`GoogleAuthClient`, `useGoogleAuth`)
 * **Microsoft / OneDrive** (`MicrosoftAuthClient`, `OneDriveAuthClient`, `useMicrosoftAuth`, `useOneDriveAuth`)
 * **GitHub** (`GitHubAuthClient`, `useGitHubAuth`)
+* **Apple** (`AppleAuthClient`, `useAppleAuth`)
 
 Built specifically for local-first architectures, these clients allow your Expo, React Native, Web, or Desktop application to authenticate users directly without requiring an intermediate backend auth server.
 
@@ -13,6 +14,7 @@ import {
   MicrosoftAuthClient,
   OneDriveAuthClient,
   GitHubAuthClient,
+  AppleAuthClient,
 } from 'local-lite/auth';
 
 import {
@@ -20,6 +22,7 @@ import {
   useMicrosoftAuth,
   useOneDriveAuth,
   useGitHubAuth,
+  useAppleAuth,
 } from 'local-lite/react';
 ```
 
@@ -171,9 +174,61 @@ export function LoginButtons() {
 
 ---
 
+## 4. Sign in with Apple
+
+`AppleAuthClient` supports both native iOS credentials (`expo-apple-authentication` / `ASAuthorizationAppleIDCredential`) and OAuth authorization flows. Because Apple provides full name and email **only on the very first sign-in**, `AppleAuthClient` automatically caches and preserves user details across sessions.
+
+### Setup with `expo-apple-authentication`:
+```typescript
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { AppleAuthClient } from 'local-lite/auth';
+
+export const appleAuth = new AppleAuthClient({
+  clientId: 'com.yourcompany.app',
+  nativeSignIn: async () => {
+    const cred = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+    return {
+      user: cred.user,
+      identityToken: cred.identityToken,
+      authorizationCode: cred.authorizationCode,
+      email: cred.email,
+      fullName: cred.fullName,
+    };
+  },
+});
+```
+
+### React Hook Example:
+```tsx
+import { useAppleAuth } from 'local-lite/react';
+import { appleAuth } from './auth';
+
+export function AppleLoginButton() {
+  const { user, isSignedIn, signIn, signOut } = useAppleAuth(appleAuth);
+
+  if (isSignedIn && user) {
+    return (
+      <View>
+        <Text>Welcome {user.name ?? user.email}!</Text>
+        <Button title="Sign Out" onPress={signOut} />
+      </View>
+    );
+  }
+
+  return <Button title="Sign in with Apple" onPress={() => signIn()} />;
+}
+```
+
+---
+
 ## 💾 Session Persistence Adapters
 
-All three clients accept a `storage` option compatible with any key-value store (AsyncStorage, SQLite kv-store, MMKV, or SecureStore):
+All auth clients accept a `storage` option compatible with any key-value store (AsyncStorage, SQLite kv-store, MMKV, or SecureStore):
 
 ```typescript
 import AsyncStorage from 'expo-sqlite/kv-store';
@@ -181,6 +236,7 @@ import {
   createGoogleAuthTokenStore,
   createMicrosoftAuthTokenStore,
   createGitHubAuthTokenStore,
+  createAppleAuthTokenStore,
 } from 'local-lite/auth';
 
 const storage = {
@@ -199,4 +255,5 @@ const storage = {
 const googleTokenStore = createGoogleAuthTokenStore(storage);
 const msTokenStore = createMicrosoftAuthTokenStore(storage);
 const ghTokenStore = createGitHubAuthTokenStore(storage);
+const appleTokenStore = createAppleAuthTokenStore(storage);
 ```

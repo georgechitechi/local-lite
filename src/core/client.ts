@@ -5,6 +5,7 @@ import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
 import { OutboxStore } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
+import { DatabaseMaintenance } from './maintenance.js';
 import { SchemaManager, DBExecutable } from './schema-manager.js';
 import {
   BatchMutation,
@@ -271,6 +272,7 @@ export class LocalFirstClient {
   public autoHydrateJSON: boolean;
   /** Local column stamped on INSERT/UPDATE writes, or null when disabled. */
   public touchColumn: string | null;
+  public readonly maintenance: DatabaseMaintenance;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -296,6 +298,7 @@ export class LocalFirstClient {
           ? touch
           : ((this.remote as any)?.updatedAtColumn as string | undefined) || 'updated_at';
     this.schemaManager = new SchemaManager();
+    this.maintenance = new DatabaseMaintenance(this.db, () => this.tables);
 
     const workerOptions: SyncWorkerOptions = {
       network: config.network,
