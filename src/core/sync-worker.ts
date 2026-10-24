@@ -22,6 +22,8 @@ import { MetaStore } from './meta-store.js';
 import { TableManager } from './table-manager.js';
 import { SchemaManager } from './schema-manager.js';
 import { SyncLogger, CustomLogger, LogLevel, createSyncLogger } from '../utils/logger.js';
+import { safeDynamicRequire } from '../utils/dynamic.js';
+const REACT_NATIVE_PKG = ['react', 'native'].join('-');
 
 /** Maximum outbox records sent per push cycle. */
 const PUSH_BATCH_SIZE = 50;

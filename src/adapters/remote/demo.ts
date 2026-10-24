@@ -52,3 +52,25 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
     this.allPushedOperations = [];
   }
 }
+
+/**
+ * Built-in No-Op Remote Adapter for local-only / offline operation.
+ * Acknowledges all local outbox pushes with 0 latency, performs no remote pulls,
+ * and maintains zero cloud backend connections.
+ */
+export class NoopRemoteAdapter implements RemoteDBAdapter {
+  async pushChanges(_operations: SyncOperation[]): Promise<boolean> {
+    return true;
+  }
+
+  async fetchChanges(_sinceTimestamp: number): Promise<DeltaChanges> {
+    return {
+      timestamp: Date.now(),
+      changes: [],
+    };
+  }
+
+  subscribeToLiveChanges(_callback: (changes: DeltaChanges) => void): () => void {
+    return () => {};
+  }
+}

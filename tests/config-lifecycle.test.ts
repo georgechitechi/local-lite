@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSyncClient, resolveRemoteAdapter } from '../src/config/index.js';
 import { LocalFirstClient } from '../src/core/index.js';
-import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
+import { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { MockDB } from './helpers/mock-db.js';
 
 const clients: LocalFirstClient[] = [];
@@ -16,6 +16,7 @@ describe('explicit configuration and initialization', () => {
     await expect(resolveRemoteAdapter({})).rejects.toThrow('No remote adapter configured');
     await expect(resolveRemoteAdapter({ inMemoryRemote: false })).rejects.toThrow();
     await expect(resolveRemoteAdapter({ inMemoryRemote: true })).resolves.toBeInstanceOf(MemoryDemoRemoteAdapter);
+    await expect(resolveRemoteAdapter({ localOnly: true })).resolves.toBeInstanceOf(NoopRemoteAdapter);
     const remote = new MemoryDemoRemoteAdapter(0);
     await expect(resolveRemoteAdapter({ remote })).resolves.toBe(remote);
   });

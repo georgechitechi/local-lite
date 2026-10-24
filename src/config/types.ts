@@ -145,6 +145,15 @@ export interface LocalLiteConfig {
   inMemoryRemote?: boolean;
 
   /**
+   * Run purely local-only without requiring any remote cloud backend.
+   * Disables cloud sync pushes and pulls while preserving all local SQLite features,
+   * schema management, outbox tracking, and transactions.
+   * Default: false
+   */
+  localOnly?: boolean;
+
+
+  /**
    * Conflict resolution strategy. Default: 'last-write-wins'
    */
   conflictResolver?: ConflictStrategy | ConflictResolver;

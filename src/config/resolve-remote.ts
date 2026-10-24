@@ -2,12 +2,17 @@ import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 import { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 import { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
-import { MemoryDemoRemoteAdapter } from '../adapters/remote/demo.js';
+import { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
+import { safeDynamicImport, safeDynamicRequire } from '../utils/dynamic.js';
 import { LocalLiteConfig } from './types.js';
+
+// Construct dynamically to prevent Metro, Webpack, and Rollup from treating
+// optional peer dependencies as unconditional build-time dependencies.
+const SUPABASE_PKG = ['@supabase', 'supabase-js'].join('/');
 
 /**
  * Resolves or instantiates the appropriate RemoteDBAdapter based on the provided configuration.
- * Supports Supabase, Convex, Firebase / Firestore, in-memory demo adapter, or custom adapters.
+ * Supports Supabase, Convex, Firebase / Firestore, in-memory demo adapter, local-only mode, or custom adapters.
  */
 export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<RemoteDBAdapter> {
   // 1. Explicit custom remote adapter
@@ -58,41 +63,37 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
 
   // 5. Supabase with URL + anonKey (lazy dynamic import)
   if (config.supabase?.url && config.supabase?.anonKey) {
-    let supabaseModule: any;
-
-    // In CommonJS / React Native Metro environments, synchronous require avoids async chunk split failure
-    try {
-      if (typeof require === 'function') {
-        supabaseModule = require('@supabase/supabase-js');
-      }
-    } catch {
-      // ignore
-    }
+    let supabaseModule = safeDynamicRequire(SUPABASE_PKG);
 
     if (!supabaseModule && typeof (globalThis as any)?.supabase?.createClient === 'function') {
       supabaseModule = (globalThis as any).supabase;
     }
 
     if (!supabaseModule) {
-      try {
-        supabaseModule = await import('@supabase/supabase-js');
-      } catch {
-        throw new Error(
-          'To initialize Supabase from url and anonKey, please install @supabase/supabase-js or provide a pre-configured client to config.supabase.client'
-        );
-      }
+      supabaseModule = await safeDynamicImport(SUPABASE_PKG);
+    }
+
+    if (!supabaseModule) {
+      throw new Error(
+        'To initialize Supabase from url and anonKey, please install @supabase/supabase-js or provide a pre-configured client to config.supabase.client'
+      );
     }
     const createClientFn = supabaseModule.createClient || supabaseModule.default?.createClient;
     const supabaseClient = createClientFn(config.supabase.url, config.supabase.anonKey);
     return new SupabaseRemoteAdapter(supabaseClient, getSupabaseOptions());
   }
 
-  // 6. Explicitly selected demo backend only; never acknowledge writes into a temporary backend implicitly.
+  // 6. Local-only standalone mode
+  if (config.localOnly === true) {
+    return new NoopRemoteAdapter();
+  }
+
+  // 7. Explicitly selected demo backend only; never acknowledge writes into a temporary backend implicitly.
   if (config.inMemoryRemote === true) {
     return new MemoryDemoRemoteAdapter(300);
   }
 
   throw new Error(
-    'No remote adapter configured. Please specify config.supabase, config.convex, config.firebase, or config.remote. For demos only, explicitly set config.inMemoryRemote: true.'
+    'No remote adapter configured. Please specify config.supabase, config.convex, config.firebase, or config.remote. For local-only use, set config.localOnly: true. For demos, set config.inMemoryRemote: true.'
   );
 }

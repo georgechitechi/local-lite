@@ -22,7 +22,7 @@ export { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
 export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
-export { MemoryDemoRemoteAdapter } from '../adapters/remote/demo.js';
+export { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
 
 /**
  * Type-safe configuration helper function (similar to defineConfig in Vite/Tailwind).

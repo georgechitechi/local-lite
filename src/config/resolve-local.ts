@@ -5,7 +5,10 @@ import { BetterSQLite3Adapter } from '../adapters/local/better-sqlite3.js';
 import { LibSQLAdapter } from '../adapters/local/libsql.js';
 import { SqlJsAdapter } from '../adapters/local/sql-js.js';
 import { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
+import { safeDynamicImport, safeDynamicRequire } from '../utils/dynamic.js';
 import { LocalLiteConfig } from './types.js';
+
+const EXPO_SQLITE_PKG = ['expo', 'sqlite'].join('-');
 
 /**
  * Resolves or instantiates the appropriate LocalDBAdapter based on the provided configuration.
@@ -60,19 +63,13 @@ export async function resolveLocalAdapter(config: LocalLiteConfig): Promise<Loca
   // 9. Auto-open by name using expo-sqlite if available
   if (typeof rawDb === 'string' || config.databaseName) {
     const dbName = typeof rawDb === 'string' ? rawDb : (config.databaseName ?? 'local_lite.db');
-    let expoSqlite: any;
-    try {
-      if (typeof require === 'function') {
-        expoSqlite = require('expo-sqlite');
-      }
-    } catch {
-      // ignore
+    let expoSqlite: any = safeDynamicRequire(EXPO_SQLITE_PKG);
+
+    if (!expoSqlite) {
+      expoSqlite = await safeDynamicImport(EXPO_SQLITE_PKG);
     }
 
     try {
-      if (!expoSqlite) {
-        expoSqlite = await import('expo-sqlite');
-      }
       if (expoSqlite && typeof expoSqlite.openDatabaseAsync === 'function') {
         const expoDb = await expoSqlite.openDatabaseAsync(dbName);
         return new ExpoSQLiteAdapter(expoDb);
