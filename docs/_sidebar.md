@@ -5,5 +5,6 @@
 * [💾 Local SQLite Adapters](adapters-local.md)
 * [☁️ Remote Cloud Adapters](adapters-remote.md)
 * [⚛️ React & Expo Hooks](react-hooks.md)
-* [🔑 Google Sign-In & Auth](google-auth.md)
+* [🔑 Authentication (Google, OneDrive, GitHub)](auth.md)
 * [🔀 Conflict Resolution](conflict-resolution.md)
+

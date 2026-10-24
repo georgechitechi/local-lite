@@ -33,11 +33,13 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
    - `useLiveQuery()`: Zero-SQL live query hook
    - `useSyncStatus()`: Real-time sync engine & queue status inspector
    - `useGoogleAuth()`: Reactive Google authentication & user profile hook
-7. **[Google Sign-In & Auth](./google-auth.md)**
-   - Zero-backend Google OAuth 2.0 PKCE authentication
+7. **[Authentication (Google, OneDrive, GitHub)](./auth.md)**
+   - Zero-backend OAuth 2.0 PKCE authentication
    - Automatic token refreshing & user profile fetching
-   - Persistent session storage adapters
-   - Google Drive backup synergy
+   - Microsoft Graph & OneDrive integration
+   - GitHub OAuth with verified email resolution
+   - React hooks (`useGoogleAuth`, `useMicrosoftAuth`, `useGitHubAuth`)
+
 8. **[Conflict Resolution](./conflict-resolution.md)**
    - Last-Write-Wins (LWW)
    - Client-Wins & Server-Wins
