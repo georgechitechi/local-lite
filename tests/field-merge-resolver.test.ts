@@ -118,6 +118,7 @@ describe('createFieldMergeResolver', () => {
         operation: 'UPDATE',
         timestamp: 1000,
         status: 'PENDING',
+        retryCount: 0,
         payload: { views: 100, version: 5, tags: ['b', 'c'] },
       },
       localRow: { id: 'c1', views: 0, version: 0, tags: [] },
@@ -147,6 +148,7 @@ describe('createFieldMergeResolver', () => {
         rowId: 'i-1',
         operation: 'DELETE',
         timestamp: 2000,
+        payload: null,
       },
       localOutboxRecord: {
         id: 'outbox-1',
@@ -155,6 +157,7 @@ describe('createFieldMergeResolver', () => {
         operation: 'UPDATE',
         timestamp: 1000,
         status: 'PENDING',
+        retryCount: 0,
         payload: { name: 'Item 1' },
       },
     };
@@ -180,6 +183,8 @@ describe('createFieldMergeResolver', () => {
         operation: 'DELETE',
         timestamp: 1000,
         status: 'PENDING',
+        retryCount: 0,
+        payload: null,
       },
     };
 
