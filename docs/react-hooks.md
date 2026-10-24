@@ -137,3 +137,54 @@ export function SyncBadge({ client }) {
   );
 }
 ```
+
+---
+
+## 3. `useGoogleAuth`
+
+`useGoogleAuth` connects your React component to a `GoogleAuthClient` instance, providing reactive user profile data, sign-in, and sign-out actions.
+
+### Signature:
+```typescript
+function useGoogleAuth(client: GoogleAuthClient | null | undefined): {
+  user: GoogleUser | null;
+  isSignedIn: boolean;
+  loading: boolean;
+  error: Error | null;
+  signIn: () => Promise<GoogleUser | null>;
+  signOut: () => Promise<void>;
+  refetchUser: () => Promise<GoogleUser | null>;
+};
+```
+
+---
+
+### Usage Example:
+
+```tsx
+import { useGoogleAuth } from 'local-lite/react';
+import { googleAuth } from './auth';
+
+export function AuthButton() {
+  const { user, isSignedIn, loading, signIn, signOut } = useGoogleAuth(googleAuth);
+
+  if (loading) return <Text>Loading account...</Text>;
+
+  if (!isSignedIn || !user) {
+    return <Button title="Sign in with Google" onPress={signIn} />;
+  }
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      {user.picture && (
+        <Image source={{ uri: user.picture }} style={{ width: 32, height: 32, borderRadius: 16 }} />
+      )}
+      <Text>{user.name}</Text>
+      <Button title="Sign Out" onPress={signOut} />
+    </View>
+  );
+}
+```
+
+For full details on configuring redirect URIs, OAuth scopes, and Google Drive backups, see **[Google Sign-In & Auth](google-auth.md)**.
+

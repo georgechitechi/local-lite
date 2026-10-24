@@ -46,6 +46,11 @@
       "import": "./dist/adapters/remote/firestore.js",
       "default": "./dist/adapters/remote/firestore.js"
     },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js",
+      "default": "./dist/auth/index.js"
+    },
     "./backups": {
       "types": "./dist/backups/index.d.ts",
       "import": "./dist/backups/index.js",

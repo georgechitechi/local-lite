@@ -87,6 +87,8 @@ This recovers sync state; it does not repair corrupt SQLite files or cancel hung
 * **📶 Network-Aware:** Automatically pauses polling when offline and triggers immediate sync flushes the instant connectivity is restored.
 * **🔄 Infinite-Loop Safe:** Incoming remote deltas update local tables and fire reactive UI listeners without echoing back into the outbox.
 * **☁️ Database Backups:** Export and restore SQLite snapshots independently of your live sync backend.
+* **🔑 Google Sign-In Out of the Box:** Secure, zero-backend Google OAuth 2.0 (PKCE) authentication with automatic token refresh, user profile retrieval, persistent session storage, and `useGoogleAuth()` hook.
+
 
 ---
 
@@ -244,7 +246,49 @@ export function TodoScreen() {
 }
 ```
 
+### 3. Google Sign-In (Out of the Box)
+
+`local-lite` provides a zero-backend, PKCE-secured Google OAuth 2.0 client with automatic token refreshing, user profile retrieval, and React hooks.
+
+```tsx
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { GoogleAuthClient } from 'local-lite/auth';
+import { useGoogleAuth } from 'local-lite/react';
+
+const googleAuth = new GoogleAuthClient({
+  clientId: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
+  redirectUri: Linking.createURL('oauth'),
+  authorize: async ({ authorizationUrl, redirectUri }) => {
+    const res = await WebBrowser.openAuthSessionAsync(authorizationUrl, redirectUri);
+    if (res.type !== 'success' || !res.url) return null;
+    const url = new URL(res.url);
+    return {
+      code: url.searchParams.get('code') || '',
+      state: url.searchParams.get('state') || '',
+    };
+  },
+});
+
+export function UserProfileHeader() {
+  const { user, isSignedIn, loading, signIn, signOut } = useGoogleAuth(googleAuth);
+
+  if (loading) return <Text>Loading...</Text>;
+  if (!isSignedIn) {
+    return <Button title="Sign in with Google" onPress={signIn} />;
+  }
+
+  return (
+    <View>
+      <Text>Welcome, {user?.name} ({user?.email})</Text>
+      <Button title="Sign Out" onPress={signOut} />
+    </View>
+  );
+}
+```
+
 ---
+
 
 ## Supabase Backend Setup & Schema
 

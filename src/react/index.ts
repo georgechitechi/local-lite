@@ -702,3 +702,5 @@ export * from './theme.js';
 export * from './BenchmarkModal.js';
 export { SyncInspector, SyncIndicator } from './SyncInspector.js';
 export type { SyncInspectorProps, SyncIndicatorProps } from './SyncInspector.js';
+export * from './auth.js';
+

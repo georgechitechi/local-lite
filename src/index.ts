@@ -18,3 +18,5 @@ export * from './utils/uuid.js';
 export * from './utils/sql.js';
 export * from './utils/logger.js';
 export * from './schema/index.js';
+export * from './auth/index.js';
+export * from './backups/index.js';
