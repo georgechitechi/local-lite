@@ -776,7 +776,7 @@ export class SyncWorker {
             change.tableName,
             change.rowId,
             change.operation,
-            change.payload,
+            change.payload ?? null,
             this.primaryKey,
             { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
           );
