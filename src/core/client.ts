@@ -1303,7 +1303,11 @@ export class LocalFirstClient {
           for (const [table, rows] of Object.entries(parsed.tables)) {
             const safeTable = escapeIdentifier(table);
             if (Array.isArray(rows) && rows.length > 0) {
-              await this.schemaManager.ensureTable(tx, table, rows[0]);
+              for (const row of rows) {
+                if (row && typeof row === 'object') {
+                  await this.schemaManager.ensureColumns(tx, table, row, this.primaryKey);
+                }
+              }
               await tx.execute(`DELETE FROM ${safeTable}`);
               for (const row of rows) {
                 const cols = Object.keys(row);
