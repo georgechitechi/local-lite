@@ -16,14 +16,16 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 
 * **[Quickstart & Setup](https://georgechitechi.github.io/local-lite/#/getting-started)** - 5-minute setup with Expo, React Native, or Node.js
 * **[Architecture](https://georgechitechi.github.io/local-lite/#/architecture)** - Transactional outbox pattern, SyncWorker loops, and event pipeline
-* **[Configuration Reference](https://georgechitechi.github.io/local-lite/#/configuration)** - Options for `defineSyncConfig()`, retries, and loggers
+* **[Configuration Reference](https://georgechitechi.github.io/local-lite/#/configuration)** - Options for `defineSyncConfig()`, retries, user scoping, and loggers
+* **[Client API & Query Builder](https://georgechitechi.github.io/local-lite/#/client-api)** - CRUD, batching, custom transactions, fluent QueryBuilder, and native aggregations
 * **[Local SQLite Adapters](https://georgechitechi.github.io/local-lite/#/adapters-local)** - Expo SQLite, OP-SQLite, better-sqlite3, node:sqlite, and LibSQL
 * **[Remote Cloud Adapters](https://georgechitechi.github.io/local-lite/#/adapters-remote)** - Supabase, Convex, Cloud Firestore, and custom adapters
 * **[Authentication (Google, Microsoft, GitHub, Apple)](https://georgechitechi.github.io/local-lite/#/auth)** - Direct PKCE & native Apple authentication clients & hooks
 * **[Database Backups & Encryption](https://georgechitechi.github.io/local-lite/#/backups)** - Google Drive, OneDrive, and Zero-Knowledge AES-256-GCM snapshots
 * **[Conflict Resolution & Field Merge](https://georgechitechi.github.io/local-lite/#/conflict-resolution)** - 3-Way field merging, LWW, Client-Wins, and Server-Wins
 * **[Maintenance & Data Portability](https://georgechitechi.github.io/local-lite/#/maintenance-portability)** - VACUUM, WAL checkpoints, outbox pruning, and JSON/CSV export/import
-* **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()`, `useSyncStatus()`, and auth hooks
+* **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()`, `useLiveQueries()`, `useLiveRow()`, `useLiveInfiniteQuery()`, `useMutations()`, `useSyncStatus()`, developer inspector tools, and backup/auth hooks
+
 
 ---
 

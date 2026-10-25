@@ -2,11 +2,12 @@
 * [🚀 Getting Started](getting-started.md)
 * [🏛️ Architecture & Concepts](architecture.md)
 * [⚙️ Configuration](configuration.md)
+* [💻 Client API & Query Builder](client-api.md)
 * [💾 Local SQLite Adapters](adapters-local.md)
 * [☁️ Remote Cloud Adapters](adapters-remote.md)
 * [⚛️ React & Expo Hooks](react-hooks.md)
 * [🔑 Authentication (Google, Microsoft, GitHub, Apple)](auth.md)
+* [🌐 Google Sign-In & Drive Guide](google-auth.md)
 * [🔀 Conflict Resolution & Field Merge](conflict-resolution.md)
 * [📦 Cloud Backups & Zero-Knowledge Encryption](backups.md)
 * [🧹 Maintenance & Universal Data Portability](maintenance-portability.md)
-

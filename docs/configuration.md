@@ -3,14 +3,14 @@
 The configuration engine uses `defineSyncConfig(config)` to provide full TypeScript autocompletion and compile-time validation.
 
 ```typescript
-import { defineSyncConfig } from 'local-lite/config';
+import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 ```
 
 ---
 
-## `LocalLiteConfig` Options
+## Complete `LocalLiteConfig` Options
 
-### Database & Tables
+### Database, Tables & Schema
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -22,6 +22,44 @@ import { defineSyncConfig } from 'local-lite/config';
 | `migrations` | `string[]` | `[]` | Idempotent SQL executed in a transaction during initialization, before sync starts. |
 | `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
+
+---
+
+### Sync Performance & Advanced SQLite Policies
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `coalesceOutbox` | `boolean` | `true` | When true, multiple pending mutations for the same row are coalesced into a single outbox record before pushing (e.g. intermediate updates are merged, and an insert followed by an offline delete is discarded), drastically reducing bandwidth. |
+| `touchUpdatedAt` | `boolean \| string` | `true` | Stamps an `updated_at` (or specified column name) on every local INSERT/UPDATE write in SQLite so reactive queries (which compare rows by `id` + `updated_at`) immediately detect offline edits. Only the local row is stamped; remote outbox payloads are untouched. |
+| `autoPauseOnBackground` | `boolean` | `true` | When true on React Native/Expo, automatically pauses polling intervals and timers when the app moves to the background to conserve device battery and CPU, and resumes immediately upon foregrounding. |
+| `jsonColumns` | `Record<string, string[]>` | `{}` | Map of table names to arrays of column names containing JSON data. These columns are automatically serialized to JSON strings on write and parsed back to JavaScript objects/arrays on read. |
+| `autoHydrateJSON` | `boolean` | `false` | When true, any string value that begins and ends with `{}` or `[]` is automatically parsed with `JSON.parse` upon query execution. |
+
+---
+
+### Dynamic User Data Isolation & Multi-Tenancy (`syncScope`)
+
+For multi-tenant apps or applications where users should only push and pull records matching their account ID:
+
+```typescript
+export const syncConfig = defineSyncConfig({
+  database: () => SQLite.openDatabaseAsync('app.db'),
+  tables: ['milestones', 'records'],
+
+  // Static user scope:
+  syncScope: { user_id: 'user_123' },
+
+  // Or dynamic async scope function:
+  syncScope: async () => {
+    const user = await authClient.getUser();
+    return user ? { user_id: user.id } : {};
+  },
+});
+```
+
+* The active scope is passed down to `remoteAdapter.fetchChanges(since, syncScope)` to filter remote delta queries.
+* In Supabase, queries filter matching columns automatically.
+* You can update the scope dynamically after login with `client.setSyncScope({ user_id: user.id })`.
 
 ---
 
@@ -68,33 +106,37 @@ firebase: {
 ```
 
 #### `remote`
-Pass an object implementing `RemoteDBAdapter` to bypass built-in cloud providers and connect to custom REST or GraphQL APIs.
+Pass an object implementing `RemoteDBAdapter` to connect to custom REST, GraphQL, or WebSocket servers.
 
 #### `inMemoryRemote`
-* Type: `boolean`
-* Default: `false`. Missing backend configuration throws unless demo mode is explicitly enabled.
-* When enabled without cloud credentials, simulates an in-memory remote server with artificial network delays (300ms) for testing offline-first workflows locally without any cloud setup.
+* Type: `boolean` (Default: `false`)
+* Missing backend configuration throws unless `inMemoryRemote: true` is explicitly enabled.
+* Simulates an in-memory remote backend with 300ms artificial network delay for unit testing and offline development.
 
 ---
 
-### Timing & Retry Policies
+### Timing, Retry & Exponential Backoff
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `pushIntervalMs` | `number` | `5000` | Periodic timer interval (in ms) to flush pending outbox records to remote. |
 | `pullIntervalMs` | `number` | `10000` | Periodic timer interval (in ms) to fetch remote deltas. |
-| `maxRetries` | `number` | `5` | Maximum push attempts before a failing mutation is marked or paused. |
+| `maxRetries` | `number` | `5` | Maximum push attempts before a failing mutation is marked as `FAILED`. |
 | `retry` | `number \| RetryConfig` | — | Advanced retry settings with exponential backoff and jitter. |
 
-#### Advanced Retry Configuration
+#### Advanced Retry Configuration:
 ```typescript
 retry: {
-  maxRetries: Infinity,     // Supports infinite retries for reliable background syncing
+  maxRetries: Infinity,     // Supports infinite retries for persistent background sync
   initialDelayMs: 1000,     // Delay before the first retry (1 second)
   maxDelayMs: 30000,        // Max ceiling delay (30 seconds)
-  backoffMultiplier: 1.5,   // Exponential multiplier
-  jitter: true,             // Add randomized jitter to prevent thundering herd
-  shouldRetry: (err, operation) => true, // Custom function to decide whether an error is retryable
+  backoffMultiplier: 1.5,   // Exponential backoff multiplier
+  jitter: true,             // Add randomized jitter to avoid synchronized server stampedes
+  shouldRetry: (err, op) => {
+    // Only retry transient network/server errors; fail immediately on 400 Bad Request
+    if (err?.status === 400) return false;
+    return true;
+  },
 }
 ```
 
@@ -105,30 +147,14 @@ retry: {
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `logLevel` | `'debug' \| 'info' \| 'warn' \| 'error' \| 'none'` | `'info'` | Minimum log verbosity. |
-| `logger` | `SyncLogger \| CustomLogger \| boolean` | Default | Pass `false` to silence all logs, or supply a custom logger (e.g., Winston, Sentry, Datadog). |
+| `logger` | `SyncLogger \| CustomLogger \| boolean` | Default | Pass `false` to silence all logs, or supply a custom logger (e.g., Sentry, Winston, Datadog). |
 
-#### Custom Logger Example
+#### Custom Logger Example:
 ```typescript
 logger: {
-  debug: (msg, ...args) => console.debug('[MyLog]', msg, ...args),
-  info: (msg, ...args) => console.info('[MyLog]', msg, ...args),
-  warn: (msg, ...args) => console.warn('[MyLog]', msg, ...args),
+  debug: (msg, ...args) => console.debug('[Sync]', msg, ...args),
+  info: (msg, ...args) => console.info('[Sync]', msg, ...args),
+  warn: (msg, ...args) => console.warn('[Sync]', msg, ...args),
   error: (msg, ...args) => Sentry.captureMessage(msg),
 }
 ```
-
-## Lifecycle and adapter boundaries
-
-For an explicit adapter-only setup, import `LocalFirstClient` and adapter types
-from `local-lite/core`. The `local-lite/config` factory retains optional provider
-conveniences. See the README compatibility notes for changed defaults.
-
-With `autoInitialize: false`, call `await client.initialize()` before using storage.
-Configured migrations still run during that call. Concurrent calls share the same
-initialization; a failure can be retried. To resume after `client.stop()`, use
-`client.syncWorker.start()`. `autoStart: false` disables automatic push scheduling
-as well as polling and subscriptions until start is called.
-
-The library retains failed outbox writes for inspection/retry or explicit
-`clearFailedMutations()` calls. Application-specific error handling, authentication,
-account switching, reloads, and schema policies belong to the consuming app.
