@@ -39,6 +39,14 @@ import {
   type ImportCsvOptions,
   type ImportSummary,
 } from '../utils/portability.js';
+import {
+  performBackup,
+  performRestore,
+  type BackupStorage,
+  type CreateDatabaseBackupOptions,
+  type EncryptedBackupOptions,
+  type RestoreEncryptedBackupOptions,
+} from '../backups/index.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -1179,5 +1187,171 @@ export class LocalFirstClient {
     }
     await this.resetSyncCursor();
     this.events.emit('reset', { dropTables: options.dropTables ?? false });
+  }
+
+  private async getAllTableNames(): Promise<string[]> {
+    const list = new Set(this.tables);
+    list.add('sync_outbox');
+    list.add('sync_meta');
+    try {
+      const rows = await this.db.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
+      );
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          if (r.name) list.add(r.name);
+        }
+      }
+    } catch {
+      // Non-SQLite database adapter, fallback to configured tables
+    }
+    return Array.from(list);
+  }
+
+  /**
+   * Exports the entire local database state as a portable binary snapshot.
+   * If the local adapter has a native export mechanism (e.g. serialize or export),
+   * it uses that; otherwise, it exports an atomic JSON snapshot of all tables.
+   */
+  async exportDatabase(): Promise<Uint8Array> {
+    await this.initialize();
+    if (typeof (this.db as any).exportDatabase === 'function') {
+      return (this.db as any).exportDatabase();
+    }
+    if (typeof (this.db as any).serialize === 'function') {
+      return new Uint8Array((this.db as any).serialize());
+    }
+    if (typeof (this.db as any).export === 'function') {
+      return new Uint8Array((this.db as any).export());
+    }
+
+    const tables = await this.getAllTableNames();
+    const snapshot: Record<string, any[]> = {};
+    for (const table of tables) {
+      const safeTable = escapeIdentifier(table);
+      try {
+        const rows = await this.db.execute(`SELECT * FROM ${safeTable}`);
+        snapshot[table] = rows || [];
+      } catch {
+        // Table may not exist yet
+      }
+    }
+
+    const payload = JSON.stringify({
+      format: 'local-lite-backup-v1',
+      timestamp: Date.now(),
+      tables: snapshot,
+    });
+    return new TextEncoder().encode(payload);
+  }
+
+  /**
+   * Imports database state from a backup snapshot.
+   */
+  async importDatabase(data: Uint8Array): Promise<void> {
+    if (!data || data.length === 0) {
+      throw new Error('Cannot restore an empty database snapshot.');
+    }
+
+    await this.initialize();
+
+    if (typeof (this.db as any).importDatabase === 'function') {
+      await (this.db as any).importDatabase(data);
+      this.schemaManager.clearCache();
+      this.events.emit('reset', { dropTables: false });
+      return;
+    }
+
+    // Check if data is SQLite format (magic header: "SQLite format 3\0")
+    const isSqlite =
+      data.length > 16 &&
+      data[0] === 0x53 &&
+      data[1] === 0x51 &&
+      data[2] === 0x4c &&
+      data[3] === 0x69 &&
+      data[4] === 0x74 &&
+      data[5] === 0x65 &&
+      data[6] === 0x20 &&
+      data[7] === 0x66 &&
+      data[8] === 0x6f &&
+      data[9] === 0x72 &&
+      data[10] === 0x6d &&
+      data[11] === 0x61 &&
+      data[12] === 0x74 &&
+      data[13] === 0x20 &&
+      data[14] === 0x33 &&
+      data[15] === 0x00;
+
+    if (isSqlite) {
+      if (typeof (this.db as any).load === 'function') {
+        await (this.db as any).load(data);
+        this.schemaManager.clearCache();
+        this.events.emit('reset', { dropTables: false });
+        return;
+      }
+      throw new Error(
+        'Direct SQLite binary snapshot import requires an adapter with native import/load support (e.g. sql.js).',
+      );
+    }
+
+    // Parse portable JSON backup snapshot
+    try {
+      const text = new TextDecoder().decode(data);
+      const parsed = JSON.parse(text);
+      if (parsed.tables && typeof parsed.tables === 'object') {
+        await this.db.transaction(async tx => {
+          for (const [table, rows] of Object.entries(parsed.tables)) {
+            const safeTable = escapeIdentifier(table);
+            if (Array.isArray(rows) && rows.length > 0) {
+              await this.schemaManager.ensureTable(tx, table, rows[0]);
+              await tx.execute(`DELETE FROM ${safeTable}`);
+              for (const row of rows) {
+                const cols = Object.keys(row);
+                const safeCols = cols.map(escapeIdentifier).join(', ');
+                const placeholders = cols.map(() => '?').join(', ');
+                const values = cols.map(c => {
+                  const val = row[c];
+                  return val !== null && typeof val === 'object' ? JSON.stringify(val) : val;
+                });
+                await tx.execute(
+                  `INSERT INTO ${safeTable} (${safeCols}) VALUES (${placeholders})`,
+                  values,
+                );
+              }
+            } else {
+              try {
+                await tx.execute(`DELETE FROM ${safeTable}`);
+              } catch {}
+            }
+          }
+        });
+        this.schemaManager.clearCache();
+        this.events.emit('reset', { dropTables: false });
+        return;
+      }
+    } catch (err: any) {
+      throw new Error(`Failed to import backup snapshot: ${err?.message || err}`);
+    }
+  }
+
+  /**
+   * Creates a backup directly from this client to the given cloud or local storage.
+   */
+  async backup(
+    storage: BackupStorage,
+    options?: CreateDatabaseBackupOptions & Partial<EncryptedBackupOptions>,
+  ): Promise<string> {
+    return performBackup(this, storage, options);
+  }
+
+  /**
+   * Restores this client's database from a backup in cloud or local storage.
+   */
+  async restore(
+    storage: BackupStorage,
+    fileNameOrId: string,
+    options?: Partial<RestoreEncryptedBackupOptions>,
+  ): Promise<void> {
+    return performRestore(this, storage, fileNameOrId, options);
   }
 }

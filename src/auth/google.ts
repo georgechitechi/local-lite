@@ -1,6 +1,10 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
-import { GoogleDriveBackupStorage } from '../backups/cloud-storage.js';
+import {
+  GoogleDriveBackupStorage,
+  GoogleDriveBackupClient,
+  type GoogleDriveBackupClientOptions,
+} from '../backups/cloud-storage.js';
 
 export const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
@@ -434,5 +438,13 @@ export class GoogleAuthClient {
       () => this.getValidAccessToken(),
       this.fetcher,
     );
+  }
+
+  createDriveBackupClient(options: Partial<GoogleDriveBackupClientOptions> = {}): GoogleDriveBackupClient {
+    return new GoogleDriveBackupClient({
+      authClient: this,
+      fetch: this.fetcher,
+      ...options,
+    });
   }
 }

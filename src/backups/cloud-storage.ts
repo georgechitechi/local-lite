@@ -1,6 +1,14 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
-import type { BackupStorage } from './index.js';
+import type {
+  BackupStorage,
+  CloudBackupClient,
+  CreateDatabaseBackupOptions,
+  ResolvableBackupDatabase,
+} from './operations.js';
+import { performBackup, performRestore } from './operations.js';
+import type { EncryptedBackupOptions, RestoreEncryptedBackupOptions } from './encryption.js';
+import type { GoogleAuthClient } from '../auth/google.js';
 
 export interface CloudBackupFile {
   id: string;
@@ -15,7 +23,7 @@ const GOOGLE_API = 'https://www.googleapis.com/drive/v3';
 const GOOGLE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+export const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const BACKUP_FOLDER = 'backups';
 
 export interface GoogleDriveTokens {
@@ -47,12 +55,14 @@ export interface GoogleDriveAuthorizationResponse {
 }
 
 export interface GoogleDriveBackupClientOptions {
-  clientId: string;
-  redirectUri: string;
-  authorize: (
+  authClient?: GoogleAuthClient;
+  clientId?: string;
+  redirectUri?: string;
+  authorize?: (
     request: GoogleDriveAuthorizationRequest,
   ) => Promise<GoogleDriveAuthorizationResponse | null>;
-  tokenStore: GoogleDriveTokenStore;
+  tokenStore?: GoogleDriveTokenStore;
+  storage?: GoogleDriveKeyValueStorage;
   randomBytes?: (length: number) => Uint8Array;
   fetch?: typeof fetch;
 }
@@ -91,6 +101,19 @@ function validateGoogleTokens(value: unknown): value is GoogleDriveTokens {
     typeof tokens.expiresAt === 'number' &&
     (tokens.refreshToken === undefined || typeof tokens.refreshToken === 'string')
   );
+}
+
+export function createInMemoryGoogleDriveTokenStore(): GoogleDriveTokenStore {
+  let stored: GoogleDriveTokens | null = null;
+  return {
+    get: async () => stored,
+    set: async tokens => {
+      stored = tokens;
+    },
+    remove: async () => {
+      stored = null;
+    },
+  };
 }
 
 export function createGoogleDriveTokenStore(
@@ -259,6 +282,20 @@ export class GoogleDriveBackupStorage implements BackupStorage {
     return new Uint8Array(await response.arrayBuffer());
   }
 
+  async delete(fileId: string): Promise<void> {
+    const token = await this.getAccessToken();
+    const response = await this.fetcher(
+      `${GOOGLE_API}/files/${encodeURIComponent(fileId)}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (!response.ok && response.status !== 404) {
+      throw await parseApiError(response);
+    }
+  }
+
   async list(): Promise<CloudBackupFile[]> {
     const token = await this.getAccessToken();
     const folderId = await getGoogleFolderId(token, this.fetcher);
@@ -282,21 +319,74 @@ export class GoogleDriveBackupStorage implements BackupStorage {
   }
 }
 
-export class GoogleDriveBackupClient implements BackupStorage {
+export class GoogleDriveBackupClient implements CloudBackupClient {
   private readonly storage: GoogleDriveBackupStorage;
   private readonly fetcher: typeof fetch;
+  private readonly authClient?: GoogleAuthClient;
+  private readonly tokenStore?: GoogleDriveTokenStore;
+  private readonly listeners = new Set<(connected: boolean) => void>();
 
   constructor(private readonly options: GoogleDriveBackupClientOptions) {
-    if (!options.clientId.trim()) throw new Error('Google OAuth client ID is required.');
-    if (!options.redirectUri.trim()) throw new Error('Google OAuth redirect URI is required.');
     this.fetcher = options.fetch ?? fetch;
-    this.storage = new GoogleDriveBackupStorage(
-      () => this.getValidAccessToken(),
-      this.fetcher,
-    );
+
+    if (options.authClient) {
+      this.authClient = options.authClient;
+      this.storage = new GoogleDriveBackupStorage(
+        () => this.authClient!.getValidAccessToken(),
+        this.fetcher,
+      );
+      this.authClient.onAuthStateChange(user => {
+        this.notify(Boolean(user));
+      });
+    } else {
+      if (!options.clientId?.trim()) {
+        throw new Error('Google OAuth client ID is required when authClient is not provided.');
+      }
+      if (!options.redirectUri?.trim()) {
+        throw new Error('Google OAuth redirect URI is required when authClient is not provided.');
+      }
+      if (!options.authorize) {
+        throw new Error('Google OAuth authorize function is required when authClient is not provided.');
+      }
+
+      this.tokenStore =
+        options.tokenStore ??
+        (options.storage
+          ? createGoogleDriveTokenStore(options.storage)
+          : createInMemoryGoogleDriveTokenStore());
+
+      this.storage = new GoogleDriveBackupStorage(
+        () => this.getValidAccessToken(),
+        this.fetcher,
+      );
+    }
+  }
+
+  onStatusChange(listener: (connected: boolean) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(connected: boolean): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(connected);
+      } catch (err) {
+        console.error('Error in GoogleDriveBackupClient status listener:', err);
+      }
+    }
   }
 
   async connect(): Promise<boolean> {
+    if (this.authClient) {
+      const user = await this.authClient.signIn();
+      const connected = user !== null;
+      this.notify(connected);
+      return connected;
+    }
+
     const randomBytes = this.options.randomBytes ?? secureRandomBytes;
     const verifierBytes = randomBytes(32);
     const stateBytes = randomBytes(32);
@@ -308,8 +398,8 @@ export class GoogleDriveBackupClient implements BackupStorage {
     const codeChallenge = base64UrlEncode(sha256(utf8ToBytes(codeVerifier)));
     const state = base64UrlEncode(stateBytes);
     const authorizationParams = new URLSearchParams({
-      client_id: this.options.clientId,
-      redirect_uri: this.options.redirectUri,
+      client_id: this.options.clientId!,
+      redirect_uri: this.options.redirectUri!,
       response_type: 'code',
       scope: GOOGLE_DRIVE_SCOPE,
       access_type: 'offline',
@@ -318,11 +408,14 @@ export class GoogleDriveBackupClient implements BackupStorage {
       code_challenge_method: 'S256',
       state,
     });
-    const authorization = await this.options.authorize({
+    const authorization = await this.options.authorize!({
       authorizationUrl: `${GOOGLE_AUTHORIZATION_ENDPOINT}?${authorizationParams}`,
-      redirectUri: this.options.redirectUri,
+      redirectUri: this.options.redirectUri!,
     });
-    if (!authorization) return false;
+    if (!authorization) {
+      this.notify(false);
+      return false;
+    }
     if (authorization.state !== state) {
       throw new Error('Google OAuth state validation failed. Please try connecting again.');
     }
@@ -334,31 +427,44 @@ export class GoogleDriveBackupClient implements BackupStorage {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: this.options.clientId,
+        client_id: this.options.clientId!,
         code: authorization.code,
         code_verifier: codeVerifier,
         grant_type: 'authorization_code',
-        redirect_uri: this.options.redirectUri,
+        redirect_uri: this.options.redirectUri!,
       }).toString(),
     });
     const payload = await parseTokenResponse(response);
     if (!response.ok) throwTokenError(payload, response.status);
-    const prior = await this.options.tokenStore.get();
-    await this.options.tokenStore.set(createStoredTokens(payload, prior));
+    const prior = await this.tokenStore!.get();
+    await this.tokenStore!.set(createStoredTokens(payload, prior));
+    this.notify(true);
     return true;
   }
 
   async disconnect(): Promise<void> {
-    await this.options.tokenStore.remove();
+    if (this.authClient) {
+      await this.authClient.signOut();
+    } else if (this.tokenStore) {
+      await this.tokenStore.remove();
+    }
+    this.notify(false);
   }
 
   async isConnected(): Promise<boolean> {
-    const tokens = await this.options.tokenStore.get();
+    if (this.authClient) {
+      return this.authClient.isSignedIn();
+    }
+    const tokens = await this.tokenStore!.get();
     return validateGoogleTokens(tokens);
   }
 
   async getValidAccessToken(): Promise<string> {
-    const tokens = await this.options.tokenStore.get();
+    if (this.authClient) {
+      return this.authClient.getValidAccessToken();
+    }
+
+    const tokens = await this.tokenStore!.get();
     if (!validateGoogleTokens(tokens)) {
       throw new Error('Connect Google Drive before using cloud backups.');
     }
@@ -373,7 +479,7 @@ export class GoogleDriveBackupClient implements BackupStorage {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: this.options.clientId,
+        client_id: this.options.clientId!,
         grant_type: 'refresh_token',
         refresh_token: tokens.refreshToken,
         scope: GOOGLE_DRIVE_SCOPE,
@@ -382,7 +488,7 @@ export class GoogleDriveBackupClient implements BackupStorage {
     const payload = await parseTokenResponse(response);
     if (!response.ok) throwTokenError(payload, response.status);
     const updatedTokens = createStoredTokens(payload, tokens);
-    await this.options.tokenStore.set(updatedTokens);
+    await this.tokenStore!.set(updatedTokens);
     return updatedTokens.accessToken;
   }
 
@@ -394,7 +500,30 @@ export class GoogleDriveBackupClient implements BackupStorage {
     return this.storage.read(fileId);
   }
 
+  delete(fileId: string): Promise<void> {
+    return this.storage.delete(fileId);
+  }
+
+  deleteBackup(fileId: string): Promise<void> {
+    return this.delete(fileId);
+  }
+
   list(): Promise<CloudBackupFile[]> {
     return this.storage.list();
+  }
+
+  backup(
+    database: ResolvableBackupDatabase,
+    options?: CreateDatabaseBackupOptions & Partial<EncryptedBackupOptions>,
+  ): Promise<string> {
+    return performBackup(database, this, options);
+  }
+
+  restore(
+    database: ResolvableBackupDatabase,
+    fileNameOrId: string,
+    options?: Partial<RestoreEncryptedBackupOptions>,
+  ): Promise<void> {
+    return performRestore(database, this, fileNameOrId, options);
   }
 }

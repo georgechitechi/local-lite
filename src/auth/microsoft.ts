@@ -1,5 +1,10 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
+import {
+  OneDriveBackupStorage,
+  OneDriveBackupClient,
+  type OneDriveBackupClientOptions,
+} from '../backups/onedrive.js';
 
 export const MICROSOFT_GRAPH_ENDPOINT = 'https://graph.microsoft.com/v1.0';
 export const DEFAULT_MICROSOFT_AUTH_SCOPES = ['openid', 'profile', 'email', 'User.Read'];
@@ -411,6 +416,21 @@ export class MicrosoftAuthClient {
       familyName: raw.surname,
       userPrincipalName: raw.userPrincipalName,
     };
+  }
+
+  createOneDriveBackupStorage(): OneDriveBackupStorage {
+    return new OneDriveBackupStorage(
+      () => this.getValidAccessToken(),
+      this.fetcher,
+    );
+  }
+
+  createOneDriveBackupClient(options?: Partial<OneDriveBackupClientOptions>): OneDriveBackupClient {
+    return new OneDriveBackupClient({
+      authClient: this,
+      fetch: this.fetcher,
+      ...options,
+    });
   }
 }
 
