@@ -50,7 +50,6 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
     updatedAtColumn: config.supabase?.updatedAtColumn,
     deletedColumn: config.supabase?.deletedColumn,
     deletedValue: config.supabase?.deletedValue,
-    deletedAtColumn: config.supabase?.deletedAtColumn,
     pushRpcName: config.supabase?.pushRpcName,
     channelName: config.supabase?.channelName,
     scopedTables: config.supabase?.scopedTables,

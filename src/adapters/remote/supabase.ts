@@ -48,11 +48,6 @@ export interface SupabaseAdapterOptions {
   deletedValue?: any;
 
   /**
-   * Legacy alias for deletedColumn.
-   */
-  deletedAtColumn?: string;
-
-  /**
    * Optional custom Postgres RPC function name for batch pushing.
    * If provided, will call `supabase.rpc(pushRpcName, { operations })`.
    */
@@ -137,7 +132,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.scopedTables = options.scopedTables;
     this.updatedAtColumn = options.updatedAtColumn ?? 'updated_at';
     this.primaryKey = options.primaryKey ?? 'id';
-    this.deletedColumn = options.deletedColumn ?? options.deletedAtColumn ?? 'deleted';
+    this.deletedColumn = options.deletedColumn ?? 'deleted';
     this.deletedValue = options.deletedValue !== undefined ? options.deletedValue : true;
     this.pushRpcName = options.pushRpcName;
     this.schema = options.schema ?? 'public';
@@ -161,7 +156,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   }
 
   /**
-   * Property getter for backwards-compatibility.
+   * Active Supabase client instance.
    */
   public get client(): AnySupabaseClient {
     return this.getClient();

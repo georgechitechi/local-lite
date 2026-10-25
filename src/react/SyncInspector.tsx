@@ -1073,6 +1073,3 @@ const rnStyles =
       },
     })
     : {};
-
-export const SyncIndicator = SyncInspector;
-export type SyncIndicatorProps = SyncInspectorProps;

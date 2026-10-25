@@ -126,8 +126,6 @@ export interface UseMicrosoftAuthResult {
   refetchUser: () => Promise<MicrosoftUser | null>;
 }
 
-export type UseOneDriveAuthResult = UseMicrosoftAuthResult;
-
 export function useMicrosoftAuth(
   client: MicrosoftAuthClient | null | undefined,
 ): UseMicrosoftAuthResult {
@@ -221,8 +219,6 @@ export function useMicrosoftAuth(
     refetchUser,
   };
 }
-
-export const useOneDriveAuth = useMicrosoftAuth;
 
 // ----------------------------------------------------
 // GitHub Auth Hook

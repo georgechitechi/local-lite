@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   MicrosoftAuthClient,
-  OneDriveAuthClient,
   createMicrosoftAuthTokenStore,
   createInMemoryMicrosoftTokenStore,
   type MicrosoftAuthKeyValueStorage,
@@ -143,10 +142,6 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
     const stored = await tokenStore.getTokens();
     expect(stored?.accessToken).toBe('new-ms-token');
     expect(stored?.refreshToken).toBe('my-ms-refresh-token');
-  });
-
-  it('OneDriveAuthClient works as an alias to MicrosoftAuthClient', () => {
-    expect(OneDriveAuthClient).toBe(MicrosoftAuthClient);
   });
 
   it('persists tokens and user info via key-value storage adapter', async () => {

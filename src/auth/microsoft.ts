@@ -19,8 +19,6 @@ export interface MicrosoftUser {
   userPrincipalName?: string;
 }
 
-export type OneDriveUser = MicrosoftUser;
-
 export interface MicrosoftAuthTokens {
   accessToken: string;
   refreshToken?: string;
@@ -161,8 +159,6 @@ export function createMicrosoftAuthTokenStore(
     },
   };
 }
-
-export const createOneDriveAuthTokenStore = createMicrosoftAuthTokenStore;
 
 export class MicrosoftAuthClient {
   private readonly tokenStore: MicrosoftAuthTokenStore;
@@ -433,5 +429,3 @@ export class MicrosoftAuthClient {
     });
   }
 }
-
-export const OneDriveAuthClient = MicrosoftAuthClient;

@@ -767,8 +767,8 @@ export * from './runner.js';
 export * from './status.js';
 export * from './theme.js';
 export * from './BenchmarkModal.js';
-export { SyncInspector, SyncIndicator } from './SyncInspector.js';
-export type { SyncInspectorProps, SyncIndicatorProps } from './SyncInspector.js';
+export { SyncInspector } from './SyncInspector.js';
+export type { SyncInspectorProps } from './SyncInspector.js';
 export * from './auth.js';
 export * from './backups.js';
 

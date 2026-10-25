@@ -170,6 +170,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",
+    "native-access-control": "^0.0.2",
     "uuid": "^14.0.3"
   }
 }
