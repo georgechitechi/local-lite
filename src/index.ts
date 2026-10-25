@@ -22,3 +22,4 @@ export * from './utils/portability.js';
 export * from './schema/index.js';
 export * from './auth/index.js';
 export * from './backups/index.js';
+export * from './access/index.js';

@@ -100,6 +100,16 @@
       "types": "./dist/core/index.d.ts",
       "import": "./dist/core/index.js",
       "default": "./dist/core/index.js"
+    },
+    "./access": {
+      "types": "./dist/access/index.d.ts",
+      "import": "./dist/access/index.js",
+      "default": "./dist/access/index.js"
+    },
+    "./access/react": {
+      "types": "./dist/access/react/index.d.ts",
+      "import": "./dist/access/react/index.js",
+      "default": "./dist/access/react/index.js"
     }
   },
   "scripts": {
