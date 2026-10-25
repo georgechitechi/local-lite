@@ -56,6 +56,16 @@
       "import": "./dist/backups/index.js",
       "default": "./dist/backups/index.js"
     },
+    "./portability": {
+      "types": "./dist/utils/portability.d.ts",
+      "import": "./dist/utils/portability.js",
+      "default": "./dist/utils/portability.js"
+    },
+    "./maintenance": {
+      "types": "./dist/core/maintenance.d.ts",
+      "import": "./dist/core/maintenance.js",
+      "default": "./dist/core/maintenance.js"
+    },
     "./expo-sqlite": {
       "types": "./dist/adapters/local/expo-sqlite.d.ts",
       "import": "./dist/adapters/local/expo-sqlite.js",

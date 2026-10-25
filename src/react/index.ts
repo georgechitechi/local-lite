@@ -696,6 +696,73 @@ export function useMutations<TTable extends string = string>(
   );
 }
 
+export interface UseDatabaseMaintenanceResult {
+  stats: import('../core/maintenance.js').StorageStats | null;
+  loading: boolean;
+  refreshStats: () => Promise<import('../core/maintenance.js').StorageStats | null>;
+  pruneOutbox: (options?: import('../core/maintenance.js').PruneOutboxOptions) => Promise<number>;
+  vacuum: () => Promise<void>;
+  checkpoint: (mode?: import('../core/maintenance.js').CheckpointMode) => Promise<void>;
+}
+
+/**
+ * Reactive hook for database maintenance (vacuum, WAL checkpoint, outbox pruning, and storage metrics).
+ */
+export function useDatabaseMaintenance(
+  client: LocalFirstClient | null | undefined
+): UseDatabaseMaintenanceResult {
+  const [stats, setStats] = useState<import('../core/maintenance.js').StorageStats | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const refreshStats = useCallback(async () => {
+    if (!client) return null;
+    setLoading(true);
+    try {
+      const res = await client.maintenance.getStorageStats();
+      setStats(res);
+      return res;
+    } catch {
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [client]);
+
+  const pruneOutbox = useCallback(
+    async (options?: import('../core/maintenance.js').PruneOutboxOptions) => {
+      if (!client) return 0;
+      const count = await client.maintenance.pruneOutbox(options);
+      await refreshStats();
+      return count;
+    },
+    [client, refreshStats]
+  );
+
+  const vacuum = useCallback(async () => {
+    if (!client) return;
+    await client.maintenance.vacuum();
+    await refreshStats();
+  }, [client, refreshStats]);
+
+  const checkpoint = useCallback(
+    async (mode?: import('../core/maintenance.js').CheckpointMode) => {
+      if (!client) return;
+      await client.maintenance.checkpoint(mode);
+      await refreshStats();
+    },
+    [client, refreshStats]
+  );
+
+  return {
+    stats,
+    loading,
+    refreshStats,
+    pruneOutbox,
+    vacuum,
+    checkpoint,
+  };
+}
+
 export * from './runner.js';
 export * from './status.js';
 export * from './theme.js';
@@ -703,4 +770,5 @@ export * from './BenchmarkModal.js';
 export { SyncInspector, SyncIndicator } from './SyncInspector.js';
 export type { SyncInspectorProps, SyncIndicatorProps } from './SyncInspector.js';
 export * from './auth.js';
+
 

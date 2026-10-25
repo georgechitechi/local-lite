@@ -28,6 +28,17 @@ import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier } from '../utils/sql.js';
 import { isDeletedRecord, applyQueryOptions } from './query.js';
 import { QueryBuilder, AggregateSpec, AggregateResult } from './query-builder.js';
+import {
+  exportTablesToJson,
+  importTablesFromJson,
+  exportTableToCsv,
+  importTableFromCsv,
+  type ExportJsonOptions,
+  type ImportJsonOptions,
+  type ExportCsvOptions,
+  type ImportCsvOptions,
+  type ImportSummary,
+} from '../utils/portability.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -244,6 +255,13 @@ export class TransactionalClient {
       return applyQueryOptions<T>(rows, options);
     }
     return this.from<T>(tableName).applyOptions(options).execute();
+  }
+
+  /**
+   * Alias for findMany().
+   */
+  async find<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
+    return this.findMany<T>(tableName, options);
   }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -939,6 +957,48 @@ export class LocalFirstClient {
       return applyQueryOptions<T>(rows, options);
     }
     return this.from<T>(tableName).applyOptions(options).execute();
+  }
+
+  /**
+   * Alias for findMany().
+   */
+  async find<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
+    return this.findMany<T>(tableName, options);
+  }
+
+  /**
+   * Returns true if client storage has successfully initialized.
+   */
+  get isReady(): boolean {
+    return Boolean(this.initialization);
+  }
+
+  /**
+   * Convenience export of tables to JSON.
+   */
+  async exportToJson(tables?: string[], options?: ExportJsonOptions): Promise<string> {
+    return exportTablesToJson(this, tables, options);
+  }
+
+  /**
+   * Convenience import of tables from JSON.
+   */
+  async importFromJson(jsonString: string, options?: ImportJsonOptions): Promise<ImportSummary> {
+    return importTablesFromJson(this, jsonString, options);
+  }
+
+  /**
+   * Convenience export of a table to RFC-4180 CSV.
+   */
+  async exportToCsv(tableName: string, options?: ExportCsvOptions): Promise<string> {
+    return exportTableToCsv(this, tableName, options);
+  }
+
+  /**
+   * Convenience import of RFC-4180 CSV into a table.
+   */
+  async importFromCsv(tableName: string, csvString: string, options?: ImportCsvOptions): Promise<{ rowCount: number }> {
+    return importTableFromCsv(this, tableName, csvString, options);
   }
 
   /**

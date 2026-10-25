@@ -295,7 +295,8 @@ export class SyncWorker {
 
     // React Native AppState
     try {
-      const { AppState } = require('react-native');
+      const rn = safeDynamicRequire(REACT_NATIVE_PKG);
+      const AppState = rn?.AppState;
       if (AppState?.currentState && typeof AppState.currentState === 'string') {
         return Boolean(AppState.currentState.match(/inactive|background/));
       }
@@ -316,7 +317,8 @@ export class SyncWorker {
 
     // 1. Try React Native AppState
     try {
-      const { AppState } = require('react-native');
+      const rn = safeDynamicRequire(REACT_NATIVE_PKG);
+      const AppState = rn?.AppState;
       if (AppState && typeof AppState.addEventListener === 'function') {
         const sub = AppState.addEventListener('change', (state: string) => {
           if (state.match(/inactive|background/)) {
