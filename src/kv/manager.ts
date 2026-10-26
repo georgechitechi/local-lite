@@ -1,4 +1,5 @@
 import { DBExecutable } from '../core/schema-manager.js';
+import { EventEmitter } from '../reactive/event-emitter.js';
 import {
   decryptBackupData,
   encryptBackupData,
@@ -9,12 +10,21 @@ import { DEFAULT_KV_TABLE, KVStore } from './store.js';
 
 export class KVManager {
   private tableName: string;
+  private events?: EventEmitter;
 
   constructor(
     private db: DBExecutable,
-    options: KVStoreOptions = {}
+    eventsOrOptions?: EventEmitter | KVStoreOptions,
+    options?: KVStoreOptions
   ) {
-    this.tableName = options.tableName ?? DEFAULT_KV_TABLE;
+    let opts: KVStoreOptions = {};
+    if (eventsOrOptions && typeof (eventsOrOptions as any).emit === 'function') {
+      this.events = eventsOrOptions as EventEmitter;
+      opts = options || {};
+    } else if (eventsOrOptions) {
+      opts = eventsOrOptions as KVStoreOptions;
+    }
+    this.tableName = opts.tableName ?? DEFAULT_KV_TABLE;
   }
 
   async initialize(): Promise<void> {
@@ -23,6 +33,7 @@ export class KVManager {
 
   /**
    * Sets a value in the key-value store with optional TTL.
+   * Emits an event on the event emitter if configured.
    */
   async set(key: string, value: any, options: KVSetOptions = {}): Promise<void> {
     const now = Date.now();
@@ -51,6 +62,7 @@ export class KVManager {
     }
 
     await KVStore.set(this.db, this.tableName, key, valueStr, type, now, expiresAt);
+    this.events?.emit(this.tableName, { operation: 'SET', key, value });
   }
 
   /**
@@ -94,9 +106,11 @@ export class KVManager {
 
   /**
    * Removes a key from the store.
+   * Emits an event on the event emitter if configured.
    */
   async delete(key: string): Promise<void> {
     await KVStore.delete(this.db, this.tableName, key);
+    this.events?.emit(this.tableName, { operation: 'DELETE', key });
   }
 
   /**
@@ -111,6 +125,7 @@ export class KVManager {
    */
   async clear(): Promise<void> {
     await KVStore.clear(this.db, this.tableName);
+    this.events?.emit(this.tableName, { operation: 'CLEAR' });
   }
 
   /**
@@ -135,6 +150,7 @@ export class KVManager {
           : null;
 
     await KVStore.set(this.db, this.tableName, key, encryptedBase64, 'encrypted', now, expiresAt);
+    this.events?.emit(this.tableName, { operation: 'SET_SECRET', key });
   }
 
   /**

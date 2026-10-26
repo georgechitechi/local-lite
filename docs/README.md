@@ -22,57 +22,76 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
    - Fluent `QueryBuilder` (`from`, `select`, `join`, `where`, `groupBy`, `orderBy`)
    - Native SQL aggregations (`count`, `sum`, `avg`, `aggregate`)
    - Telemetry & outbox management (`getMetrics`, `retryFailedMutations`, `clearFailedMutations`)
-5. **[Local SQLite Adapters](./adapters-local.md)**
+5. **[Fast Key-Value & Encrypted Preferences](./kv.md)**
+   - Typed storage for strings, numbers, booleans, and JSON objects (`client.kv`)
+   - TTL expiration with lazy cleanup and batch pruning
+   - Zero-Knowledge client-side encrypted secrets (AES-256-GCM + PBKDF2)
+   - Reactive `useKV()` React hook
+6. **[Instant Full-Text Search](./search.md)**
+   - Native SQLite FTS5 engine integration (`client.search`)
+   - Prefix matching, BM25 ranking, and highlighted `<mark>` snippets
+   - Reactive `useSearch()` React hook with automatic debouncing
+7. **[Offline Media & Blob Storage](./storage.md)**
+   - Decoupled binary storage from SQLite table queries (`client.storage`)
+   - Local filesystem and in-memory file drivers with SHA-256 integrity verification
+   - Background cloud sync queue for S3, Supabase, Cloudinary, and Firebase Storage
+8. **[Offline Job Scheduler & Background Cron](./scheduler.md)**
+   - Persistent offline job scheduling surviving app restarts (`client.scheduler`)
+   - Human expressions (`'daily'`, `'hourly'`, `'every 15 minutes'`) and 5-part cron
+   - Run history tracking, duration telemetry, and automatic error logging
+9. **[Local SQLite Adapters](./adapters-local.md)**
    - Expo SQLite (`expo-sqlite`)
    - Bare React Native (`@op-engineering/op-sqlite`)
    - Node.js / Electron (`better-sqlite3`)
    - Built-in Node 22+ (`node:sqlite`)
    - Edge / Turso (`@libsql/client`)
    - Web / Browser (`sql.js`)
-6. **[Remote Backend Adapters](./adapters-remote.md)**
-   - Supabase (Postgres + Realtime)
-   - Convex (Reactive documents + RPCs)
-   - Firebase / Firestore
-   - Memory Demo (Mock testing without cloud)
-   - Building custom backend adapters
-7. **[React & Expo Hooks](./react-hooks.md)**
-   - `useLiveQuery()`: Zero-SQL single table reactive query
-   - `useLiveQueries()`: Parallel multi-table queries with single atomic commit
-   - `useLiveRow()`: Targeted single-record live query with row-level invalidation
-   - `useLiveInfiniteQuery()`: Paginated infinite scrolling live query
-   - `useMutations()`: Null-safe memoized mutation helper methods
-   - `useSyncStatus()`: Real-time sync engine & outbox queue inspector
-   - `useDatabaseMaintenance()`: Reactive storage stats, outbox pruning, VACUUM, and WAL checkpoints
-   - `<SyncInspector />` and `<BenchmarkModal />`: Developer UI debugging tools
-8. **[Authentication (Google, Microsoft, GitHub, Apple)](./auth.md)**
-   - Zero-backend OAuth 2.0 PKCE authentication
-   - Automatic token refreshing & user profile fetching
-   - Microsoft Graph & OneDrive integration
-   - GitHub OAuth with verified email resolution
-   - Sign in with Apple (Native iOS & OAuth)
-   - Pluggable storage adapters (AsyncStorage, SecureStore, MMKV)
-9. **[Google Sign-In & Drive Guide](./google-auth.md)**
-   - Dedicated guide for zero-backend Google authentication
-   - Unified Google Drive cloud backup synergy
-10. **[Conflict Resolution & Field Merge](./conflict-resolution.md)**
+10. **[Remote Backend Adapters](./adapters-remote.md)**
+    - Supabase (Postgres + Realtime)
+    - Convex (Reactive documents + RPCs)
+    - Firebase / Firestore
+    - Memory Demo (Mock testing without cloud)
+    - Building custom backend adapters
+11. **[React & Expo Hooks](./react-hooks.md)**
+    - `useLiveQuery()`: Zero-SQL single table reactive query
+    - `useLiveQueries()`: Parallel multi-table queries with single atomic commit
+    - `useLiveRow()`: Targeted single-record live query with row-level invalidation
+    - `useLiveInfiniteQuery()`: Paginated infinite scrolling live query
+    - `useKV()`: Reactive state binding for key-value preferences
+    - `useSearch()`: Debounced instant full-text search hook
+    - `useMutations()`: Null-safe memoized mutation helper methods
+    - `useSyncStatus()`: Real-time sync engine & outbox queue inspector
+    - `useDatabaseMaintenance()`: Reactive storage stats, outbox pruning, VACUUM, and WAL checkpoints
+    - `<SyncInspector />` and `<BenchmarkModal />`: Developer UI debugging tools
+12. **[Authentication (Google, Microsoft, GitHub, Apple)](./auth.md)**
+    - Zero-backend OAuth 2.0 PKCE authentication
+    - Automatic token refreshing & user profile fetching
+    - Microsoft Graph & OneDrive integration
+    - GitHub OAuth with verified email resolution
+    - Sign in with Apple (Native iOS & OAuth)
+    - Pluggable storage adapters (AsyncStorage, SecureStore, MMKV)
+13. **[Google Sign-In & Drive Guide](./google-auth.md)**
+    - Dedicated guide for zero-backend Google authentication
+    - Unified Google Drive cloud backup synergy
+14. **[Conflict Resolution & Field Merge](./conflict-resolution.md)**
     - Smart 3-Way field-level merge (`createFieldMergeResolver`)
     - Last-Write-Wins (LWW)
     - Client-Wins & Server-Wins
     - Custom conflict resolvers
-11. **[Database Backups & Zero-Knowledge Encryption](./backups.md)**
+15. **[Database Backups & Zero-Knowledge Encryption](./backups.md)**
     - Google Drive and Microsoft OneDrive sandboxed backups
     - Zero-Knowledge client-side encryption (AES-256-GCM + PBKDF2)
     - React backup hooks (`useGoogleDriveBackup`, `useOneDriveBackup`)
     - Universal binary database snapshots (`exportDatabase`, `importDatabase`)
-12. **[Maintenance & Data Portability](./maintenance-portability.md)**
+16. **[Maintenance & Data Portability](./maintenance-portability.md)**
     - Storage breakdown, outbox pruning, VACUUM, and WAL checkpoints
     - PRAGMA analyze and structural integrity checks
     - Universal JSON & RFC-4180 CSV export and import
-13. **[Action Outbox & Email Queue](./actions-email.md)**
+17. **[Action Outbox & Email Queue](./actions-email.md)**
     - 0ms offline transactional email enqueuing
     - Generic action dispatchers (push notifications, webhooks, analytics)
     - Idempotency deduplication, TTL expiration, and crash recovery
-14. **[API Keys & Signed Tokens](./api-keys.md)**
+18. **[API Keys & Signed Tokens](./api-keys.md)**
     - Checksummed API key generation & verification (Stripe/GitHub pattern)
     - HMAC-SHA256 signed tokens with expiration and renewal
     - Local SQLite API key manager (`client.keys`)

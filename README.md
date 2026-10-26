@@ -93,6 +93,10 @@ This recovers sync state; it does not repair corrupt SQLite files or cancel hung
 * **☁️ Database Backups:** Export and restore SQLite snapshots independently of your live sync backend.
 * **🔑 Google Sign-In Out of the Box:** Secure, zero-backend Google OAuth 2.0 (PKCE) authentication with automatic token refresh, user profile retrieval, persistent session storage, and `useGoogleAuth()` hook.
 * **📨 Action Outbox & Email Queue:** Enqueue transactional emails, push notifications, and webhooks offline with idempotency keys, automatic retry backoff, crash recovery, and TTL expiration.
+* **⚡ Fast Key-Value & Encrypted Preferences (`client.kv`):** Typed storage, TTL expiration, and AES-256-GCM zero-knowledge secret protection.
+* **🔍 Instant Full-Text Search (`client.search`):** SQLite FTS5 indexer with prefix matching, BM25 rank scoring, and highlighting.
+* **📁 Offline Media & Blob Storage (`client.storage`):** Decoupled binary attachments, SHA-256 verification, and cloud sync queue (S3/Supabase/Firebase).
+* **⏰ Offline Job Scheduler & Background Cron (`client.scheduler`):** Persistent background task runner supporting human schedules and 5-field cron.
 
 
 ---

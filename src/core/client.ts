@@ -358,11 +358,19 @@ export class LocalFirstClient {
           ? touch
           : ((this.remote as any)?.updatedAtColumn as string | undefined) || 'updated_at';
     this.schemaManager = new SchemaManager();
-    this.maintenance = new DatabaseMaintenance(this.db, () => this.tables);
+    this.maintenance = new DatabaseMaintenance(this.db, () => [
+      ...this.tables,
+      '_local_kv',
+      '_local_blobs',
+      '_local_scheduled_jobs',
+      '_local_job_runs',
+      '_local_api_keys',
+      '_local_actions',
+    ]);
 
     const actionNetwork = config.actions?.network ?? config.network;
     this.keys = new ApiKeyManager(this.db, config.keys);
-    this.kv = new KVManager(this.db, config.kv);
+    this.kv = new KVManager(this.db, this.events, config.kv);
     this.search = new SearchManager(this.db, this.events, (table, id) => this.findById(table, id));
     this.storage = new BlobStorageManager(this.db, {
       network: config.network,
@@ -1225,10 +1233,25 @@ export class LocalFirstClient {
    * Resets local state by stopping sync and deleting or dropping all managed tables,
    * clearing the sync_outbox and _sync_meta stores, and resetting the sync cursor.
    */
-  async reset(options: { dropTables?: boolean } = {}): Promise<void> {
+  async reset(options: { dropTables?: boolean; includeInternal?: boolean } = {}): Promise<void> {
     this.stop();
 
-    const tablesToReset = Array.from(new Set([...this.tables, 'sync_outbox', 'sync_meta']));
+    const internalTables = [
+      '_local_kv',
+      '_local_blobs',
+      '_local_scheduled_jobs',
+      '_local_job_runs',
+      '_local_api_keys',
+      '_local_actions',
+    ];
+    const tablesToReset = Array.from(
+      new Set([
+        ...this.tables,
+        'sync_outbox',
+        'sync_meta',
+        ...(options.includeInternal ? internalTables : []),
+      ])
+    );
     for (const table of tablesToReset) {
       try {
         if (options.dropTables) {
