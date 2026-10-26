@@ -24,3 +24,7 @@ export * from './auth/index.js';
 export * from './backups/index.js';
 export * from './actions/index.js';
 export * from './keys/index.js';
+export * from './kv/index.js';
+export * from './search/index.js';
+export * from './storage/index.js';
+export * from './scheduler/index.js';

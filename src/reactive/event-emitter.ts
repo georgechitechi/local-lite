@@ -10,12 +10,16 @@ export class EventEmitter {
     this.listeners.get(event)!.add(callback);
 
     return () => {
-      const eventSet = this.listeners.get(event);
-      if (eventSet) {
-        eventSet.delete(callback);
-        if (eventSet.size === 0) this.listeners.delete(event);
-      }
+      this.off(event, callback);
     };
+  }
+
+  off(event: string, callback: EventCallback): void {
+    const eventSet = this.listeners.get(event);
+    if (eventSet) {
+      eventSet.delete(callback);
+      if (eventSet.size === 0) this.listeners.delete(event);
+    }
   }
 
   emit(event: string, data: any): void {

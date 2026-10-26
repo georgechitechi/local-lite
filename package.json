@@ -110,6 +110,26 @@
       "types": "./dist/keys/index.d.ts",
       "import": "./dist/keys/index.js",
       "default": "./dist/keys/index.js"
+    },
+    "./kv": {
+      "types": "./dist/kv/index.d.ts",
+      "import": "./dist/kv/index.js",
+      "default": "./dist/kv/index.js"
+    },
+    "./search": {
+      "types": "./dist/search/index.d.ts",
+      "import": "./dist/search/index.js",
+      "default": "./dist/search/index.js"
+    },
+    "./storage": {
+      "types": "./dist/storage/index.d.ts",
+      "import": "./dist/storage/index.js",
+      "default": "./dist/storage/index.js"
+    },
+    "./scheduler": {
+      "types": "./dist/scheduler/index.d.ts",
+      "import": "./dist/scheduler/index.js",
+      "default": "./dist/scheduler/index.js"
     }
   },
   "scripts": {

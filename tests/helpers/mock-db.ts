@@ -15,6 +15,11 @@ export class MockDB implements LocalDBAdapter {
     const normQ = q.replace(/\s+/g, ' ');
     const lowerQ = normQ.toLowerCase();
 
+    if (q.startsWith('CREATE TABLE') || q.startsWith('CREATE VIRTUAL TABLE')) {
+      const match = normQ.match(/CREATE (?:VIRTUAL )?TABLE (?:IF NOT EXISTS )?"?(w+)"?/i);
+      if (match) this.getTable(match[1]);
+      return [];
+    }
     if (q.startsWith('CREATE TABLE')) {
       const match = normQ.match(/CREATE TABLE (?:IF NOT EXISTS )?"?(\w+)"?/i);
       if (match) this.getTable(match[1]);
@@ -22,6 +27,151 @@ export class MockDB implements LocalDBAdapter {
     }
 
     if (q.startsWith('ALTER TABLE') || q.startsWith('PRAGMA table_info') || q.startsWith('CREATE INDEX')) {
+      return [];
+    }
+
+    
+    // KV: keys listing (SELECT key FROM _local_kv WHERE expires_at IS NULL OR expires_at > ?)
+    if (lowerQ.includes('from _local_kv') && lowerQ.includes('expires_at is null or expires_at > ?')) {
+      const now = Number(params[0] || Date.now());
+      const rows = Array.from(this.getTable('_local_kv').values());
+      const active = rows.filter((r) => r.expires_at == null || Number(r.expires_at) > now);
+      return active.map((r) => ({ key: r.key }));
+    }
+
+    // KV: prune expired (DELETE FROM _local_kv WHERE expires_at IS NOT NULL AND expires_at <= ?)
+    if (lowerQ.includes('delete from _local_kv where expires_at is not null and expires_at <= ?')) {
+      const now = Number(params[0] || Date.now());
+      for (const [k, row] of this.getTable('_local_kv').entries()) {
+        if (row.expires_at != null && Number(row.expires_at) <= now) {
+          this.getTable('_local_kv').delete(k);
+        }
+      }
+      return [];
+    }
+
+    // FTS: search match query
+    if (lowerQ.includes('match ?')) {
+      const matchIdx = normQ.match(/FROM\s+"?(_fts_\w+)"?\s+WHERE/i);
+      const tableName = matchIdx ? matchIdx[1] : null;
+      if (tableName) {
+        const queryTerm = String(params[0] || '').replace(/["*]/g, '').toLowerCase().trim();
+        const rows = Array.from(this.getTable(tableName).values());
+        const matched = rows.filter((r) => {
+          const combined = Object.values(r).map(String).join(' ').toLowerCase();
+          return combined.includes(queryTerm);
+        });
+        const limit = params[1] ?? 20;
+        const offset = params[2] ?? 0;
+        return matched.slice(offset, offset + limit).map((r, idx) => ({
+          row_id: r.row_id || r.id,
+          rank: -1 * (100 - idx),
+          snippet_text: 'Match: <mark>' + queryTerm + '</mark>',
+        }));
+      }
+      return [];
+    }
+
+    // Scheduler: get due jobs
+    if (lowerQ.includes('from _local_scheduled_jobs') && lowerQ.includes('enabled = 1 and next_run_at <= ?')) {
+      const now = Number(params[0] || Date.now());
+      const rows = Array.from(this.getTable('_local_scheduled_jobs').values());
+      const due = rows.filter((r) => (r.enabled === 1 || r.enabled === true) && Number(r.next_run_at ?? r.nextRunAt) <= now);
+      due.sort((a, b) => Number(a.next_run_at) - Number(b.next_run_at));
+      return due;
+    }
+
+    // Scheduler: update schedule
+    if (lowerQ.includes('update _local_scheduled_jobs set last_run_at = ?')) {
+      const [lastRunAt, nextRunAt, id] = params;
+      const row = this.getTable('_local_scheduled_jobs').get(id);
+      if (row) {
+        row.last_run_at = lastRunAt;
+        row.next_run_at = nextRunAt;
+      }
+      return [];
+    }
+
+    // Scheduler: set enabled
+    if (lowerQ.includes('update _local_scheduled_jobs set enabled = ? where id = ?')) {
+      const [enabled, id] = params;
+      const row = this.getTable('_local_scheduled_jobs').get(id);
+      if (row) {
+        row.enabled = enabled;
+      }
+      return [];
+    }
+
+    // Scheduler: run start
+    if (lowerQ.includes('insert into _local_job_runs')) {
+      const [id, job_id, status, started_at] = params;
+      this.getTable('_local_job_runs').set(id, {
+        id,
+        job_id,
+        status,
+        started_at,
+        finished_at: null,
+        duration_ms: null,
+        error: null,
+      });
+      return [];
+    }
+
+    // Scheduler: run finish
+    if (lowerQ.includes('update _local_job_runs set status = ?')) {
+      const [status, finished_at, duration_ms, error, id] = params;
+      const row = this.getTable('_local_job_runs').get(id);
+      if (row) {
+        row.status = status;
+        row.finished_at = finished_at;
+        row.duration_ms = duration_ms;
+        row.error = error;
+      }
+      return [];
+    }
+
+    // Scheduler: get runs
+    if (lowerQ.includes('from _local_job_runs')) {
+      const rows = Array.from(this.getTable('_local_job_runs').values());
+      if (lowerQ.includes('where job_id = ?')) {
+        const jobId = params[0];
+        const limit = params[1] || 50;
+        const filtered = rows.filter((r) => r.job_id === jobId);
+        filtered.sort((a, b) => Number(b.started_at) - Number(a.started_at));
+        return filtered.slice(0, limit);
+      }
+      const limit = params[0] || 50;
+      rows.sort((a, b) => Number(b.started_at) - Number(a.started_at));
+      return rows.slice(0, limit);
+    }
+
+    // Blobs: list by status
+    if (lowerQ.includes('from _local_blobs where status = ?')) {
+      const status = params[0];
+      const rows = Array.from(this.getTable('_local_blobs').values());
+      const filtered = rows.filter((r) => r.status === status);
+      filtered.sort((a, b) => Number(b.created_at) - Number(a.created_at));
+      return filtered;
+    }
+
+    // Blobs: update status
+    if (lowerQ.includes('update _local_blobs set status = ?')) {
+      if (lowerQ.includes('remote_url = ?')) {
+        const [status, remote_url, updated_at, id] = params;
+        const row = this.getTable('_local_blobs').get(id);
+        if (row) {
+          row.status = status;
+          row.remote_url = remote_url;
+          row.updated_at = updated_at;
+        }
+      } else {
+        const [status, updated_at, id] = params;
+        const row = this.getTable('_local_blobs').get(id);
+        if (row) {
+          row.status = status;
+          row.updated_at = updated_at;
+        }
+      }
       return [];
     }
 
@@ -107,15 +257,14 @@ export class MockDB implements LocalDBAdapter {
     }
 
     // Select single row or filter by column (with optional LIMIT 1)
-    const selectRowMatch = normQ.match(/^SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? = \?(?:\s+LIMIT \d+)?$/i);
+    const selectRowMatch = normQ.match(/^SELECT \* FROM "?(\w+)"? WHERE "?(\w+)"? = \?(?:\s+LIMIT \d+)?;?$/i);
     if (selectRowMatch && selectRowMatch[1] !== 'sync_outbox') {
       const table = selectRowMatch[1];
       const col = selectRowMatch[2];
       const val = params[0];
       const rows = this.getTable(table);
-      if (col.toLowerCase() === 'id') {
-        const row = rows.get(val);
-        return row ? [row] : [];
+      if (rows.has(val)) {
+        return [rows.get(val)];
       }
       return Array.from(rows.values()).filter((r: any) => r[col] === val);
     }
@@ -127,7 +276,7 @@ export class MockDB implements LocalDBAdapter {
       const col = selectInMatch[2];
       const rows = this.getTable(table);
       const idSet = new Set(params);
-      if (col.toLowerCase() === 'id') {
+      if (col.toLowerCase() === 'id' || col.toLowerCase() === 'key') {
         return params.map((id) => rows.get(id)).filter(Boolean);
       }
       return Array.from(rows.values()).filter((r: any) => idSet.has(r[col]));
@@ -212,7 +361,7 @@ export class MockDB implements LocalDBAdapter {
       cols.forEach((c, idx) => {
         obj[c] = params[idx];
       });
-      const id = obj.id || params[0];
+      const id = obj.id || obj.key || obj.row_id || params[0];
       const existing = this.getTable(table).get(id);
       if (existing && /ON CONFLICT/i.test(q)) {
         this.getTable(table).set(id, { ...existing, ...obj });
@@ -364,8 +513,15 @@ export class MockDB implements LocalDBAdapter {
     const deleteMatch = q.match(/DELETE FROM "?(\w+)"?\s*WHERE\s*"?(\w+)"?\s*=\s*\?/i);
     if (deleteMatch) {
       const table = deleteMatch[1];
-      const id = params[0];
-      this.getTable(table).delete(id);
+      const col = deleteMatch[2];
+      const val = params[0];
+      if (this.getTable(table).has(val)) {
+        this.getTable(table).delete(val);
+      } else {
+        for (const [k, r] of this.getTable(table).entries()) {
+          if (r[col] === val) this.getTable(table).delete(k);
+        }
+      }
       return [];
     }
 

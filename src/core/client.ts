@@ -55,6 +55,21 @@ import {
   ApiKeyManager,
   type ApiKeyManagerOptions,
 } from '../keys/index.js';
+import {
+  KVManager,
+  type KVStoreOptions,
+} from '../kv/index.js';
+import {
+  SearchManager,
+} from '../search/index.js';
+import {
+  BlobStorageManager,
+  type BlobStorageManagerOptions,
+} from '../storage/index.js';
+import {
+  JobScheduler,
+  type JobSchedulerOptions,
+} from '../scheduler/index.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -88,6 +103,9 @@ export interface LocalFirstClientConfig {
   touchUpdatedAt?: boolean | string;
   actions?: ActionManagerOptions;
   keys?: ApiKeyManagerOptions;
+  kv?: KVStoreOptions;
+  storage?: BlobStorageManagerOptions;
+  scheduler?: JobSchedulerOptions;
 }
 
 function hasFunctionFilter(value: any): boolean {
@@ -311,6 +329,10 @@ export class LocalFirstClient {
   public readonly maintenance: DatabaseMaintenance;
   public readonly actions: ActionManager;
   public readonly keys: ApiKeyManager;
+  public readonly kv: KVManager;
+  public readonly search: SearchManager;
+  public readonly storage: BlobStorageManager;
+  public readonly scheduler: JobScheduler;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -340,6 +362,13 @@ export class LocalFirstClient {
 
     const actionNetwork = config.actions?.network ?? config.network;
     this.keys = new ApiKeyManager(this.db, config.keys);
+    this.kv = new KVManager(this.db, config.kv);
+    this.search = new SearchManager(this.db, this.events, (table, id) => this.findById(table, id));
+    this.storage = new BlobStorageManager(this.db, {
+      network: config.network,
+      ...config.storage,
+    });
+    this.scheduler = new JobScheduler(this.db, config.scheduler);
 
     this.actions = new ActionManager(
       this.db,
@@ -525,6 +554,9 @@ export class LocalFirstClient {
     await OutboxStore.resetStaleProcessing(this.db);
     await this.actions.initialize();
     await this.keys.initialize();
+    await this.kv.initialize();
+    await this.storage.initialize();
+    await this.scheduler.initialize();
 
     if (this.migrations.length > 0) {
       await this.db.transaction(async (tx) => {
@@ -1172,6 +1204,7 @@ export class LocalFirstClient {
   stop(): void {
     this.syncWorker.stop();
     this.actions.stop();
+    this.scheduler.stop();
   }
 
   /**
