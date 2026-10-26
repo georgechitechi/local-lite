@@ -371,3 +371,42 @@ await client.clearFailedMutations();
 const lastSyncedAt = await client.getLastSyncedAt();
 await client.resetSyncCursor(); // Forces next pull to re-fetch all cloud data
 ```
+
+---
+
+## 11. Action Outbox & Email Queue (`client.actions`)
+
+Enqueues asynchronous actions (emails, notifications, webhooks) with offline durability, idempotency deduplication, and automatic retries.
+
+```typescript
+// Enqueue an email offline (instant 0ms local write)
+const emailAction = await client.actions.sendEmail({
+  to: 'customer@example.com',
+  subject: 'Order Confirmed',
+  html: '<h1>Thank you!</h1>',
+  idempotencyKey: 'order_123',
+  ttlMs: 24 * 60 * 60 * 1000,
+});
+
+// Register an email dispatcher
+client.actions.registerEmailHandler(async (email) => {
+  const res = await sendWithProvider(email);
+  return { messageId: res.id };
+});
+
+// Enqueue generic offline actions
+await client.actions.enqueue({
+  action: 'push_notification',
+  payload: { title: 'New message', token: 'fcm-xxx' },
+});
+
+// Flush pending actions immediately
+await client.actions.flush();
+
+// Query, cancel, or prune actions
+const action = await client.actions.get(emailAction.id);
+await client.actions.cancel(emailAction.id);
+await client.actions.prune({ completedOlderThanMs: 86400000 });
+```
+
+See the dedicated [**Action Outbox & Email Queue Guide**](./actions-email.md) for full architecture, cloud function integration, and options reference.

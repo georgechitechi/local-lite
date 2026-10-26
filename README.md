@@ -92,6 +92,7 @@ This recovers sync state; it does not repair corrupt SQLite files or cancel hung
 * **🔄 Infinite-Loop Safe:** Incoming remote deltas update local tables and fire reactive UI listeners without echoing back into the outbox.
 * **☁️ Database Backups:** Export and restore SQLite snapshots independently of your live sync backend.
 * **🔑 Google Sign-In Out of the Box:** Secure, zero-backend Google OAuth 2.0 (PKCE) authentication with automatic token refresh, user profile retrieval, persistent session storage, and `useGoogleAuth()` hook.
+* **📨 Action Outbox & Email Queue:** Enqueue transactional emails, push notifications, and webhooks offline with idempotency keys, automatic retry backoff, crash recovery, and TTL expiration.
 
 
 ---
@@ -293,6 +294,46 @@ export function UserProfileHeader() {
 
 ---
 
+
+### 4. Offline Actions & Inbuilt Email Queue
+
+`local-lite` includes a durable **Generic Action Outbox** (`client.actions`) for side-effects that should not be lost when offline:
+
+```typescript
+import { client } from './sync.config';
+
+// ⚡ 1. Enqueue transactional email offline (0ms latency, safe if app closes)
+const emailAction = await client.actions.sendEmail({
+  to: 'customer@example.com',
+  subject: 'Order #1042 Confirmed',
+  html: '<h1>Thank you for your purchase!</h1>',
+  template: 'order_receipt',
+  templateData: { orderId: 1042, total: '$49.99' },
+  idempotencyKey: 'order_receipt_1042', // Prevents sending twice
+  ttlMs: 24 * 60 * 60 * 1000,           // Expire if offline for >24 hours
+});
+
+// ⚡ 2. Register local dispatcher (or let rows replicate to Supabase/Convex/Firebase)
+client.actions.registerEmailHandler(async (email) => {
+  // Dispatch via your transactional provider or backend API
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+    body: JSON.stringify(email),
+  });
+  const data = await response.json();
+  return { messageId: data.id };
+});
+
+// ⚡ 3. Enqueue arbitrary asynchronous actions (e.g., push notifications, analytics)
+await client.actions.enqueue({
+  action: 'push_notification',
+  payload: { title: 'New chat message', token: 'fcm-xxx' },
+  idempotencyKey: 'chat_msg_99',
+});
+```
+
+---
 
 ## Supabase Backend Setup & Schema
 

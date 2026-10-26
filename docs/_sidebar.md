@@ -3,6 +3,7 @@
 * [🏛️ Architecture & Concepts](architecture.md)
 * [⚙️ Configuration](configuration.md)
 * [💻 Client API & Query Builder](client-api.md)
+* [📨 Action Outbox & Email Queue](actions-email.md)
 * [💾 Local SQLite Adapters](adapters-local.md)
 * [☁️ Remote Cloud Adapters](adapters-remote.md)
 * [⚛️ React & Expo Hooks](react-hooks.md)

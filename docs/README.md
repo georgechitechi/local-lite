@@ -68,6 +68,10 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
     - Storage breakdown, outbox pruning, VACUUM, and WAL checkpoints
     - PRAGMA analyze and structural integrity checks
     - Universal JSON & RFC-4180 CSV export and import
+13. **[Action Outbox & Email Queue](./actions-email.md)**
+    - 0ms offline transactional email enqueuing
+    - Generic action dispatchers (push notifications, webhooks, analytics)
+    - Idempotency deduplication, TTL expiration, and crash recovery
 
 ---
 

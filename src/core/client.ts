@@ -47,6 +47,10 @@ import {
   type EncryptedBackupOptions,
   type RestoreEncryptedBackupOptions,
 } from '../backups/index.js';
+import {
+  ActionManager,
+  type ActionManagerOptions,
+} from '../actions/index.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -78,6 +82,7 @@ export interface LocalFirstClientConfig {
    * - `false`: disabled
    */
   touchUpdatedAt?: boolean | string;
+  actions?: ActionManagerOptions;
 }
 
 function hasFunctionFilter(value: any): boolean {
@@ -299,6 +304,7 @@ export class LocalFirstClient {
   /** Local column stamped on INSERT/UPDATE writes, or null when disabled. */
   public touchColumn: string | null;
   public readonly maintenance: DatabaseMaintenance;
+  public readonly actions: ActionManager;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -325,6 +331,17 @@ export class LocalFirstClient {
           : ((this.remote as any)?.updatedAtColumn as string | undefined) || 'updated_at';
     this.schemaManager = new SchemaManager();
     this.maintenance = new DatabaseMaintenance(this.db, () => this.tables);
+
+    const actionNetwork = config.actions?.network ?? config.network;
+    this.actions = new ActionManager(
+      this.db,
+      this.events,
+      () => Promise.resolve(actionNetwork ? actionNetwork.isOnline() : true),
+      {
+        network: actionNetwork,
+        ...config.actions,
+      }
+    );
 
     const workerOptions: SyncWorkerOptions = {
       network: config.network,
@@ -498,6 +515,7 @@ export class LocalFirstClient {
     await OutboxStore.ensureSchema(this.db);
     await MetaStore.ensureSchema(this.db);
     await OutboxStore.resetStaleProcessing(this.db);
+    await this.actions.initialize();
 
     if (this.migrations.length > 0) {
       await this.db.transaction(async (tx) => {
@@ -1144,6 +1162,7 @@ export class LocalFirstClient {
    */
   stop(): void {
     this.syncWorker.stop();
+    this.actions.stop();
   }
 
   /**

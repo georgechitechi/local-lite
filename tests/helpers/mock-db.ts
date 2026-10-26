@@ -133,6 +133,49 @@ export class MockDB implements LocalDBAdapter {
       return Array.from(rows.values()).filter((r: any) => idSet.has(r[col]));
     }
 
+        // Reset _local_actions executing on startup
+    if (normQ.includes("UPDATE _local_actions SET status = 'PENDING' WHERE status = 'EXECUTING'")) {
+      for (const row of this.getTable('_local_actions').values()) {
+        if (row.status === 'EXECUTING') row.status = 'PENDING';
+      }
+      return [];
+    }
+
+    // Cancel action: UPDATE _local_actions SET status = 'CANCELLED' WHERE id = ? AND status = 'PENDING'
+    if (normQ.includes("UPDATE _local_actions SET status = 'CANCELLED' WHERE id = ? AND status = 'PENDING'")) {
+      const id = params[0];
+      const row = this.getTable('_local_actions').get(id);
+      if (row && row.status === 'PENDING') {
+        row.status = 'CANCELLED';
+      }
+      return [];
+    }
+
+    // Pending actions: SELECT * FROM _local_actions WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT ?
+    if (lowerQ.includes('from _local_actions') && lowerQ.includes("status = 'pending'")) {
+      const limit = params[0] || 50;
+      const rows = Array.from(this.getTable('_local_actions').values());
+      const pending = rows.filter((r) => r.status === 'PENDING');
+      pending.sort((a, b) => (Number(a.created_at) || 0) - (Number(b.created_at) || 0));
+      return pending.slice(0, limit);
+    }
+
+    // Prune _local_actions
+    if (lowerQ.startsWith('delete from _local_actions where status =')) {
+      const cutoff = params[0];
+      const match = lowerQ.match(/status = '(\w+)'/);
+      const targetStatus = match ? match[1].toUpperCase() : null;
+      for (const [id, row] of this.getTable('_local_actions').entries()) {
+        if (row.status === targetStatus) {
+          const ts = row.status === 'COMPLETED' ? Number(row.executed_at) : Number(row.created_at);
+          if (cutoff === undefined || ts <= cutoff) {
+            this.getTable('_local_actions').delete(id);
+          }
+        }
+      }
+      return [];
+    }
+
     // Select rows from table (with optional projection / WHERE / ORDER / LIMIT)
     const selectAllMatch = normQ.match(/^SELECT (?:[\w",\s]+|\*) FROM "?(\w+)"?(?:\s+WHERE\s+[^;]+)?(?:\s+ORDER BY\s+[^;]+)?(?:\s+LIMIT\s+[^;]+)?;?$/i);
     if (selectAllMatch) {
@@ -193,6 +236,8 @@ export class MockDB implements LocalDBAdapter {
     }
 
     // Recover interrupted pushes without changing failure history.
+    
+
     if (normQ === "UPDATE sync_outbox SET status = 'PENDING' WHERE status = 'PROCESSING'") {
       for (const row of this.getTable('sync_outbox').values()) {
         if (row.status === 'PROCESSING') row.status = 'PENDING';
