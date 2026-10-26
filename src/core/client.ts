@@ -70,6 +70,10 @@ import {
   JobScheduler,
   type JobSchedulerOptions,
 } from '../scheduler/index.js';
+import {
+  SessionManager,
+  type SessionManagerOptions,
+} from '../auth/session.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -106,6 +110,7 @@ export interface LocalFirstClientConfig {
   kv?: KVStoreOptions;
   storage?: BlobStorageManagerOptions;
   scheduler?: JobSchedulerOptions;
+  session?: SessionManagerOptions;
 }
 
 function hasFunctionFilter(value: any): boolean {
@@ -333,6 +338,7 @@ export class LocalFirstClient {
   public readonly search: SearchManager;
   public readonly storage: BlobStorageManager;
   public readonly scheduler: JobScheduler;
+  public readonly session: SessionManager;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -366,6 +372,8 @@ export class LocalFirstClient {
       '_local_job_runs',
       '_local_api_keys',
       '_local_actions',
+      '_local_sessions',
+      '_local_sessions',
     ]);
 
     const actionNetwork = config.actions?.network ?? config.network;
@@ -377,6 +385,10 @@ export class LocalFirstClient {
       ...config.storage,
     });
     this.scheduler = new JobScheduler(this.db, config.scheduler);
+    this.session = new SessionManager(this.db, this.events, {
+      network: config.network,
+      ...config.session,
+    });
 
     this.actions = new ActionManager(
       this.db,
@@ -565,6 +577,7 @@ export class LocalFirstClient {
     await this.kv.initialize();
     await this.storage.initialize();
     await this.scheduler.initialize();
+    await this.session.initialize();
 
     if (this.migrations.length > 0) {
       await this.db.transaction(async (tx) => {

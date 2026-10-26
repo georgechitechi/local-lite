@@ -145,6 +145,46 @@ export class MockDB implements LocalDBAdapter {
       return rows.slice(0, limit);
     }
 
+    
+    // Sessions: update all
+    if (lowerQ.startsWith('update _local_sessions set is_active = ?') && !lowerQ.includes('where')) {
+      const val = params[0];
+      for (const row of this.getTable('_local_sessions').values()) {
+        row.is_active = val;
+      }
+      return [];
+    }
+
+    // Sessions: deactivate active
+    if (lowerQ.includes('update _local_sessions set is_active = ? where is_active = ?')) {
+      const [newVal, targetVal] = params;
+      for (const row of this.getTable('_local_sessions').values()) {
+        if (row.is_active === targetVal) {
+          row.is_active = newVal;
+        }
+      }
+      return [];
+    }
+
+    // Sessions: find by id or user_id
+    if (lowerQ.includes('from _local_sessions where id = ? or user_id = ?')) {
+      const [id, userId] = params;
+      const rows = Array.from(this.getTable('_local_sessions').values());
+      const found = rows.find((r) => r.id === id || r.user_id === userId);
+      return found ? [found] : [];
+    }
+
+    // Sessions: switch session update
+    if (lowerQ.includes('update _local_sessions set is_active = ?, last_active_at = ? where id = ?')) {
+      const [isActive, lastActiveAt, id] = params;
+      const row = this.getTable('_local_sessions').get(id);
+      if (row) {
+        row.is_active = isActive;
+        row.last_active_at = lastActiveAt;
+      }
+      return [];
+    }
+
     // Blobs: list by status
     if (lowerQ.includes('from _local_blobs where status = ?')) {
       const status = params[0];
