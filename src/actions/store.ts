@@ -238,7 +238,7 @@ export class ActionStore {
     tableName: string = DEFAULT_ACTIONS_TABLE,
     id: string
   ): Promise<boolean> {
-    const rows = await db.execute(
+    await db.execute(
       `UPDATE ${tableName} SET status = 'CANCELLED' WHERE id = ? AND status = 'PENDING';`,
       [id]
     );

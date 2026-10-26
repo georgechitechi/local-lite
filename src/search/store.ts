@@ -1,5 +1,5 @@
 import { DBExecutable } from '../core/schema-manager.js';
-import { SearchIndexConfig, SearchQueryOptions, SearchResult } from './types.js';
+import { SearchIndexConfig, SearchQueryOptions } from './types.js';
 
 export function getFtsTableName(table: string): string {
   return `_fts_${table}`;
