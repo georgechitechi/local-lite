@@ -8,6 +8,7 @@
 * [☁️ Remote Cloud Adapters](adapters-remote.md)
 * [⚛️ React & Expo Hooks](react-hooks.md)
 * [🔑 Authentication (Google, Microsoft, GitHub, Apple)](auth.md)
+* [🔐 API Keys & Signed Tokens](api-keys.md)
 * [🌐 Google Sign-In & Drive Guide](google-auth.md)
 * [🔀 Conflict Resolution & Field Merge](conflict-resolution.md)
 * [📦 Cloud Backups & Zero-Knowledge Encryption](backups.md)

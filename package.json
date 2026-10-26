@@ -105,6 +105,11 @@
       "types": "./dist/actions/index.d.ts",
       "import": "./dist/actions/index.js",
       "default": "./dist/actions/index.js"
+    },
+    "./keys": {
+      "types": "./dist/keys/index.d.ts",
+      "import": "./dist/keys/index.js",
+      "default": "./dist/keys/index.js"
     }
   },
   "scripts": {

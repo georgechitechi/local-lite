@@ -305,6 +305,37 @@ export class MockDB implements LocalDBAdapter {
       return [];
     }
 
+        // Update _local_api_keys revoked
+    if (lowerQ.includes('update _local_api_keys set revoked = 1')) {
+      const revokedAt = params[0];
+      const id = params[1];
+      const row = this.getTable('_local_api_keys').get(id);
+      if (row && !row.revoked) {
+        row.revoked = 1;
+        row.revoked_at = revokedAt;
+      }
+      return [];
+    }
+
+    // Prune _local_api_keys
+    if (lowerQ.includes('delete from _local_api_keys where')) {
+      const cutoff = params[0];
+      if (lowerQ.includes('revoked = 1')) {
+        for (const [id, row] of this.getTable('_local_api_keys').entries()) {
+          if (row.revoked && (cutoff === undefined || Number(row.revoked_at) <= cutoff)) {
+            this.getTable('_local_api_keys').delete(id);
+          }
+        }
+      } else if (lowerQ.includes('expires_at is not null')) {
+        for (const [id, row] of this.getTable('_local_api_keys').entries()) {
+          if (row.expires_at != null && Number(row.expires_at) <= cutoff) {
+            this.getTable('_local_api_keys').delete(id);
+          }
+        }
+      }
+      return [];
+    }
+
     // Generic Update
     const updateMatch = q.match(/UPDATE "?(\w+)"?\s*SET\s*([^W]+)WHERE\s*"?(\w+)"?\s*=\s*\?/i);
     if (updateMatch) {

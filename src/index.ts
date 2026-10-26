@@ -23,3 +23,4 @@ export * from './schema/index.js';
 export * from './auth/index.js';
 export * from './backups/index.js';
 export * from './actions/index.js';
+export * from './keys/index.js';

@@ -51,6 +51,10 @@ import {
   ActionManager,
   type ActionManagerOptions,
 } from '../actions/index.js';
+import {
+  ApiKeyManager,
+  type ApiKeyManagerOptions,
+} from '../keys/index.js';
 
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
@@ -83,6 +87,7 @@ export interface LocalFirstClientConfig {
    */
   touchUpdatedAt?: boolean | string;
   actions?: ActionManagerOptions;
+  keys?: ApiKeyManagerOptions;
 }
 
 function hasFunctionFilter(value: any): boolean {
@@ -305,6 +310,7 @@ export class LocalFirstClient {
   public touchColumn: string | null;
   public readonly maintenance: DatabaseMaintenance;
   public readonly actions: ActionManager;
+  public readonly keys: ApiKeyManager;
   private primaryKey: string;
   private migrations: string[];
   private autoStart: boolean;
@@ -333,6 +339,8 @@ export class LocalFirstClient {
     this.maintenance = new DatabaseMaintenance(this.db, () => this.tables);
 
     const actionNetwork = config.actions?.network ?? config.network;
+    this.keys = new ApiKeyManager(this.db, config.keys);
+
     this.actions = new ActionManager(
       this.db,
       this.events,
@@ -516,6 +524,7 @@ export class LocalFirstClient {
     await MetaStore.ensureSchema(this.db);
     await OutboxStore.resetStaleProcessing(this.db);
     await this.actions.initialize();
+    await this.keys.initialize();
 
     if (this.migrations.length > 0) {
       await this.db.transaction(async (tx) => {

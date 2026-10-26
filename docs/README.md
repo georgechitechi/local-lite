@@ -72,6 +72,10 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
     - 0ms offline transactional email enqueuing
     - Generic action dispatchers (push notifications, webhooks, analytics)
     - Idempotency deduplication, TTL expiration, and crash recovery
+14. **[API Keys & Signed Tokens](./api-keys.md)**
+    - Checksummed API key generation & verification (Stripe/GitHub pattern)
+    - HMAC-SHA256 signed tokens with expiration and renewal
+    - Local SQLite API key manager (`client.keys`)
 
 ---
 
