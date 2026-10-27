@@ -1,6 +1,6 @@
 import { LocalDBAdapter } from '../adapters/local/index.js';
 import { OutboxStatus } from './types.js';
-import { escapeIdentifier } from '../utils/sql.js';
+import { escapeIdentifier, isInternalTable } from '../utils/sql.js';
 
 export interface PruneOutboxOptions {
   /**
@@ -145,18 +145,23 @@ export class DatabaseMaintenance {
   /**
    * Gathers storage metrics: table row counts, outbox status distribution, and database size.
    */
-  async getStorageStats(): Promise<StorageStats> {
+  async getStorageStats(options: { includeInternal?: boolean } = {}): Promise<StorageStats> {
+    const includeInternal = options.includeInternal ?? false;
     // 1. Table row counts
     const tableCounts: Record<string, number> = {};
     let tableNames: string[] = [];
 
     try {
       const masterRows = await this.db.execute(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'`,
       );
       tableNames = masterRows.map((r: any) => r.name);
     } catch {
       tableNames = this.getKnownTables();
+    }
+
+    if (!includeInternal) {
+      tableNames = tableNames.filter(name => !isInternalTable(name));
     }
 
     for (const tableName of tableNames) {

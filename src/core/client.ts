@@ -25,7 +25,7 @@ import {
 } from './types.js';
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import { generateUUID } from '../utils/uuid.js';
-import { escapeIdentifier } from '../utils/sql.js';
+import { escapeIdentifier, isInternalTable } from '../utils/sql.js';
 import { isDeletedRecord, applyQueryOptions } from './query.js';
 import { QueryBuilder, AggregateSpec, AggregateResult } from './query-builder.js';
 import {
@@ -1300,21 +1300,52 @@ export class LocalFirstClient {
     this.events.emit('reset', { dropTables: options.dropTables ?? false });
   }
 
-  private async getAllTableNames(): Promise<string[]> {
+    /**
+   * Checks if a table name belongs to internal system, FTS, or engine tables.
+   */
+  isInternalTable(tableName: string): boolean {
+    return isInternalTable(tableName);
+  }
+
+  /**
+   * Returns list of database tables.
+   * By default, internal tables (FTS shadow tables, local-lite engine tables) are excluded.
+   * Pass `{ includeInternal: true }` to include internal tables.
+   */
+  async getTables(options: { includeInternal?: boolean } = {}): Promise<string[]> {
+    const includeInternal = options.includeInternal ?? false;
+    const allTables = await this.getAllTableNames(options);
+    if (includeInternal) {
+      return allTables;
+    }
+    return allTables.filter(name => !isInternalTable(name));
+  }
+
+  async getAllTableNames(options: { includeInternal?: boolean } = {}): Promise<string[]> {
+    const includeInternal = options.includeInternal ?? false;
     const list = new Set(this.tables);
-    list.add('sync_outbox');
-    list.add('sync_meta');
+    if (includeInternal) {
+      list.add('sync_outbox');
+      list.add('sync_meta');
+    }
     try {
       const rows = await this.db.execute(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'`,
       );
       if (Array.isArray(rows)) {
         for (const r of rows) {
-          if (r.name) list.add(r.name);
+          if (r.name) {
+            if (includeInternal || !isInternalTable(r.name)) {
+              list.add(r.name);
+            }
+          }
         }
       }
     } catch {
       // Non-SQLite database adapter, fallback to configured tables
+    }
+    if (!includeInternal) {
+      return Array.from(list).filter(name => !isInternalTable(name));
     }
     return Array.from(list);
   }

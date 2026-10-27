@@ -1,11 +1,13 @@
 import type { LocalFirstClient } from '../core/client.js';
-import { escapeIdentifier } from './sql.js';
+import { escapeIdentifier, isInternalTable } from './sql.js';
 
 export interface ExportJsonOptions {
   /** Pretty-print JSON with 2-space indentation. Default: false */
   pretty?: boolean;
   /** Explicit list of tables to export. If not specified, exports all registered tables. */
   tables?: string[];
+  /** Whether to include internal system/engine tables. Default: false */
+  includeInternal?: boolean;
 }
 
 export interface JsonExportData {
@@ -28,6 +30,8 @@ export interface ImportJsonOptions {
   skipOutbox?: boolean;
   /** Whitelist of tables to import. If specified, any tables in JSON not in this list are ignored. */
   tables?: string[];
+  /** Whether to import internal system/engine tables. Default: false */
+  includeInternal?: boolean;
 }
 
 export interface ExportCsvOptions {
@@ -165,7 +169,10 @@ export async function exportTablesToJson(
   tables?: string[],
   options: ExportJsonOptions = {},
 ): Promise<string> {
-  const targetTables = tables && tables.length > 0 ? tables : client.tables;
+  let targetTables = tables && tables.length > 0 ? tables : client.tables;
+  if (!options.includeInternal) {
+    targetTables = targetTables.filter(t => !isInternalTable(t));
+  }
   const result: JsonExportData = {
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -212,6 +219,9 @@ export async function importTablesFromJson(
   const rowCounts: Record<string, number> = {};
 
   for (const [table, rows] of Object.entries(parsed.tables)) {
+    if (!options.includeInternal && isInternalTable(table)) {
+      continue;
+    }
     if (filterTables && !filterTables.has(table)) {
       continue;
     }
