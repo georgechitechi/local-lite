@@ -8,6 +8,12 @@ import {
   createSyncLogger,
   formatSupabaseError,
 } from '../../utils/logger.js';
+import {
+  createSupabaseStorageUploader,
+  type SupabaseStorageUploaderOptions,
+  type SupabaseStorageUploaderInstance,
+} from '../../storage/supabase.js';
+import type { RemoteStorageUploader } from '../../storage/types.js';
 
 export interface SupabaseAdapterOptions {
   /**
@@ -118,7 +124,8 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       typeof clientOrOptions === 'object' &&
       !('channel' in clientOrOptions) &&
       !('from' in clientOrOptions) &&
-      !('auth' in clientOrOptions)
+      !('auth' in clientOrOptions) &&
+      !('storage' in clientOrOptions)
     ) {
       client = null;
       options = clientOrOptions as SupabaseAdapterOptions;
@@ -771,4 +778,19 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       this.activeChannel = undefined;
     }
   }
+
+  /**
+   * Helper to create a remote storage uploader targeting Supabase Storage buckets.
+   * Connects local-lite offline blob/file storage directly to Supabase Storage.
+   */
+  createStorageUploader(options: SupabaseStorageUploaderOptions): SupabaseStorageUploaderInstance {
+    return createSupabaseStorageUploader(this.getClient(), options);
+  }
 }
+
+export {
+  SupabaseRemoteAdapter as SupabaseAdapter,
+  createSupabaseStorageUploader,
+  type SupabaseStorageUploaderOptions,
+  type SupabaseStorageUploaderInstance,
+};

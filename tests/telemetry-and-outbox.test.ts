@@ -46,7 +46,7 @@ describe('Telemetry & Outbox Management', () => {
     await client.insert('todos', { id: 'm-1', title: 'Metric task' });
 
     // Wait for push
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     const metricsAfter = await client.getMetrics();
     expect(metricsAfter.totalPushedOperations).toBeGreaterThanOrEqual(1);

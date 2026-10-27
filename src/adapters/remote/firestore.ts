@@ -7,6 +7,11 @@ import {
   createSyncLogger,
   formatFirestoreError,
 } from '../../utils/logger.js';
+import {
+  createFirebaseStorageUploader,
+  FirebaseStorageUploaderOptions,
+  FirebaseStorageUploaderInstance,
+} from '../../storage/firebase.js';
 
 export interface FirestoreAdapterOptions {
   /**
@@ -402,4 +407,36 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     }
     this.unsubscribers = [];
   }
+
+  /**
+   * Helper to create a remote storage uploader targeting Firebase Cloud Storage.
+   * Connects local-lite offline blob/file storage directly to Firebase Storage.
+   */
+  createStorageUploader(
+    storageOrApp?: any,
+    options: FirebaseStorageUploaderOptions = {}
+  ): FirebaseStorageUploaderInstance {
+    let client = storageOrApp;
+    let opts = options;
+    if (
+      storageOrApp &&
+      !storageOrApp.ref &&
+      !storageOrApp.storage &&
+      !storageOrApp.app &&
+      typeof storageOrApp === 'object' &&
+      ('bucket' in storageOrApp || 'storageModule' in storageOrApp || 'basePath' in storageOrApp)
+    ) {
+      opts = storageOrApp;
+      client = this.db.app || this.db;
+    }
+    const resolvedClient = client || this.db.app || this.db;
+    return createFirebaseStorageUploader(resolvedClient, opts);
+  }
 }
+
+export {
+  FirestoreRemoteAdapter as FirestoreAdapter,
+  createFirebaseStorageUploader,
+  type FirebaseStorageUploaderOptions,
+  type FirebaseStorageUploaderInstance,
+};

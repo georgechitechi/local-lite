@@ -380,9 +380,23 @@ export class LocalFirstClient {
     this.keys = new ApiKeyManager(this.db, config.keys);
     this.kv = new KVManager(this.db, this.events, config.kv);
     this.search = new SearchManager(this.db, this.events, (table, id) => this.findById(table, id));
+    let storageUploader = config.storage?.uploader;
+    if (!storageUploader && config.storage) {
+      if (
+        typeof (this.remote as any)?.createStorageUploader === 'function' &&
+        (config.storage.autoRemote !== false &&
+          (config.storage.autoRemote || config.storage.bucket || config.storage.uploadMutation))
+      ) {
+        try {
+          storageUploader = (this.remote as any).createStorageUploader(config.storage);
+        } catch {}
+      }
+    }
+
     this.storage = new BlobStorageManager(this.db, {
       network: config.network,
       ...config.storage,
+      uploader: storageUploader,
     });
     this.scheduler = new JobScheduler(this.db, config.scheduler);
     this.session = new SessionManager(this.db, this.events, {

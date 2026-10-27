@@ -7,6 +7,11 @@ import {
   createSyncLogger,
   formatConvexError,
 } from '../../utils/logger.js';
+import {
+  createConvexStorageUploader,
+  ConvexStorageUploaderOptions,
+  ConvexStorageUploaderInstance,
+} from '../../storage/convex.js';
 
 export interface ConvexRemoteAdapterOptions {
   /**
@@ -255,4 +260,18 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
       this.unsubscribeLive = undefined;
     }
   }
+
+  /**
+   * Helper to create a remote storage uploader targeting Convex File Storage.
+   * Connects local-lite offline blob/file storage directly to Convex File Storage.
+   */
+  createStorageUploader(options: ConvexStorageUploaderOptions = {}): ConvexStorageUploaderInstance {
+    return createConvexStorageUploader(this.client, options);
+  }
 }
+
+export {
+  createConvexStorageUploader,
+  type ConvexStorageUploaderOptions,
+  type ConvexStorageUploaderInstance,
+};

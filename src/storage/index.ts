@@ -2,3 +2,8 @@ export * from './types.js';
 export * from './driver.js';
 export * from './store.js';
 export * from './manager.js';
+export * from './expo.js';
+export * from './supabase.js';
+export * from './convex.js';
+export * from './firebase.js';
+export * from './factory.js';
