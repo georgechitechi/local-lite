@@ -13,8 +13,6 @@ import {
   type SupabaseStorageUploaderOptions,
   type SupabaseStorageUploaderInstance,
 } from '../../storage/supabase.js';
-import type { RemoteStorageUploader } from '../../storage/types.js';
-
 export interface SupabaseAdapterOptions {
   /**
    * The list of Postgres tables to sync.
