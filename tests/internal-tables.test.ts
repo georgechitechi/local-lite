@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { LocalFirstClient } from '../src/core/client.js';
 import { isInternalTable } from '../src/utils/sql.js';
 import { NodeSQLiteAdapter } from '../src/adapters/local/node-sqlite.js';
+import { NoopRemoteAdapter } from '../src/adapters/remote/demo.js';
 
 describe('Internal Tables Filtering', () => {
   it('correctly identifies internal tables', () => {
@@ -25,11 +26,7 @@ describe('Internal Tables Filtering', () => {
     const raw = new DatabaseSync(':memory:');
     const client = new LocalFirstClient({
       local: new NodeSQLiteAdapter(raw),
-      remote: {
-        pushChanges: async () => {},
-        fetchChanges: async () => {},
-        subscribeToLiveChanges() {},
-      },
+      remote: new NoopRemoteAdapter(),
       autoStart: false,
       autoSchema: false,
       tables: ['properties', 'houses'],
