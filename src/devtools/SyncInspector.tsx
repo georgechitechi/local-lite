@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LocalFirstClient } from '../core/client.js';
-import { useSyncStatus } from './status.js';
+import { useSyncStatus } from '../react/status.js';
 import { BenchmarkModal } from './BenchmarkModal.js';
-import { resolveSyncTheme, type SyncThemeColors } from './theme.js';
+import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
 
 let RN: any;
 try {

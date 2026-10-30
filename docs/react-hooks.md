@@ -19,8 +19,6 @@ import {
   useCloudBackup,
   useGoogleDriveBackup,
   useOneDriveBackup,
-  SyncInspector,
-  BenchmarkModal,
 } from 'local-lite/react';
 ```
 
@@ -417,13 +415,13 @@ export function BackupManager({ client }) {
 
 ## 10. Developer Tools & Components
 
-`local-lite/react` includes ready-to-use developer UI components for testing, monitoring, and stress testing your sync engine:
+`local-lite/devtools` includes ready-to-use developer UI components for testing, monitoring, and stress testing your sync engine. They live in their own entry point so production bundles that only import `local-lite/react` never include them.
 
 ### `<SyncInspector />`
 A floating or inline developer widget displaying real-time outbox queues, active sync status, connection indicators, push/pull controls, theme toggling, and benchmark runner.
 
 ```tsx
-import { SyncInspector } from 'local-lite/react';
+import { SyncInspector } from 'local-lite/devtools';
 import { client } from './sync.config';
 
 export default function App() {

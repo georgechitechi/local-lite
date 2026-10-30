@@ -62,7 +62,7 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
     - `useMutations()`: Null-safe memoized mutation helper methods
     - `useSyncStatus()`: Real-time sync engine & outbox queue inspector
     - `useDatabaseMaintenance()`: Reactive storage stats, outbox pruning, VACUUM, and WAL checkpoints
-    - `<SyncInspector />` and `<BenchmarkModal />`: Developer UI debugging tools
+    - `<SyncInspector />` and `<BenchmarkModal />` (from `local-lite/devtools`): Developer UI debugging tools
 12. **[Authentication (Google, Microsoft, GitHub, Apple)](./auth.md)**
     - Zero-backend OAuth 2.0 PKCE authentication
     - Automatic token refreshing & user profile fetching

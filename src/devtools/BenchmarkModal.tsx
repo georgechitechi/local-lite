@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LocalFirstClient } from '../core/client.js';
-import { resolveSyncTheme, type SyncThemeColors } from './theme.js';
+import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
 
 let RN: any;
 try {
