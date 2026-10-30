@@ -4,7 +4,8 @@ import { OutboxStore } from '../src/core/outbox-store.js';
 import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { MockDB } from './helpers/mock-db.js';
-import { useLiveRow, useLiveInfiniteQuery, useMutations, SyncInspector } from '../src/react/index.js';
+import { useLiveRow, useLiveInfiniteQuery, useMutations } from '../src/react/index.js';
+import { SyncInspector } from '../src/devtools/index.js';
 
 describe('local-lite Architectural Enhancements', () => {
   let db: MockDB;
