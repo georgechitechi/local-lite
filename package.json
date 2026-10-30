@@ -141,7 +141,8 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run test && npm run build"
+    "test:package": "node package-smoke.mjs",
+    "prepublishOnly": "npm run test && npm run build && npm run test:package"
   },
   "peerDependencies": {
     "@libsql/client": "^0.6.0",

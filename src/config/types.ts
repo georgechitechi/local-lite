@@ -1,6 +1,6 @@
 import { LocalDBAdapter } from '../adapters/local/index.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
-import { ConflictResolver, ConflictStrategy, NetworkStatusProvider, RetryConfig } from '../core/types.js';
+import { ConflictResolver, ConflictStrategy, NetworkStatusProvider, RetryConfig, SchemaMigration } from '../core/types.js';
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 
 export interface SupabaseConfigOptions {
@@ -100,10 +100,16 @@ export interface LocalLiteConfig {
   tables?: string[];
 
   /**
-   * Initial SQL table schema migration queries to execute on startup.
+   * Legacy idempotent SQL statements executed transactionally on every initialization.
    * e.g. ["CREATE TABLE IF NOT EXISTS todos (id TEXT PRIMARY KEY, title TEXT);"]
    */
   migrations?: string[];
+
+  /**
+   * Versioned application schema migrations. Versions must be consecutive integers
+   * starting at 1; each migration is applied once and recorded in schema_migrations.
+   */
+  schemaMigrations?: SchemaMigration[];
 
   /**
    * Automatically create tables and columns dynamically on the fly without manual SQL migrations.

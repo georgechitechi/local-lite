@@ -63,9 +63,10 @@ remain configurable; the existing default conflict strategy is last-write-wins.
   `inMemoryRemote: true`; it must never silently acknowledge production writes.
 - `autoSchema` now defaults to `false` in the configuration factory as well as the
   core constructor. Set `autoSchema: true` to retain inferred schema behavior.
-- Migrations run transactionally before sync starts, including when initialization
-  is deferred with `autoInitialize: false`. Use idempotent SQL; this is not a
-  versioned migration framework.
+- Versioned `schemaMigrations` run transactionally before sync starts, including
+  when initialization is deferred with `autoInitialize: false`. The existing
+  `migrations` option remains available for legacy idempotent SQL that runs on
+  every initialization.
 - `initialize()` is safe to call repeatedly or concurrently. After `stop()`, call
   `client.syncWorker.start()` to resume. Mutations after stop remain queued.
 - `autoStart: false` prepares storage without automatic sync. Explicit push/pull

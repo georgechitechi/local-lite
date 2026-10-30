@@ -61,8 +61,16 @@ export const syncConfig = defineSyncConfig({
   // 2. Tables to synchronize
   tables: ['todos', 'notes'],
 
-  // 3. Auto-create tables & columns dynamically without manual SQL
-  autoSchema: true,
+  // 3. Create and evolve the local schema with ordered migrations
+  schemaMigrations: [
+    {
+      version: 1,
+      up: [
+        'CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL)',
+        'CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT, updated_at INTEGER NOT NULL DEFAULT 0)',
+      ],
+    },
+  ],
 
   // 4. Remote backend credentials (e.g. Supabase, Convex, or in-memory demo)
   supabase: {
@@ -111,7 +119,7 @@ export default function TodoApp() {
 
   // 2. Live query: automatically re-renders on local writes & remote pulls
   const { data: todos } = useLiveQuery(client, 'todos', {
-    orderBy: 'updatedAt',
+    orderBy: 'updated_at',
     order: 'desc',
   });
 
@@ -128,7 +136,7 @@ export default function TodoApp() {
       id: generateUUID(),
       title,
       completed: 0,
-      updatedAt: Date.now(),
+      updated_at: Date.now(),
     });
   };
 
@@ -136,7 +144,7 @@ export default function TodoApp() {
     if (!client) return;
     await client.update('todos', id, {
       completed: current ? 0 : 1,
-      updatedAt: Date.now(),
+      updated_at: Date.now(),
     });
   };
 

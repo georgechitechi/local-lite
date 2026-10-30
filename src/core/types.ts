@@ -1,6 +1,11 @@
 export type SyncOp = 'INSERT' | 'UPDATE' | 'DELETE';
 export type OutboxStatus = 'PENDING' | 'PROCESSING' | 'FAILED';
 
+export interface SchemaMigration {
+  version: number;
+  up: string | string[];
+}
+
 export interface SyncOperation {
   id: string;
   tableName: string;

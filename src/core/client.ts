@@ -17,6 +17,7 @@ import {
   OutboxStatus,
   QueryOptions,
   RetryConfig,
+  SchemaMigration,
   SyncMetrics,
   SyncOp,
   SyncOperation,
@@ -90,6 +91,7 @@ export interface LocalFirstClientConfig {
   autoSchema?: boolean;
   tables?: string[];
   migrations?: string[];
+  schemaMigrations?: SchemaMigration[];
   autoStart?: boolean;
   coalesceOutbox?: boolean;
   jsonColumns?: Record<string, string[]>;
@@ -111,6 +113,46 @@ export interface LocalFirstClientConfig {
   storage?: BlobStorageManagerOptions;
   scheduler?: JobSchedulerOptions;
   session?: SessionManagerOptions;
+}
+
+function normalizeSchemaMigrations(
+  migrations: SchemaMigration[]
+): Array<{ version: number; up: string[] }> {
+  if (!Array.isArray(migrations)) {
+    throw new TypeError('schemaMigrations must be an array.');
+  }
+
+  if (
+    migrations.some(
+      (migration) =>
+        !migration ||
+        typeof migration !== 'object' ||
+        !Number.isSafeInteger(migration.version) ||
+        migration.version < 1
+    )
+  ) {
+    throw new TypeError('Each schema migration must have a positive integer version.');
+  }
+
+  const ordered = [...migrations].sort((a, b) => a.version - b.version);
+  return ordered.map((migration, index) => {
+    const expectedVersion = index + 1;
+    if (!migration || !Number.isSafeInteger(migration.version) || migration.version !== expectedVersion) {
+      throw new TypeError(
+        `schemaMigrations must use consecutive integer versions starting at 1; expected version ${expectedVersion}.`
+      );
+    }
+
+    const statements = Array.isArray(migration.up) ? migration.up : [migration.up];
+    if (
+      statements.length === 0 ||
+      statements.some((statement) => typeof statement !== 'string' || statement.trim().length === 0)
+    ) {
+      throw new TypeError(`schemaMigrations version ${migration.version} must contain non-empty SQL.`);
+    }
+
+    return { version: migration.version, up: statements.map((statement) => statement.trim()) };
+  });
 }
 
 function hasFunctionFilter(value: any): boolean {
@@ -341,6 +383,7 @@ export class LocalFirstClient {
   public readonly session: SessionManager;
   private primaryKey: string;
   private migrations: string[];
+  private schemaMigrations: Array<{ version: number; up: string[] }>;
   private autoStart: boolean;
   private initialization?: Promise<void>;
 
@@ -353,6 +396,7 @@ export class LocalFirstClient {
     this.coalesceOutbox = config.coalesceOutbox ?? true;
     this.tables = config.tables ?? [];
     this.migrations = config.migrations ?? [];
+    this.schemaMigrations = normalizeSchemaMigrations(config.schemaMigrations ?? []);
     this.autoStart = config.autoStart ?? true;
     this.jsonColumns = config.jsonColumns ?? {};
     this.autoHydrateJSON = config.autoHydrateJSON ?? false;
@@ -601,6 +645,8 @@ export class LocalFirstClient {
       });
     }
 
+    await this.applySchemaMigrations();
+
     if (this.autoSchema && this.tables.length > 0) {
       for (const table of this.tables) {
         await this.schemaManager.ensureTable(this.db, table, this.primaryKey);
@@ -608,6 +654,50 @@ export class LocalFirstClient {
     }
 
     if (this.autoStart) this.syncWorker.start();
+  }
+
+  private async applySchemaMigrations(): Promise<void> {
+    if (this.schemaMigrations.length === 0) return;
+
+    await this.db.transaction(async (tx) => {
+      await tx.execute(
+        `CREATE TABLE IF NOT EXISTS schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at INTEGER NOT NULL
+        );`
+      );
+      const rows = await tx.execute(
+        'SELECT version FROM schema_migrations ORDER BY version ASC'
+      );
+      const appliedVersions = rows.map((row) => Number(row.version));
+
+      for (let index = 0; index < appliedVersions.length; index += 1) {
+        if (appliedVersions[index] !== index + 1) {
+          throw new Error('The schema_migrations table contains a missing or invalid version.');
+        }
+      }
+
+      let currentVersion = appliedVersions.at(-1) ?? 0;
+      if (currentVersion > this.schemaMigrations.length) {
+        throw new Error(
+          `Database schema version ${currentVersion} is newer than the latest available migration (${this.schemaMigrations.length}).`
+        );
+      }
+
+      for (const migration of this.schemaMigrations) {
+        if (migration.version <= currentVersion) continue;
+
+        for (const statement of migration.up) {
+          await tx.execute(statement);
+        }
+
+        await tx.execute(
+          'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+          [migration.version, Date.now()]
+        );
+        currentVersion = migration.version;
+      }
+    });
   }
 
   /**

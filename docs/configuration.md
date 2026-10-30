@@ -19,9 +19,37 @@ import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 | `tables` | `string[]` | `[]` | List of table names to synchronize. |
 | `autoSchema` | `boolean` | `false` | When true, automatically creates tables and adds missing columns dynamically on insert/update. |
 | `primaryKey` | `string` | `'id'` | Primary key column name used across tables. |
-| `migrations` | `string[]` | `[]` | Idempotent SQL executed in a transaction during initialization, before sync starts. |
+| `schemaMigrations` | `SchemaMigration[]` | `[]` | Consecutive, versioned SQL migrations applied once and recorded in the local `schema_migrations` table. |
+| `migrations` | `string[]` | `[]` | Legacy idempotent SQL statements, still executed on every initialization for compatibility. Prefer `schemaMigrations` for application schema changes. |
 | `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
+
+### Versioned schema migrations
+
+Use `schemaMigrations` to apply app schema changes once in ascending version order.
+Keep the full migration history in the app so an older local database can catch up
+after an upgrade. Versions must be consecutive integers starting at `1`. Each
+migration runs in the database transaction and is recorded only after its SQL
+succeeds. A migration failure rolls back the migration batch and prevents sync
+from starting. Migrations only move forward; write additive SQL when old app
+versions or stored data must remain compatible.
+
+```typescript
+schemaMigrations: [
+  {
+    version: 1,
+    up: 'CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL)',
+  },
+  {
+    version: 2,
+    up: 'ALTER TABLE todos ADD COLUMN completed INTEGER NOT NULL DEFAULT 0',
+  },
+],
+```
+
+`autoSchema` remains available for inferred schemas, but explicit migrations are
+recommended when you need predictable upgrades. If both are configured, migrations
+run before `autoSchema`.
 
 ---
 

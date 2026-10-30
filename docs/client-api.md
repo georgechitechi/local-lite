@@ -12,7 +12,7 @@ import { LocalFirstClient } from 'local-lite';
 ## 1. Lifecycle & Connection Management
 
 ### `client.initialize(): Promise<void>`
-Initializes SQLite storage: sets PRAGMA modes (WAL, synchronous NORMAL), ensures internal tables (`sync_outbox`, `sync_meta`), runs configured migrations, creates tables if `autoSchema: true`, and starts background sync loops if `autoStart: true`.
+Initializes SQLite storage: sets PRAGMA modes (WAL, synchronous NORMAL), ensures internal tables (`sync_outbox`, `sync_meta`), runs configured migrations, creates tables if `autoSchema: true`, and starts background sync loops if `autoStart: true`. Versioned `schemaMigrations` are applied once and recorded locally before sync starts.
 Safe to call concurrently or repeatedly.
 
 ```typescript

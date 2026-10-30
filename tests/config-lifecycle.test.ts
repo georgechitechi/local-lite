@@ -69,6 +69,78 @@ describe('explicit configuration and initialization', () => {
     expect(execute.mock.calls.filter(([sql]) => sql.includes('CREATE TABLE IF NOT EXISTS notes'))).toHaveLength(1);
   });
 
+  it('applies versioned schema migrations in order and records each version once', async () => {
+    const db = new MockDB();
+    const execute = vi.spyOn(db, 'execute');
+    const client = await createSyncClient({
+      database: db,
+      remote: new MemoryDemoRemoteAdapter(0),
+      autoInitialize: false,
+      schemaMigrations: [
+        { version: 2, up: 'ALTER TABLE todos ADD COLUMN completed INTEGER NOT NULL DEFAULT 0' },
+        { version: 1, up: 'CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL)' },
+      ],
+      logger: false,
+    });
+    clients.push(client);
+
+    await client.initialize();
+    const restartedClient = await createSyncClient({
+      database: db,
+      remote: new MemoryDemoRemoteAdapter(0),
+      autoInitialize: false,
+      autoStart: false,
+      schemaMigrations: [
+        { version: 2, up: 'ALTER TABLE todos ADD COLUMN completed INTEGER NOT NULL DEFAULT 0' },
+        { version: 1, up: 'CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL)' },
+      ],
+      logger: false,
+    });
+    clients.push(restartedClient);
+    await restartedClient.initialize();
+
+    const migrationStatements = execute.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => sql.includes('todos'));
+    expect(migrationStatements).toEqual([
+      'CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL)',
+      'ALTER TABLE todos ADD COLUMN completed INTEGER NOT NULL DEFAULT 0',
+    ]);
+    expect(db.getAll('schema_migrations').map((row) => row.version)).toEqual([1, 2]);
+  });
+
+  it('rolls back failed versioned migrations and retries them during initialization', async () => {
+    const db = new MockDB();
+    const execute = db.execute.bind(db);
+    let fail = true;
+    vi.spyOn(db, 'execute').mockImplementation(async (sql, params) => {
+      if (sql === 'versioned migration' && fail) throw new Error('versioned migration failed');
+      return execute(sql, params);
+    });
+    const client = new LocalFirstClient({
+      local: db,
+      remote: new MemoryDemoRemoteAdapter(0),
+      schemaMigrations: [{ version: 1, up: 'versioned migration' }],
+      logger: false,
+    });
+    clients.push(client);
+
+    await expect(client.initialize()).rejects.toThrow('versioned migration failed');
+    expect(db.getAll('schema_migrations')).toEqual([]);
+    fail = false;
+    await client.initialize();
+    expect(db.getAll('schema_migrations').map((row) => row.version)).toEqual([1]);
+  });
+
+  it('rejects gaps in configured schema migration versions', async () => {
+    await expect(createSyncClient({
+      database: new MockDB(),
+      remote: new MemoryDemoRemoteAdapter(0),
+      schemaMigrations: [{ version: 2, up: 'ALTER TABLE todos ADD COLUMN title TEXT' }],
+      logger: false,
+    })).rejects.toThrow('consecutive integer versions starting at 1');
+  });
+
   it('does not start sync on migration failure and allows initialization to retry', async () => {
     const db = new MockDB();
     const execute = db.execute.bind(db);
