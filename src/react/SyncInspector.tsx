@@ -20,6 +20,7 @@ try {
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
+  title?: string;
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'top' | 'bottom' | 'inline';
   variant?: 'pill' | 'compact' | 'icon' | 'minimal';
   initialOpen?: boolean;
@@ -58,6 +59,7 @@ export function SyncInspector({
   theme = 'auto',
   alwaysVisible = true,
   renderTrigger,
+  title = '⚡ Local Lite DevTools',
 }: SyncInspectorProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isBenchmarkModalOpen, setIsBenchmarkModalOpen] = useState(false);
@@ -108,6 +110,36 @@ export function SyncInspector({
       client!.retryFailedMutations()
     );
 
+  const handleClearOutbox = () => {
+    const clearOutbox = () =>
+      runAction('Clearing stuck outbox...', (count) => `Cleared ${count || 0} stuck outbox mutations`, async () => {
+        client!.syncWorker.pause();
+        try {
+          const count = await client!.maintenance.pruneOutbox({ statuses: ['PENDING', 'PROCESSING', 'FAILED'] });
+          if (count > 0) {
+            client!.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'clear-stuck' });
+          }
+          await status.refresh();
+          return count;
+        } finally {
+          client!.syncWorker.resume();
+        }
+      });
+    const message =
+      'This permanently removes queued pending, processing, and failed mutations. Local database records are not deleted.';
+
+    if (RN?.Alert?.alert) {
+      RN.Alert.alert('Clear stuck outbox?', message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear outbox', style: 'destructive', onPress: () => { void clearOutbox(); } },
+      ]);
+      return;
+    }
+    if (typeof globalThis.confirm === 'function' && globalThis.confirm(message)) {
+      void clearOutbox();
+    }
+  };
+
   const handleBenchmarkPress = () => {
     if (onOpenBenchmark) {
       onOpenBenchmark();
@@ -154,8 +186,9 @@ export function SyncInspector({
       { id: 'pull', label: '📥 Pull Changes', onPress: handlePull, bg: '#2563EB', color: '#FFFFFF' },
       { id: 'retry', label: '🔄 Retry Failed', onPress: handleRetryFailed, bg: currentTheme.actionBg, color: currentTheme.actionText },
       { id: 'reset', label: '⏪ Reset Cursor', onPress: handleResetCursor, bg: currentTheme.actionBg, color: currentTheme.actionText },
+      { id: 'clear-outbox', label: 'Clear Stuck Outbox', onPress: handleClearOutbox, disabled: status.pendingCount === 0, bg: '#EF4444', color: '#FFFFFF' },
     ],
-    [handlePush, handlePull, handleRetryFailed, handleResetCursor, currentTheme.actionBg, currentTheme.actionText]
+    [handlePush, handlePull, handleRetryFailed, handleResetCursor, handleClearOutbox, currentTheme.actionBg, currentTheme.actionText, status.pendingCount]
   );
 
   const triggerLabel =
@@ -249,7 +282,7 @@ export function SyncInspector({
               ]}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[rnStyles.topBarTitle, { color: currentTheme.text }]}>⚡ Local Lite DevTools</Text>
+                <Text style={[rnStyles.topBarTitle, { color: currentTheme.text }]}>{title}</Text>
                 <Text style={[rnStyles.topBarSub, { color: currentTheme.textMuted }]}>
                   Engine Inspector & Sync Telemetry
                 </Text>
@@ -327,7 +360,21 @@ export function SyncInspector({
                     <TouchableOpacity
                       key={btn.id}
                       onPress={btn.onPress}
-                      style={[rnStyles.actionBtn, { backgroundColor: btn.bg }]}
+                      style={[rnStyles.actionBtn, { backgroundColor: btn.bg }, btn.disabled && { opacity: 0.5 }]}
+                      disabled={btn.disabled}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[rnStyles.actionBtnText, { color: btn.color }]}>{btn.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={[rnStyles.btnRow, { marginTop: 8 }]}>
+                  {actionButtons.slice(4, 5).map((btn) => (
+                    <TouchableOpacity
+                      key={btn.id}
+                      onPress={btn.onPress}
+                      style={[rnStyles.actionBtn, { backgroundColor: btn.bg }, btn.disabled && { opacity: 0.5 }]}
+                      disabled={btn.disabled}
                       activeOpacity={0.8}
                     >
                       <Text style={[rnStyles.actionBtnText, { color: btn.color }]}>{btn.label}</Text>
@@ -485,25 +532,6 @@ export function SyncInspector({
               )}
             </ScrollView>
 
-            {/* Bottom Bar */}
-            <View
-              style={[
-                rnStyles.bottomBar,
-                {
-                  backgroundColor: currentTheme.surface,
-                  borderTopColor: currentTheme.border,
-                },
-                !RNSafeArea?.SafeAreaView && isAndroid && { paddingBottom: 32 },
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => setIsOpen(false)}
-                style={[rnStyles.doneBtn, { backgroundColor: currentTheme.actionBg }]}
-                activeOpacity={0.8}
-              >
-                <Text style={[rnStyles.doneBtnText, { color: currentTheme.actionText }]}>Close DevTools</Text>
-              </TouchableOpacity>
-            </View>
           </SafeComp>
         </Modal>
 
@@ -556,7 +584,7 @@ export function SyncInspector({
                 }}
               />
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: currentTheme.text }}>⚡ Local Lite DevTools</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: currentTheme.text }}>{title}</div>
                 <div style={{ fontSize: 11, color: currentTheme.textMuted, marginTop: 2 }}>
                   Engine Inspector & Sync Telemetry
                 </div>
@@ -644,7 +672,7 @@ export function SyncInspector({
                     backgroundColor: currentTheme.card,
                     border: `1px solid ${currentTheme.border}`,
                     borderRadius: 12,
-                    padding: 16,
+                    padding: 8,
                   }}
                 >
                   <div style={{ fontSize: 24, fontWeight: 800, color: card.numColor }}>{card.num}</div>
@@ -682,6 +710,7 @@ export function SyncInspector({
                   <button
                     key={btn.id}
                     onClick={btn.onPress}
+                    disabled={btn.disabled}
                     style={{
                       padding: '10px 14px',
                       backgroundColor: btn.bg,
@@ -689,7 +718,8 @@ export function SyncInspector({
                       border: 'none',
                       borderRadius: 8,
                       fontWeight: 600,
-                      cursor: 'pointer',
+                      cursor: btn.disabled ? 'not-allowed' : 'pointer',
+                      opacity: btn.disabled ? 0.5 : 1,
                     }}
                   >
                     {btn.label}
@@ -758,30 +788,6 @@ export function SyncInspector({
             )}
           </div>
 
-          {/* Bottom Bar */}
-          <div
-            style={{
-              padding: '14px 20px',
-              backgroundColor: currentTheme.surface,
-              borderTop: `1px solid ${currentTheme.border}`,
-            }}
-          >
-            <button
-              onClick={() => setIsOpen(false)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: currentTheme.actionBg,
-                color: currentTheme.actionText,
-                border: 'none',
-                borderRadius: 8,
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              Close DevTools
-            </button>
-          </div>
         </div>
       ) : (
         /* Floating or Inline Trigger Pill */
@@ -945,7 +951,8 @@ const rnStyles =
         minWidth: '45%',
         borderWidth: 1,
         borderRadius: 12,
-        padding: 14,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
       },
       statNum: {
         fontSize: 24,
