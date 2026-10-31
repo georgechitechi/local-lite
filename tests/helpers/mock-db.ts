@@ -12,7 +12,9 @@ export class MockDB implements LocalDBAdapter {
 
   async execute(query: string, params: any[] = []): Promise<any[]> {
     const q = query.trim();
-    const normQ = q.replace(/\s+/g, ' ');
+    // SQLite accepts quoted identifiers; normalize them so the mock's SQL
+    // matchers handle the same statements as the real adapter.
+    const normQ = q.replace(/"/g, '').replace(/\s+/g, ' ');
     const lowerQ = normQ.toLowerCase();
 
     if (q.startsWith('CREATE TABLE') || q.startsWith('CREATE VIRTUAL TABLE')) {
