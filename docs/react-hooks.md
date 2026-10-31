@@ -451,3 +451,5 @@ An automated in-app stress test runner measuring:
 * ACID rollback isolation integrity
 * Non-blocking WAL concurrency
 * Outbox queue flushing performance
+
+The workload scales by 1x per 1,000 app records, capped at 10x, and includes bounded samples of real app rows in its temporary benchmark payloads. Benchmark writes are isolated to temporary tables and cleaned up when the run finishes.

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
+import { escapeIdentifier } from '../utils/sql.js';
 
 let RN: any;
 try {
@@ -52,6 +53,38 @@ export async function runSQLiteBenchmark(
 
   try {
     onProgress?.('Preparing benchmark environment...', 0.05);
+    let appRowCount = 0;
+    let appTableCount = 0;
+    const appDataSamples: string[] = [];
+    if (client?.maintenance) {
+      const stats = await client.maintenance.getStorageStats();
+      const appTables = Object.entries(stats.tables).filter(([, count]) => count > 0);
+      appRowCount = appTables.reduce((total, [, count]) => total + count, 0);
+      appTableCount = appTables.length;
+
+      for (const [tableName] of appTables) {
+        const rows = await db.execute(`SELECT * FROM ${escapeIdentifier(tableName)} LIMIT 1`);
+        if (rows[0]) {
+          const sample = JSON.stringify(rows[0], (_key, value) =>
+            typeof value === 'bigint' ? value.toString() : value,
+          );
+          if (sample) appDataSamples.push(sample.slice(0, 4096));
+        }
+      }
+    }
+
+    const workloadScale = Math.min(10, Math.max(1, Math.ceil(appRowCount / 1000)));
+    const scaleWorkload = (count: number) => count * workloadScale;
+    const makeMetadata = (index: number, tag: string) =>
+      JSON.stringify({
+        index,
+        tag,
+        timestamp: Date.now(),
+        ...(appDataSamples.length > 0
+          ? { appRecord: appDataSamples[index % appDataSamples.length] }
+          : {}),
+      });
+
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"').catch(() => {});
@@ -84,9 +117,9 @@ export async function runSQLiteBenchmark(
       'CREATE INDEX IF NOT EXISTS "idx_sync_bench_outbox" ON "_sync_bench_outbox" (status, timestamp)',
     );
 
-    // 1. client.batch() Ingestion (500 rows in single atomic transaction)
-    onProgress?.('Testing client.batch() atomic multi-mutation (500 rows)...', 0.12);
-    const batchCount = 500;
+    // 1. client.batch() Ingestion
+    const batchCount = scaleWorkload(500);
+    onProgress?.(`Testing client.batch() atomic multi-mutation (${batchCount} rows)...`, 0.12);
     const batchMutations = Array.from({ length: batchCount }, (_, i) => ({
       tableName: '_sync_bench_temp',
       operation: 'INSERT' as const,
@@ -95,7 +128,7 @@ export async function runSQLiteBenchmark(
         id: `b-batch-${i}`,
         title: `Item ${i}`,
         score: Math.floor(Math.random() * 100),
-        metadata: JSON.stringify({ index: i, tag: 'batch', timestamp: Date.now() }),
+        metadata: makeMetadata(i, 'batch'),
         created_at: new Date().toISOString(),
       },
     }));
@@ -117,22 +150,23 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.batch() Ingestion',
       category: 'Local-Lite Client',
-      description: '500 rows inserted via local-lite atomic batch() mutation pipeline',
+      description: `${batchCount.toLocaleString()} rows inserted via local-lite atomic batch() mutation pipeline`,
       operations: batchCount,
       durationMs: t1Duration,
       opsPerSec: Math.round((batchCount / t1Duration) * 1000),
       status: 'success',
+      note: `Calibrated to ${appRowCount.toLocaleString()} app rows across ${appTableCount} tables (${workloadScale}x workload).`,
     });
 
-    // 2. client.insert() Individual Mutations (40 rows)
-    onProgress?.('Testing client.insert() individual mutations (40 rows)...', 0.24);
-    const indivCount = 40;
+    // 2. client.insert() Individual Mutations
+    const indivCount = scaleWorkload(40);
+    onProgress?.(`Testing client.insert() individual mutations (${indivCount} rows)...`, 0.24);
     const t2Start = Date.now();
     for (let i = 0; i < indivCount; i++) {
       const payload = {
         title: `Individual Item ${i}`,
         score: Math.floor(Math.random() * 100),
-        metadata: JSON.stringify({ index: i, tag: 'indiv' }),
+        metadata: makeMetadata(i, 'indiv'),
         created_at: new Date().toISOString(),
       };
       if (client?.insert) {
@@ -148,22 +182,22 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.insert() Mutation',
       category: 'Local-Lite Client',
-      description: '40 standalone client.insert() calls testing dual-write mutation pipeline',
+      description: `${indivCount.toLocaleString()} standalone client.insert() calls testing the dual-write mutation pipeline`,
       operations: indivCount,
       durationMs: t2Duration,
       opsPerSec: Math.round((indivCount / t2Duration) * 1000),
       status: 'success',
     });
 
-    // 3. client.update() Reactive Updates (150 rows)
-    onProgress?.('Testing client.update() reactive updates (150 rows)...', 0.36);
-    const updateCount = 150;
+    // 3. client.update() Reactive Updates
+    const updateCount = scaleWorkload(150);
+    onProgress?.(`Testing client.update() reactive updates (${updateCount} rows)...`, 0.36);
     const t3Start = Date.now();
     for (let i = 0; i < updateCount; i++) {
       const patch = {
         title: `Updated Item ${i}`,
         score: 999 + i,
-        metadata: JSON.stringify({ updated: true, rev: i + 1 }),
+        metadata: makeMetadata(i, 'update'),
       };
       if (client?.update) {
         await client.update('_sync_bench_temp', `b-batch-${i}`, patch, { skipOutbox: true });
@@ -178,16 +212,16 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.update() Pipeline',
       category: 'Local-Lite Client',
-      description: '150 client.update() calls testing schema verification & event emission',
+      description: `${updateCount.toLocaleString()} client.update() calls testing schema verification & event emission`,
       operations: updateCount,
       durationMs: t3Duration,
       opsPerSec: Math.round((updateCount / t3Duration) * 1000),
       status: 'success',
     });
 
-    // 4. client.findById() Indexed Lookups (400 queries)
-    onProgress?.('Testing client.findById() indexed point lookups (400 queries)...', 0.48);
-    const findCount = 400;
+    // 4. client.findById() Indexed Lookups
+    const findCount = scaleWorkload(400);
+    onProgress?.(`Testing client.findById() indexed point lookups (${findCount} queries)...`, 0.48);
     const t4Start = Date.now();
     for (let i = 0; i < findCount; i++) {
       const id = `b-batch-${i % batchCount}`;
@@ -201,17 +235,20 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.findById() Lookups',
       category: 'Local-Lite Client',
-      description: '400 point lookups testing PK index resolution & auto JSON hydration',
+      description: `${findCount.toLocaleString()} point lookups testing PK index resolution & auto JSON hydration`,
       operations: findCount,
       durationMs: t4Duration,
       opsPerSec: Math.round((findCount / t4Duration) * 1000),
       status: 'success',
     });
 
-    // 5. client.findByIds() Batched PK Lookups (400 entities loaded in 20 queries)
-    onProgress?.('Testing client.findByIds() batched lookups (400 entities)...', 0.55);
-    const batchedQueryCount = 20;
+    // 5. client.findByIds() Batched PK Lookups
+    const batchedQueryCount = scaleWorkload(20);
     const batchLookupSize = 20;
+    onProgress?.(
+      `Testing client.findByIds() batched lookups (${batchedQueryCount * batchLookupSize} entities)...`,
+      0.55,
+    );
     const tBatchFindStart = Date.now();
     for (let i = 0; i < batchedQueryCount; i++) {
       const ids = Array.from(
@@ -240,9 +277,9 @@ export async function runSQLiteBenchmark(
       status: 'success',
     });
 
-    // 6. client.findMany() with SQL Pushdown Filters (40 queries)
-    onProgress?.('Testing client.findMany() query filter compilation (40 queries)...', 0.6);
-    const findManyCount = 40;
+    // 6. client.findMany() with SQL Pushdown Filters
+    const findManyCount = scaleWorkload(40);
+    onProgress?.(`Testing client.findMany() query filter compilation (${findManyCount} queries)...`, 0.6);
     const t5Start = Date.now();
     for (let i = 0; i < findManyCount; i++) {
       if (client?.findMany) {
@@ -262,7 +299,7 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.findMany() Filters',
       category: 'Local-Lite Client',
-      description: '40 queries through local-lite SQL pushdown ($gt, ORDER BY, LIMIT)',
+      description: `${findManyCount.toLocaleString()} queries through local-lite SQL pushdown ($gt, ORDER BY, LIMIT)`,
       operations: findManyCount,
       durationMs: t5Duration,
       opsPerSec: Math.round((findManyCount / t5Duration) * 1000),
@@ -270,8 +307,8 @@ export async function runSQLiteBenchmark(
     });
 
     // 6. client.findMany() with $contains (Fuzzy Substring Search)
-    onProgress?.('Testing client.findMany() $contains fuzzy search (50 queries)...', 0.7);
-    const searchCount = 50;
+    const searchCount = scaleWorkload(50);
+    onProgress?.(`Testing client.findMany() $contains fuzzy search (${searchCount} queries)...`, 0.7);
     const searchTokens = ['Item 1', 'Updated', 'rev', 'Large', 'nonexistent'];
     const t6Start = Date.now();
     for (let i = 0; i < searchCount; i++) {
@@ -292,7 +329,7 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.findMany() $contains Search',
       category: 'Local-Lite Client',
-      description: '50 fuzzy text queries compiling $contains into SQL LIKE pushdown',
+      description: `${searchCount.toLocaleString()} fuzzy text queries compiling $contains into SQL LIKE pushdown`,
       operations: searchCount,
       durationMs: t6Duration,
       opsPerSec: Math.round((searchCount / t6Duration) * 1000),
@@ -302,7 +339,8 @@ export async function runSQLiteBenchmark(
     // 7. client.transaction() ACID Rollback Verification
     onProgress?.('Testing client.transaction() ACID rollback isolation...', 0.78);
     const rollbackStart = Date.now();
-    for (let c = 0; c < 10; c++) {
+    const rollbackCount = scaleWorkload(10);
+    for (let c = 0; c < rollbackCount; c++) {
       try {
         if (client?.transaction) {
           await client.transaction(async (txClient: any) => {
@@ -336,17 +374,17 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.transaction() Rollback',
       category: 'ACID / Transactions',
-      description: `10 aborted transactions via client.transaction() (${leaked} leaked rows, zero pollution)`,
-      operations: 10,
+      description: `${rollbackCount} aborted transactions via client.transaction() (${leaked} leaked rows, zero pollution)`,
+      operations: rollbackCount,
       durationMs: rbDuration,
-      opsPerSec: Math.round((10 / rbDuration) * 1000),
+      opsPerSec: Math.round((rollbackCount / rbDuration) * 1000),
       status: 'success',
       note: `${leaked} leaked rows`,
     });
 
-    // 8. Outbox Pipeline Ingestion (200 mutations)
-    onProgress?.('Testing outbox mutation pipeline (200 mutations)...', 0.85);
-    const outboxCount = 200;
+    // 8. Outbox Pipeline Ingestion
+    const outboxCount = scaleWorkload(200);
+    onProgress?.(`Testing outbox mutation pipeline (${outboxCount} mutations)...`, 0.85);
     const tOutboxStart = Date.now();
     await db.transaction(async (tx: any) => {
       for (let i = 0; i < outboxCount; i++) {
@@ -369,7 +407,7 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'Outbox Pipeline Ingestion',
       category: 'Outbox / Sync',
-      description: '200 mutations staged through outbox queue with compound index',
+      description: `${outboxCount.toLocaleString()} mutations staged through outbox queue with compound index`,
       operations: outboxCount,
       durationMs: tOutboxDuration,
       opsPerSec: Math.round((outboxCount / tOutboxDuration) * 1000),
@@ -377,8 +415,8 @@ export async function runSQLiteBenchmark(
     });
 
     // 9. client.delete() Pipeline
-    onProgress?.('Testing client.delete() removal (50 rows)...', 0.9);
-    const deleteCount = 50;
+    const deleteCount = scaleWorkload(50);
+    onProgress?.(`Testing client.delete() removal (${deleteCount} rows)...`, 0.9);
     const tDelStart = Date.now();
     for (let i = 0; i < deleteCount; i++) {
       if (client?.delete) {
@@ -391,7 +429,7 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.delete() Pipeline',
       category: 'Local-Lite Client',
-      description: '50 deletions through local-lite mutate() deletion pipeline',
+      description: `${deleteCount.toLocaleString()} deletions through local-lite mutate() deletion pipeline`,
       operations: deleteCount,
       durationMs: tDelDuration,
       opsPerSec: Math.round((deleteCount / tDelDuration) * 1000),
@@ -400,8 +438,8 @@ export async function runSQLiteBenchmark(
 
     // 10. WAL Read/Write Concurrency Under Contention
     onProgress?.('Testing WAL non-blocking concurrent reads & writes...', 0.95);
-    const concReadCount = 100;
-    const concWriteCount = 60;
+    const concReadCount = scaleWorkload(100);
+    const concWriteCount = scaleWorkload(60);
     const tConcStart = Date.now();
     const writePromise = db.transaction(async (tx: any) => {
       for (let i = 0; i < concWriteCount; i++) {
@@ -420,7 +458,7 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'WAL Concurrency Under Contention',
       category: 'ACID / Transactions',
-      description: '60 atomic writes executed simultaneously with 100 concurrent reads in non-blocking WAL mode',
+      description: `${concWriteCount.toLocaleString()} atomic writes executed simultaneously with ${concReadCount.toLocaleString()} concurrent reads in non-blocking WAL mode`,
       operations: totalConcOps,
       durationMs: tConcDuration,
       opsPerSec: Math.round((totalConcOps / tConcDuration) * 1000),
@@ -428,8 +466,8 @@ export async function runSQLiteBenchmark(
     });
 
     // 11. Resilient JSON Fuzz Parsing
-    onProgress?.('Testing resilient JSON fuzz hydration (1,000 cycles)...', 0.99);
-    const fuzzCount = 1000;
+    const fuzzCount = scaleWorkload(1000);
+    onProgress?.(`Testing resilient JSON fuzz hydration (${fuzzCount.toLocaleString()} cycles)...`, 0.99);
     const fuzzPayloads = [
       JSON.stringify({ nested: { title: 'Document 🏢', val: 42, tags: ['sync', 'offline'] } }),
       '{"corrupted": [1, 2, 3, {"unclosed": true',
@@ -449,7 +487,7 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'Resilient JSON Fuzz Parsing',
       category: 'Memory / JSON',
-      description: '1,000 cycles parsing deep unicode trees, corrupted shapes & fallback structures',
+      description: `${fuzzCount.toLocaleString()} cycles parsing deep unicode trees, corrupted shapes & fallback structures`,
       operations: fuzzCount,
       durationMs: t8Duration,
       opsPerSec: Math.round((fuzzCount / t8Duration) * 1000),
@@ -508,6 +546,7 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
       '# ⚡ local-lite SQLite Benchmark Report',
       `- Platform: ${RN && RN.Platform ? RN.Platform.OS : 'web'}`,
       `- Date: ${new Date().toLocaleString()}`,
+      ...(results[0]?.note ? [`- App dataset: ${results[0].note}`] : []),
       '',
       '| Benchmark | Category | Operations | Duration | Throughput |',
       '| :--- | :--- | :--- | :--- | :--- |',
@@ -636,6 +675,9 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
                     </View>
                   </View>
                   <Text style={[styles.cardDesc, { color: currentTheme.textMuted }]}>{r.description}</Text>
+                  {r.note && (
+                    <Text style={[styles.cardDesc, { color: currentTheme.textMuted }]}>{r.note}</Text>
+                  )}
                   <View style={[styles.cardMetrics, { borderTopColor: currentTheme.border }]}>
                     <View>
                       <Text style={[styles.metricLabel, { color: currentTheme.textMuted }]}>Duration</Text>
@@ -793,6 +835,9 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
               </span>
             </div>
             <div style={{ fontSize: 12, color: currentTheme.textMuted, marginBottom: 10 }}>{r.description}</div>
+            {r.note && (
+              <div style={{ fontSize: 11, color: currentTheme.textMuted, marginBottom: 10 }}>{r.note}</div>
+            )}
             <div style={{ fontSize: 11, color: currentTheme.textMuted }}>
               {r.operations.toLocaleString()} ops in {r.durationMs}ms
             </div>
