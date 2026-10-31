@@ -452,4 +452,6 @@ An automated in-app stress test runner measuring:
 * Non-blocking WAL concurrency
 * Outbox queue flushing performance
 
-The workload scales by 1x per 1,000 app records, capped at 10x, and includes bounded samples of real app rows in its temporary benchmark payloads. Benchmark writes are isolated to temporary tables and cleaned up when the run finishes.
+The workload scales by 1x per 1,000 app records, capped at 10x, and includes bounded samples of real app rows in its temporary benchmark payloads. Mutating benchmarks are isolated to temporary tables that are cleaned up when the run finishes.
+
+It also runs read-only scans and `findById()` lookups against your three largest real tables (reported under the **App Data** category). These use a warm-up pass and the median of 5 timed runs, with sub-millisecond timing. Tables are discovered automatically, excluding internal ones; note that app tables whose names start with `sync_` are treated as internal and skipped.

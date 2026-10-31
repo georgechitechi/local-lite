@@ -17,9 +17,39 @@ try {
   // Web / DOM environment or not installed
 }
 
+const now = (): number =>
+  typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+
+const elapsed = (start: number): number => Math.max(0.01, Math.round((now() - start) * 100) / 100);
+
+const median = (values: number[]): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/** Runs one untimed warm-up pass, then returns the median duration (ms) of `runs` timed passes. */
+async function timeMedian(action: () => Promise<void>, runs = 5): Promise<number> {
+  await action();
+  const samples: number[] = [];
+  for (let i = 0; i < runs; i++) {
+    const start = now();
+    await action();
+    samples.push(elapsed(start));
+  }
+  return median(samples);
+}
+
 export interface BuiltinBenchmarkResult {
   name: string;
-  category: 'Local-Lite Client' | 'ACID / Transactions' | 'Outbox / Sync' | 'Memory / JSON';
+  category:
+    | 'Local-Lite Client'
+    | 'ACID / Transactions'
+    | 'Outbox / Sync'
+    | 'Memory / JSON'
+    | 'App Data';
   description: string;
   operations: number;
   durationMs: number;
@@ -55,10 +85,11 @@ export async function runSQLiteBenchmark(
     onProgress?.('Preparing benchmark environment...', 0.05);
     let appRowCount = 0;
     let appTableCount = 0;
+    let appTables: Array<[string, number]> = [];
     const appDataSamples: string[] = [];
     if (client?.maintenance) {
       const stats = await client.maintenance.getStorageStats();
-      const appTables = Object.entries(stats.tables).filter(([, count]) => count > 0);
+      appTables = Object.entries(stats.tables).filter(([, count]) => count > 0);
       appRowCount = appTables.reduce((total, [, count]) => total + count, 0);
       appTableCount = appTables.length;
 
@@ -133,7 +164,7 @@ export async function runSQLiteBenchmark(
       },
     }));
 
-    const t1Start = Date.now();
+    const t1Start = now();
     if (client?.batch) {
       await client.batch(batchMutations, { skipOutbox: true });
     } else {
@@ -146,7 +177,7 @@ export async function runSQLiteBenchmark(
         }
       });
     }
-    const t1Duration = Math.max(1, Date.now() - t1Start);
+    const t1Duration = elapsed(t1Start);
     list.push({
       name: 'client.batch() Ingestion',
       category: 'Local-Lite Client',
@@ -161,7 +192,7 @@ export async function runSQLiteBenchmark(
     // 2. client.insert() Individual Mutations
     const indivCount = scaleWorkload(40);
     onProgress?.(`Testing client.insert() individual mutations (${indivCount} rows)...`, 0.24);
-    const t2Start = Date.now();
+    const t2Start = now();
     for (let i = 0; i < indivCount; i++) {
       const payload = {
         title: `Individual Item ${i}`,
@@ -178,7 +209,7 @@ export async function runSQLiteBenchmark(
         );
       }
     }
-    const t2Duration = Math.max(1, Date.now() - t2Start);
+    const t2Duration = elapsed(t2Start);
     list.push({
       name: 'client.insert() Mutation',
       category: 'Local-Lite Client',
@@ -192,7 +223,7 @@ export async function runSQLiteBenchmark(
     // 3. client.update() Reactive Updates
     const updateCount = scaleWorkload(150);
     onProgress?.(`Testing client.update() reactive updates (${updateCount} rows)...`, 0.36);
-    const t3Start = Date.now();
+    const t3Start = now();
     for (let i = 0; i < updateCount; i++) {
       const patch = {
         title: `Updated Item ${i}`,
@@ -208,7 +239,7 @@ export async function runSQLiteBenchmark(
         );
       }
     }
-    const t3Duration = Math.max(1, Date.now() - t3Start);
+    const t3Duration = elapsed(t3Start);
     list.push({
       name: 'client.update() Pipeline',
       category: 'Local-Lite Client',
@@ -222,7 +253,7 @@ export async function runSQLiteBenchmark(
     // 4. client.findById() Indexed Lookups
     const findCount = scaleWorkload(400);
     onProgress?.(`Testing client.findById() indexed point lookups (${findCount} queries)...`, 0.48);
-    const t4Start = Date.now();
+    const t4Start = now();
     for (let i = 0; i < findCount; i++) {
       const id = `b-batch-${i % batchCount}`;
       if (client?.findById) {
@@ -231,7 +262,7 @@ export async function runSQLiteBenchmark(
         await db.execute('SELECT * FROM "_sync_bench_temp" WHERE id = ?', [id]);
       }
     }
-    const t4Duration = Math.max(1, Date.now() - t4Start);
+    const t4Duration = elapsed(t4Start);
     list.push({
       name: 'client.findById() Lookups',
       category: 'Local-Lite Client',
@@ -249,7 +280,7 @@ export async function runSQLiteBenchmark(
       `Testing client.findByIds() batched lookups (${batchedQueryCount * batchLookupSize} entities)...`,
       0.55,
     );
-    const tBatchFindStart = Date.now();
+    const tBatchFindStart = now();
     for (let i = 0; i < batchedQueryCount; i++) {
       const ids = Array.from(
         { length: batchLookupSize },
@@ -265,7 +296,7 @@ export async function runSQLiteBenchmark(
         );
       }
     }
-    const tBatchFindDuration = Math.max(1, Date.now() - tBatchFindStart);
+    const tBatchFindDuration = elapsed(tBatchFindStart);
     const totalBatchedFinds = batchedQueryCount * batchLookupSize;
     list.push({
       name: 'client.findByIds() Batched',
@@ -280,7 +311,7 @@ export async function runSQLiteBenchmark(
     // 6. client.findMany() with SQL Pushdown Filters
     const findManyCount = scaleWorkload(40);
     onProgress?.(`Testing client.findMany() query filter compilation (${findManyCount} queries)...`, 0.6);
-    const t5Start = Date.now();
+    const t5Start = now();
     for (let i = 0; i < findManyCount; i++) {
       if (client?.findMany) {
         await client.findMany('_sync_bench_temp', {
@@ -295,7 +326,7 @@ export async function runSQLiteBenchmark(
         );
       }
     }
-    const t5Duration = Math.max(1, Date.now() - t5Start);
+    const t5Duration = elapsed(t5Start);
     list.push({
       name: 'client.findMany() Filters',
       category: 'Local-Lite Client',
@@ -310,7 +341,7 @@ export async function runSQLiteBenchmark(
     const searchCount = scaleWorkload(50);
     onProgress?.(`Testing client.findMany() $contains fuzzy search (${searchCount} queries)...`, 0.7);
     const searchTokens = ['Item 1', 'Updated', 'rev', 'Large', 'nonexistent'];
-    const t6Start = Date.now();
+    const t6Start = now();
     for (let i = 0; i < searchCount; i++) {
       const token = searchTokens[i % searchTokens.length];
       if (client?.findMany) {
@@ -325,7 +356,7 @@ export async function runSQLiteBenchmark(
         );
       }
     }
-    const t6Duration = Math.max(1, Date.now() - t6Start);
+    const t6Duration = elapsed(t6Start);
     list.push({
       name: 'client.findMany() $contains Search',
       category: 'Local-Lite Client',
@@ -338,7 +369,7 @@ export async function runSQLiteBenchmark(
 
     // 7. client.transaction() ACID Rollback Verification
     onProgress?.('Testing client.transaction() ACID rollback isolation...', 0.78);
-    const rollbackStart = Date.now();
+    const rollbackStart = now();
     const rollbackCount = scaleWorkload(10);
     for (let c = 0; c < rollbackCount; c++) {
       try {
@@ -370,7 +401,7 @@ export async function runSQLiteBenchmark(
         })
       : [];
     const leaked = Array.isArray(leakedCheck) ? leakedCheck.length : 0;
-    const rbDuration = Math.max(1, Date.now() - rollbackStart);
+    const rbDuration = elapsed(rollbackStart);
     list.push({
       name: 'client.transaction() Rollback',
       category: 'ACID / Transactions',
@@ -385,7 +416,7 @@ export async function runSQLiteBenchmark(
     // 8. Outbox Pipeline Ingestion
     const outboxCount = scaleWorkload(200);
     onProgress?.(`Testing outbox mutation pipeline (${outboxCount} mutations)...`, 0.85);
-    const tOutboxStart = Date.now();
+    const tOutboxStart = now();
     await db.transaction(async (tx: any) => {
       for (let i = 0; i < outboxCount; i++) {
         await tx.execute(
@@ -403,7 +434,7 @@ export async function runSQLiteBenchmark(
         );
       }
     });
-    const tOutboxDuration = Math.max(1, Date.now() - tOutboxStart);
+    const tOutboxDuration = elapsed(tOutboxStart);
     list.push({
       name: 'Outbox Pipeline Ingestion',
       category: 'Outbox / Sync',
@@ -417,7 +448,7 @@ export async function runSQLiteBenchmark(
     // 9. client.delete() Pipeline
     const deleteCount = scaleWorkload(50);
     onProgress?.(`Testing client.delete() removal (${deleteCount} rows)...`, 0.9);
-    const tDelStart = Date.now();
+    const tDelStart = now();
     for (let i = 0; i < deleteCount; i++) {
       if (client?.delete) {
         await client.delete('_sync_bench_temp', `b-batch-${i}`, { skipOutbox: true });
@@ -425,7 +456,7 @@ export async function runSQLiteBenchmark(
         await db.execute('DELETE FROM "_sync_bench_temp" WHERE id = ?', [`b-batch-${i}`]);
       }
     }
-    const tDelDuration = Math.max(1, Date.now() - tDelStart);
+    const tDelDuration = elapsed(tDelStart);
     list.push({
       name: 'client.delete() Pipeline',
       category: 'Local-Lite Client',
@@ -440,7 +471,7 @@ export async function runSQLiteBenchmark(
     onProgress?.('Testing WAL non-blocking concurrent reads & writes...', 0.95);
     const concReadCount = scaleWorkload(100);
     const concWriteCount = scaleWorkload(60);
-    const tConcStart = Date.now();
+    const tConcStart = now();
     const writePromise = db.transaction(async (tx: any) => {
       for (let i = 0; i < concWriteCount; i++) {
         await tx.execute(
@@ -453,7 +484,7 @@ export async function runSQLiteBenchmark(
       db.execute('SELECT COUNT(*) as c FROM "_sync_bench_temp" WHERE score >= ?', [idx % 50]),
     );
     await Promise.all([writePromise, ...readPromises]);
-    const tConcDuration = Math.max(1, Date.now() - tConcStart);
+    const tConcDuration = elapsed(tConcStart);
     const totalConcOps = concWriteCount + concReadCount;
     list.push({
       name: 'WAL Concurrency Under Contention',
@@ -476,14 +507,14 @@ export async function runSQLiteBenchmark(
       '',
       'null',
     ];
-    const t8Start = Date.now();
+    const t8Start = now();
     for (let i = 0; i < fuzzCount; i++) {
       const raw = fuzzPayloads[i % fuzzPayloads.length];
       try {
         if (raw && typeof raw === 'string') JSON.parse(raw);
       } catch {}
     }
-    const t8Duration = Math.max(1, Date.now() - t8Start);
+    const t8Duration = elapsed(t8Start);
     list.push({
       name: 'Resilient JSON Fuzz Parsing',
       category: 'Memory / JSON',
@@ -493,6 +524,49 @@ export async function runSQLiteBenchmark(
       opsPerSec: Math.round((fuzzCount / t8Duration) * 1000),
       status: 'success',
     });
+
+    // 12. Read-only benchmarks against the app's real tables (never writes app data)
+    const realTables = [...appTables].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    for (const [tableName, rowCount] of realTables) {
+      onProgress?.(`Reading real app table "${tableName}"...`, 0.995);
+      try {
+        const safeTable = escapeIdentifier(tableName);
+        const pk = client?.getPrimaryKey?.() ?? 'id';
+        const safePk = escapeIdentifier(pk);
+        const pkRows = await db.execute(`SELECT ${safePk} AS pk FROM ${safeTable} LIMIT 200`);
+        const ids: string[] = pkRows.map((r: any) => String(r.pk));
+
+        const scanMs = await timeMedian(async () => {
+          await db.execute(`SELECT * FROM ${safeTable} LIMIT 500`);
+        });
+        list.push({
+          name: `Real table scan: ${tableName}`,
+          category: 'App Data',
+          description: `Median of 5 runs reading up to 500 of ${rowCount.toLocaleString()} real rows (SELECT *)`,
+          operations: Math.min(500, rowCount),
+          durationMs: scanMs,
+          opsPerSec: Math.round((Math.min(500, rowCount) / scanMs) * 1000),
+          status: 'success',
+        });
+
+        if (ids.length > 0 && client?.findById) {
+          const lookupMs = await timeMedian(async () => {
+            for (const id of ids) await client.findById(tableName, id);
+          });
+          list.push({
+            name: `Real point lookups: ${tableName}`,
+            category: 'App Data',
+            description: `Median of 5 runs of ${ids.length} client.findById() calls on real rows`,
+            operations: ids.length,
+            durationMs: lookupMs,
+            opsPerSec: Math.round((ids.length / lookupMs) * 1000),
+            status: 'success',
+          });
+        }
+      } catch {
+        // Table without the expected primary key column; skip it
+      }
+    }
 
     onProgress?.('Benchmark complete!', 1);
   } finally {
