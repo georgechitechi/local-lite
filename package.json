@@ -141,7 +141,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:package": "node package-smoke.mjs",
+    "test:package": "node scripts/package-smoke.mjs",
     "prepublishOnly": "npm run test && npm run build && npm run test:package"
   },
   "peerDependencies": {
