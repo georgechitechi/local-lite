@@ -55,18 +55,31 @@ export interface FirestoreAdapterOptions {
  * Safely extracts epoch milliseconds from numbers, Firestore Timestamps, or ISO strings.
  */
 function extractTimestamp(val: any): number {
-  if (!val) return Date.now();
-  if (typeof val === 'number') return val;
+  if (val == null) {
+    throw new Error('Firestore change is missing its updatedAt timestamp.');
+  }
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (typeof val === 'string') {
+    const numeric = Number(val);
+    if (val.trim() !== '' && Number.isFinite(numeric)) return numeric;
+    const parsed = Date.parse(val);
+    if (Number.isFinite(parsed)) return parsed;
+    throw new Error(`Firestore change has an invalid updatedAt timestamp: ${val}`);
+  }
   if (typeof val.toMillis === 'function') return val.toMillis();
   if (typeof val.toDate === 'function') return val.toDate().getTime();
   if (typeof val.seconds === 'number') {
     return val.seconds * 1000 + Math.floor((val.nanoseconds || 0) / 1000000);
   }
-  if (typeof val.string === 'string') {
-    const parsed = Date.parse(val);
-    if (!isNaN(parsed)) return parsed;
+  throw new Error('Firestore change has an unsupported updatedAt timestamp.');
+}
+
+function getRowId(data: any, primaryKey: string, documentId?: unknown): string {
+  const id = data?.[primaryKey] ?? documentId ?? data?.id;
+  if (id === undefined || id === null || String(id).length === 0) {
+    throw new Error('Firestore change is missing its document ID.');
   }
-  return Date.now();
+  return String(id);
 }
 
 export class FirestoreRemoteAdapter implements RemoteDBAdapter {
@@ -275,7 +288,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
               maxServerTimestamp = rowTime;
             }
 
-            const rowId = String(data[this.primaryKey] || doc.id || data.id);
+            const rowId = getRowId(data, this.primaryKey, doc.id);
             const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
 
             changes.push({
@@ -295,7 +308,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
       };
     } catch (error) {
       this.logger.error(formatFirestoreError(error, { operation: 'fetchChanges' }));
-      return { timestamp: sinceTimestamp, changes: [] };
+      throw error;
     }
   }
 
@@ -345,7 +358,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
               );
 
               const rowTime = extractTimestamp(data[this.updatedAtColumn]);
-              const rowId = String(data[this.primaryKey] || doc.id || data.id);
+              const rowId = getRowId(data, this.primaryKey, doc.id);
 
               changes.push({
                 tableName: table,

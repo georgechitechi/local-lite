@@ -13,6 +13,26 @@ import {
   ConvexStorageUploaderInstance,
 } from '../../storage/convex.js';
 
+function getRowTimestamp(value: unknown, fallback?: unknown): number {
+  const timestamp = value ?? fallback;
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) return timestamp;
+  if (typeof timestamp === 'string') {
+    const numeric = Number(timestamp);
+    if (timestamp.trim() !== '' && Number.isFinite(numeric)) return numeric;
+    const parsed = Date.parse(timestamp);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  throw new Error('Convex change is missing a valid updatedAt timestamp.');
+}
+
+function getRowId(row: any, primaryKey: string): string {
+  const id = row?.[primaryKey] ?? row?._id ?? row?.id;
+  if (id === undefined || id === null || String(id).length === 0) {
+    throw new Error('Convex change is missing its document ID.');
+  }
+  return String(id);
+}
+
 export interface ConvexRemoteAdapterOptions {
   /**
    * Tables synchronized with Convex.
@@ -163,13 +183,13 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
           );
 
           const operation: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
-          const rowTime = Number(row[this.updatedAtColumn] || row._creationTime || Date.now());
+          const rowTime = getRowTimestamp(row[this.updatedAtColumn], row._creationTime);
 
           if (rowTime > maxServerTimestamp) {
             maxServerTimestamp = rowTime;
           }
 
-          const rowId = String(row[this.primaryKey] || row._id || row.id);
+          const rowId = getRowId(row, this.primaryKey);
           const tableName = row.tableName || row._table || (this.tables.length === 1 ? this.tables[0] : 'default');
 
           changes.push({
@@ -190,7 +210,7 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
       return { timestamp: sinceTimestamp, changes: [] };
     } catch (error) {
       this.logger.error(formatConvexError(error, { operation: 'fetchChanges' }));
-      return { timestamp: sinceTimestamp, changes: [] };
+      throw error;
     }
   }
 
@@ -226,8 +246,8 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
             const changes: DeltaChange[] = data.map((row: any) => {
               const isSoftDeleted = Boolean(row[this.deletedColumn] === true);
               const op: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
-              const rowTime = Number(row[this.updatedAtColumn] || row._creationTime || Date.now());
-              const rowId = String(row[this.primaryKey] || row._id || row.id);
+              const rowTime = getRowTimestamp(row[this.updatedAtColumn], row._creationTime);
+              const rowId = getRowId(row, this.primaryKey);
               const tableName = row.tableName || row._table || (this.tables[0] ?? 'default');
               return {
                 tableName,

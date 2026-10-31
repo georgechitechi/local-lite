@@ -407,13 +407,16 @@ export class QueryBuilder<T = any> {
     }
 
     // LIMIT & OFFSET
-    if (typeof this.limitCount === 'number' && this.limitCount > 0) {
+    if (typeof this.limitCount === 'number' && this.limitCount >= 0) {
       sql += ` LIMIT ?`;
       params.push(this.limitCount);
       if (typeof this.offsetCount === 'number' && this.offsetCount > 0) {
         sql += ` OFFSET ?`;
         params.push(this.offsetCount);
       }
+    } else if (typeof this.offsetCount === 'number' && this.offsetCount > 0) {
+      sql += ` LIMIT -1 OFFSET ?`;
+      params.push(this.offsetCount);
     }
 
     return { sql, params };
@@ -462,9 +465,12 @@ export class QueryBuilder<T = any> {
   async first(): Promise<T | null> {
     const originalLimit = this.limitCount;
     this.limitCount = 1;
-    const rows = await this.execute();
-    this.limitCount = originalLimit;
-    return rows.length > 0 ? rows[0] : null;
+    try {
+      const rows = await this.execute();
+      return rows.length > 0 ? rows[0] : null;
+    } finally {
+      this.limitCount = originalLimit;
+    }
   }
 
   /**
@@ -473,10 +479,13 @@ export class QueryBuilder<T = any> {
   async count(): Promise<number> {
     const originalSelect = this.selectCols;
     this.selectCols = ['COUNT(*) AS _count'];
-    const rows = await this.execute();
-    this.selectCols = originalSelect;
-    const countVal = (rows[0] as any)?._count;
-    return typeof countVal === 'number' ? countVal : Number(countVal) || 0;
+    try {
+      const rows = await this.execute();
+      const countVal = (rows[0] as any)?._count;
+      return typeof countVal === 'number' ? countVal : Number(countVal) || 0;
+    } finally {
+      this.selectCols = originalSelect;
+    }
   }
 
   /**
@@ -486,10 +495,13 @@ export class QueryBuilder<T = any> {
     const originalSelect = this.selectCols;
     const safeCol = formatColumnIdentifier(column);
     this.selectCols = [`COALESCE(SUM(${safeCol}), 0) AS _sum`];
-    const rows = await this.execute();
-    this.selectCols = originalSelect;
-    const sumVal = (rows[0] as any)?._sum;
-    return typeof sumVal === 'number' ? sumVal : Number(sumVal) || 0;
+    try {
+      const rows = await this.execute();
+      const sumVal = (rows[0] as any)?._sum;
+      return typeof sumVal === 'number' ? sumVal : Number(sumVal) || 0;
+    } finally {
+      this.selectCols = originalSelect;
+    }
   }
 
   /**
@@ -499,9 +511,12 @@ export class QueryBuilder<T = any> {
     const originalSelect = this.selectCols;
     const safeCol = formatColumnIdentifier(column);
     this.selectCols = [`AVG(${safeCol}) AS _avg`];
-    const rows = await this.execute();
-    this.selectCols = originalSelect;
-    const avgVal = (rows[0] as any)?._avg;
-    return avgVal === null || avgVal === undefined ? null : Number(avgVal) || 0;
+    try {
+      const rows = await this.execute();
+      const avgVal = (rows[0] as any)?._avg;
+      return avgVal === null || avgVal === undefined ? null : Number(avgVal) || 0;
+    } finally {
+      this.selectCols = originalSelect;
+    }
   }
 }
