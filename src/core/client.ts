@@ -85,7 +85,7 @@ export interface RelationshipDefinition {
   foreignKey: string;
   /** Referenced parent table; its configured primary key is used. */
   references: string;
-  /** Behavior when the referenced parent row is deleted. Defaults to `noAction`. */
+  /** Behavior when the referenced parent row is deleted. Defaults to `noAction` (rejects when children exist). */
   onDelete?: OnDeleteAction;
 }
 
@@ -483,12 +483,29 @@ export class LocalFirstClient {
       if (!relationship.table || !relationship.foreignKey || !relationship.references) {
         throw new TypeError('Each relationship requires table, foreignKey, and references.');
       }
+      if (this.tables.length > 0) {
+        for (const tableName of [relationship.table, relationship.references]) {
+          if (!this.tables.includes(tableName)) {
+            throw new TypeError(`Relationship table "${tableName}" must be included in config.tables.`);
+          }
+        }
+      }
       if (
         relationship.onDelete !== undefined &&
         !['cascade', 'restrict', 'setNull', 'noAction'].includes(relationship.onDelete)
       ) {
         throw new TypeError(`Unsupported onDelete action: ${relationship.onDelete}`);
       }
+    }
+    const relationshipKeys = new Set<string>();
+    for (const relationship of this.relationships) {
+      const key = `${relationship.references}\0${relationship.table}\0${relationship.foreignKey}`;
+      if (relationshipKeys.has(key)) {
+        throw new TypeError(
+          `Duplicate relationship for ${relationship.table}.${relationship.foreignKey} referencing ${relationship.references}.`
+        );
+      }
+      relationshipKeys.add(key);
     }
     this.migrations = config.migrations ?? [];
     this.schemaMigrations = normalizeSchemaMigrations(config.schemaMigrations ?? []);

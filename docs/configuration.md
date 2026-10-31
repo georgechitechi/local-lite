@@ -30,7 +30,9 @@ import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 Configure child-table foreign keys in `relationships`. When a parent is deleted through
 `client.delete()`, `client.mutate(..., 'DELETE')`, a transaction, or `client.batch()`,
 local-lite applies each relationship's `onDelete` action atomically and records the
-resulting child mutations in the outbox.
+resulting child mutations in the outbox. Include both parent and child tables in
+`tables` when that list is configured. Relationship table/column names are checked
+for required values and supported delete actions are validated during client setup.
 
 ```typescript
 const config = defineSyncConfig({
@@ -54,8 +56,10 @@ const config = defineSyncConfig({
 
 Supported actions are `cascade` (delete referencing rows recursively), `restrict`
 (reject when referencing rows exist), `setNull` (clear the foreign key), and `noAction`
-(the default, which rejects deletion when referencing rows exist). `references` names
-the parent table; local-lite uses the configured primary key, which defaults to `id`.
+(the default, which also rejects immediately when referencing rows exist). `restrict`
+and `noAction` therefore have the same behavior in local-lite. The child foreign-key
+column must allow `NULL` when using `setNull`. `references` names the parent table;
+local-lite uses the configured primary key, which defaults to `id`.
 
 ### Versioned schema migrations
 

@@ -102,7 +102,7 @@ export interface LocalLiteConfig {
   tables?: string[];
 
   /**
-   * Parent-child relationships. `onDelete` defaults to `noAction`.
+   * Parent-child relationships. `onDelete` defaults to `noAction`, which rejects deletion when children exist.
    * Deletes through client.delete(), client.mutate(..., 'DELETE'), or batch are handled atomically.
    */
   relationships?: RelationshipDefinition[];
