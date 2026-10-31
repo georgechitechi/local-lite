@@ -6,4 +6,5 @@ node_modules/
 build/
 *.apk
 *.aab
-scripts/
+scripts/*
+!scripts/package-smoke.mjs
