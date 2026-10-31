@@ -76,6 +76,19 @@ import {
   type SessionManagerOptions,
 } from '../auth/session.js';
 
+export type OnDeleteAction = 'cascade' | 'restrict' | 'setNull' | 'noAction';
+
+export interface RelationshipDefinition {
+  /** Table containing the referencing rows. */
+  table: string;
+  /** Foreign-key field in the referencing table. */
+  foreignKey: string;
+  /** Referenced parent table; its configured primary key is used. */
+  references: string;
+  /** Behavior when the referenced parent row is deleted. Defaults to `noAction`. */
+  onDelete?: OnDeleteAction;
+}
+
 export interface LocalFirstClientConfig {
   local: LocalDBAdapter;
   remote: RemoteDBAdapter;
@@ -90,6 +103,7 @@ export interface LocalFirstClientConfig {
   logLevel?: LogLevel;
   autoSchema?: boolean;
   tables?: string[];
+  relationships?: RelationshipDefinition[];
   migrations?: string[];
   schemaMigrations?: SchemaMigration[];
   autoStart?: boolean;
@@ -221,6 +235,74 @@ export class TransactionalClient {
   ) { }
 
   async mutate(
+    tableName: string,
+    rowId: string,
+    operation: SyncOp,
+    payload: Record<string, any> | null,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    if (operation === 'DELETE') {
+      await this.deleteRelated(tableName, rowId, new Set(), options);
+      return;
+    }
+
+    await this.applyMutation(tableName, rowId, operation, payload, options);
+  }
+
+  private async deleteRelated(
+    tableName: string,
+    rowId: string,
+    visited: Set<string>,
+    options: MutateOptions = {}
+  ): Promise<void> {
+    const key = `${tableName}:${rowId}`;
+    if (visited.has(key)) return;
+    visited.add(key);
+
+    const relationships = this.parent.relationships.filter(
+      (relationship) => relationship.references === tableName
+    );
+
+    for (const relationship of relationships) {
+      const relatedRows = await this.findMany<Record<string, any>>(relationship.table, {
+        where: { [relationship.foreignKey]: rowId },
+      });
+      if (relatedRows.length === 0) continue;
+
+      const action = relationship.onDelete ?? 'noAction';
+      if (action === 'restrict' || action === 'noAction') {
+        throw new Error(
+          `Cannot delete ${tableName} record while ${relationship.table} records still reference it.`
+        );
+      }
+
+      if (action === 'setNull') {
+        for (const row of relatedRows) {
+          const childId = row[this.parent.getPrimaryKey()];
+          if (childId !== undefined && childId !== null) {
+            await this.update(
+              relationship.table,
+              String(childId),
+              { [relationship.foreignKey]: null },
+              options
+            );
+          }
+        }
+        continue;
+      }
+
+      for (const row of relatedRows) {
+        const childId = row[this.parent.getPrimaryKey()];
+        if (childId !== undefined && childId !== null) {
+          await this.deleteRelated(relationship.table, String(childId), visited, options);
+        }
+      }
+    }
+
+    await this.applyMutation(tableName, rowId, 'DELETE', null, options);
+  }
+
+  private async applyMutation(
     tableName: string,
     rowId: string,
     operation: SyncOp,
@@ -369,6 +451,7 @@ export class LocalFirstClient {
   public autoSchema: boolean;
   public coalesceOutbox: boolean;
   public tables: string[];
+  public relationships: RelationshipDefinition[];
   public jsonColumns: Record<string, string[]>;
   public autoHydrateJSON: boolean;
   /** Local column stamped on INSERT/UPDATE writes, or null when disabled. */
@@ -395,6 +478,18 @@ export class LocalFirstClient {
     this.autoSchema = config.autoSchema ?? false;
     this.coalesceOutbox = config.coalesceOutbox ?? true;
     this.tables = config.tables ?? [];
+    this.relationships = config.relationships ?? [];
+    for (const relationship of this.relationships) {
+      if (!relationship.table || !relationship.foreignKey || !relationship.references) {
+        throw new TypeError('Each relationship requires table, foreignKey, and references.');
+      }
+      if (
+        relationship.onDelete !== undefined &&
+        !['cascade', 'restrict', 'setNull', 'noAction'].includes(relationship.onDelete)
+      ) {
+        throw new TypeError(`Unsupported onDelete action: ${relationship.onDelete}`);
+      }
+    }
     this.migrations = config.migrations ?? [];
     this.schemaMigrations = normalizeSchemaMigrations(config.schemaMigrations ?? []);
     this.autoStart = config.autoStart ?? true;
@@ -711,6 +806,25 @@ export class LocalFirstClient {
     payload: Record<string, any> | null,
     options: MutateOptions = {}
   ): Promise<void> {
+    if (operation === 'DELETE') {
+      if (options.tx) {
+        const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
+        const queuedOutboxIds: string[] = [];
+        const txClient = new TransactionalClient(this, options.tx, queuedEvents, queuedOutboxIds);
+        await txClient.delete(tableName, rowId, options);
+        for (const item of queuedEvents) {
+          this.events.emit(item.tableName, item.event);
+        }
+        if (queuedOutboxIds.length > 0) {
+          this.events.emit('sync_outbox', { operation: 'INSERT', rowId: 'batch' });
+          this.syncWorker.schedulePush(20);
+        }
+      } else {
+        await this.transaction((tx) => tx.delete(tableName, rowId, options));
+      }
+      return;
+    }
+
     const pk = options.primaryKey ?? this.primaryKey;
     const timestamp = options.customTimestamp ?? Date.now();
 
@@ -779,6 +893,7 @@ export class LocalFirstClient {
     let pendingOutboxMap: Map<string, OutboxRecord> | undefined;
 
     const executeInTx = async (tx: LocalTransaction) => {
+      const txClient = new TransactionalClient(this, tx, queuedEvents, queuedOutboxIds);
       if (this.coalesceOutbox && mutations.length > 1) {
         pendingOutboxMap = await OutboxStore.getActivePendingMap(tx);
       }
@@ -792,6 +907,16 @@ export class LocalFirstClient {
             : generateUUID());
         generatedIds.push(rowId);
         const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
+        const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
+
+        if (m.operation === 'DELETE') {
+          await txClient.delete(m.tableName, rowId, {
+            primaryKey: pk,
+            customTimestamp: timestamp,
+            skipOutbox,
+          });
+          continue;
+        }
 
         await TableManager.applyMutation(
           tx,
@@ -803,7 +928,6 @@ export class LocalFirstClient {
           this.localMutationOptions(timestamp)
         );
 
-        const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
         if (!skipOutbox) {
           if (this.coalesceOutbox && m.operation !== 'INSERT') {
             const outboxId = await this.recordOutboxMutation(

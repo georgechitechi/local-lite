@@ -61,6 +61,7 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
     logLevel: config.logLevel,
     autoSchema,
     tables: config.tables ?? [],
+    relationships: config.relationships ?? [],
     migrations: config.migrations,
     schemaMigrations: config.schemaMigrations,
     autoStart: config.autoStart,

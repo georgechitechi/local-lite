@@ -1,7 +1,9 @@
 import { LocalDBAdapter } from '../adapters/local/index.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { ConflictResolver, ConflictStrategy, NetworkStatusProvider, RetryConfig, SchemaMigration } from '../core/types.js';
+import type { RelationshipDefinition } from '../core/client.js';
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
+export type { OnDeleteAction, RelationshipDefinition } from '../core/client.js';
 
 export interface SupabaseConfigOptions {
   url?: string;
@@ -98,6 +100,12 @@ export interface LocalLiteConfig {
    * e.g. ['todos', 'notes']
    */
   tables?: string[];
+
+  /**
+   * Parent-child relationships. `onDelete` defaults to `noAction`.
+   * Deletes through client.delete(), client.mutate(..., 'DELETE'), or batch are handled atomically.
+   */
+  relationships?: RelationshipDefinition[];
 
   /**
    * Legacy idempotent SQL statements executed transactionally on every initialization.

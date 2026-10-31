@@ -17,12 +17,45 @@ import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 | `database` | `any \| string \| (() => Promise<any>) \| LocalDBAdapter` | Optional | Database instance, factory function, or custom adapter. |
 | `databaseName` | `string` | Not set | Database filename when auto-opening via `expo-sqlite`. |
 | `tables` | `string[]` | `[]` | List of table names to synchronize. |
+| `relationships` | `RelationshipDefinition[]` | `[]` | Parent-child relationships and delete behavior handled by local-lite mutation methods. |
 | `autoSchema` | `boolean` | `false` | When true, automatically creates tables and adds missing columns dynamically on insert/update. |
 | `primaryKey` | `string` | `'id'` | Primary key column name used across tables. |
 | `schemaMigrations` | `SchemaMigration[]` | `[]` | Consecutive, versioned SQL migrations applied once and recorded in the local `schema_migrations` table. |
 | `migrations` | `string[]` | `[]` | Legacy idempotent SQL statements, still executed on every initialization for compatibility. Prefer `schemaMigrations` for application schema changes. |
 | `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
+
+### Relationship delete behavior
+
+Configure child-table foreign keys in `relationships`. When a parent is deleted through
+`client.delete()`, `client.mutate(..., 'DELETE')`, a transaction, or `client.batch()`,
+local-lite applies each relationship's `onDelete` action atomically and records the
+resulting child mutations in the outbox.
+
+```typescript
+const config = defineSyncConfig({
+  tables: ['children', 'milestones', 'visits'],
+  relationships: [
+    {
+      table: 'milestones',
+      foreignKey: 'childId',
+      references: 'children',
+      onDelete: 'cascade',
+    },
+    {
+      table: 'visits',
+      foreignKey: 'childId',
+      references: 'children',
+      onDelete: 'restrict',
+    },
+  ],
+});
+```
+
+Supported actions are `cascade` (delete referencing rows recursively), `restrict`
+(reject when referencing rows exist), `setNull` (clear the foreign key), and `noAction`
+(the default, which rejects deletion when referencing rows exist). `references` names
+the parent table; local-lite uses the configured primary key, which defaults to `id`.
 
 ### Versioned schema migrations
 
