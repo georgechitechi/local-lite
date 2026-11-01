@@ -93,9 +93,16 @@ For an application-level upgrade checklist or AI-assisted code review, see the
 ## AI Skills
 
 The package ships [Agent Skills](./skills) that AI coding assistants can load:
-`local-lite-setup`, `local-lite-custom-adapter` and `local-lite-upgrade`. Copy
-the folders from `node_modules/local-lite/skills/` into `.github/skills/`
-(Copilot) or `.claude/skills/` (Claude Code).
+`local-lite-setup`, `local-lite-custom-adapter` and `local-lite-upgrade`.
+
+```bash
+npx local-lite install-skills                    # Copilot: .github/skills
+npx local-lite install-skills --target claude    # Claude Code: .claude/skills
+npx local-lite install-skills --dir path/to/dir --force
+```
+
+Without npm, fetch them from GitHub:
+`npx degit georgechitechi/local-lite/skills .github/skills`.
 
 ## Features
 

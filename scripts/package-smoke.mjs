@@ -63,6 +63,15 @@ try {
     }
   `;
   run(process.execPath, ['--input-type=module', '-e', importScript], consumerRoot);
+  const cliPath = path.join(consumerRoot, 'node_modules', packageJson.name, 'bin', 'local-lite.mjs');
+  run(process.execPath, [cliPath, 'install-skills', '--target', 'claude'], consumerRoot);
+  const installed = await readFile(
+    path.join(consumerRoot, '.claude', 'skills', 'local-lite-setup', 'SKILL.md'),
+    'utf8'
+  );
+  if (!installed.includes('name: local-lite-setup')) {
+    throw new Error('install-skills did not copy the setup skill.');
+  }
   console.log(`Packed package consumer smoke test passed (${entrypoints.length} entry points).`);
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });

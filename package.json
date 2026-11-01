@@ -5,7 +5,11 @@
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "local-lite": "bin/local-lite.mjs"
+  },
   "files": [
+    "bin",
     "dist",
     "docs",
     "skills",
