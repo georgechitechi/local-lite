@@ -90,6 +90,13 @@ For an application-level upgrade checklist or AI-assisted code review, see the
 - FTS table creation no longer retries without the configured tokenizer; SQLite
   tokenizer errors now propagate.
 
+## AI Skills
+
+The package ships [Agent Skills](./skills) that AI coding assistants can load:
+`local-lite-setup`, `local-lite-custom-adapter` and `local-lite-upgrade`. Copy
+the folders from `node_modules/local-lite/skills/` into `.github/skills/`
+(Copilot) or `.claude/skills/` (Claude Code).
+
 ## Features
 
 Interrupted pushes recover automatically at startup and before the next push cycle,

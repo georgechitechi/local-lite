@@ -16,9 +16,11 @@ Copy this prompt into your code-review request:
 > suggest a minimal migration. Do not edit files unless asked. Do not treat
 > unrelated uses of the same words as API usage.
 
-For a workspace where this guide is not available in the dependency checkout,
-point the assistant to the installed package's `docs/breaking-changes.md` or
-provide this file directly.
+This guide ships with the package at
+`node_modules/local-lite/docs/breaking-changes.md`. A ready-made skill is at
+`node_modules/local-lite/skills/local-lite-upgrade/SKILL.md` (setup and custom
+adapter skills live beside it); copy the folders
+into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
 
 ## Changes in 0.0.30
 
