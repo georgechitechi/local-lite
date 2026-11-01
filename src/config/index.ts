@@ -35,6 +35,10 @@ export function defineSyncConfig(config: LocalLiteConfig): LocalLiteConfig {
  * Factory that instantiates, wires up, and initializes a LocalFirstClient from a LocalLiteConfig.
  */
 export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFirstClient> {
+  if ('migrations' in config) {
+    throw new TypeError('The migrations option has been removed. Use schemaMigrations instead.');
+  }
+
   // 1. Resolve Local Database Adapter
   const localAdapter = await resolveLocalAdapter(config);
 
@@ -62,7 +66,6 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
     autoSchema,
     tables: config.tables ?? [],
     relationships: config.relationships ?? [],
-    migrations: config.migrations,
     schemaMigrations: config.schemaMigrations,
     autoStart: config.autoStart,
     jsonColumns: config.jsonColumns,

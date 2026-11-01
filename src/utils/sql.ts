@@ -16,6 +16,6 @@ export function isInternalTable(tableName: string): boolean {
   if (lower.startsWith('_fts_')) return true;
   if (lower.startsWith('_local_')) return true;
   if (lower.startsWith('sync_')) return true;
-  if (lower === 'schema_migrations' || lower === '_migrations') return true;
+  if (lower === 'schema_migrations') return true;
   return false;
 }

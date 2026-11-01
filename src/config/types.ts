@@ -108,12 +108,6 @@ export interface LocalLiteConfig {
   relationships?: RelationshipDefinition[];
 
   /**
-   * Legacy idempotent SQL statements executed transactionally on every initialization.
-   * e.g. ["CREATE TABLE IF NOT EXISTS todos (id TEXT PRIMARY KEY, title TEXT);"]
-   */
-  migrations?: string[];
-
-  /**
    * Versioned application schema migrations. Versions must be consecutive integers
    * starting at 1; each migration is applied once and recorded in schema_migrations.
    */

@@ -2,6 +2,7 @@
 * [🚀 Getting Started](getting-started.md)
 * [🏛️ Architecture & Concepts](architecture.md)
 * [⚙️ Configuration](configuration.md)
+* [⚠️ Breaking Changes](breaking-changes.md)
 * [💻 Client API & Query Builder](client-api.md)
 * [⚡ Fast Key-Value & Preferences](kv.md)
 * [🔍 Full-Text Search (FTS5)](search.md)

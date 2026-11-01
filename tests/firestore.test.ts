@@ -187,7 +187,8 @@ describe('FirestoreRemoteAdapter', () => {
     });
 
     const liveHandler = vi.fn();
-    adapter.subscribeToLiveChanges(liveHandler);
+    const unsubscribe = adapter.subscribeToLiveChanges(liveHandler);
+    expect(typeof unsubscribe).toBe('function');
 
     expect(onSnapshotSpy).toHaveBeenCalledTimes(1);
 
@@ -226,7 +227,7 @@ describe('FirestoreRemoteAdapter', () => {
     });
 
     // Cleanup
-    adapter.destroy();
+    unsubscribe();
     expect(unsubscribeSpy).toHaveBeenCalledTimes(1);
   });
 

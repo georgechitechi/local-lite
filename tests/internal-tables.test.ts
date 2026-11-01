@@ -20,6 +20,7 @@ describe('Internal Tables Filtering', () => {
     expect(isInternalTable('sync_meta')).toBe(true);
     expect(isInternalTable('sqlite_master')).toBe(true);
     expect(isInternalTable('schema_migrations')).toBe(true);
+    expect(isInternalTable('_migrations')).toBe(false);
   });
 
   it('excludes internal tables from getTables() and getAllTableNames() by default', async () => {

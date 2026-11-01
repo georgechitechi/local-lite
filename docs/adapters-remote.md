@@ -262,10 +262,10 @@ export const config = defineSyncConfig({
 Implement `RemoteDBAdapter` to connect `local-lite` to your own REST, GraphQL, or WebSocket servers:
 
 ```typescript
-import { RemoteDBAdapter, SyncOp } from 'local-lite';
+import { RemoteDBAdapter, SyncOperation, DeltaChanges } from 'local-lite';
 
 export class MyCustomServerAdapter implements RemoteDBAdapter {
-  async pushChanges(operations: SyncOp[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
     const response = await fetch('https://api.mybackend.com/sync/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -274,16 +274,18 @@ export class MyCustomServerAdapter implements RemoteDBAdapter {
     return response.ok;
   }
 
-  async fetchChanges(tables: string[], sinceTimestamp: number): Promise<Record<string, any[]>> {
+  async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
     const res = await fetch(`https://api.mybackend.com/sync/pull?since=${sinceTimestamp}`);
     return await res.json();
   }
 
-  subscribe?(tables: string[], onRemoteChange: () => void): () => void {
-    // Optional WebSocket or SSE listener
+  subscribeToLiveChanges(onRemoteChange: (changes: DeltaChanges) => void): () => void {
     const ws = new WebSocket('wss://api.mybackend.com/realtime');
-    ws.onmessage = () => onRemoteChange();
+    ws.onmessage = (event) => onRemoteChange(JSON.parse(event.data));
     return () => ws.close();
   }
 }
 ```
+
+`subscribeToLiveChanges()` must return a cleanup function even when no listener is
+created; return a no-op function in that case.

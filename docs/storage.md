@@ -18,6 +18,10 @@ In local-first applications, large files like inspection photos, tenant contract
 - **Auto-Wiring**: Pass `bucket` or `uploadMutation` to `client.storage` and local-lite automatically connects to your active remote database adapter.
 - **Mobile-Ready**: Direct URI resolution (`file://`) and zero-memory-leak local file import (`saveFromUri`) from `expo-image-picker` or `expo-document-picker`.
 
+`ExpoFileDriver` requires Expo SDK 58 or newer and the modern `File`, `Directory`,
+and `Paths` APIs from `expo-file-system`. Older `FileSystem` module APIs and the
+`fileSystem` constructor option are no longer supported.
+
 ---
 
 ## 1. Supabase Storage Setup

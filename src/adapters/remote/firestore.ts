@@ -90,6 +90,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
   private updatedAtColumn: string;
   private firestoreModule: any;
   private unsubscribers: Array<() => void> = [];
+  private liveGeneration = 0;
   public logger: SyncLogger;
 
   constructor(db: any, options: FirestoreAdapterOptions = {}) {
@@ -315,22 +316,27 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
   /**
    * Subscribes to live real-time query updates via onSnapshot.
    */
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): void {
+  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
     this.destroy();
+    const generation = this.liveGeneration;
 
     if (!this.tables || this.tables.length === 0) {
-      return;
+      return () => {
+        if (generation === this.liveGeneration) this.destroy();
+      };
     }
 
     const setupListeners = async () => {
       const isCompat = typeof this.db.collection === 'function';
       const mod = isCompat ? null : await this.getModule();
+      if (generation !== this.liveGeneration) return;
       const currentCursor = Date.now() - 2000;
 
       for (const table of this.tables) {
+        if (generation !== this.liveGeneration) return;
         try {
           const handleSnapshot = (snapshot: any) => {
-            if (!snapshot) return;
+            if (generation !== this.liveGeneration || !snapshot) return;
 
             let docList: any[] = [];
             if (typeof snapshot.docChanges === 'function') {
@@ -406,13 +412,21 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
       }
     };
 
-    setupListeners();
+    void setupListeners().catch((err) => {
+      if (generation === this.liveGeneration) {
+        console.warn('Failed to initialize Firestore live listeners:', err);
+      }
+    });
+    return () => {
+      if (generation === this.liveGeneration) this.destroy();
+    };
   }
 
   /**
    * Cleans up all active real-time listeners.
    */
   destroy(): void {
+    this.liveGeneration++;
     for (const unsub of this.unsubscribers) {
       try {
         unsub();

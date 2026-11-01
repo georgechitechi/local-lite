@@ -15,7 +15,7 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
 
   async function makeClient(opts: {
     autoSchema?: boolean;
-    migrations?: string[];
+    schemaMigrations?: { version: number; up: string | string[] }[];
     touchUpdatedAt?: boolean | string;
   }) {
     const db = new NodeSQLiteAdapter(new DatabaseSync(':memory:'));
@@ -25,7 +25,7 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
       network: new DefaultNetworkStatusProvider(false),
       autoSchema: opts.autoSchema ?? false,
       tables: ['receipts'],
-      migrations: opts.migrations,
+      schemaMigrations: opts.schemaMigrations,
       autoStart: false,
       logger: false,
       touchUpdatedAt: opts.touchUpdatedAt,
@@ -102,7 +102,10 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
 
   it('skips stamping when the column does not exist on a manual schema', async () => {
     const db = await makeClient({
-      migrations: ['CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL);'],
+      schemaMigrations: [{
+        version: 1,
+        up: 'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL);',
+      }],
     });
     await client.insert('receipts', { id: 'r1', amount: 1 });
     await client.update('receipts', 'r1', { amount: 2 });
@@ -113,9 +116,10 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
 
   it('stamps on a manual schema that has the column', async () => {
     const db = await makeClient({
-      migrations: [
-        'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL, updated_at TEXT);',
-      ],
+      schemaMigrations: [{
+        version: 1,
+        up: 'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL, updated_at TEXT);',
+      }],
     });
     await client.insert('receipts', { id: 'r1', amount: 1, updated_at: '2020-01-01T00:00:00.000Z' });
     await client.update('receipts', 'r1', { amount: 2 });

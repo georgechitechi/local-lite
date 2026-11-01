@@ -21,7 +21,6 @@ import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 | `autoSchema` | `boolean` | `false` | When true, automatically creates tables and adds missing columns dynamically on insert/update. |
 | `primaryKey` | `string` | `'id'` | Primary key column name used across tables. |
 | `schemaMigrations` | `SchemaMigration[]` | `[]` | Consecutive, versioned SQL migrations applied once and recorded in the local `schema_migrations` table. |
-| `migrations` | `string[]` | `[]` | Legacy idempotent SQL statements, still executed on every initialization for compatibility. Prefer `schemaMigrations` for application schema changes. |
 | `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
 
@@ -83,6 +82,10 @@ schemaMigrations: [
   },
 ],
 ```
+
+The legacy `migrations` option has been removed. Move each SQL statement into a
+versioned entry in `schemaMigrations`; migrations now run once and are tracked in
+the local `schema_migrations` table.
 
 `autoSchema` remains available for inferred schemas, but explicit migrations are
 recommended when you need predictable upgrades. If both are configured, migrations

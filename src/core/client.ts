@@ -104,7 +104,6 @@ export interface LocalFirstClientConfig {
   autoSchema?: boolean;
   tables?: string[];
   relationships?: RelationshipDefinition[];
-  migrations?: string[];
   schemaMigrations?: SchemaMigration[];
   autoStart?: boolean;
   coalesceOutbox?: boolean;
@@ -465,12 +464,14 @@ export class LocalFirstClient {
   public readonly scheduler: JobScheduler;
   public readonly session: SessionManager;
   private primaryKey: string;
-  private migrations: string[];
   private schemaMigrations: Array<{ version: number; up: string[] }>;
   private autoStart: boolean;
   private initialization?: Promise<void>;
 
   constructor(config: LocalFirstClientConfig) {
+    if ('migrations' in config) {
+      throw new TypeError('The migrations option has been removed. Use schemaMigrations instead.');
+    }
     this.db = config.local;
     this.remote = config.remote;
     this.events = new EventEmitter();
@@ -507,7 +508,6 @@ export class LocalFirstClient {
       }
       relationshipKeys.add(key);
     }
-    this.migrations = config.migrations ?? [];
     this.schemaMigrations = normalizeSchemaMigrations(config.schemaMigrations ?? []);
     this.autoStart = config.autoStart ?? true;
     this.jsonColumns = config.jsonColumns ?? {};
@@ -716,7 +716,7 @@ export class LocalFirstClient {
 
   /**
    * Initializes the client: creates sync_outbox schema, ensures autoSchema tables if enabled,
-   * applies migrations, and optionally starts automatic sync. Concurrent/repeated calls
+   * applies schema migrations, and optionally starts automatic sync. Concurrent/repeated calls
    * share initialization; failures can be retried. After stop(), explicitly start the worker.
    */
   async initialize(): Promise<void> {
@@ -748,14 +748,6 @@ export class LocalFirstClient {
     await this.storage.initialize();
     await this.scheduler.initialize();
     await this.session.initialize();
-
-    if (this.migrations.length > 0) {
-      await this.db.transaction(async (tx) => {
-        for (const query of this.migrations) {
-          if (query.trim()) await tx.execute(query);
-        }
-      });
-    }
 
     await this.applySchemaMigrations();
 

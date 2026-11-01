@@ -666,7 +666,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Subscribes to live realtime postgres_changes from Supabase.
    * Batches rapid burst events in the same microtask turn into a single SQLite sync transaction.
    */
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): (() => void) | void {
+  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
     this.activeLiveCallback = callback;
     const client = this.getClient();
 

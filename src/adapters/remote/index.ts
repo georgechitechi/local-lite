@@ -4,11 +4,11 @@ export interface RemoteDBAdapter {
   pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult>;
   /** Return a complete batch through timestamp; reject on partial failure. Supports optional scope for data filtering. */
   fetchChanges(sinceTimestamp: number, scope?: Record<string, any>): Promise<DeltaChanges>;
-  /** Live events do not advance the durable pull checkpoint. Return cleanup when supported. */
+  /** Live events do not advance the durable pull checkpoint; return a cleanup function. */
   subscribeToLiveChanges(
     callback: (changes: DeltaChanges) => void,
     scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>),
-  ): void | (() => void);
+  ): () => void;
   setSyncScope?(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void;
 }
 

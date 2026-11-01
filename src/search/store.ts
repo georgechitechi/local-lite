@@ -18,16 +18,7 @@ export class SearchStore {
     const columnDefs = ['row_id UNINDEXED', ...cols].join(', ');
 
     const sql = `CREATE VIRTUAL TABLE IF NOT EXISTS ${ftsTable} USING fts5(${columnDefs}, tokenize='${tokenize}');`;
-    try {
-      await db.execute(sql);
-    } catch (err: any) {
-      // In case tokenize='unicode61' isn't supported by legacy SQLite build, retry without tokenize option
-      if (err?.message?.includes('tokenize') || err?.message?.includes('unknown tokenizer')) {
-        await db.execute(`CREATE VIRTUAL TABLE IF NOT EXISTS ${ftsTable} USING fts5(${columnDefs});`);
-      } else {
-        throw err;
-      }
-    }
+    await db.execute(sql);
   }
 
   /**
