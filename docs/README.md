@@ -103,3 +103,6 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
 * **Local-First By Default:** The app writes to and reads from local SQLite first. Operations never stall on slow cell connections or outages.
 * **Guaranteed Durability:** Every mutate operation executes in an atomic transaction that updates the user table and inserts a mutation into `sync_outbox` simultaneously. If the device restarts or loses power, pending changes are never lost.
 * **Zero Lock-In:** Switch seamlessly between Supabase, Convex, Firestore, or your own REST/GraphQL server without rewriting your UI layer.
+5. **[Server API Routing](./server.md)**
+   - Create server route handlers from one typed config
+   - Add middleware and use provider-specific server services
