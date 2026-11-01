@@ -243,7 +243,7 @@ export class MockDB implements LocalDBAdapter {
     }
 
     // sync_meta queries
-    if (lowerQ.includes('from sync_meta where key = ?')) {
+    if (lowerQ.startsWith('select value from sync_meta where key = ?')) {
       const key = params[0];
       const row = this.getTable('sync_meta').get(key);
       return row ? [{ value: row.value }] : [];
@@ -256,7 +256,7 @@ export class MockDB implements LocalDBAdapter {
     }
 
     if (lowerQ.includes('delete from sync_meta')) {
-      this.getTable('sync_meta').delete('last_synced_at');
+      this.getTable('sync_meta').delete(params[0] ?? 'last_synced_at');
       return [];
     }
 

@@ -1,6 +1,15 @@
 import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
 import { OutboxRecord, OutboxStatus, SyncOp, SyncOperation } from './types.js';
 
+export type OutboxFilterValue = string | number | boolean | null;
+
+export interface OutboxDeleteClause {
+  tableName?: string;
+  operation?: string;
+  rowIds?: string[];
+  payloadIn?: Record<string, OutboxFilterValue[]>;
+}
+
 /**
  * Maps a raw sync_outbox row into an OutboxRecord.
  */
@@ -204,6 +213,37 @@ export class OutboxStore {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => '?').join(',');
     await db.execute(`DELETE FROM sync_outbox WHERE id IN (${placeholders})`, ids);
+  }
+
+  /** Deletes outbox records matching one or more safe, parameterized clauses. */
+  static async deleteMatching(db: LocalDBAdapter, clauses: OutboxDeleteClause[]): Promise<void> {
+    const alternatives: string[] = [];
+    const params: unknown[] = [];
+
+    for (const clause of clauses) {
+      const conditions: string[] = [];
+      if (clause.tableName) {
+        conditions.push('table_name = ?');
+        params.push(clause.tableName);
+      }
+      if (clause.operation) {
+        conditions.push('operation = ?');
+        params.push(clause.operation);
+      }
+      if (clause.rowIds?.length) {
+        conditions.push(`row_id IN (${clause.rowIds.map(() => '?').join(',')})`);
+        params.push(...clause.rowIds);
+      }
+      for (const [field, values] of Object.entries(clause.payloadIn ?? {})) {
+        if (!/^[A-Za-z0-9_]+$/.test(field) || values.length === 0) continue;
+        conditions.push(`json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, ?) IN (${values.map(() => '?').join(',')})`);
+        params.push(`$.${field}`, ...values);
+      }
+      if (conditions.length > 0) alternatives.push(`(${conditions.join(' AND ')})`);
+    }
+
+    if (alternatives.length === 0) return;
+    await db.execute(`DELETE FROM sync_outbox WHERE ${alternatives.join(' OR ')}`, params);
   }
 
   /**

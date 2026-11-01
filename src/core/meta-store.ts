@@ -45,8 +45,8 @@ export class MetaStore {
   /**
    * Retrieves the persisted last_synced_at cursor timestamp (in ms). Returns 0 if never synced.
    */
-  static async getLastSyncedAt(db: LocalDBAdapter): Promise<number> {
-    const val = await this.get(db, 'last_synced_at');
+  static async getLastSyncedAt(db: LocalDBAdapter, key = 'last_synced_at'): Promise<number> {
+    const val = await this.get(db, key);
     if (!val) return 0;
     const parsed = parseInt(val, 10);
     return isNaN(parsed) ? 0 : parsed;
@@ -57,17 +57,18 @@ export class MetaStore {
    */
   static async setLastSyncedAt(
     db: LocalDBAdapter | LocalTransaction,
-    timestamp: number
+    timestamp: number,
+    key = 'last_synced_at'
   ): Promise<void> {
-    await this.set(db, 'last_synced_at', String(timestamp));
+    await this.set(db, key, String(timestamp));
   }
 
   /**
    * Clears the persisted cursor (forces next pull to re-query active remote records).
    */
-  static async clearLastSyncedAt(db: LocalDBAdapter | LocalTransaction): Promise<void> {
+  static async clearLastSyncedAt(db: LocalDBAdapter | LocalTransaction, key = 'last_synced_at'): Promise<void> {
     try {
-      await db.execute(`DELETE FROM sync_meta WHERE key = 'last_synced_at'`);
+      await db.execute(`DELETE FROM sync_meta WHERE key = ?`, [key]);
     } catch {
       // Ignored if table doesn't exist yet
     }

@@ -86,6 +86,9 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
   private deletedColumn: string;
   private updatedAtColumn: string;
   private unsubscribeLive?: () => void;
+  private liveCallback?: (changes: DeltaChanges) => void;
+  private liveScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  private liveGeneration = 0;
   public logger: SyncLogger;
 
   constructor(client: any, options: ConvexRemoteAdapterOptions = {}) {
@@ -150,11 +153,12 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
   /**
    * Fetches delta changes from Convex since a given timestamp.
    */
-  async fetchChanges(sinceTimestamp: number): Promise<DeltaChanges> {
+  async fetchChanges(sinceTimestamp: number, scope?: Record<string, any>): Promise<DeltaChanges> {
     try {
       const res = await this.client.query(this.pullQuery, {
         sinceTimestamp,
         tables: this.tables,
+        ...(scope ? { scope } : {}),
       });
 
       if (!res) {
@@ -217,57 +221,79 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
   /**
    * Subscribes to live reactive query updates from Convex.
    */
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): void {
-    if (typeof this.client.onUpdate !== 'function') {
-      return;
-    }
+  subscribeToLiveChanges(
+    callback: (changes: DeltaChanges) => void,
+    scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>),
+  ): () => void {
+    this.liveCallback = callback;
+    this.liveScope = scope;
+    this.refreshLiveSubscription();
+    return () => {
+      if (this.liveCallback !== callback) return;
+      this.liveCallback = undefined;
+      this.destroy();
+    };
+  }
 
-    if (this.unsubscribeLive) {
-      this.unsubscribeLive();
-      this.unsubscribeLive = undefined;
-    }
+  setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
+    this.liveScope = scope;
+    if (this.liveCallback) this.refreshLiveSubscription();
+  }
+
+  private refreshLiveSubscription(): void {
+    this.unsubscribeLive?.();
+    this.unsubscribeLive = undefined;
+    const generation = ++this.liveGeneration;
+    const callback = this.liveCallback;
+    if (!callback || typeof this.client.onUpdate !== 'function') return;
+
+    const subscribe = (scope?: Record<string, any>) => {
+      if (generation !== this.liveGeneration || this.liveCallback !== callback) return;
+      try {
+        const unsubscribe = this.client.onUpdate(
+          this.pullQuery,
+          { sinceTimestamp: Date.now() - 2000, tables: this.tables, ...(scope ? { scope } : {}) },
+          (data: any) => {
+            if (generation !== this.liveGeneration || !data) return;
+            if (data.changes && Array.isArray(data.changes)) {
+              callback({ timestamp: Number(data.timestamp || Date.now()), changes: data.changes });
+              return;
+            }
+            if (Array.isArray(data) && data.length > 0) {
+              const changes: DeltaChange[] = data.map((row: any) => {
+                const isSoftDeleted = Boolean(row[this.deletedColumn] === true);
+                const op: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
+                const rowTime = getRowTimestamp(row[this.updatedAtColumn], row._creationTime);
+                const rowId = getRowId(row, this.primaryKey);
+                const tableName = row.tableName || row._table || (this.tables[0] ?? 'default');
+                return { tableName, operation: op, rowId, payload: isSoftDeleted ? null : row, timestamp: rowTime };
+              });
+              const maxTime = Math.max(...changes.map((change) => change.timestamp || 0));
+              callback({ timestamp: maxTime > 0 ? maxTime : Date.now(), changes });
+            }
+          },
+        );
+        if (generation !== this.liveGeneration) {
+          if (typeof unsubscribe === 'function') unsubscribe();
+          return;
+        }
+        this.unsubscribeLive = typeof unsubscribe === 'function' ? unsubscribe : undefined;
+      } catch (err) {
+        console.warn('ConvexRemoteAdapter live subscription failed to initialize:', err);
+      }
+    };
 
     try {
-      this.unsubscribeLive = this.client.onUpdate(
-        this.pullQuery,
-        { sinceTimestamp: Date.now() - 2000, tables: this.tables },
-        (data: any) => {
-          if (!data) return;
-
-          if (data.changes && Array.isArray(data.changes)) {
-            callback({
-              timestamp: Number(data.timestamp || Date.now()),
-              changes: data.changes,
-            });
-            return;
-          }
-
-          if (Array.isArray(data) && data.length > 0) {
-            const changes: DeltaChange[] = data.map((row: any) => {
-              const isSoftDeleted = Boolean(row[this.deletedColumn] === true);
-              const op: SyncOp = isSoftDeleted ? 'DELETE' : 'UPDATE';
-              const rowTime = getRowTimestamp(row[this.updatedAtColumn], row._creationTime);
-              const rowId = getRowId(row, this.primaryKey);
-              const tableName = row.tableName || row._table || (this.tables[0] ?? 'default');
-              return {
-                tableName,
-                operation: op,
-                rowId,
-                payload: isSoftDeleted ? null : row,
-                timestamp: rowTime,
-              };
-            });
-
-            const maxTime = Math.max(...changes.map((c) => c.timestamp || 0));
-            callback({
-              timestamp: maxTime > 0 ? maxTime : Date.now(),
-              changes,
-            });
-          }
-        }
-      );
+      const scopeResult = typeof this.liveScope === 'function' ? this.liveScope() : this.liveScope;
+      if (scopeResult && typeof scopeResult.then === 'function') {
+        void Promise.resolve(scopeResult).then(subscribe).catch((err) => {
+          console.warn('ConvexRemoteAdapter live scope failed to resolve:', err);
+        });
+      } else {
+        subscribe(scopeResult);
+      }
     } catch (err) {
-      console.warn('ConvexRemoteAdapter live subscription failed to initialize:', err);
+      console.warn('ConvexRemoteAdapter live scope failed to resolve:', err);
     }
   }
 
@@ -275,6 +301,8 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
    * Cleans up live subscriptions.
    */
   destroy(): void {
+    this.liveGeneration++;
+    this.liveCallback = undefined;
     if (this.unsubscribeLive) {
       this.unsubscribeLive();
       this.unsubscribeLive = undefined;

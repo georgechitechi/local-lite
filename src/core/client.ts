@@ -3,7 +3,7 @@ import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
-import { OutboxStore } from './outbox-store.js';
+import { OutboxStore, type OutboxDeleteClause } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
 import { DatabaseMaintenance } from './maintenance.js';
 import { SchemaManager, DBExecutable } from './schema-manager.js';
@@ -1416,6 +1416,16 @@ export class LocalFirstClient {
     offset?: number;
   }): Promise<OutboxRecord[]> {
     return await OutboxStore.getAllRecords(this.db, options);
+  }
+
+  /**
+   * Deletes outbox entries matching one or more filter clauses. Intended for
+   * application cleanup of intentionally local-only or obsolete operations.
+   */
+  async deleteOutboxRecords(clauses: OutboxDeleteClause[]): Promise<void> {
+    if (clauses.length === 0) return;
+    await OutboxStore.deleteMatching(this.db, clauses);
+    this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'filtered' });
   }
 
   /**

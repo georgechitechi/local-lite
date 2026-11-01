@@ -31,6 +31,18 @@ const PUSH_BATCH_SIZE = 50;
 /** Maximum incoming delta changes applied in a single database transaction. */
 const DELTA_CHUNK_SIZE = 250;
 
+function stableScopeValue(value: any): any {
+  if (Array.isArray(value)) return value.map(stableScopeValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableScopeValue(value[key])]));
+  }
+  return value;
+}
+
+function getScopeCursorKey(scope?: Record<string, any>): string {
+  return scope === undefined ? 'last_synced_at' : `last_synced_at:scope:${JSON.stringify(stableScopeValue(scope))}`;
+}
+
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
@@ -80,6 +92,8 @@ export class SyncWorker {
   private isPulling = false;
   private lastPulledTimestamp = 0;
   private cursorLoaded = false;
+  private lastSyncedAtKey = 'last_synced_at';
+  private pullRequested = false;
   private deltaQueue: Promise<void> = Promise.resolve();
   private statusRun?: Promise<void>;
   private statusRerunRequested = false;
@@ -178,7 +192,7 @@ export class SyncWorker {
       this.applyDeltasLocally(deltas, { advanceCursor: false }).catch((err) => {
         this.logger.error('Error applying live remote deltas:', err);
       });
-    });
+    }, this.syncScope);
 
     if (typeof unsubscribe === 'function') this.remoteUnsubscribe = unsubscribe;
 
@@ -376,6 +390,10 @@ export class SyncWorker {
    */
   setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
     this.syncScope = scope;
+    this.remote.setSyncScope?.(scope);
+    if (this.automaticSync && !this.isPaused) {
+      this.pullRemoteChanges().catch((err) => this.logger.error('Error pulling after sync scope change:', err));
+    }
   }
 
   private async isOnline(): Promise<boolean> {
@@ -615,7 +633,11 @@ export class SyncWorker {
    * Pulls delta changes from the remote backend since lastPulledTimestamp.
    */
   async pullRemoteChanges(): Promise<void> {
-    if (this.isPulling || this.isPaused) return;
+    if (this.isPaused) return;
+    if (this.isPulling) {
+      this.pullRequested = true;
+      return;
+    }
 
     this.isPulling = true;
     this.emitStatus();
@@ -624,15 +646,13 @@ export class SyncWorker {
     try {
       if (!(await this.isOnline())) return;
       this.totalPullCycles++;
-      if (!this.cursorLoaded) {
-        this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db);
-        this.cursorLoaded = true;
-      }
-
       const scope = typeof this.syncScope === 'function' ? await this.syncScope() : this.syncScope;
+      const cursorKey = getScopeCursorKey(scope);
+      await this.loadCursor(cursorKey);
+      const sinceTimestamp = this.lastPulledTimestamp;
       const deltas = scope !== undefined
-        ? await this.remote.fetchChanges(this.lastPulledTimestamp, scope)
-        : await this.remote.fetchChanges(this.lastPulledTimestamp);
+        ? await this.remote.fetchChanges(sinceTimestamp, scope)
+        : await this.remote.fetchChanges(sinceTimestamp);
       const durationMs = Date.now() - startTime;
       this.lastPullDurationMs = durationMs;
       this.lastPullTimestamp = Date.now();
@@ -641,10 +661,10 @@ export class SyncWorker {
       const changesCount = deltas?.changes?.length || 0;
       if (deltas) {
         this.totalPulledDeltas += changesCount;
-        await this.applyDeltasLocally(deltas);
-        if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
-          this.lastPulledTimestamp = deltas.timestamp;
-          await MetaStore.setLastSyncedAt(this.db, deltas.timestamp);
+        await this.applyDeltasLocally(deltas, { cursorKey });
+        if (deltas.timestamp && deltas.timestamp > sinceTimestamp) {
+          if (cursorKey === this.lastSyncedAtKey) this.lastPulledTimestamp = deltas.timestamp;
+          await MetaStore.setLastSyncedAt(this.db, deltas.timestamp, cursorKey);
         }
       }
 
@@ -675,6 +695,10 @@ export class SyncWorker {
     } finally {
       this.isPulling = false;
       this.emitStatus();
+      if (this.pullRequested && !this.isPaused) {
+        this.pullRequested = false;
+        void this.pullRemoteChanges();
+      }
     }
   }
 
@@ -684,12 +708,14 @@ export class SyncWorker {
    */
   async applyDeltasLocally(
     deltas: DeltaChanges,
-    options: { advanceCursor?: boolean } = {}
+    options: { advanceCursor?: boolean; cursorKey?: string } = {}
   ): Promise<void> {
     const task = async () => {
-      await this.getLastPulledTimestamp();
+      const cursorKey = options.cursorKey ?? this.lastSyncedAtKey;
+      if (options.advanceCursor !== false) await this.loadCursor(cursorKey);
       await this.processDeltasLocally(
-        options.advanceCursor === false ? { ...deltas, timestamp: 0 } : deltas
+        options.advanceCursor === false ? { ...deltas, timestamp: 0 } : deltas,
+        cursorKey,
       );
     };
 
@@ -698,11 +724,11 @@ export class SyncWorker {
     return await next;
   }
 
-  private async processDeltasLocally(deltas: DeltaChanges): Promise<void> {
+  private async processDeltasLocally(deltas: DeltaChanges, cursorKey = this.lastSyncedAtKey): Promise<void> {
     if (!deltas.changes || deltas.changes.length === 0) {
-      if (deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
-        await MetaStore.setLastSyncedAt(this.db, deltas.timestamp);
-        this.lastPulledTimestamp = deltas.timestamp;
+      if (deltas.timestamp && (cursorKey !== this.lastSyncedAtKey || deltas.timestamp > this.lastPulledTimestamp)) {
+        await MetaStore.setLastSyncedAt(this.db, deltas.timestamp, cursorKey);
+        if (cursorKey === this.lastSyncedAtKey) this.lastPulledTimestamp = deltas.timestamp;
       }
       return;
     }
@@ -796,9 +822,9 @@ export class SyncWorker {
         }
 
         // Advance durable checkpoint only when a valid pull timestamp was provided
-        if (isLastChunk && deltas.timestamp && deltas.timestamp > this.lastPulledTimestamp) {
-          await MetaStore.setLastSyncedAt(tx, deltas.timestamp);
-          this.lastPulledTimestamp = deltas.timestamp;
+        if (isLastChunk && deltas.timestamp && (cursorKey !== this.lastSyncedAtKey || deltas.timestamp > this.lastPulledTimestamp)) {
+          await MetaStore.setLastSyncedAt(tx, deltas.timestamp, cursorKey);
+          if (cursorKey === this.lastSyncedAtKey) this.lastPulledTimestamp = deltas.timestamp;
         }
       });
 
@@ -813,23 +839,39 @@ export class SyncWorker {
       }
     }
 
-    if (deltas.timestamp) {
+    if (deltas.timestamp && cursorKey === this.lastSyncedAtKey) {
       this.lastPulledTimestamp = Math.max(this.lastPulledTimestamp, deltas.timestamp);
     }
   }
 
   async getLastPulledTimestamp(): Promise<number> {
-    if (!this.cursorLoaded) {
-      this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db);
-      this.cursorLoaded = true;
-    }
+    const scope = typeof this.syncScope === 'function' ? await this.syncScope() : this.syncScope;
+    await this.loadCursor(getScopeCursorKey(scope));
     return this.lastPulledTimestamp;
   }
 
+  private async loadCursor(key: string): Promise<void> {
+    if (key !== this.lastSyncedAtKey) {
+      this.lastSyncedAtKey = key;
+      this.cursorLoaded = false;
+      this.lastPulledTimestamp = 0;
+    }
+    if (!this.cursorLoaded) {
+      this.lastPulledTimestamp = await MetaStore.getLastSyncedAt(this.db, key);
+      this.cursorLoaded = true;
+    }
+  }
+
   async resetSyncCursor(): Promise<void> {
-    await MetaStore.clearLastSyncedAt(this.db);
+    await MetaStore.clearLastSyncedAt(this.db, this.lastSyncedAtKey);
     this.lastPulledTimestamp = 0;
     this.cursorLoaded = true;
+  }
+
+  /** Clears a stale push error after an explicit sync stop/reconfiguration. */
+  clearPushError(): void {
+    this.lastPushError = null;
+    this.emitStatus();
   }
 
   /**
