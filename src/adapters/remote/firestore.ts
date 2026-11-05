@@ -1,4 +1,5 @@
 import { RemoteDBAdapter } from './index.js';
+import { safeDynamicImport, safeDynamicRequire } from '../../utils/dynamic.js';
 import { DeltaChange, DeltaChanges, SyncOp, SyncOperation, PushResult } from '../../core/types.js';
 import {
   SyncLogger,
@@ -116,8 +117,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
       return this.firestoreModule;
     }
     try {
-      const dynamicImport = new Function('moduleName', 'return import(moduleName)');
-      this.firestoreModule = await dynamicImport('firebase/firestore');
+      const FIRESTORE_PKG = ['firebase', 'firestore'].join('/');
+      this.firestoreModule =
+        safeDynamicRequire(FIRESTORE_PKG) ?? (await safeDynamicImport(FIRESTORE_PKG));
       return this.firestoreModule;
     } catch {
       return null;

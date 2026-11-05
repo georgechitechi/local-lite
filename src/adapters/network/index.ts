@@ -1,4 +1,7 @@
 import { NetworkStatusProvider } from '../../core/types.js';
+import { safeDynamicRequire } from '../../utils/dynamic.js';
+
+const NETINFO_PKG = ['@react-native-community', 'netinfo'].join('/');
 
 export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
   private _isOnline: boolean = true;
@@ -10,7 +13,7 @@ export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
 
     // 1. Try React Native NetInfo if available in environment
     try {
-      const NetInfo = require('@react-native-community/netinfo');
+      const NetInfo = safeDynamicRequire(NETINFO_PKG);
       const netInfoInstance = NetInfo?.default || NetInfo;
       if (netInfoInstance && typeof netInfoInstance.addEventListener === 'function') {
         netInfoInstance

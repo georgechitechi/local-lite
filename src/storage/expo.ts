@@ -1,4 +1,7 @@
 import { FileDriver } from './types.js';
+import { safeDynamicImport, safeDynamicRequire } from '../utils/dynamic.js';
+
+const EXPO_FILE_SYSTEM_PKG = ['expo', 'file', 'system'].join('-');
 
 export interface ExpoFileDriverOptions {
   /**
@@ -89,11 +92,14 @@ export class ExpoFileDriver implements FileDriver {
   private async resolveClasses(): Promise<void> {
     if (!this.FileClass || !this.DirectoryClass || !this.PathsObj) {
       try {
-        // @ts-ignore
-        const mod = await import('expo-file-system');
-        this.FileClass = this.FileClass ?? mod.File;
-        this.DirectoryClass = this.DirectoryClass ?? mod.Directory;
-        this.PathsObj = this.PathsObj ?? mod.Paths;
+        const mod =
+          safeDynamicRequire(EXPO_FILE_SYSTEM_PKG) ??
+          (await safeDynamicImport(EXPO_FILE_SYSTEM_PKG));
+        if (mod) {
+          this.FileClass = this.FileClass ?? mod.File;
+          this.DirectoryClass = this.DirectoryClass ?? mod.Directory;
+          this.PathsObj = this.PathsObj ?? mod.Paths;
+        }
       } catch (error) {
         if (!this.FileClass) {
           throw new Error('ExpoFileDriver requires expo-file-system SDK 58 or newer.', { cause: error });

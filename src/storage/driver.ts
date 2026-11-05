@@ -1,4 +1,8 @@
 import { FileDriver } from './types.js';
+import { safeDynamicImport, safeDynamicRequire } from '../utils/dynamic.js';
+
+const NODE_FS_PROMISES_PKG = ['node:fs', 'promises'].join('/');
+const NODE_PATH_PKG = ['node', 'path'].join(':');
 
 /**
  * Universal in-memory driver (ideal for tests, memory caches, and browser storage fallback).
@@ -37,8 +41,14 @@ export class NodeFileDriver implements FileDriver {
 
   private async getFs() {
     try {
-      const fs = await import('node:fs/promises');
-      const path = await import('node:path');
+      const fs =
+        safeDynamicRequire(NODE_FS_PROMISES_PKG) ??
+        (await safeDynamicImport(NODE_FS_PROMISES_PKG));
+      const path =
+        safeDynamicRequire(NODE_PATH_PKG) ?? (await safeDynamicImport(NODE_PATH_PKG));
+      if (!fs || !path) {
+        throw new Error('Node fs/path unavailable');
+      }
       return { fs, path };
     } catch {
       throw new Error('NodeFileDriver is only supported in Node.js environments.');
