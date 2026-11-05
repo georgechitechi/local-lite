@@ -86,10 +86,24 @@ export class TableManager {
     const keys = Object.keys(rowData);
     if (keys.length === 0) return;
 
-    // Use atomic SQLite UPSERT (INSERT ... ON CONFLICT DO UPDATE) for both INSERT and UPDATE.
-    // Handles missing rows, existing rows, and partial updates in a single SQL round-trip,
-    // completely eliminating the redundant SELECT 1 pre-check on every mutation!
+    // Use atomic SQLite UPSERT (INSERT ... ON CONFLICT DO UPDATE) for INSERT,
+    // and direct UPDATE when updating an existing row so omitted NOT NULL columns do not fail.
     const updateKeys = keys.filter((k) => k !== primaryKey);
+    if (operation === 'UPDATE' && updateKeys.length > 0) {
+      const existing = await TableManager.fetchRow(tx, tableName, rowId, primaryKey, options);
+      if (existing) {
+        const setClause = updateKeys
+          .map((k) => `${escapeIdentifier(k)} = ?`)
+          .join(', ');
+        const setValues = [...updateKeys.map((k) => rowData[k]), rowId];
+        await tx.execute(
+          `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`,
+          setValues
+        );
+        return;
+      }
+    }
+
     const cols = keys.map((k) => escapeIdentifier(k)).join(', ');
     const placeholders = keys.map(() => '?').join(', ');
     const values = keys.map((k) => rowData[k]);
