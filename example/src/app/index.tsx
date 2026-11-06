@@ -116,7 +116,12 @@ export default function Index() {
         showToast('Signed in successfully!');
       }
     } catch (err: any) {
-      showToast(err.message, 'error');
+      const msg = err.message || String(err);
+      if (!isRegister && msg.includes('Invalid')) {
+        showToast('Account not found or password incorrect. If you haven\'t registered yet, tap "Don\'t have an account? Register" below!', 'error');
+      } else {
+        showToast(msg, 'error');
+      }
     }
   };
 

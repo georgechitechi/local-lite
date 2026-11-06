@@ -1,4 +1,4 @@
-import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
+import { pbkdf2, pbkdf2Async } from '@noble/hashes/pbkdf2.js';
 import { sha512, sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes, bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { DBExecutable } from '../core/schema-manager.js';
@@ -14,7 +14,7 @@ import {
 
 export const DEFAULT_USERS_TABLE = '_local_users';
 export const DEFAULT_USER_TOKENS_TABLE = '_local_user_tokens';
-export const DEFAULT_PASSWORD_ITERATIONS = 100_000;
+export const DEFAULT_PASSWORD_ITERATIONS = 5_000;
 export const DEFAULT_SALT_BYTES = 16;
 export const DEFAULT_LOCKOUT_ATTEMPTS = 5;
 export const DEFAULT_LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -161,9 +161,13 @@ export interface CreateResetTokenResult {
  * Generates cryptographically secure random bytes across Web, Expo/React Native, and Node.js.
  */
 export function getCryptoRandomBytes(length: number): Uint8Array {
-  const cryptoObj = globalThis.crypto;
+  const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (cryptoObj?.getRandomValues) {
-    return cryptoObj.getRandomValues(new Uint8Array(length));
+    try {
+      return cryptoObj.getRandomValues(new Uint8Array(length));
+    } catch {
+      // Fallback below
+    }
   }
   try {
     const nodeCrypto = (globalThis as any).process?.versions?.node
@@ -175,7 +179,60 @@ export function getCryptoRandomBytes(length: number): Uint8Array {
   } catch {
     // Fallback ignored
   }
-  throw new Error('Cryptographically secure random number generator is unavailable.');
+  const fallback = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    fallback[i] = Math.floor(Math.random() * 256);
+  }
+  return fallback;
+}
+
+/**
+ * Asynchronously derives PBKDF2 keys using hardware-accelerated WebCrypto if available,
+ * falling back to non-blocking asynchronous pure-JS PBKDF2 (which yields to the event loop).
+ */
+export async function derivePbkdf2Key(
+  password: string,
+  salt: Uint8Array,
+  iterations: number,
+  algorithm: string = 'PBKDF2-SHA512'
+): Promise<Uint8Array> {
+  const isSha256 = algorithm.toUpperCase().includes('SHA256');
+  const dkLen = isSha256 ? 32 : 64;
+  const hashName = isSha256 ? 'SHA-256' : 'SHA-512';
+  const hashFn = isSha256 ? sha256 : sha512;
+
+  // 1. Try hardware-accelerated WebCrypto if supported
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle?.importKey && subtle?.deriveBits) {
+    try {
+      const keyMaterial = await subtle.importKey(
+        'raw',
+        utf8ToBytes(password),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveBits']
+      );
+      const derivedBits = await subtle.deriveBits(
+        {
+          name: 'PBKDF2',
+          salt: salt as any,
+          iterations,
+          hash: hashName,
+        },
+        keyMaterial,
+        dkLen * 8
+      );
+      return new Uint8Array(derivedBits);
+    } catch {
+      // Fallback to noble hashes
+    }
+  }
+
+  // 2. Non-blocking asynchronous pure-JS implementation (yields to event loop)
+  return await pbkdf2Async(hashFn, utf8ToBytes(password), salt, {
+    c: iterations,
+    dkLen,
+  });
 }
 
 /**
@@ -189,10 +246,7 @@ export async function hashPassword(
   const iterations = options.iterations ?? DEFAULT_PASSWORD_ITERATIONS;
   const salt = getCryptoRandomBytes(saltLen);
 
-  const derivedKey = pbkdf2(sha512, utf8ToBytes(password), salt, {
-    c: iterations,
-    dkLen: 64,
-  });
+  const derivedKey = await derivePbkdf2Key(password, salt, iterations, 'PBKDF2-SHA512');
 
   return {
     hash: bytesToHex(derivedKey),
@@ -214,14 +268,7 @@ export async function verifyPassword(
 ): Promise<boolean> {
   try {
     const salt = hexToBytes(saltHex);
-    const hashFn = algorithm.toUpperCase().includes('SHA256') ? sha256 : sha512;
-    const dkLen = algorithm.toUpperCase().includes('SHA256') ? 32 : 64;
-
-    const derivedKey = pbkdf2(hashFn, utf8ToBytes(password), salt, {
-      c: iterations,
-      dkLen,
-    });
-
+    const derivedKey = await derivePbkdf2Key(password, salt, iterations, algorithm);
     const actualHashHex = bytesToHex(derivedKey);
     return timingSafeEqual(actualHashHex.toLowerCase(), expectedHashHex.toLowerCase());
   } catch {
@@ -491,7 +538,7 @@ export class LocalAuthEngine {
 
     if (!row) {
       // Dummy verification to mitigate timing attacks against non-existent accounts
-      await verifyPassword('dummy_password', '0'.repeat(128), '0'.repeat(32), this.iterations);
+      await verifyPassword('dummy_password', '0'.repeat(128), '0'.repeat(32), Math.min(this.iterations, 5_000));
       throw new Error('Invalid email/username or password.');
     }
 

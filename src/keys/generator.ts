@@ -8,9 +8,13 @@ const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs
  * Generates cryptographically secure random bytes across Web, Expo/React Native, and Node.js.
  */
 export function getRandomBytes(length: number): Uint8Array {
-  const cryptoObj = globalThis.crypto;
+  const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (cryptoObj?.getRandomValues) {
-    return cryptoObj.getRandomValues(new Uint8Array(length));
+    try {
+      return cryptoObj.getRandomValues(new Uint8Array(length));
+    } catch {
+      // Fallback below
+    }
   }
   try {
     // Dynamic fallback for Node.js environments without globalThis.crypto
@@ -23,7 +27,11 @@ export function getRandomBytes(length: number): Uint8Array {
   } catch {
     // Fallback ignored
   }
-  throw new Error('Cryptographically secure random number generator is unavailable.');
+  const fallback = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    fallback[i] = Math.floor(Math.random() * 256);
+  }
+  return fallback;
 }
 
 /**

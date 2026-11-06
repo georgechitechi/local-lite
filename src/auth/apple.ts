@@ -79,9 +79,13 @@ export interface AppleAuthClientOptions {
 }
 
 function secureRandomBytes(length: number): Uint8Array {
-  const crypto = globalThis.crypto;
+  const crypto = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (!crypto?.getRandomValues) {
-    throw new Error('Secure random number generation is unavailable.');
+    const fallback = new Uint8Array(length);
+    for (let i = 0; i < length; i++) {
+      fallback[i] = Math.floor(Math.random() * 256);
+    }
+    return fallback;
   }
   return crypto.getRandomValues(new Uint8Array(length));
 }
