@@ -93,7 +93,15 @@ For an application-level upgrade checklist or AI-assisted code review, see the
 ## AI Skills
 
 The package ships [Agent Skills](./skills) that AI coding assistants can load:
-`local-lite-setup`, `local-lite-custom-adapter` and `local-lite-upgrade`.
+* `local-lite-setup`: Multi-platform setup (Expo, Web, Node) and client initialization.
+* `local-lite-auth`: Zero-backend SQLite authentication, PBKDF2 crypto, lockout, reset tokens, and OAuth.
+* `local-lite-backups`: Cloud backups (OneDrive, Google Drive), AES-256-GCM database encryption, and restore.
+* `local-lite-schema`: Declarative cascading deletions (`onDelete`), append-only migrations, and FTS5 search.
+* `local-lite-storage`: Blob and file management, ExpoFileDriver, and cloud storage bucket sync.
+* `local-lite-react`: Reactive hooks (`useLiveQuery`, `useSyncStatus`, `useLocalAuth`, `useKV`), and 0ms optimistic writes.
+* `local-lite-offline-actions`: Queued mutation outbox, encrypted secret preferences, and background scheduler.
+* `local-lite-custom-adapter`: Implementing custom REST, GraphQL, or WebSocket remote database adapters.
+* `local-lite-upgrade`: Migration checklist and breaking change reviews across version upgrades.
 
 ```bash
 npx local-lite install-skills                    # Copilot: .github/skills
