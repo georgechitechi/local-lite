@@ -1,6 +1,7 @@
-# 🔑 Authentication (Google, Microsoft / OneDrive, GitHub & Apple)
+# 🔑 Authentication (Local SQLite, Google, Microsoft / OneDrive, GitHub & Apple)
 
-`local-lite` provides zero-backend, PKCE-secured authentication clients and React hooks out of the box for the four most popular identity providers:
+`local-lite` provides zero-backend, PKCE-secured authentication clients and React hooks out of the box for the four most popular identity providers, plus a **fully local SQLite authentication engine**:
+* **Local SQLite Auth Engine** (`LocalAuthEngine`, `useLocalAuth`) — 100% offline, PBKDF2-SHA512 password crypto, account lockout, tokens, and users table
 * **Google** (`GoogleAuthClient`, `useGoogleAuth`)
 * **Microsoft / OneDrive** (`MicrosoftAuthClient`, `OneDriveAuthClient`, `useMicrosoftAuth`, `useOneDriveAuth`)
 * **GitHub** (`GitHubAuthClient`, `useGitHubAuth`)
@@ -257,3 +258,85 @@ const msTokenStore = createMicrosoftAuthTokenStore(storage);
 const ghTokenStore = createGitHubAuthTokenStore(storage);
 const appleTokenStore = createAppleAuthTokenStore(storage);
 ```
+
+---
+
+## 🔒 5. Fully Local Authentication Engine (`auth/local`)
+
+For standalone offline-first apps, local-only modes, or self-contained credentials without third-party OAuth, `local-lite` provides a zero-backend **LocalAuthEngine** storing credentials directly in SQLite.
+
+```typescript
+import { LocalAuthEngine } from 'local-lite/auth/local';
+// or access client.auth directly on LocalFirstClient:
+import { useLocalAuth } from 'local-lite/react';
+```
+
+### Features & Security:
+* **🛡️ High-Level Crypto Credentials:** PBKDF2 with SHA-512 key derivation, 100,000 iterations by default, and distinct cryptographically secure 16-byte random salts.
+* **⏱️ Constant-Time Verification:** Password comparison uses timing-safe XOR operations to defeat side-channel timing attacks.
+* **🚫 Brute-Force & Lockout Protection:** Automatically tracks consecutive failed login attempts and locks accounts temporarily (default: 5 failed attempts locks for 15 minutes).
+* **🔑 Single-Use Password Reset Tokens:** Cryptographically secure 32-byte tokens stored only as SHA-256 hashes with configurable expiry.
+* **👤 SQLite `_local_users` Table:** Stores sanitized user profiles, usernames, case-insensitive emails, roles, JSON metadata, and status (`active`, `suspended`, `locked`).
+* **📱 Integrated Offline Sessions:** Automatically creates and persists sessions in `SessionManager` so users stay logged in offline.
+
+### Basic Usage:
+
+```typescript
+// Standalone or via client.auth:
+const { user, session } = await client.auth.signUp({
+  email: 'alice@example.com',
+  username: 'alice',
+  password: 'SuperSecretPassword123!',
+  displayName: 'Alice Wonderland',
+  metadata: { role: 'admin' },
+});
+
+// Sign In with email or username:
+const { user, session } = await client.auth.signIn({
+  identifier: 'alice@example.com', // or username 'alice'
+  password: 'SuperSecretPassword123!',
+});
+
+// Password Change:
+await client.auth.changePassword({
+  userId: user.id,
+  oldPassword: 'SuperSecretPassword123!',
+  newPassword: 'BrandNewPassword456!',
+});
+
+// Password Reset Flow:
+const { token } = await client.auth.createPasswordResetToken('alice@example.com');
+await client.auth.resetPasswordWithToken(token, 'BrandNewPassword456!');
+
+// Sign Out:
+await client.auth.signOut();
+```
+
+### React Hook (`useLocalAuth`):
+
+```tsx
+import { useLocalAuth } from 'local-lite/react';
+
+export function AuthScreen({ client }) {
+  const { user, isSignedIn, loading, signIn, signUp, signOut } = useLocalAuth(client.auth);
+
+  if (loading) return <Text>Loading user state...</Text>;
+
+  if (isSignedIn) {
+    return (
+      <View>
+        <Text>Welcome back, {user.displayName || user.email}!</Text>
+        <Button title="Sign Out" onPress={() => signOut()} />
+      </View>
+    );
+  }
+
+  return (
+    <LoginForm
+      onLogin={(email, password) => signIn(email, password)}
+      onRegister={(email, password) => signUp({ email, password })}
+    />
+  );
+}
+```
+

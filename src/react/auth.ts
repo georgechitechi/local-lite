@@ -3,6 +3,14 @@ import type { GoogleAuthClient, GoogleUser } from '../auth/google.js';
 import type { MicrosoftAuthClient, MicrosoftUser } from '../auth/microsoft.js';
 import type { GitHubAuthClient, GitHubUser } from '../auth/github.js';
 import type { AppleAuthClient, AppleUser, AppleNativeCredential } from '../auth/apple.js';
+import type {
+  LocalAuthEngine,
+  LocalUser,
+  SignUpOptions,
+  SignInOptions,
+  SignInResult,
+} from '../auth/local.js';
+import type { SessionRecord } from '../auth/session.js';
 
 // ----------------------------------------------------
 // Google Auth Hook
@@ -436,5 +444,154 @@ export function useAppleAuth(
     signIn,
     signOut,
     refetchUser,
+  };
+}
+
+// ----------------------------------------------------
+// Local Auth Hook
+// ----------------------------------------------------
+
+export interface UseLocalAuthResult<TMetadata = any> {
+  user: LocalUser<TMetadata> | null;
+  session: SessionRecord<LocalUser<TMetadata>> | null;
+  isSignedIn: boolean;
+  loading: boolean;
+  error: Error | null;
+  signIn: (
+    identifier: string,
+    password: string,
+    options?: Omit<SignInOptions, 'identifier' | 'password'>
+  ) => Promise<SignInResult<TMetadata>>;
+  signUp: (options: SignUpOptions<TMetadata>) => Promise<SignInResult<TMetadata>>;
+  signOut: () => Promise<void>;
+  refetchUser: () => Promise<LocalUser<TMetadata> | null>;
+}
+
+/**
+ * Reactive React hook for the fully local, zero-backend authentication engine.
+ * Automatically synchronizes with local user state and offline sessions in SQLite.
+ *
+ * Example:
+ * const { user, isSignedIn, signIn, signUp, signOut } = useLocalAuth(client.auth);
+ */
+export function useLocalAuth<TMetadata = any>(
+  engine: LocalAuthEngine | null | undefined
+): UseLocalAuthResult<TMetadata> {
+  const [user, setUser] = useState<LocalUser<TMetadata> | null>(null);
+  const [session, setSession] = useState<SessionRecord<LocalUser<TMetadata>> | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const refreshState = useCallback(async () => {
+    if (!engine) {
+      setUser(null);
+      setSession(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const sessionMgr = engine.getSessionManager();
+      const currentSession = await sessionMgr.getActiveSession<LocalUser<TMetadata>>();
+      setSession(currentSession);
+      const currentUser = await engine.getCurrentUser<TMetadata>();
+      setUser(currentUser);
+      setError(null);
+    } catch (err: any) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }, [engine]);
+
+  useEffect(() => {
+    refreshState();
+    if (!engine) return;
+
+    const unsub = engine.onAuthStateChange(() => {
+      refreshState();
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [engine, refreshState]);
+
+  const signIn = useCallback(
+    async (
+      identifier: string,
+      password: string,
+      options?: Omit<SignInOptions, 'identifier' | 'password'>
+    ) => {
+      if (!engine) throw new Error('LocalAuthEngine is not initialized.');
+      setError(null);
+      setLoading(true);
+      try {
+        const result = await engine.signIn<TMetadata>({
+          identifier,
+          password,
+          ...options,
+        });
+        setUser(result.user);
+        setSession(result.session ?? null);
+        return result;
+      } catch (err: any) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        setError(e);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [engine]
+  );
+
+  const signUp = useCallback(
+    async (options: SignUpOptions<TMetadata>) => {
+      if (!engine) throw new Error('LocalAuthEngine is not initialized.');
+      setError(null);
+      setLoading(true);
+      try {
+        const result = await engine.signUp<TMetadata>(options);
+        setUser(result.user);
+        setSession(result.session ?? null);
+        return result;
+      } catch (err: any) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        setError(e);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [engine]
+  );
+
+  const signOut = useCallback(async () => {
+    if (!engine) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await engine.signOut();
+      setUser(null);
+      setSession(null);
+    } catch (err: any) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      setError(e);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [engine]);
+
+  return {
+    user,
+    session,
+    isSignedIn: Boolean(user),
+    loading,
+    error,
+    signIn,
+    signUp,
+    signOut,
+    refetchUser: refreshState as any,
   };
 }

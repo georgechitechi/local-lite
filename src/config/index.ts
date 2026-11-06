@@ -73,6 +73,7 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
     syncScope: config.syncScope,
     autoPauseOnBackground: config.autoPauseOnBackground,
     touchUpdatedAt: config.touchUpdatedAt,
+    auth: config.auth ?? config.localAuth,
   });
 
   // 5. Execute Migrations & Auto-initialize

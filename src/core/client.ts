@@ -75,6 +75,10 @@ import {
   SessionManager,
   type SessionManagerOptions,
 } from '../auth/session.js';
+import {
+  LocalAuthEngine,
+  type LocalAuthEngineOptions,
+} from '../auth/local.js';
 
 export type OnDeleteAction = 'cascade' | 'restrict' | 'setNull' | 'noAction';
 
@@ -126,6 +130,8 @@ export interface LocalFirstClientConfig {
   storage?: BlobStorageManagerOptions;
   scheduler?: JobSchedulerOptions;
   session?: SessionManagerOptions;
+  localAuth?: LocalAuthEngineOptions;
+  auth?: LocalAuthEngineOptions;
 }
 
 function normalizeSchemaMigrations(
@@ -463,6 +469,7 @@ export class LocalFirstClient {
   public readonly storage: BlobStorageManager;
   public readonly scheduler: JobScheduler;
   public readonly session: SessionManager;
+  public readonly auth: LocalAuthEngine;
   private primaryKey: string;
   private schemaMigrations: Array<{ version: number; up: string[] }>;
   private autoStart: boolean;
@@ -529,7 +536,8 @@ export class LocalFirstClient {
       '_local_api_keys',
       '_local_actions',
       '_local_sessions',
-      '_local_sessions',
+      '_local_users',
+      '_local_user_tokens',
     ]);
 
     const actionNetwork = config.actions?.network ?? config.network;
@@ -559,6 +567,12 @@ export class LocalFirstClient {
       network: config.network,
       ...config.session,
     });
+    this.auth = new LocalAuthEngine(
+      this.db,
+      this.session,
+      this.events,
+      config.auth || config.localAuth
+    );
 
     this.actions = new ActionManager(
       this.db,
@@ -748,6 +762,7 @@ export class LocalFirstClient {
     await this.storage.initialize();
     await this.scheduler.initialize();
     await this.session.initialize();
+    await this.auth.initialize();
 
     await this.applySchemaMigrations();
 

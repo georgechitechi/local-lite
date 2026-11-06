@@ -3,7 +3,9 @@ import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { ConflictResolver, ConflictStrategy, NetworkStatusProvider, RetryConfig, SchemaMigration } from '../core/types.js';
 import type { RelationshipDefinition } from '../core/client.js';
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
+import type { LocalAuthEngineOptions } from '../auth/local.js';
 export type { OnDeleteAction, RelationshipDefinition } from '../core/client.js';
+export type { LocalAuthEngineOptions } from '../auth/local.js';
 
 export interface SupabaseConfigOptions {
   url?: string;
@@ -245,4 +247,9 @@ export interface LocalLiteConfig {
    * - `false`: disabled
    */
   touchUpdatedAt?: boolean | string;
+  /**
+   * Options for the fully local, zero-backend authentication engine (`client.auth`).
+   */
+  auth?: LocalAuthEngineOptions;
+  localAuth?: LocalAuthEngineOptions;
 }
