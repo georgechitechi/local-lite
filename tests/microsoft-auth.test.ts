@@ -16,7 +16,7 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
-    const sampleUser = {
+  const sampleUser: MicrosoftUser = {
     id: resolveUnifiedUserId({ id: 'ms-user-789', email: 'developer@outlook.com', emailVerified: true }, 'microsoft'),
     userId: resolveUnifiedUserId({ id: 'ms-user-789', email: 'developer@outlook.com', emailVerified: true }, 'microsoft'),
     provider: 'microsoft' as const,

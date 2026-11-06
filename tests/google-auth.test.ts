@@ -16,7 +16,7 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe('GoogleAuthClient', () => {
-    const sampleUser = {
+  const sampleUser: GoogleUser = {
     id: resolveUnifiedUserId({ id: 'google-user-123', email: 'test@example.com', emailVerified: true }, 'google'),
     userId: resolveUnifiedUserId({ id: 'google-user-123', email: 'test@example.com', emailVerified: true }, 'google'),
     provider: 'google' as const,

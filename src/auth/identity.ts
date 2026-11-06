@@ -21,8 +21,8 @@ export interface AuthUser {
   picture?: string | null;
   provider: SupportedAuthProvider;
   providerAccountId: string;
-  rawProfile: Record<string, any>;
-  createdAt: number;
+  rawProfile?: Record<string, any>;
+  createdAt?: number;
 }
 
 export type UnifiedAuthUser = AuthUser;

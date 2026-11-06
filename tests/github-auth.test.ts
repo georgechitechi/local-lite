@@ -16,7 +16,7 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe('GitHubAuthClient', () => {
-    const sampleUser = {
+  const sampleUser: GitHubUser = {
     id: resolveUnifiedUserId({ id: '123456', email: 'octocat@github.com', emailVerified: true }, 'github'),
     userId: resolveUnifiedUserId({ id: '123456', email: 'octocat@github.com', emailVerified: true }, 'github'),
     provider: 'github' as const,
