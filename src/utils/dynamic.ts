@@ -15,9 +15,6 @@ export function safeDynamicRequire(pkgName: string): any {
     if (pkgName === 'expo-file-system') {
       return require('expo-file-system');
     }
-    if (pkgName === '@react-native-community/netinfo') {
-      return require('@react-native-community/netinfo');
-    }
     // In Metro bundler (__r), calling require(variableString) triggers Metro's
     // unknownModuleError console.error before throwing. Skip non-literal require in Metro.
     if (typeof globalThis !== 'undefined' && typeof (globalThis as any).__r === 'function') {

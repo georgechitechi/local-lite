@@ -8,9 +8,9 @@ import type {
 import { performBackup, performRestore } from './operations.js';
 import type { CloudBackupFile } from './cloud-storage.js';
 import type { EncryptedBackupOptions, RestoreEncryptedBackupOptions } from './encryption.js';
-import {
+import type {
   MicrosoftAuthClient,
-  type MicrosoftAuthClientOptions,
+  MicrosoftAuthClientOptions,
 } from '../auth/microsoft.js';
 
 export const MICROSOFT_GRAPH_DRIVE = 'https://graph.microsoft.com/v1.0/me/drive';
@@ -125,6 +125,7 @@ export type OneDriveBackupClientOptions =
     };
 
 export class OneDriveBackupClient implements CloudBackupClient {
+  static AuthClientClass: (new (options: MicrosoftAuthClientOptions) => MicrosoftAuthClient) | null = null;
   private readonly storage: OneDriveBackupStorage;
   private readonly authClient: MicrosoftAuthClient;
   private readonly listeners = new Set<(connected: boolean) => void>();
@@ -145,7 +146,13 @@ export class OneDriveBackupClient implements CloudBackupClient {
         'User.Read',
         'Files.ReadWrite.AppFolder',
       ];
-      this.authClient = new MicrosoftAuthClient({
+      const AuthClass = OneDriveBackupClient.AuthClientClass;
+      if (!AuthClass) {
+        throw new Error(
+          'MicrosoftAuthClient is not registered. Pass an authClient instance in options or ensure local-lite/auth is loaded.',
+        );
+      }
+      this.authClient = new AuthClass({
         ...msOptions,
         scopes,
       });
