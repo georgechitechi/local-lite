@@ -138,7 +138,18 @@ export class SessionManager {
    * Creates or updates a user session, persisting it to local SQLite so it remains available offline.
    */
   async createSession<TUser = any>(options: CreateSessionOptions<TUser>): Promise<SessionRecord<TUser>> {
-    const id = options.id || `sess_${generateUUID()}`;
+    let id = options.id;
+    if (!id) {
+      const existing = await this.db.execute(
+        `SELECT id FROM ${this.sqlTableName} WHERE user_id = ? LIMIT 1;`,
+        [options.userId]
+      );
+      if (existing && existing.length > 0) {
+        id = String(existing[0].id);
+      } else {
+        id = `sess_${generateUUID()}`;
+      }
+    }
     const now = Date.now();
     const offlineDuration =
       options.offlineDurationMs !== undefined
@@ -251,6 +262,18 @@ export class SessionManager {
   async getUser<TUser = any>(): Promise<TUser | null> {
     const session = await this.getActiveSession<TUser>();
     return session ? session.user : null;
+  }
+
+  /**
+   * Retrieves a session record by its canonical userId.
+   */
+  async getSessionByUserId<TUser = any>(userId: string): Promise<SessionRecord<TUser> | null> {
+    const rows = await this.db.execute(
+      `SELECT * FROM ${this.sqlTableName} WHERE user_id = ? LIMIT 1;`,
+      [userId]
+    );
+    if (!rows || rows.length === 0) return null;
+    return mapSessionRow<TUser>(rows[0]);
   }
 
   /**
