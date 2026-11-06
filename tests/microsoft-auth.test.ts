@@ -3,6 +3,7 @@ import {
   MicrosoftAuthClient,
   createMicrosoftAuthTokenStore,
   createInMemoryMicrosoftTokenStore,
+  resolveUnifiedUserId,
   type MicrosoftAuthKeyValueStorage,
   type MicrosoftUser,
 } from '../src/auth/index.js';
@@ -15,13 +16,20 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
-  const sampleUser: MicrosoftUser = {
-    id: 'ms-user-789',
+    const sampleUser = {
+    id: resolveUnifiedUserId({ id: 'ms-user-789', email: 'developer@outlook.com', emailVerified: true }, 'microsoft'),
+    userId: resolveUnifiedUserId({ id: 'ms-user-789', email: 'developer@outlook.com', emailVerified: true }, 'microsoft'),
+    provider: 'microsoft' as const,
+    providerAccountId: 'ms-user-789',
     email: 'developer@outlook.com',
+    emailVerified: true,
     name: 'Morgan Taylor',
+    displayName: 'Morgan Taylor',
     givenName: 'Morgan',
     familyName: 'Taylor',
     userPrincipalName: 'developer@outlook.com',
+    avatarUrl: null,
+    picture: null,
   };
 
   it('performs PKCE authorization code flow and fetches Microsoft Graph user profile', async () => {
@@ -53,7 +61,7 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
             Authorization: 'Bearer ms-access-token-1',
           });
           return jsonResponse({
-            id: sampleUser.id,
+            id: sampleUser.providerAccountId,
             displayName: sampleUser.name,
             givenName: sampleUser.givenName,
             surname: sampleUser.familyName,
@@ -69,8 +77,10 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
 
     const user = await client.signIn();
 
-    expect(user).toEqual(sampleUser);
-    expect(authEvents).toEqual([sampleUser]);
+    expect(user).toMatchObject(sampleUser);
+    expect(user?.id).toBeDefined();
+    expect(user?.userId).toBe(user?.id);
+    expect(authEvents[0]).toMatchObject(sampleUser);
 
     const authUrl = new URL(authorizationUrl);
     expect(authUrl.searchParams.get('client_id')).toBe('ms-client-id-xyz');
@@ -81,7 +91,7 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
     expect(tokenRequestBody).toContain('grant_type=authorization_code');
 
     expect(await client.isSignedIn()).toBe(true);
-    expect(await client.getUser()).toEqual(sampleUser);
+    expect(await client.getUser()).toMatchObject(sampleUser);
     expect(await client.getValidAccessToken()).toBe('ms-access-token-1');
   });
 

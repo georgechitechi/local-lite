@@ -1,14 +1,12 @@
+import { resolveUnifiedUserId, type AuthUser } from './identity.js';
 export const GITHUB_AUTHORIZATION_ENDPOINT = 'https://github.com/login/oauth/authorize';
 export const GITHUB_TOKEN_ENDPOINT = 'https://github.com/login/oauth/access_token';
 export const GITHUB_API_ENDPOINT = 'https://api.github.com';
 export const DEFAULT_GITHUB_AUTH_SCOPES = ['read:user', 'user:email'];
 
-export interface GitHubUser {
-  id: string;
+export interface GitHubUser extends AuthUser {
+  provider: 'github';
   login: string;
-  name: string;
-  email: string;
-  avatarUrl?: string;
   bio?: string;
   company?: string;
   location?: string;
@@ -362,15 +360,29 @@ export class GitHubAuthClient {
       }
     }
 
+    const rawId = String(raw.id ?? raw.sub ?? 'github_user');
+    const normalizedEmail = email ? email.trim().toLowerCase() : `${raw.login}@users.noreply.github.com`;
+    const id = resolveUnifiedUserId({ id: rawId, email: normalizedEmail, emailVerified: true }, 'github');
+    const name = raw.name || raw.login || 'GitHub User';
+    const avatarUrl = raw.avatar_url || null;
+
     return {
-      id: String(raw.id),
+      id,
+      userId: id,
       login: raw.login,
-      name: raw.name || raw.login,
-      email: email || `${raw.login}@users.noreply.github.com`,
-      avatarUrl: raw.avatar_url,
+      name,
+      displayName: name,
+      email: normalizedEmail,
+      emailVerified: true,
+      provider: 'github',
+      providerAccountId: rawId,
+      avatarUrl,
+      picture: avatarUrl,
       bio: raw.bio,
       company: raw.company,
       location: raw.location,
+      rawProfile: raw,
+      createdAt: Date.now(),
     };
   }
 }

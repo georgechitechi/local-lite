@@ -1,11 +1,10 @@
+import { resolveUnifiedUserId, type AuthUser } from './identity.js';
 export const APPLE_AUTHORIZATION_ENDPOINT = 'https://appleid.apple.com/auth/authorize';
 export const APPLE_TOKEN_ENDPOINT = 'https://appleid.apple.com/auth/token';
 export const DEFAULT_APPLE_AUTH_SCOPES = ['name', 'email'];
 
-export interface AppleUser {
-  id: string;
-  email: string;
-  name: string;
+export interface AppleUser extends AuthUser {
+  provider: 'apple';
   givenName?: string;
   familyName?: string;
   identityToken?: string;
@@ -291,14 +290,24 @@ export class AppleAuthClient {
     };
     await this.tokenStore.setTokens(tokens);
 
+    const canonicalId = resolveUnifiedUserId({ id, email, emailVerified: Boolean(claims.email_verified ?? true) }, 'apple');
     const user: AppleUser = {
-      id,
+      id: canonicalId,
+      userId: canonicalId,
       email,
+      emailVerified: Boolean(claims.email_verified ?? true),
       name,
+      displayName: name,
+      avatarUrl: null,
+      picture: null,
+      provider: 'apple',
+      providerAccountId: id,
       givenName,
       familyName,
       identityToken: authorization.id_token,
       authorizationCode: authorization.code,
+      rawProfile: claims,
+      createdAt: Date.now(),
     };
     await this.tokenStore.setUser(user);
     this.notify(user);
@@ -321,14 +330,26 @@ export class AppleAuthClient {
     const resolvedFamilyName = familyName || priorUser?.familyName;
     const resolvedName = name !== email.split('@')[0] ? name : priorUser?.name || name;
 
+    const rawId = String(cred.user || claims.sub || 'apple_user');
+    const finalEmail = cred.email || priorUser?.email || email;
+    const canonicalId = resolveUnifiedUserId({ id: rawId, email: finalEmail, emailVerified: true }, 'apple');
     const user: AppleUser = {
-      id,
-      email: cred.email || priorUser?.email || email,
+      id: canonicalId,
+      userId: canonicalId,
+      email: finalEmail,
+      emailVerified: true,
       name: resolvedName,
+      displayName: resolvedName,
+      avatarUrl: null,
+      picture: null,
+      provider: 'apple',
+      providerAccountId: rawId,
       givenName: resolvedGivenName,
       familyName: resolvedFamilyName,
       identityToken: cred.identityToken || undefined,
       authorizationCode: cred.authorizationCode || undefined,
+      rawProfile: claims,
+      createdAt: Date.now(),
     };
 
     if (cred.identityToken) {

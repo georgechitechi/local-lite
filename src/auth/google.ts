@@ -1,3 +1,4 @@
+import { resolveUnifiedUserId, type AuthUser } from './identity.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
@@ -11,14 +12,10 @@ export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v3/userinfo';
 export const DEFAULT_GOOGLE_AUTH_SCOPES = ['openid', 'email', 'profile'];
 
-export interface GoogleUser {
-  id: string;
-  email: string;
-  emailVerified: boolean;
-  name: string;
+export interface GoogleUser extends AuthUser {
+  provider: 'google';
   givenName?: string;
   familyName?: string;
-  picture?: string;
   locale?: string;
 }
 
@@ -425,15 +422,29 @@ export class GoogleAuthClient {
     }
 
     const raw = (await res.json()) as any;
+    const email = raw.email ? String(raw.email).trim().toLowerCase() : '';
+    const emailVerified = Boolean(raw.email_verified ?? true);
+    const sub = String(raw.sub || raw.id || 'google_user');
+    const id = resolveUnifiedUserId({ id: sub, email, emailVerified }, 'google');
+    const name = raw.name || raw.email || 'Google User';
+    const avatarUrl = raw.picture || null;
+
     return {
-      id: raw.sub,
-      email: raw.email,
-      emailVerified: Boolean(raw.email_verified),
-      name: raw.name || raw.email || 'Google User',
+      id,
+      userId: id,
+      email,
+      emailVerified,
+      name,
+      displayName: name,
+      avatarUrl,
+      picture: avatarUrl,
+      provider: 'google',
+      providerAccountId: sub,
       givenName: raw.given_name,
       familyName: raw.family_name,
-      picture: raw.picture,
       locale: raw.locale,
+      rawProfile: raw,
+      createdAt: Date.now(),
     };
   }
 

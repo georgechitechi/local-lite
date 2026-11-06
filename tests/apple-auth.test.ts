@@ -34,12 +34,14 @@ describe('AppleAuthClient', () => {
     });
 
     expect(user).toBeDefined();
-    expect(user?.id).toBe('apple-user-001');
+    expect(user?.id).toBeDefined();
+    expect(user?.providerAccountId).toBe('apple-user-001');
     expect(user?.name).toBe('Jane Doe');
     expect(user?.email).toBe('parent@privaterelay.appleid.com');
     expect(await client.isSignedIn()).toBe(true);
     expect(authEvents).toHaveLength(1);
-    expect(authEvents[0]?.id).toBe('apple-user-001');
+    expect(authEvents[0]?.providerAccountId).toBe('apple-user-001');
+    expect(authEvents[0]?.id).toBe(user?.id);
   });
 
   it('signs in via web authorization flow when native credential is not supplied', async () => {
@@ -58,7 +60,8 @@ describe('AppleAuthClient', () => {
     });
 
     const user = await client.signIn();
-    expect(user?.id).toBe('apple-user-999');
+    expect(user?.id).toBeDefined();
+    expect(user?.providerAccountId).toBe('apple-user-999');
     expect(user?.name).toBe('Taylor Swift');
     expect(authUrl).toContain('appleid.apple.com/auth/authorize');
     expect(authUrl).toContain('client_id=com.example.service');

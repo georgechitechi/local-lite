@@ -4,23 +4,32 @@ export const DEFAULT_UNIFIED_EMAIL_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd4
 
 export type SupportedAuthProvider = 'google' | 'github' | 'microsoft' | 'apple' | 'local';
 
-export interface UnifiedAuthUser {
+/**
+ * Standardized first-class user identity across all auth providers in local-lite.
+ * Every provider client natively resolves and returns this canonical model.
+ */
+export interface AuthUser {
   /** Canonical deterministic UUID across all providers with the same verified email */
+  id: string;
+  /** Alias for id to ensure compatibility with session records and sync workers */
   userId: string;
   email: string;
   emailVerified: boolean;
-  name?: string;
-  displayName?: string;
+  name: string;
+  displayName: string;
   avatarUrl?: string | null;
+  picture?: string | null;
   provider: SupportedAuthProvider;
   providerAccountId: string;
   rawProfile: Record<string, any>;
   createdAt: number;
 }
 
+export type UnifiedAuthUser = AuthUser;
+
 export interface IdentityResolverOptions {
   namespace?: string;
-  requireVerifiedEmail?: boolean; // Defaults to true
+  requireVerifiedEmail?: boolean;
 }
 
 /**
@@ -41,29 +50,28 @@ export function resolveUnifiedUserId(
     return uuidv5(profile.email.trim().toLowerCase(), ns);
   }
 
-  // Deterministic fallback for unverified or missing emails
   return uuidv5(`${provider}:${profile.id}`, ns);
 }
 
 /**
  * Standardizes raw user records from Google, GitHub, Microsoft, Apple, or local auth
- * into a single unified user object with a canonical `userId`.
+ * into a single unified user object with a canonical `id` / `userId`.
  */
 export function createUnifiedAuthUser(
   rawUser: Record<string, any>,
   provider: SupportedAuthProvider,
   options?: IdentityResolverOptions,
-): UnifiedAuthUser {
+): AuthUser {
   const emailRaw = typeof rawUser.email === 'string' ? rawUser.email : undefined;
   const email = emailRaw ? emailRaw.trim().toLowerCase() : '';
   const emailVerified =
     rawUser.emailVerified === true ||
     rawUser.email_verified === true ||
-    provider === 'microsoft' || // Azure Graph returns primary user mail/UPN
-    provider === 'github'; // GitHub emails returned from verified endpoint
+    provider === 'microsoft' ||
+    provider === 'github';
 
-  const providerAccountId = String(rawUser.id ?? rawUser.sub ?? rawUser.userId ?? '');
-  const userId = resolveUnifiedUserId(
+  const providerAccountId = String(rawUser.providerAccountId ?? rawUser.id ?? rawUser.sub ?? rawUser.userId ?? '');
+  const id = resolveUnifiedUserId(
     { id: providerAccountId, email, emailVerified },
     provider,
     options,
@@ -88,16 +96,17 @@ export function createUnifiedAuthUser(
           : null;
 
   return {
-    userId,
+    id,
+    userId: id,
     email,
     emailVerified,
     name,
     displayName: name,
     avatarUrl,
+    picture: avatarUrl,
     provider,
     providerAccountId,
     rawProfile: rawUser,
-    createdAt: Date.now(),
+    createdAt: typeof rawUser.createdAt === 'number' ? rawUser.createdAt : Date.now(),
   };
 }
-

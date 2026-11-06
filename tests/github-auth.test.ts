@@ -3,6 +3,7 @@ import {
   GitHubAuthClient,
   createGitHubAuthTokenStore,
   createInMemoryGitHubTokenStore,
+  resolveUnifiedUserId,
   type GitHubAuthKeyValueStorage,
   type GitHubUser,
 } from '../src/auth/index.js';
@@ -15,12 +16,18 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe('GitHubAuthClient', () => {
-  const sampleUser: GitHubUser = {
-    id: '123456',
+    const sampleUser = {
+    id: resolveUnifiedUserId({ id: '123456', email: 'octocat@github.com', emailVerified: true }, 'github'),
+    userId: resolveUnifiedUserId({ id: '123456', email: 'octocat@github.com', emailVerified: true }, 'github'),
+    provider: 'github' as const,
+    providerAccountId: '123456',
     login: 'octocat',
     name: 'The Octocat',
+    displayName: 'The Octocat',
     email: 'octocat@github.com',
+    emailVerified: true,
     avatarUrl: 'https://github.com/images/error/octocat_happy.gif',
+    picture: 'https://github.com/images/error/octocat_happy.gif',
     bio: 'Open source mascot',
     location: 'San Francisco',
   };
@@ -76,8 +83,10 @@ describe('GitHubAuthClient', () => {
 
     const user = await client.signIn();
 
-    expect(user).toEqual(sampleUser);
-    expect(authEvents).toEqual([sampleUser]);
+    expect(user).toMatchObject(sampleUser);
+    expect(user?.id).toBeDefined();
+    expect(user?.userId).toBe(user?.id);
+    expect(authEvents[0]).toMatchObject(sampleUser);
 
     const authUrl = new URL(authorizationUrl);
     expect(authUrl.searchParams.get('client_id')).toBe('gh-client-id-xyz');
@@ -92,7 +101,7 @@ describe('GitHubAuthClient', () => {
     });
 
     expect(await client.isSignedIn()).toBe(true);
-    expect(await client.getUser()).toEqual(sampleUser);
+    expect(await client.getUser()).toMatchObject(sampleUser);
     expect(await client.getValidAccessToken()).toBe('gh-access-token-1');
   });
 

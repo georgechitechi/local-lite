@@ -3,6 +3,7 @@ import {
   GoogleAuthClient,
   createGoogleAuthTokenStore,
   createInMemoryGoogleTokenStore,
+  resolveUnifiedUserId,
   type GoogleAuthKeyValueStorage,
   type GoogleUser,
 } from '../src/auth/index.js';
@@ -15,14 +16,19 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe('GoogleAuthClient', () => {
-  const sampleUser: GoogleUser = {
-    id: 'google-user-123',
+    const sampleUser = {
+    id: resolveUnifiedUserId({ id: 'google-user-123', email: 'test@example.com', emailVerified: true }, 'google'),
+    userId: resolveUnifiedUserId({ id: 'google-user-123', email: 'test@example.com', emailVerified: true }, 'google'),
+    provider: 'google' as const,
+    providerAccountId: 'google-user-123',
     email: 'test@example.com',
     emailVerified: true,
     name: 'Test Parent',
+    displayName: 'Test Parent',
     givenName: 'Test',
     familyName: 'Parent',
     picture: 'https://lh3.googleusercontent.com/photo.jpg',
+    avatarUrl: 'https://lh3.googleusercontent.com/photo.jpg',
   };
 
   it('performs PKCE authorization code flow and fetches user profile', async () => {
@@ -55,7 +61,7 @@ describe('GoogleAuthClient', () => {
             Authorization: 'Bearer valid-access-token-1',
           });
           return jsonResponse({
-            sub: sampleUser.id,
+            sub: sampleUser.providerAccountId,
             email: sampleUser.email,
             email_verified: sampleUser.emailVerified,
             name: sampleUser.name,
@@ -74,8 +80,10 @@ describe('GoogleAuthClient', () => {
 
     const user = await client.signIn();
 
-    expect(user).toEqual(sampleUser);
-    expect(authEvents).toEqual([sampleUser]);
+    expect(user).toMatchObject(sampleUser);
+    expect(user?.id).toBeDefined();
+    expect(user?.userId).toBe(user?.id);
+    expect(authEvents[0]).toMatchObject(sampleUser);
 
     const authUrl = new URL(authorizationUrl);
     expect(authUrl.searchParams.get('client_id')).toBe('google-client-id-xyz');
@@ -89,7 +97,7 @@ describe('GoogleAuthClient', () => {
     expect(tokenRequestBody).toContain('grant_type=authorization_code');
 
     expect(await client.isSignedIn()).toBe(true);
-    expect(await client.getUser()).toEqual(sampleUser);
+    expect(await client.getUser()).toMatchObject(sampleUser);
     expect(await client.getValidAccessToken()).toBe('valid-access-token-1');
   });
 

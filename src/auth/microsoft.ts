@@ -1,3 +1,4 @@
+import { resolveUnifiedUserId, type AuthUser } from './identity.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
@@ -9,13 +10,10 @@ import {
 export const MICROSOFT_GRAPH_ENDPOINT = 'https://graph.microsoft.com/v1.0';
 export const DEFAULT_MICROSOFT_AUTH_SCOPES = ['openid', 'profile', 'email', 'User.Read'];
 
-export interface MicrosoftUser {
-  id: string;
-  email: string;
-  name: string;
+export interface MicrosoftUser extends AuthUser {
+  provider: 'microsoft';
   givenName?: string;
   familyName?: string;
-  picture?: string;
   userPrincipalName?: string;
 }
 
@@ -406,15 +404,27 @@ export class MicrosoftAuthClient {
     }
 
     const raw = (await res.json()) as any;
-    const email = raw.mail || raw.userPrincipalName || `${raw.id}@microsoft.account`;
+    const email = (raw.mail || raw.userPrincipalName || '').trim().toLowerCase();
+    const sub = String(raw.id || raw.sub || 'microsoft_user');
+    const id = resolveUnifiedUserId({ id: sub, email, emailVerified: true }, 'microsoft');
+    const name = raw.displayName || email || 'Microsoft User';
 
     return {
-      id: raw.id,
+      id,
+      userId: id,
       email,
-      name: raw.displayName || raw.givenName || email,
+      emailVerified: true,
+      name,
+      displayName: name,
+      avatarUrl: null,
+      picture: null,
+      provider: 'microsoft',
+      providerAccountId: sub,
       givenName: raw.givenName,
       familyName: raw.surname,
       userPrincipalName: raw.userPrincipalName,
+      rawProfile: raw,
+      createdAt: Date.now(),
     };
   }
 
