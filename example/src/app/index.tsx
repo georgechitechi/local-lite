@@ -218,7 +218,7 @@ export default function Index() {
       <View style={styles.header}>
         <Text style={styles.title}>⚡ local-lite Local Auth</Text>
         <Text style={styles.subtitle}>
-          Fully local SQLite user database, PBKDF2-SHA512 crypto & offline sessions
+          Fully local SQLite user database, fast PBKDF2-SHA256 crypto & offline sessions
         </Text>
         <View style={styles.badgeRow}>
           <View style={styles.badge}>

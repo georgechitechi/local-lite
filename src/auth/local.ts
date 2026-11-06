@@ -14,7 +14,8 @@ import {
 
 export const DEFAULT_USERS_TABLE = '_local_users';
 export const DEFAULT_USER_TOKENS_TABLE = '_local_user_tokens';
-export const DEFAULT_PASSWORD_ITERATIONS = 5_000;
+export const DEFAULT_PASSWORD_ALGORITHM = 'PBKDF2-SHA256';
+export const DEFAULT_PASSWORD_ITERATIONS = 1_000;
 export const DEFAULT_SALT_BYTES = 16;
 export const DEFAULT_LOCKOUT_ATTEMPTS = 5;
 export const DEFAULT_LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -69,7 +70,11 @@ export interface LocalAuthEngineOptions {
    */
   tokensTable?: string;
   /**
-   * PBKDF2 hash iterations. Default: 100,000
+   * PBKDF2 hash algorithm ('PBKDF2-SHA256' or 'PBKDF2-SHA512'). Default: 'PBKDF2-SHA256'
+   */
+  algorithm?: 'PBKDF2-SHA256' | 'PBKDF2-SHA512' | string;
+  /**
+   * PBKDF2 hash iterations. Default: 1,000 (optimized for client-side/mobile performance)
    */
   iterations?: number;
   /**
@@ -187,14 +192,15 @@ export function getCryptoRandomBytes(length: number): Uint8Array {
 }
 
 /**
- * Asynchronously derives PBKDF2 keys using hardware-accelerated WebCrypto if available,
- * falling back to non-blocking asynchronous pure-JS PBKDF2 (which yields to the event loop).
+ * Derives PBKDF2 keys using hardware-accelerated WebCrypto if available,
+ * fast 32-bit integer unboxed pure-JS for mobile performance (<=2000 iters),
+ * or non-blocking asynchronous pure-JS PBKDF2.
  */
 export async function derivePbkdf2Key(
   password: string,
   salt: Uint8Array,
   iterations: number,
-  algorithm: string = 'PBKDF2-SHA512'
+  algorithm: string = DEFAULT_PASSWORD_ALGORITHM
 ): Promise<Uint8Array> {
   const isSha256 = algorithm.toUpperCase().includes('SHA256');
   const dkLen = isSha256 ? 32 : 64;
@@ -202,7 +208,7 @@ export async function derivePbkdf2Key(
   const hashFn = isSha256 ? sha256 : sha512;
 
   // 1. Try hardware-accelerated WebCrypto if supported
-  const subtle = globalThis.crypto?.subtle;
+  const subtle = typeof globalThis !== 'undefined' ? (globalThis as any).crypto?.subtle : undefined;
   if (subtle?.importKey && subtle?.deriveBits) {
     try {
       const keyMaterial = await subtle.importKey(
@@ -228,31 +234,43 @@ export async function derivePbkdf2Key(
     }
   }
 
-  // 2. Non-blocking asynchronous pure-JS implementation (yields to event loop)
+  // 2. Pure-JS execution:
+  // With SHA-256 and <=2000 iterations, pbkdf2 uses native 32-bit unboxed integers without BigInt.
+  // In Hermes on mobile, this takes ~15-25ms. Running synchronously avoids timer queue latency.
+  if (iterations <= 2000 && isSha256) {
+    return pbkdf2(hashFn, utf8ToBytes(password), salt, {
+      c: iterations,
+      dkLen,
+    });
+  }
+
+  // 3. For large iterations or SHA-512, yield to event loop
   return await pbkdf2Async(hashFn, utf8ToBytes(password), salt, {
     c: iterations,
     dkLen,
+    asyncTick: 50,
   });
 }
 
 /**
- * Hashes a plaintext password using PBKDF2-SHA512 with a cryptographically secure random salt.
+ * Hashes a plaintext password using PBKDF2 with a cryptographically secure random salt.
  */
 export async function hashPassword(
   password: string,
-  options: { saltBytes?: number; iterations?: number } = {}
+  options: { saltBytes?: number; iterations?: number; algorithm?: string } = {}
 ): Promise<{ hash: string; salt: string; iterations: number; algorithm: string }> {
   const saltLen = options.saltBytes ?? DEFAULT_SALT_BYTES;
   const iterations = options.iterations ?? DEFAULT_PASSWORD_ITERATIONS;
+  const algorithm = options.algorithm ?? DEFAULT_PASSWORD_ALGORITHM;
   const salt = getCryptoRandomBytes(saltLen);
 
-  const derivedKey = await derivePbkdf2Key(password, salt, iterations, 'PBKDF2-SHA512');
+  const derivedKey = await derivePbkdf2Key(password, salt, iterations, algorithm);
 
   return {
     hash: bytesToHex(derivedKey),
     salt: bytesToHex(salt),
     iterations,
-    algorithm: 'PBKDF2-SHA512',
+    algorithm,
   };
 }
 
@@ -264,7 +282,7 @@ export async function verifyPassword(
   expectedHashHex: string,
   saltHex: string,
   iterations: number,
-  algorithm: string = 'PBKDF2-SHA512'
+  algorithm: string = DEFAULT_PASSWORD_ALGORITHM
 ): Promise<boolean> {
   try {
     const salt = hexToBytes(saltHex);
@@ -325,6 +343,7 @@ export class LocalAuthEngine {
   private tokensTable: string;
   private sqlUsersTable: string;
   private sqlTokensTable: string;
+  private algorithm: string;
   private iterations: number;
   private saltBytes: number;
   private maxFailedAttempts: number;
@@ -345,6 +364,7 @@ export class LocalAuthEngine {
     this.sqlUsersTable = escapeIdentifier(this.usersTable);
     this.sqlTokensTable = escapeIdentifier(this.tokensTable);
 
+    this.algorithm = options.algorithm || DEFAULT_PASSWORD_ALGORITHM;
     this.iterations = options.iterations || DEFAULT_PASSWORD_ITERATIONS;
     this.saltBytes = options.saltBytes || DEFAULT_SALT_BYTES;
     this.maxFailedAttempts = options.maxFailedAttempts ?? DEFAULT_LOCKOUT_ATTEMPTS;
@@ -457,6 +477,7 @@ export class LocalAuthEngine {
     const creds = await hashPassword(options.password, {
       saltBytes: this.saltBytes,
       iterations: this.iterations,
+      algorithm: this.algorithm,
     });
 
     const metadataStr = options.metadata ? JSON.stringify(options.metadata) : null;
@@ -602,6 +623,23 @@ export class LocalAuthEngine {
       [now, now, row.id]
     );
 
+    // Auto-upgrade legacy or slower hashes to modern PBKDF2-SHA256 standard
+    if (row.algorithm !== this.algorithm || row.iterations !== this.iterations) {
+      try {
+        const upgraded = await hashPassword(password, {
+          saltBytes: this.saltBytes,
+          iterations: this.iterations,
+          algorithm: this.algorithm,
+        });
+        await this.db.execute(
+          `UPDATE ${this.sqlUsersTable} SET password_hash = ?, salt = ?, iterations = ?, algorithm = ? WHERE id = ?;`,
+          [upgraded.hash, upgraded.salt, upgraded.iterations, upgraded.algorithm, row.id]
+        );
+      } catch {
+        // Non-critical upgrade
+      }
+    }
+
     const user = mapStoredUserRow<TMetadata>({
       ...row,
       failed_login_attempts: 0,
@@ -735,6 +773,7 @@ export class LocalAuthEngine {
     const creds = await hashPassword(options.newPassword, {
       saltBytes: this.saltBytes,
       iterations: this.iterations,
+      algorithm: this.algorithm,
     });
 
     await this.db.execute(
@@ -804,6 +843,7 @@ export class LocalAuthEngine {
     const creds = await hashPassword(newPassword, {
       saltBytes: this.saltBytes,
       iterations: this.iterations,
+      algorithm: this.algorithm,
     });
 
     // Invalidate token

@@ -41,10 +41,29 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
   });
 
   describe('High-Level Crypto Credentials', () => {
-    it('hashes passwords using PBKDF2-SHA512 with random salts', async () => {
+    it('hashes passwords using fast PBKDF2-SHA256 by default', async () => {
       const password = 'SuperSecretPassword123!';
-      const res1 = await hashPassword(password, { iterations: 5000 });
-      const res2 = await hashPassword(password, { iterations: 5000 });
+      const res1 = await hashPassword(password);
+      const res2 = await hashPassword(password);
+
+      expect(res1.algorithm).toBe('PBKDF2-SHA256');
+      expect(res1.hash).toHaveLength(64); // 32 bytes = 64 hex chars
+      expect(res1.salt).toHaveLength(32); // 16 bytes = 32 hex chars
+
+      expect(res1.salt).not.toBe(res2.salt);
+      expect(res1.hash).not.toBe(res2.hash);
+
+      const isValid = await verifyPassword(password, res1.hash, res1.salt, res1.iterations, res1.algorithm);
+      expect(isValid).toBe(true);
+
+      const isInvalid = await verifyPassword('WrongPassword', res1.hash, res1.salt, res1.iterations, res1.algorithm);
+      expect(isInvalid).toBe(false);
+    });
+
+    it('hashes passwords using PBKDF2-SHA512 when requested', async () => {
+      const password = 'SuperSecretPassword123!';
+      const res1 = await hashPassword(password, { iterations: 1000, algorithm: 'PBKDF2-SHA512' });
+      const res2 = await hashPassword(password, { iterations: 1000, algorithm: 'PBKDF2-SHA512' });
 
       expect(res1.algorithm).toBe('PBKDF2-SHA512');
       expect(res1.hash).toHaveLength(128); // 64 bytes = 128 hex chars
