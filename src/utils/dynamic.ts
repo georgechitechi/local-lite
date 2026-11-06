@@ -6,9 +6,6 @@ declare const __non_webpack_require__: any;
  */
 export function safeDynamicRequire(pkgName: string): any {
   try {
-    if (pkgName === 'react-native') {
-      return require('react-native');
-    }
     if (pkgName === 'expo-sqlite') {
       return require('expo-sqlite');
     }
