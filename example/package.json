@@ -13,10 +13,12 @@
     "expo-linking": "~58.0.16",
     "expo-router": "~58.0.30",
     "expo-splash-screen": "~58.0.13",
+    "expo-sqlite": "^58.0.15",
     "expo-status-bar": "~58.0.4",
     "expo-symbols": "~58.0.4",
     "expo-system-ui": "~58.0.7",
     "expo-web-browser": "~58.0.7",
+    "local-lite": "file:..",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -32,8 +34,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
+    "dev": "expo start --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
