@@ -207,5 +207,44 @@ describe('User Identity Unification (local-lite/auth)', () => {
       expect(await authManager.isAuthenticated()).toBe(false);
       expect(notifiedUser).toBeNull();
     });
+
+    it('throws descriptive errors when signing in with an unconfigured or unsupported provider', async () => {
+      const authManager = new UnifiedAuthManager({ sessionManager });
+
+      await expect(authManager.signIn('google')).rejects.toThrow(
+        'GoogleAuthClient is not configured on UnifiedAuthManager.'
+      );
+      await expect(authManager.signIn('github')).rejects.toThrow(
+        'GitHubAuthClient is not configured on UnifiedAuthManager.'
+      );
+      await expect(authManager.signIn('microsoft')).rejects.toThrow(
+        'MicrosoftAuthClient is not configured on UnifiedAuthManager.'
+      );
+      await expect(authManager.signIn('apple')).rejects.toThrow(
+        'AppleAuthClient is not configured on UnifiedAuthManager.'
+      );
+      await expect(authManager.signIn('local')).rejects.toThrow(
+        'LocalAuthEngine is not configured on UnifiedAuthManager.'
+      );
+      await expect(authManager.signIn('unknown' as any)).rejects.toThrow(
+        'Unsupported auth provider: unknown'
+      );
+    });
+
+    it('manages listener subscriptions and cleans up on destroy()', async () => {
+      const authManager = new UnifiedAuthManager({ sessionManager });
+      let callCount = 0;
+      const unsubscribe = authManager.onAuthStateChange(() => {
+        callCount++;
+      });
+
+      // Calling unsubscribe removes the listener
+      unsubscribe();
+      await authManager.signOut();
+      expect(callCount).toBe(0);
+
+      // destroy() does not throw and clears all active subscriptions
+      expect(() => authManager.destroy()).not.toThrow();
+    });
   });
 });

@@ -458,4 +458,75 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       expect(manualExchange?.token).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
     });
   });
+
+  describe('Account Status, Password Validation & Reset Token Edge Cases', () => {
+    it('rejects passwords failing custom password validator (returning false or string)', async () => {
+      const customAuth = new LocalAuthEngine(db, undefined, events, {
+        iterations: 1000,
+        validatePassword: (pwd) => {
+          if (!/[A-Z]/.test(pwd)) return 'Password must contain at least one uppercase letter.';
+          if (!/[0-9]/.test(pwd)) return false;
+          return true;
+        },
+      });
+      await customAuth.initialize();
+
+      // Fails with custom string error
+      await expect(
+        customAuth.signUp({ email: 'val1@test.com', password: 'alllowercase1' })
+      ).rejects.toThrow('Password must contain at least one uppercase letter.');
+
+      // Fails with boolean false error
+      await expect(
+        customAuth.signUp({ email: 'val2@test.com', password: 'NoNumbersHere!' })
+      ).rejects.toThrow('Password does not meet complexity requirements.');
+
+      // Passes validation
+      const res = await customAuth.signUp({ email: 'val3@test.com', password: 'ValidPassword1' });
+      expect(res.user.email).toBe('val3@test.com');
+    });
+
+    it('blocks suspended accounts from signing in', async () => {
+      const { user } = await auth.signUp({
+        email: 'suspended@locallite.dev',
+        password: 'Password123!',
+      });
+
+      // Mark user as suspended using updateUser API
+      await auth.updateUser(user.id, { status: 'suspended' });
+
+      await expect(
+        auth.signIn({ identifier: 'suspended@locallite.dev', password: 'Password123!' })
+      ).rejects.toThrow('Account has been suspended. Please contact support.');
+    });
+
+    it('rejects invalid or non-existent password reset requests', async () => {
+      await expect(
+        auth.createPasswordResetToken('nonexistent@locallite.dev')
+      ).rejects.toThrow('No account found matching this identifier.');
+
+      await expect(
+        auth.resetPasswordWithToken('invalid_token_xyz', 'NewPass123!')
+      ).rejects.toThrow('Password reset token is invalid or has expired.');
+    });
+
+    it('rejects expired password reset tokens', async () => {
+      const { user } = await auth.signUp({
+        email: 'expiredtoken@locallite.dev',
+        password: 'Password123!',
+      });
+
+      const { token } = await auth.createPasswordResetToken('expiredtoken@locallite.dev');
+
+      // Artificially expire the token in SQLite
+      await db.execute(
+        `UPDATE _local_user_tokens SET expires_at = ? WHERE user_id = ?;`,
+        [Date.now() - 10000, user.id]
+      );
+
+      await expect(
+        auth.resetPasswordWithToken(token, 'BrandNewPassword123!')
+      ).rejects.toThrow('Password reset token is invalid or has expired.');
+    });
+  });
 });
