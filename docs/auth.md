@@ -1,7 +1,8 @@
 # 🔑 Authentication (Local SQLite, Google, Microsoft / OneDrive, GitHub & Apple)
 
 `local-lite` provides zero-backend, PKCE-secured authentication clients and React hooks out of the box for the four most popular identity providers, plus a **fully local SQLite authentication engine**:
-* **Local SQLite Auth Engine** (`LocalAuthEngine`, `useLocalAuth`) — 100% offline, PBKDF2-SHA512 password crypto, account lockout, tokens, and users table
+* **Local SQLite Auth Engine** (`LocalAuthEngine`, `useLocalAuth`) — 100% offline, PBKDF2-SHA256 password crypto, account lockout, tokens, and users table
+* **Multi-Provider Identity Unification** (`UnifiedAuthManager`) — Links local and OAuth identities by verified email into a canonical deterministic `userId`
 * **Google** (`GoogleAuthClient`, `useGoogleAuth`)
 * **Microsoft / OneDrive** (`MicrosoftAuthClient`, `OneDriveAuthClient`, `useMicrosoftAuth`, `useOneDriveAuth`)
 * **GitHub** (`GitHubAuthClient`, `useGitHubAuth`)
@@ -272,11 +273,12 @@ import { useLocalAuth } from 'local-lite/react';
 ```
 
 ### Features & Security:
-* **🛡️ High-Level Crypto Credentials:** PBKDF2 with SHA-512 key derivation, 100,000 iterations by default, and distinct cryptographically secure 16-byte random salts.
+* **🛡️ High-Level Crypto Credentials:** PBKDF2 with SHA-256 key derivation, 1,000 rounds by default (fast execution on mobile Hermes and WebCrypto), with automated transparent migration of legacy SHA-512 hashes.
 * **⏱️ Constant-Time Verification:** Password comparison uses timing-safe XOR operations to defeat side-channel timing attacks.
 * **🚫 Brute-Force & Lockout Protection:** Automatically tracks consecutive failed login attempts and locks accounts temporarily (default: 5 failed attempts locks for 15 minutes).
 * **🔑 Single-Use Password Reset Tokens:** Cryptographically secure 32-byte tokens stored only as SHA-256 hashes with configurable expiry.
 * **👤 SQLite `_local_users` Table:** Stores sanitized user profiles, usernames, case-insensitive emails, roles, JSON metadata, and status (`active`, `suspended`, `locked`).
+* **🔄 Pluggable Remote Auth Exchange:** `remoteAuthHandler` automatically exchanges local credentials with your backend to retrieve and cache remote sync JWTs.
 * **📱 Integrated Offline Sessions:** Automatically creates and persists sessions in `SessionManager` so users stay logged in offline.
 
 ### Basic Usage:
@@ -307,6 +309,10 @@ await client.auth.changePassword({
 // Password Reset Flow:
 const { token } = await client.auth.createPasswordResetToken('alice@example.com');
 await client.auth.resetPasswordWithToken(token, 'BrandNewPassword456!');
+
+// Account Administration:
+await client.auth.updateUser(user.id, { status: 'suspended' }); // blocks login
+await client.auth.unlockAccount(user.id);
 
 // Sign Out:
 await client.auth.signOut();
@@ -339,4 +345,38 @@ export function AuthScreen({ client }) {
   );
 }
 ```
+
+---
+
+## 🔗 6. Multi-Provider Identity Unification (`UnifiedAuthManager`)
+
+When combining local authentication with third-party OAuth providers, `UnifiedAuthManager` automatically generates a deterministic UUIDv5 canonical identity linked to the user's verified email address:
+
+```typescript
+import {
+  UnifiedAuthManager,
+  GoogleAuthClient,
+  GitHubAuthClient,
+  SessionManager,
+} from 'local-lite/auth';
+
+const sessionManager = new SessionManager(client.getAdapter());
+await sessionManager.initialize();
+
+export const unifiedAuth = new UnifiedAuthManager({
+  google: googleClient,
+  github: githubClient,
+  local: client.auth,
+  sessionManager,
+  unifyByEmail: true,
+});
+
+// User logs in via Google:
+const user = await unifiedAuth.signIn('google');
+console.log('Canonical User ID:', user.userId);
+
+// Later, the same user logs in via GitHub with the same verified email:
+// They are mapped to the EXACT same canonical user.userId in SQLite!
+```
+
 

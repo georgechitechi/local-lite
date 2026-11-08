@@ -95,6 +95,7 @@ For an application-level upgrade checklist or AI-assisted code review, see the
 The package ships [Agent Skills](./skills) that AI coding assistants can load:
 * `local-lite-setup`: Multi-platform setup (Expo, Web, Node) and client initialization.
 * `local-lite-auth`: Zero-backend SQLite authentication, PBKDF2 crypto, lockout, reset tokens, and OAuth.
+* `local-lite-server`: Framework-neutral REST API routing, route params, middleware pipelines, and single fetch() dispatcher.
 * `local-lite-backups`: Cloud backups (OneDrive, Google Drive), AES-256-GCM database encryption, and restore.
 * `local-lite-schema`: Declarative cascading deletions (`onDelete`), append-only migrations, and FTS5 search.
 * `local-lite-storage`: Blob and file management, ExpoFileDriver, and cloud storage bucket sync.
@@ -104,8 +105,10 @@ The package ships [Agent Skills](./skills) that AI coding assistants can load:
 * `local-lite-upgrade`: Migration checklist and breaking change reviews across version upgrades.
 
 ```bash
-npx local-lite install-skills                    # Copilot: .github/skills
-npx local-lite install-skills --target claude    # Claude Code: .claude/skills
+npx local-lite install-skills                         # Copilot: .github/skills
+npx local-lite install-skills --target claude         # Claude Code: .claude/skills
+npx local-lite install-skills --target antigravity    # Antigravity / Gemini: .gemini/skills
+npx local-lite install-skills --target cursor         # Cursor: .cursor/skills
 npx local-lite install-skills --dir path/to/dir --force
 ```
 

@@ -7,12 +7,16 @@ const skillsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const targets = {
   copilot: '.github/skills',
   claude: '.claude/skills',
+  antigravity: '.gemini/skills',
+  gemini: '.gemini/skills',
+  cursor: '.cursor/skills',
+  agent: '.agent/skills',
 };
 
-const usage = `Usage: local-lite install-skills [--target copilot|claude] [--dir <path>] [--force]
+const usage = `Usage: local-lite install-skills [--target copilot|claude|antigravity|cursor|agent] [--dir <path>] [--force]
 
 Copies the bundled AI skills into your project.
-  --target  copilot (default, .github/skills) or claude (.claude/skills)
+  --target  copilot (default, .github/skills), claude (.claude/skills), antigravity (.gemini/skills), cursor (.cursor/skills), agent (.agent/skills)
   --dir     custom destination directory (overrides --target)
   --force   overwrite existing skill files`;
 
@@ -28,7 +32,7 @@ function parseArgs(argv) {
     } else throw new Error(`Unknown option: ${arg}`);
   }
   if (!options.dir && !targets[options.target]) {
-    throw new Error(`Unknown target "${options.target}". Use copilot or claude.`);
+    throw new Error(`Unknown target "${options.target}". Supported: ${Object.keys(targets).join(', ')}.`);
   }
   return options;
 }

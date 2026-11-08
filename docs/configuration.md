@@ -23,6 +23,7 @@ import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 | `schemaMigrations` | `SchemaMigration[]` | `[]` | Consecutive, versioned SQL migrations applied once and recorded in the local `schema_migrations` table. |
 | `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
+| `localAuth` | `LocalAuthEngineOptions` | Not set | Configures zero-backend SQLite authentication engine (`client.auth`), PBKDF2 cryptography, lockout, and password reset tokens. |
 
 ### Relationship delete behavior
 

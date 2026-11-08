@@ -1,11 +1,11 @@
 ---
 name: local-lite-auth
-description: Implement authentication and session management in local-lite. Use when setting up zero-backend local SQLite authentication (LocalAuthEngine, useLocalAuth), configuring PBKDF2 crypto, brute-force lockout, single-use reset tokens, or integrating OAuth providers (Google, Microsoft, GitHub, Apple) and offline sessions.
+description: Implement authentication and session management in local-lite. Use when setting up zero-backend local SQLite authentication (LocalAuthEngine, useLocalAuth), configuring PBKDF2 crypto, brute-force lockout, single-use reset tokens, remoteAuthHandler JWT exchange, UnifiedAuthManager multi-provider linking, or integrating OAuth providers (Google, Microsoft, GitHub, Apple) and offline sessions.
 ---
 
 # local-lite Authentication
 
-Comprehensive guide for implementing zero-backend local SQLite authentication and OAuth integrations in `local-lite`.
+Comprehensive guide for implementing zero-backend local SQLite authentication, multi-provider identity unification, and OAuth integrations in `local-lite`.
 
 ---
 
@@ -14,11 +14,13 @@ Comprehensive guide for implementing zero-backend local SQLite authentication an
 `LocalAuthEngine` provides fully local, client-side authentication stored directly in private SQLite tables (`_local_users` and `_local_user_tokens`). It requires no remote servers or cloud accounts.
 
 ### Features
-* **PBKDF2-SHA256 Cryptography**: Fast, unboxed 32-bit integer arithmetic optimized for mobile (Hermes) and hardware-accelerated WebCrypto on Web.
+* **PBKDF2-SHA256 Cryptography**: Fast, unboxed 32-bit integer arithmetic optimized for mobile (Hermes) and hardware-accelerated WebCrypto on Web. Seamless auto-migration of legacy `PBKDF2-SHA512` hashes upon successful sign-in.
 * **Cryptographic Salting**: 16-byte (128-bit) secure random salt per user to prevent rainbow table attacks.
 * **Timing-Attack Protection**: Constant-time byte comparisons (`timingSafeEqual`) and dummy verification for non-existent accounts.
 * **Brute-Force Lockout**: Automatically locks accounts after consecutive failed attempts for a configurable duration.
 * **Single-Use Reset Tokens**: 32-byte high-entropy tokens with SHA-256 storage and automated expiration.
+* **Pluggable Remote Auth Exchange**: `remoteAuthHandler` automatically exchanges local credentials with your backend to retrieve and cache remote JWTs.
+* **User Status Lifecycle**: Active, locked, or suspended accounts (`status: 'active' | 'locked' | 'suspended'`). Suspended accounts are immediately rejected on sign-in.
 * **Offline Sessions**: Integrated with `SessionManager` for persistent multi-device or single-device offline session lifecycles.
 
 ---
@@ -38,10 +40,11 @@ export const syncConfig = defineSyncConfig({
     usersTable: '_local_users',
     tokensTable: '_local_user_tokens',
 
-    // Password requirements & validation
+    // Password requirements & custom validation (returns boolean or custom error string)
     minPasswordLength: 8,
     validatePassword: (password: string) => {
       if (!/[0-9]/.test(password)) return 'Password must include at least one number.';
+      if (!/[A-Z]/.test(password)) return 'Password must include at least one uppercase letter.';
       return true;
     },
 
@@ -55,6 +58,17 @@ export const syncConfig = defineSyncConfig({
     // Tuning (defaults: 'PBKDF2-SHA256' with 1,000 rounds)
     algorithm: 'PBKDF2-SHA256',
     iterations: 1_000,
+
+    // Optional remote auth token exchange (e.g. swap local login for backend JWT)
+    remoteAuthHandler: async ({ user, session }) => {
+      const res = await fetch('https://api.example.com/auth/sync-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email }),
+      });
+      const data = await res.json();
+      return { token: data.token };
+    },
   },
 });
 ```
@@ -130,7 +144,7 @@ export function AuthScreen() {
 
 ---
 
-## 4. Password Management & Cryptographic Resets
+## 4. Password Management & Administrative Controls
 
 ### Changing Passwords (User Authenticated)
 ```typescript
@@ -153,37 +167,63 @@ await client.auth.resetPasswordWithToken(token, 'NewStrongPassword789!');
 // The token is permanently invalidated in SQLite and the account is unlocked.
 ```
 
+### Administrative User Controls
+```typescript
+// Suspend an abusive or compromised account
+await client.auth.updateUser(userId, { status: 'suspended' });
+
+// Manually unlock an account
+await client.auth.unlockAccount(userId);
+
+// Delete user and cascade clear tokens
+await client.auth.deleteUser(userId);
+```
+
 ---
 
-## 5. OAuth Providers & Cloud Auth
+## 5. Multi-Provider Identity Unification (`UnifiedAuthManager`)
 
-`local-lite/auth` also includes standalone OAuth clients and hooks for external identity providers:
+When supporting both local authentication and third-party OAuth providers, `UnifiedAuthManager` generates a canonical, deterministic `userId` linking accounts by verified email:
 
-### Google OAuth
 ```typescript
-import { GoogleAuthClient } from 'local-lite/auth';
-import { useGoogleAuth } from 'local-lite/react';
+import {
+  UnifiedAuthManager,
+  GoogleAuthClient,
+  GitHubAuthClient,
+  SessionManager,
+} from 'local-lite/auth';
 
-const googleClient = new GoogleAuthClient({
-  clientId: 'YOUR_GOOGLE_CLIENT_ID',
-  redirectUri: 'YOUR_REDIRECT_URI',
-  scopes: ['openid', 'profile', 'email'],
-  authorize: async (req) => { /* invoke browser or WebBrowser.openAuthSessionAsync */ },
+const sessionManager = new SessionManager(client.getAdapter());
+await sessionManager.initialize();
+
+export const unifiedAuth = new UnifiedAuthManager({
+  google: googleClient,
+  github: githubClient,
+  local: client.auth,
+  sessionManager,
+  unifyByEmail: true, // Derives canonical UUIDv5 by normalized verified email
 });
+
+// Sign in with any provider - user sessions and local tables link seamlessly
+const user = await unifiedAuth.signIn('google');
+console.log('Unified Canonical User ID:', user.userId);
+
+// Listen to unified state changes
+const unsubscribe = unifiedAuth.onAuthStateChange((user) => {
+  console.log('Active User:', user?.email);
+});
+
+// Cleanup when unmounting
+unifiedAuth.destroy();
 ```
 
-### Microsoft OAuth & OneDrive
-```typescript
-import { MicrosoftAuthClient } from 'local-lite/auth';
+---
 
-const msClient = new MicrosoftAuthClient({
-  clientId: 'YOUR_MS_CLIENT_ID',
-  redirectUri: 'YOUR_REDIRECT_URI',
-  scopes: ['openid', 'profile', 'User.Read', 'Files.ReadWrite.AppFolder'],
-  authorize: async (req) => { /* invoke browser */ },
-});
-```
+## 6. Standalone OAuth Providers
 
-### Apple & GitHub OAuth
-Clients are available via `AppleAuthClient` and `GitHubAuthClient` with matching React hooks (`useAppleAuth`, `useGitHubAuth`).
+`local-lite/auth` includes standalone PKCE OAuth clients with matching React hooks:
 
+* **Google**: `GoogleAuthClient` / `useGoogleAuth`
+* **Microsoft & OneDrive**: `MicrosoftAuthClient` / `OneDriveAuthClient` / `useMicrosoftAuth`
+* **GitHub**: `GitHubAuthClient` / `useGitHubAuth`
+* **Apple**: `AppleAuthClient` / `useAppleAuth`
