@@ -105,7 +105,20 @@ export interface LocalAuthEngineOptions {
    * Shared SessionManager instance or options to configure internal SessionManager.
    */
   session?: SessionManager | SessionManagerOptions;
+  /**
+   * Optional remote authentication handler to exchange local sessions for remote sync provider tokens.
+   */
+  remoteAuthHandler?: RemoteAuthHandler;
 }
+
+export interface RemoteAuthExchangeContext<TMetadata = any> {
+  user: LocalUser<TMetadata>;
+  session: SessionRecord<LocalUser<TMetadata>>;
+}
+
+export type RemoteAuthHandler<TMetadata = any> = (
+  context: RemoteAuthExchangeContext<TMetadata>
+) => Promise<{ token: string; [key: string]: any } | null>;
 
 export interface SignUpOptions<TMetadata = Record<string, any>> {
   id?: string;
@@ -352,32 +365,92 @@ export class LocalAuthEngine {
   private minPasswordLength: number;
   private customPasswordValidator?: (password: string) => boolean | string;
   private sessionManager: SessionManager;
+  private remoteAuthHandler?: RemoteAuthHandler;
 
   constructor(
     private db: DBExecutable,
-    sessionOrManager?: SessionManager | SessionManagerOptions,
+    sessionOrManager?: SessionManager | SessionManagerOptions | LocalAuthEngineOptions,
     private events?: EventEmitter,
     options: LocalAuthEngineOptions = {}
   ) {
-    this.usersTable = options.usersTable || DEFAULT_USERS_TABLE;
-    this.tokensTable = options.tokensTable || DEFAULT_USER_TOKENS_TABLE;
+    let resolvedOptions = options;
+    let resolvedSession: SessionManager | SessionManagerOptions | undefined =
+      sessionOrManager instanceof SessionManager ? sessionOrManager : undefined;
+    let resolvedEvents = events;
+
+    if (sessionOrManager && !(sessionOrManager instanceof SessionManager)) {
+      if (
+        'usersTable' in sessionOrManager ||
+        'iterations' in sessionOrManager ||
+        'remoteAuthHandler' in sessionOrManager ||
+        'maxFailedAttempts' in sessionOrManager
+      ) {
+        resolvedOptions = sessionOrManager as LocalAuthEngineOptions;
+        resolvedSession = (sessionOrManager as LocalAuthEngineOptions).session;
+      } else {
+        resolvedSession = sessionOrManager as SessionManagerOptions;
+      }
+    }
+    this.events = resolvedEvents || new EventEmitter();
+    this.usersTable = resolvedOptions.usersTable || DEFAULT_USERS_TABLE;
+    this.tokensTable = resolvedOptions.tokensTable || DEFAULT_USER_TOKENS_TABLE;
     this.sqlUsersTable = escapeIdentifier(this.usersTable);
     this.sqlTokensTable = escapeIdentifier(this.tokensTable);
 
-    this.algorithm = options.algorithm || DEFAULT_PASSWORD_ALGORITHM;
-    this.iterations = options.iterations || DEFAULT_PASSWORD_ITERATIONS;
-    this.saltBytes = options.saltBytes || DEFAULT_SALT_BYTES;
-    this.maxFailedAttempts = options.maxFailedAttempts ?? DEFAULT_LOCKOUT_ATTEMPTS;
-    this.lockoutDurationMs = options.lockoutDurationMs ?? DEFAULT_LOCKOUT_DURATION_MS;
-    this.resetTokenExpiryMs = options.resetTokenExpiryMs ?? DEFAULT_RESET_TOKEN_EXPIRY_MS;
-    this.minPasswordLength = options.minPasswordLength ?? DEFAULT_MIN_PASSWORD_LENGTH;
-    this.customPasswordValidator = options.validatePassword;
+    this.algorithm = resolvedOptions.algorithm || DEFAULT_PASSWORD_ALGORITHM;
+    this.iterations = resolvedOptions.iterations || DEFAULT_PASSWORD_ITERATIONS;
+    this.saltBytes = resolvedOptions.saltBytes || DEFAULT_SALT_BYTES;
+    this.maxFailedAttempts = resolvedOptions.maxFailedAttempts ?? DEFAULT_LOCKOUT_ATTEMPTS;
+    this.lockoutDurationMs = resolvedOptions.lockoutDurationMs ?? DEFAULT_LOCKOUT_DURATION_MS;
+    this.resetTokenExpiryMs = resolvedOptions.resetTokenExpiryMs ?? DEFAULT_RESET_TOKEN_EXPIRY_MS;
+    this.minPasswordLength = resolvedOptions.minPasswordLength ?? DEFAULT_MIN_PASSWORD_LENGTH;
+    this.customPasswordValidator = resolvedOptions.validatePassword;
+    this.remoteAuthHandler = resolvedOptions.remoteAuthHandler;
 
-    if (sessionOrManager instanceof SessionManager) {
-      this.sessionManager = sessionOrManager;
+    if (resolvedSession instanceof SessionManager) {
+      this.sessionManager = resolvedSession;
     } else {
-      this.sessionManager = new SessionManager(this.db, this.events, sessionOrManager);
+      this.sessionManager = new SessionManager(this.db, this.events, resolvedSession);
     }
+  }
+
+  /**
+   * Registers a pluggable remote authentication exchange handler.
+   */
+  setRemoteAuthHandler(handler: RemoteAuthHandler): void {
+    this.remoteAuthHandler = handler;
+  }
+
+  /**
+   * Gets the configured remote authentication exchange handler.
+   */
+  getRemoteAuthHandler(): RemoteAuthHandler | undefined {
+    return this.remoteAuthHandler;
+  }
+
+  /**
+   * Triggers token exchange with the registered remote sync provider for the active session.
+   */
+  async exchangeRemoteAuth(): Promise<{ token: string; [key: string]: any } | null> {
+    if (!this.remoteAuthHandler) return null;
+    const session = await this.sessionManager.getActiveSession();
+    if (!session || !session.userId) return null;
+    const user = await this.getUserById(session.userId);
+    if (!user) return null;
+    const result = await this.remoteAuthHandler({ user, session });
+    if (result && result.token) {
+      await this.sessionManager.updateTokens({ token: result.token });
+      session.token = result.token;
+    }
+    return result;
+  }
+
+  /**
+   * Retrieves the cached remote sync authentication token from the active session.
+   */
+  async getRemoteAuthToken(): Promise<string | null> {
+    const session = await this.sessionManager.getActiveSession();
+    return session?.token || null;
   }
 
   /**
@@ -532,6 +605,17 @@ export class LocalAuthEngine {
         offlineDurationMs: options.offlineDurationMs,
         setActive: true,
       });
+      if (this.remoteAuthHandler && session) {
+        try {
+          const remoteRes = await this.remoteAuthHandler({ user, session });
+          if (remoteRes && remoteRes.token) {
+            await this.sessionManager.updateTokens({ token: remoteRes.token });
+            session.token = remoteRes.token;
+          }
+        } catch {
+          // Non-fatal if offline
+        }
+      }
     }
 
     this.events?.emit(this.usersTable, { operation: 'SIGN_UP', user });
@@ -657,6 +741,17 @@ export class LocalAuthEngine {
         offlineDurationMs: options.offlineDurationMs,
         setActive: true,
       });
+      if (this.remoteAuthHandler && session) {
+        try {
+          const remoteRes = await this.remoteAuthHandler({ user, session });
+          if (remoteRes && remoteRes.token) {
+            await this.sessionManager.updateTokens({ token: remoteRes.token });
+            session.token = remoteRes.token;
+          }
+        } catch {
+          // Non-fatal if offline
+        }
+      }
     }
 
     this.events?.emit(this.usersTable, { operation: 'SIGN_IN', user, session });

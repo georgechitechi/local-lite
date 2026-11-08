@@ -413,4 +413,49 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       expect(typeof useLocalAuth).toBe('function');
     });
   });
+
+  describe('Pluggable Remote Auth Handler', () => {
+    it('automatically exchanges tokens during signUp and signIn when configured', async () => {
+      let exchangeCalls = 0;
+
+      const engine = new LocalAuthEngine(db, {
+        iterations: 1000,
+        remoteAuthHandler: async ({ user, session }) => {
+          exchangeCalls++;
+          return { token: `remote_jwt_${user.id}_${session.id}` };
+        },
+      });
+
+      await engine.initialize();
+
+      // 1. SignUp triggers remoteAuthHandler
+      const { user, session } = await engine.signUp({
+        email: 'remote@locallite.dev',
+        password: 'Password123!',
+      });
+
+      expect(exchangeCalls).toBe(1);
+      expect(session?.token).toBe(`remote_jwt_${user.id}_${session?.id}`);
+      expect(await engine.getRemoteAuthToken()).toBe(`remote_jwt_${user.id}_${session?.id}`);
+
+      // 2. SignOut clears session
+      await engine.signOut();
+      expect(await engine.getRemoteAuthToken()).toBeNull();
+
+      // 3. SignIn triggers remoteAuthHandler and caches token
+      const signInRes = await engine.signIn({
+        identifier: 'remote@locallite.dev',
+        password: 'Password123!',
+      });
+
+      expect(exchangeCalls).toBe(2);
+      expect(signInRes.session?.token).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
+      expect(await engine.getRemoteAuthToken()).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
+
+      // 4. Manual exchangeRemoteAuth
+      const manualExchange = await engine.exchangeRemoteAuth();
+      expect(exchangeCalls).toBe(3);
+      expect(manualExchange?.token).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
+    });
+  });
 });
