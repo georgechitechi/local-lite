@@ -23,6 +23,7 @@ export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
 export { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
+export type { RemoteDBAdapter } from '../adapters/remote/index.js';
 
 /**
  * Type-safe configuration helper function (similar to defineConfig in Vite/Tailwind).
