@@ -1,5 +1,5 @@
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
-import { RemoteDBAdapter } from './index.js';
+import { RemoteAutomationJob, RemoteBackupArchive, RemoteDBAdapter } from './index.js';
 import { DeltaChange, DeltaChanges, PushResult, SyncOp, SyncOperation } from '../../core/types.js';
 import {
   SyncLogger,
@@ -783,6 +783,98 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    */
   createStorageUploader(options: SupabaseStorageUploaderOptions): SupabaseStorageUploaderInstance {
     return createSupabaseStorageUploader(this.getClient(), options);
+  }
+
+  /**
+   * Invokes a Supabase Edge Function or Postgres RPC function.
+   */
+  async call<T = any>(functionName: string, args: any = {}): Promise<T> {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase client is not available.');
+
+    if (typeof client.functions?.invoke === 'function') {
+      try {
+        const { data, error } = await client.functions.invoke(functionName, { body: args });
+        if (!error) return data as T;
+        if (error?.status !== 404 && !error?.message?.includes?.('not found')) {
+          throw error;
+        }
+      } catch (err: any) {
+        if (!err?.message?.includes?.('not found')) {
+          // If RPC is available, fall through and try RPC
+          if (typeof client.rpc !== 'function') throw err;
+        }
+      }
+    }
+
+    if (typeof client.rpc === 'function') {
+      const { data, error } = await client.rpc(functionName, args);
+      if (error) throw error;
+      return data as T;
+    }
+
+    throw new Error('Supabase client does not support functions or rpc invocation.');
+  }
+
+  /**
+   * Queries a remote Postgres RPC or view.
+   */
+  async queryRemote<T = any>(queryName: string, args: any = {}): Promise<T> {
+    const client = this.getClient();
+    if (typeof client?.rpc === 'function') {
+      const { data, error } = await client.rpc(queryName, args);
+      if (error) throw error;
+      return data as T;
+    }
+    throw new Error('Supabase client does not support rpc queries.');
+  }
+
+  /**
+   * Lists automated cron jobs configured on Supabase.
+   */
+  async listAutomations(): Promise<RemoteAutomationJob[]> {
+    return this.call<RemoteAutomationJob[]>('list_automations', {});
+  }
+
+  /**
+   * Enables or disables an automated cron job on Supabase.
+   */
+  async setAutomationEnabled(jobId: string, enabled: boolean): Promise<void> {
+    return this.call<void>('set_automation_enabled', { job_id: jobId, enabled });
+  }
+
+  /**
+   * Lists cloud backup archives stored on Supabase Storage.
+   */
+  async listBackups(): Promise<RemoteBackupArchive[]> {
+    try {
+      const client = this.getClient();
+      if (typeof client?.storage?.from === 'function') {
+        const { data, error } = await client.storage.from('backups').list();
+        if (!error && Array.isArray(data)) {
+          return data.map((file: any) => ({
+            createdAt: new Date(file.created_at || file.updated_at || Date.now()).getTime(),
+            status: 'succeeded',
+            fileName: file.name,
+            sizeBytes: file.metadata?.size,
+            downloadUrl: null,
+          }));
+        }
+      }
+    } catch {}
+    return [];
+  }
+
+  /**
+   * Gets a signed download URL for a file stored on Supabase Storage.
+   */
+  async getDownloadUrl(fileIdOrKey: string): Promise<string | null> {
+    const client = this.getClient();
+    if (typeof client?.storage?.from === 'function') {
+      const { data } = await client.storage.from('backups').createSignedUrl(fileIdOrKey, 3600);
+      return data?.signedUrl ?? null;
+    }
+    return null;
   }
 }
 

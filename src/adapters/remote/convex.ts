@@ -1,4 +1,4 @@
-import { RemoteDBAdapter } from './index.js';
+import { RemoteAutomationJob, RemoteBackupArchive, RemoteDBAdapter } from './index.js';
 import { DeltaChange, DeltaChanges, SyncOp, SyncOperation, PushResult } from '../../core/types.js';
 import {
   SyncLogger,
@@ -315,6 +315,69 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
    */
   createStorageUploader(options: ConvexStorageUploaderOptions = {}): ConvexStorageUploaderInstance {
     return createConvexStorageUploader(this.client, options);
+  }
+
+  /**
+   * Invokes a remote Convex action or mutation.
+   */
+  async call<T = any>(functionName: string, args: any = {}): Promise<T> {
+    if (typeof this.client?.action === 'function') {
+      try {
+        return await this.client.action(functionName as any, args);
+      } catch (err: any) {
+        if (typeof this.client?.mutation === 'function' && err?.message?.includes?.('not an action')) {
+          return await this.client.mutation(functionName as any, args);
+        }
+        throw err;
+      }
+    }
+    if (typeof this.client?.mutation === 'function') {
+      return await this.client.mutation(functionName as any, args);
+    }
+    throw new Error('Convex client does not support action or mutation execution.');
+  }
+
+  /**
+   * Queries a remote Convex query function.
+   */
+  async queryRemote<T = any>(queryName: string, args: any = {}): Promise<T> {
+    if (typeof this.client?.query === 'function') {
+      return await this.client.query(queryName as any, args);
+    }
+    throw new Error('Convex client does not support query execution.');
+  }
+
+  /**
+   * Lists automated cron jobs configured on Convex.
+   */
+  async listAutomations(): Promise<RemoteAutomationJob[]> {
+    return this.queryRemote<RemoteAutomationJob[]>('functions/automations:listMine', {});
+  }
+
+  /**
+   * Enables or disables an automated cron job on Convex.
+   */
+  async setAutomationEnabled(jobId: string, enabled: boolean): Promise<void> {
+    return this.call<void>('functions/automations:setEnabled', { jobId, enabled });
+  }
+
+  /**
+   * Lists cloud backup archives stored on Convex.
+   */
+  async listBackups(): Promise<RemoteBackupArchive[]> {
+    return this.queryRemote<RemoteBackupArchive[]>('functions/convexBackups:listMyBackups', {});
+  }
+
+  /**
+   * Gets a direct download URL for a file stored on Convex.
+   */
+  async getDownloadUrl(fileIdOrKey: string): Promise<string | null> {
+    if (typeof this.client?.query === 'function') {
+      try {
+        return await this.client.query('functions/convexBackups:getDownloadUrl' as any, { storageId: fileIdOrKey });
+      } catch {}
+    }
+    return null;
   }
 }
 

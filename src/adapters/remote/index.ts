@@ -1,5 +1,23 @@
 import { SyncOperation, DeltaChanges, PushResult } from '../../core/types.js';
 
+export interface RemoteAutomationJob {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  locked?: boolean;
+}
+
+export interface RemoteBackupArchive {
+  createdAt: number;
+  status: string;
+  fileName?: string;
+  sizeBytes?: number;
+  recordCount?: number;
+  error?: string;
+  downloadUrl: string | null;
+}
+
 export interface RemoteDBAdapter {
   pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult>;
   /** Return a complete batch through timestamp; reject on partial failure. Supports optional scope for data filtering. */
@@ -10,6 +28,19 @@ export interface RemoteDBAdapter {
     scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>),
   ): () => void;
   setSyncScope?(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void;
+
+  /** Call a remote cloud action/function/RPC */
+  call?<T = any>(functionName: string, args?: any): Promise<T>;
+  /** Query a remote function or view */
+  queryRemote?<T = any>(queryName: string, args?: any): Promise<T>;
+  /** List cloud automated cron jobs */
+  listAutomations?(): Promise<RemoteAutomationJob[]>;
+  /** Enable or disable a cloud automated cron job */
+  setAutomationEnabled?(jobId: string, enabled: boolean): Promise<void>;
+  /** List remote cloud backup archive files */
+  listBackups?(): Promise<RemoteBackupArchive[]>;
+  /** Get a public or signed download URL for a cloud file/backup */
+  getDownloadUrl?(fileIdOrKey: string): Promise<string | null>;
 }
 
 export * from './supabase.js';

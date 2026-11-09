@@ -1,5 +1,5 @@
 import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
-import { RemoteDBAdapter } from '../adapters/remote/index.js';
+import { RemoteAutomationJob, RemoteBackupArchive, RemoteDBAdapter } from '../adapters/remote/index.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
@@ -606,6 +606,67 @@ export class LocalFirstClient {
 
   getPrimaryKey(): string {
     return this.primaryKey;
+  }
+
+  /**
+   * Invokes a remote function, action, or RPC through the configured remote backend adapter.
+   * Works seamlessly across Convex actions/mutations, Supabase Edge Functions/RPC, etc.
+   */
+  async call<T = any>(functionName: string, args: any = {}): Promise<T> {
+    if (!this.remote || typeof this.remote.call !== 'function') {
+      throw new Error(`The current remote adapter does not support remote function calls (call).`);
+    }
+    return this.remote.call<T>(functionName, args);
+  }
+
+  /**
+   * Executes a remote query through the configured remote backend adapter.
+   */
+  async queryRemote<T = any>(queryName: string, args: any = {}): Promise<T> {
+    if (!this.remote || typeof this.remote.queryRemote !== 'function') {
+      throw new Error(`The current remote adapter does not support remote queries (queryRemote).`);
+    }
+    return this.remote.queryRemote<T>(queryName, args);
+  }
+
+  /**
+   * Cloud automation / scheduled cron job controls.
+   */
+  get automations() {
+    return {
+      list: async (): Promise<RemoteAutomationJob[]> => {
+        if (this.remote && typeof this.remote.listAutomations === 'function') {
+          return this.remote.listAutomations();
+        }
+        return [];
+      },
+      setEnabled: async (jobId: string, enabled: boolean): Promise<void> => {
+        if (this.remote && typeof this.remote.setAutomationEnabled === 'function') {
+          return this.remote.setAutomationEnabled(jobId, enabled);
+        }
+        throw new Error('Remote adapter does not support remote automations.');
+      },
+    };
+  }
+
+  /**
+   * Lists remote database backup archives from cloud storage.
+   */
+  async listBackups(): Promise<RemoteBackupArchive[]> {
+    if (this.remote && typeof this.remote.listBackups === 'function') {
+      return this.remote.listBackups();
+    }
+    return [];
+  }
+
+  /**
+   * Retrieves a download URL for a file stored in the remote backend.
+   */
+  async getDownloadUrl(fileIdOrKey: string): Promise<string | null> {
+    if (this.remote && typeof this.remote.getDownloadUrl === 'function') {
+      return this.remote.getDownloadUrl(fileIdOrKey);
+    }
+    return null;
   }
 
   /**
