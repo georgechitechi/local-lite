@@ -703,8 +703,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       };
     }
 
-    const uniqueChannelName = `${this.channelName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const channel = client.channel(uniqueChannelName);
+    const channel = client.channel(this.channelName);
     let pendingLiveChanges: DeltaChange[] = [];
     let isScheduled = false;
 
