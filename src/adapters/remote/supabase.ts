@@ -677,6 +677,17 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       this.activeChannel = undefined;
     }
 
+    if (client?.getChannels && client?.removeChannel) {
+      try {
+        const existingChannels = client.getChannels();
+        for (const ch of existingChannels) {
+          if (ch.topic?.includes(this.channelName)) {
+            client.removeChannel(ch);
+          }
+        }
+      } catch {}
+    }
+
     if (!client || typeof client.channel !== 'function') {
       this.logger.debug('Supabase client is not available; skipping live changes subscription.');
       return () => {
@@ -692,7 +703,8 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       };
     }
 
-    const channel = client.channel(this.channelName);
+    const uniqueChannelName = `${this.channelName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const channel = client.channel(uniqueChannelName);
     let pendingLiveChanges: DeltaChange[] = [];
     let isScheduled = false;
 
