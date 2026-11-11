@@ -82,6 +82,54 @@ export interface FirebaseConfigOptions {
   firestoreModule?: any;
 }
 
+export interface EmailConfig {
+  /**
+   * Email delivery provider:
+   * - 'nodemailer': Direct SMTP, Sendmail, SES, or custom transport via Nodemailer.
+   * - 'resend': Direct HTTP dispatch to Resend API.
+   * - 'sendgrid': Direct HTTP dispatch to SendGrid API.
+   * - 'postmark': Direct HTTP dispatch to Postmark API.
+   * - 'http': Custom HTTP endpoint or webhook.
+   */
+  provider?: 'nodemailer' | 'resend' | 'sendgrid' | 'postmark' | 'http' | 'custom';
+
+  /**
+   * Transport configuration for Nodemailer:
+   * - A Nodemailer Transporter instance (e.g. from nodemailer.createTransport(...))
+   * - An SMTP configuration object ({ host, port, auth: { user, pass }, ... })
+   * - A connection URL string (e.g. 'smtps://user:pass@smtp.example.com')
+   */
+  transport?: any;
+
+  /**
+   * API Key for HTTP email providers (Resend, SendGrid, Postmark).
+   */
+  apiKey?: string;
+
+  /**
+   * Target endpoint URL for HTTP dispatch or custom webhook.
+   */
+  endpoint?: string;
+
+  /**
+   * Custom HTTP request headers for HTTP providers.
+   */
+  headers?: Record<string, string>;
+
+  /**
+   * Default email options (e.g. default 'from' address or headers).
+   */
+  defaults?: {
+    from?: string;
+    [key: string]: any;
+  };
+
+  /**
+   * Additional handler options (template renderer, beforeSend, afterSend).
+   */
+  options?: any;
+}
+
 export interface LocalLiteConfig {
   /**
    * Local SQLite Database instance, name, factory function, or LocalDBAdapter.
@@ -252,4 +300,10 @@ export interface LocalLiteConfig {
    */
   auth?: LocalAuthEngineOptions;
   localAuth?: LocalAuthEngineOptions;
+  /**
+   * Direct email delivery configuration (Nodemailer SMTP, Resend, SendGrid, Postmark, or custom HTTP).
+   * When set, `local-lite` handles all offline-queued emails directly without needing Convex,
+   * Supabase, or any external database adapters.
+   */
+  email?: EmailConfig;
 }

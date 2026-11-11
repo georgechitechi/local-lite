@@ -150,6 +150,11 @@
       "types": "./dist/scheduler/index.d.ts",
       "import": "./dist/scheduler/index.js",
       "default": "./dist/scheduler/index.js"
+    },
+    "./email": {
+      "types": "./dist/email/index.d.ts",
+      "import": "./dist/email/index.js",
+      "default": "./dist/email/index.js"
     }
   },
   "scripts": {
@@ -168,10 +173,14 @@
     "expo-file-system": ">=58.0.0",
     "expo-sqlite": ">=58.0.0",
     "firebase": ">=9.0.0",
+    "nodemailer": ">=6.9.0",
     "react": ">=18.0.0",
     "sql.js": "^1.8.0"
   },
   "peerDependenciesMeta": {
+    "nodemailer": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
@@ -206,9 +215,11 @@
   "devDependencies": {
     "@supabase/supabase-js": "^2.118.0",
     "@types/node": "^26.6.5",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "@types/uuid": "^11.0.0",
     "expo-sqlite": "^58.0.14",
+    "nodemailer": "^10.5.0",
     "react": "^19.3.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

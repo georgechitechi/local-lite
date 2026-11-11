@@ -80,7 +80,22 @@ export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFi
   // 5. Execute Migrations & Auto-initialize
   if (config.autoInitialize !== false) {
     await client.initialize();
+  }
 
+  // 6. Direct Email Dispatch (Nodemailer, Resend, SendGrid, Postmark, HTTP, etc.)
+  if (config.email) {
+    const { createEmailHandler } = await import('../email/index.js');
+    const emailHandler = createEmailHandler({
+      provider: config.email.provider,
+      transport: config.email.transport,
+      apiKey: config.email.apiKey,
+      endpoint: config.email.endpoint,
+      headers: config.email.headers,
+      defaultFrom: config.email.defaults?.from,
+      defaults: config.email.defaults,
+      ...config.email.options,
+    });
+    client.actions.registerEmailHandler(emailHandler);
   }
 
   return client;

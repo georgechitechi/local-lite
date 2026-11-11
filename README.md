@@ -356,17 +356,19 @@ const emailAction = await client.actions.sendEmail({
   ttlMs: 24 * 60 * 60 * 1000,           // Expire if offline for >24 hours
 });
 
-// ⚡ 2. Register local dispatcher (or let rows replicate to Supabase/Convex/Firebase)
-client.actions.registerEmailHandler(async (email) => {
-  // Dispatch via your transactional provider or backend API
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-    body: JSON.stringify(email),
-  });
-  const data = await response.json();
-  return { messageId: data.id };
-});
+// ⚡ 2. Direct email dispatch (Nodemailer SMTP, Resend, SendGrid, Postmark, or HTTP webhook)
+import { createEmailHandler } from 'local-lite/email';
+
+// Nodemailer transport:
+client.actions.registerEmailHandler(createEmailHandler({
+  transport: { host: 'smtp.example.com', port: 587, auth: { user: '...', pass: '...' } },
+  defaultFrom: 'Support <support@mycompany.com>',
+}));
+
+// Or HTTP provider (e.g., Resend):
+// client.actions.registerEmailHandler(createEmailHandler({ provider: 'resend', apiKey: '...' }));
+
+// Or configure directly in defineSyncConfig({ email: { transport: { ... } } })!
 
 // ⚡ 3. Enqueue arbitrary asynchronous actions (e.g., push notifications, analytics)
 await client.actions.enqueue({

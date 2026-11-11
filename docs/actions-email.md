@@ -77,39 +77,88 @@ console.log('Enqueued email ID:', emailAction.id);
 
 ## 🚀 Dispatching Emails
 
-There are two primary patterns for executing enqueued email actions:
+`local-lite` provides a unified **`local-lite/email`** module supporting both **Nodemailer (SMTP/Sendmail/SES)** and **HTTP APIs (Resend, SendGrid, Postmark, webhooks)** directly—without requiring Convex, Supabase, or external database adapters.
 
-### Pattern 1: Local Dispatcher via Provider API (Resend, SendGrid, etc.)
+### Pattern 1: Direct Email Dispatch via `local-lite/email` (Zero Cloud Adapters)
 
-Register a local handler that triggers whenever the device is online and flushes pending emails:
+#### Option A: Declarative Configuration via `defineSyncConfig`
+
+You can configure email delivery directly in `defineSyncConfig`. `local-lite` will automatically instantiate the transport and register the action handler:
+
+**Using Nodemailer (SMTP / Transport):**
+```typescript
+import { createSyncClient, defineSyncConfig } from 'local-lite/config';
+
+const client = await createSyncClient(
+  defineSyncConfig({
+    localOnly: true,
+    email: {
+      transport: {
+        host: 'smtp.mailgun.org',
+        port: 587,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      },
+      defaults: {
+        from: '"My Team" <noreply@mycompany.com>',
+      },
+    },
+  })
+);
+```
+
+**Using HTTP Providers (Resend, SendGrid, Postmark, or custom HTTP endpoint):**
+```typescript
+import { createSyncClient, defineSyncConfig } from 'local-lite/config';
+
+const client = await createSyncClient(
+  defineSyncConfig({
+    localOnly: true,
+    email: {
+      provider: 'resend', // 'resend' | 'sendgrid' | 'postmark' | 'http'
+      apiKey: process.env.RESEND_API_KEY,
+      defaults: {
+        from: 'Acme <onboarding@resend.dev>',
+      },
+    },
+  })
+);
+```
+
+#### Option B: Standalone Handlers (`local-lite/email`)
+
+You can also create standalone handlers using `createEmailHandler`, `createNodemailerHandler`, or `createHttpEmailHandler`:
 
 ```typescript
-// Register handler (e.g. in your app initialization)
-client.actions.registerEmailHandler(async (email, action, context) => {
-  // Call your email delivery service (e.g., Resend)
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: email.from || 'Acme <onboarding@resend.dev>',
-      to: email.to,
-      subject: email.subject,
-      html: email.html,
-    }),
-  });
+import { createEmailHandler } from 'local-lite/email';
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to dispatch email');
-  }
+// 1. Nodemailer SMTP transport
+client.actions.registerEmailHandler(
+  createEmailHandler({
+    transport: { host: 'smtp.sendgrid.net', port: 587, auth: { user: 'apikey', pass: process.env.SENDGRID_API_KEY } },
+    defaultFrom: 'Support <support@mycompany.com>',
+  })
+);
 
-  const data = await response.json();
-  // Return result to store receipt in SQLite
-  return { messageId: data.id };
-});
+// 2. HTTP delivery (e.g. Resend)
+client.actions.registerEmailHandler(
+  createEmailHandler({
+    provider: 'resend',
+    apiKey: process.env.RESEND_API_KEY,
+    defaultFrom: 'onboarding@resend.dev',
+  })
+);
+
+// 3. Custom internal HTTP webhook
+client.actions.registerEmailHandler(
+  createEmailHandler({
+    endpoint: 'https://internal.corp/api/email/dispatch',
+    headers: { 'X-Secret-Token': process.env.DISPATCH_SECRET },
+    defaultFrom: 'notifications@internal.corp',
+  })
+);
 ```
 
 ### Pattern 2: Cloud Function Trigger (Supabase / Convex / Firebase)
