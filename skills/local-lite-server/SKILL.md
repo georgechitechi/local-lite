@@ -150,6 +150,85 @@ export const apiServer = createServer(
 
 Clients connect to this simply by setting `server: { url: 'https://api.domain.com/api/sync', token: '...' }` in `defineSyncConfig`.
 
+### Production MySQL Storage Recipe
+
+```typescript
+import mysql from 'mysql2/promise';
+import { createServer, defineServerConfig, createSyncEndpoint, type ServerSyncStorage } from 'local-lite/server';
+
+const pool = mysql.createPool({
+  uri: process.env.DATABASE_URL,
+  waitForConnections: true,
+  connectionLimit: 10,
+});
+
+const mysqlStorage: ServerSyncStorage = {
+  async applyOperations(operations, serverTime = Date.now()) {
+    const conn = await pool.getConnection();
+    const successfulIds: string[] = [];
+    let applied = 0;
+    try {
+      await conn.beginTransaction();
+      for (const op of operations) {
+        if (!op.tableName || !op.rowId) continue;
+        const opTime = op.timestamp || serverTime;
+        await conn.execute(
+          'INSERT INTO _server_changes (table_name, row_id, payload, operation, timestamp) VALUES (?, ?, ?, ?, ?)',
+          [op.tableName, String(op.rowId), JSON.stringify(op.payload || {}), op.operation, opTime]
+        );
+        successfulIds.push(op.id);
+        applied++;
+      }
+      const [cursorRows]: any = await conn.query('SELECT COALESCE(MAX(`cursor`), 0) AS max_cursor FROM _server_changes');
+      await conn.commit();
+      return { applied, successfulIds, serverTime, cursor: Number(cursorRows[0]?.max_cursor || 0) };
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  },
+
+  async getDeltas(tables, since, limit = 200) {
+    if (tables.length === 0) return { changes: { timestamp: Date.now(), changes: [] }, cursor: since, hasMore: false, serverTime: Date.now() };
+    const placeholders = tables.map(() => '?').join(',');
+    const [rows]: any = await pool.query(
+      `SELECT * FROM _server_changes WHERE \`cursor\` > ? AND table_name IN (${placeholders}) ORDER BY \`cursor\` ASC LIMIT ?`,
+      [since, ...tables, Number(limit)]
+    );
+    const changes = {
+      timestamp: Date.now(),
+      changes: rows.map((r: any) => ({
+        tableName: r.table_name,
+        rowId: r.row_id,
+        operation: r.operation,
+        payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload,
+        timestamp: Number(r.timestamp),
+      })),
+    };
+    const maxCursor = rows.length > 0 ? Number(rows[rows.length - 1].cursor) : since;
+    return { changes, cursor: maxCursor, hasMore: rows.length === Number(limit), serverTime: Date.now() };
+  },
+};
+
+export const apiServer = createServer(
+  defineServerConfig({
+    config: {},
+    endpoints: {
+      '/api/sync': createSyncEndpoint({
+        storage: mysqlStorage,
+        secret: process.env.SYNC_SECRET_TOKEN,
+      }),
+    },
+  })
+);
+
+export const POST = apiServer.handler('/api/sync', 'POST');
+export const GET = apiServer.handler('/api/sync', 'GET');
+export const OPTIONS = apiServer.handler('/api/sync', 'OPTIONS');
+```
+
 ---
 
 ## 7. Turnkey Email Relay Endpoint (`createEmailEndpoint`)
