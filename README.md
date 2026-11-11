@@ -24,6 +24,8 @@ Built around the **Transactional Outbox Pattern**, `local-lite` ensures instant,
 * **[Database Backups & Encryption](https://georgechitechi.github.io/local-lite/#/backups)** - Google Drive, OneDrive, and Zero-Knowledge AES-256-GCM snapshots
 * **[Conflict Resolution & Field Merge](https://georgechitechi.github.io/local-lite/#/conflict-resolution)** - 3-Way field merging, LWW, Client-Wins, and Server-Wins
 * **[Maintenance & Data Portability](https://georgechitechi.github.io/local-lite/#/maintenance-portability)** - VACUUM, WAL checkpoints, outbox pruning, and JSON/CSV export/import
+* **[Action Outbox & Email Queue](https://georgechitechi.github.io/local-lite/#/actions-email)** - 0ms offline email queue, Nodemailer/HTTP dispatchers, React Email, and type-safe actions
+* **[Server Endpoints & Self-Hosted Sync](https://georgechitechi.github.io/local-lite/#/server)** - Turnkey sync backend and email relay endpoints for Express & Next.js
 * **[React & Expo Hooks](https://georgechitechi.github.io/local-lite/#/react-hooks)** - `useLiveQuery()`, `useLiveQueries()`, `useLiveRow()`, `useLiveInfiniteQuery()`, `useMutations()`, `useSyncStatus()`, developer inspector tools, and backup/auth hooks
 
 
@@ -125,13 +127,14 @@ This recovers sync state; it does not repair corrupt SQLite files or cancel hung
 
 * **⚡ 0ms Optimistic Writes:** Write to local SQLite immediately via atomic dual-write (`client.mutate()`).
 * **📦 Transactional Outbox:** Mutations are stored atomically in a local `sync_outbox` table, preventing data loss if the app closes or loses connectivity mid-write.
-* **🌐 Native Cloud Adapters:** First-class sync with Postgres tables (via **Supabase**), reactive document datastores (via **Convex**), and document collections (via **Firebase / Firestore**).
+* **🌐 Native Cloud & Self-Hosted Adapters:** First-class sync with your own self-hosted sync server (`server: { url, token }`), Postgres tables (via **Supabase**), reactive document datastores (via **Convex**), and document collections (via **Firebase / Firestore**).
 * **🛡️ Conflict Resolution:** Built-in strategies including **Last-Write-Wins (LWW)**, Server-Wins, Client-Wins, or custom resolver functions.
 * **📶 Network-Aware:** Automatically pauses polling when offline and triggers immediate sync flushes the instant connectivity is restored.
 * **🔄 Infinite-Loop Safe:** Incoming remote deltas update local tables and fire reactive UI listeners without echoing back into the outbox.
 * **☁️ Database Backups:** Export and restore SQLite snapshots independently of your live sync backend.
 * **🔑 Google Sign-In Out of the Box:** Secure, zero-backend Google OAuth 2.0 (PKCE) authentication with automatic token refresh, user profile retrieval, persistent session storage, and `useGoogleAuth()` hook.
-* **📨 Action Outbox & Email Queue:** Enqueue transactional emails, push notifications, and webhooks offline with idempotency keys, automatic retry backoff, crash recovery, and TTL expiration.
+* **📨 Action Outbox & Direct Email:** Enqueue transactional emails offline with 0ms local latency. Send directly via Nodemailer SMTP, Resend, SendGrid, Postmark, or Dev Mailbox. Full support for React Email JSX, auto-hydrating mobile `file://` attachments, rate limiting, and type-safe contracts (`defineAction`).
+* **🌐 Turnkey Server Endpoints (`local-lite/server`):** Mount self-hosted sync (`createSyncEndpoint`) and secure email relay (`createEmailEndpoint`) endpoints in 1 line of code for Next.js, Express, Fastify, or Node http.
 * **⚡ Fast Key-Value & Encrypted Preferences (`client.kv`):** Typed storage, TTL expiration, and AES-256-GCM zero-knowledge secret protection.
 * **🔍 Instant Full-Text Search (`client.search`):** SQLite FTS5 indexer with prefix matching, BM25 rank scoring, and highlighting.
 * **📁 Offline Media & Blob Storage (`client.storage`):** Decoupled binary attachments, SHA-256 verification, and cloud sync queue (S3/Supabase/Firebase).

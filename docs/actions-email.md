@@ -160,6 +160,183 @@ client.actions.registerEmailHandler(
     defaultFrom: 'notifications@internal.corp',
   })
 );
+
+// 4. Local Development Mailbox & Terminal Preview
+client.actions.registerEmailHandler(
+  createEmailHandler({
+    provider: 'dev', // captures emails in memory and logs formatted preview table in terminal
+    defaultFrom: 'dev@localhost',
+  })
+);
+```
+
+#### Development Mailbox (`DevMailbox`)
+
+During local testing or unit tests, use `provider: 'dev'` or the `DevMailbox` class:
+
+```typescript
+import { DevMailbox } from 'local-lite/email';
+
+const mailbox = new DevMailbox();
+client.actions.registerEmailHandler(mailbox.createHandler());
+
+// Enqueue and flush
+await client.actions.sendEmail({ to: 'tester@test.com', subject: 'Verify Account', text: 'Code: 1234' });
+await client.actions.flush();
+
+// Inspect captured emails
+const sent = mailbox.getSentEmails();
+console.log('Last email sent:', mailbox.getLatestEmail()?.subject);
+mailbox.clear();
+```
+
+---
+
+## 🎨 React Email & Mobile Attachments
+
+`local-lite/email` provides built-in rendering and attachment processing:
+
+### React Email JSX Rendering
+
+You can pass React Email JSX directly via the `react` property on any email action. `local-lite` automatically converts the component to responsive HTML and plaintext fallback (using `@react-email/render` or `react-dom/server`):
+
+```tsx
+import { WelcomeEmail } from './emails/Welcome';
+
+await client.actions.sendEmail({
+  to: 'user@example.com',
+  subject: 'Welcome to our platform!',
+  react: <WelcomeEmail name="Alex" team="Engineering" />,
+});
+```
+
+### Mobile File Attachment Auto-Hydration
+
+When running inside React Native / Expo, attachments referencing local device files (`file://`) are automatically read into memory buffers and converted for SMTP or API payloads:
+
+```typescript
+await client.actions.sendEmail({
+  to: 'accounting@company.com',
+  subject: 'Expense Receipt',
+  text: 'Attached is the receipt from my trip.',
+  attachments: [
+    {
+      filename: 'receipt.pdf',
+      url: 'file:///var/mobile/Containers/Data/Application/.../receipt.pdf',
+      contentType: 'application/pdf',
+    },
+  ],
+});
+```
+
+---
+
+## 🛡️ Concurrency & Rate Limiting
+
+Prevent overwhelming email servers or hitting provider API rate limits (e.g. Resend's 10 req/sec limit or SMTP connection limits):
+
+### Config-Level Rate Limiting
+
+```typescript
+import { createSyncClient, defineSyncConfig } from 'local-lite/config';
+
+const client = await createSyncClient(
+  defineSyncConfig({
+    localOnly: true,
+    actions: {
+      concurrency: 5, // process up to 5 actions concurrently
+      rateLimit: {
+        max: 10, // maximum 10 actions
+        windowMs: 1000, // per 1000ms (1 second)
+      },
+    },
+  })
+);
+```
+
+### Flush-Level Overrides
+
+You can also override concurrency and rate limits during a manual flush:
+
+```typescript
+const result = await client.actions.flush({
+  concurrency: 2,
+  rateLimit: { max: 5, windowMs: 1000 },
+});
+```
+
+---
+
+## 🔒 Type-Safe Action Contracts (`defineAction`)
+
+Define end-to-end type-safe offline actions with runtime schema validation (supports Zod, TypeBox, or custom validator functions):
+
+```typescript
+import { z } from 'zod';
+
+const OrderPayloadSchema = z.object({
+  orderId: z.string(),
+  amount: z.number().positive(),
+  customerEmail: z.string().email(),
+});
+
+// Define contract with schema & handler
+export const submitOrder = client.actions.defineAction({
+  name: 'submit_order',
+  schema: OrderPayloadSchema,
+  handler: async (payload, context) => {
+    // payload is strictly typed: { orderId: string; amount: number; customerEmail: string }
+    return await api.post('/orders', payload);
+  },
+});
+
+// Enqueue with compile-time type safety and runtime validation
+const action = await submitOrder({
+  orderId: 'ord_987',
+  amount: 49.99,
+  customerEmail: 'customer@example.com',
+}, {
+  idempotencyKey: 'order_ord_987',
+  ttlMs: 3600000,
+});
+```
+
+---
+
+## 🌐 Turnkey Email Server Endpoint (`local-lite/server`)
+
+If you want your mobile or web app to send emails securely without exposing API keys, deploy a 1-liner relay endpoint using `createEmailEndpoint`:
+
+```typescript
+import { createEmailEndpoint } from 'local-lite/server';
+
+// Next.js App Router (app/api/send-email/route.ts)
+const emailHandler = createEmailEndpoint({
+  provider: 'resend',
+  apiKey: process.env.RESEND_API_KEY!,
+  defaults: { from: 'Acme <noreply@acme.com>' },
+  secretToken: process.env.CLIENT_SYNC_TOKEN, // optional bearer token auth
+});
+
+export const POST = emailHandler.fetchHandler;
+
+// Express / Node.js
+import express from 'express';
+const app = express();
+app.use(express.json());
+app.post('/api/send-email', emailHandler.expressMiddleware);
+```
+
+Then configure your mobile app client to relay through it:
+
+```typescript
+defineSyncConfig({
+  email: {
+    provider: 'http',
+    endpoint: 'https://api.yourdomain.com/api/send-email',
+    headers: { Authorization: `Bearer ${process.env.CLIENT_SYNC_TOKEN}` },
+  },
+});
 ```
 
 ### Pattern 2: Cloud Function Trigger (Supabase / Convex / Firebase)

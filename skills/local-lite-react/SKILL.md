@@ -122,3 +122,20 @@ export function SettingsScreen({ client }) {
 2. **Selective Column Projections**: In high-frequency queries, select only required columns (`SELECT id, title FROM ...`) instead of `SELECT *` to reduce SQLite serialization overhead.
 3. **Batch Mutations**: Wrap bulk inserts in transactions or `client.mutateBatch()` rather than issuing individual `INSERT` statements in loops.
 
+---
+
+## 6. DevTools & Debugging (`<SyncInspector />`)
+
+Inspect database tables, live outbox operations, and trigger one-tap manual flushes of mutations and queued emails using the developer widget:
+
+```tsx
+import { SyncInspector } from 'local-lite/devtools';
+
+export function DevOverlay({ client }) {
+  if (__DEV__) {
+    return <SyncInspector client={client} position="bottom-right" defaultOpen={false} />;
+  }
+  return null;
+}
+```
+

@@ -35,6 +35,15 @@ Search the codebase for each affected pattern and apply the migration:
 * **Old**: Injecting `fileSystem` via legacy `expo-file-system`.
 * **New**: Uses standard Expo SDK 58+ `File`, `Directory`, and `Paths` APIs. Remove legacy `fileSystem` option.
 
+### Email Module Imports (`local-lite/nodemailer` ➔ `local-lite/email`)
+* **Old**: `import { ... } from 'local-lite/nodemailer'`
+* **New**: `import { ... } from 'local-lite/email'`
+* **Action**: Update imports to the unified email module supporting Nodemailer, Resend, SendGrid, Postmark, and Dev Mailbox.
+
+### Self-Hosted Sync
+* **Old**: Requiring Supabase or Convex for multi-client synchronization.
+* **New**: Use `defineSyncConfig({ server: { url: 'https://api.yourdomain.com/sync', token: '...' } })` with turnkey `createSyncEndpoint()` from `local-lite/server`.
+
 ---
 
 ## 2. Review Workflow

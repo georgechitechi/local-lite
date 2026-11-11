@@ -47,6 +47,7 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
    - Edge / Turso (`@libsql/client`)
    - Web / Browser (`sql.js`)
 10. **[Remote Backend Adapters](./adapters-remote.md)**
+    - Self-Hosted Sync Server (`SelfHostedRemoteAdapter` / `server: { url, token }`)
     - Supabase (Postgres + Realtime)
     - Convex (Reactive documents + RPCs)
     - Firebase / Firestore
@@ -89,12 +90,20 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
     - Universal JSON & RFC-4180 CSV export and import
 17. **[Action Outbox & Email Queue](./actions-email.md)**
     - 0ms offline transactional email enqueuing
+    - Direct email sending (`local-lite/email`) via Nodemailer, Resend, SendGrid, Postmark, and Dev Mailbox
+    - React Email JSX rendering and mobile `file://` attachment auto-hydration
     - Generic action dispatchers (push notifications, webhooks, analytics)
+    - Concurrency pools and rate limiting (`concurrency`, `rateLimit`)
+    - Type-safe action contracts with schema validation (`defineAction`)
     - Idempotency deduplication, TTL expiration, and crash recovery
 18. **[API Keys & Signed Tokens](./api-keys.md)**
     - Checksummed API key generation & verification (Stripe/GitHub pattern)
     - HMAC-SHA256 signed tokens with expiration and renewal
     - Local SQLite API key manager (`client.keys`)
+19. **[Server Endpoints & Self-Hosted Sync](./server.md)**
+    - Turnkey self-hosted sync endpoint (`createSyncEndpoint` from `local-lite/server`)
+    - Turnkey secure email relay endpoint (`createEmailEndpoint` from `local-lite/server`)
+    - Provider-agnostic adapters (Express middleware, Web standard `Request`/`Response` fetch handler)
 
 ---
 
@@ -102,7 +111,7 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
 
 * **Local-First By Default:** The app writes to and reads from local SQLite first. Operations never stall on slow cell connections or outages.
 * **Guaranteed Durability:** Every mutate operation executes in an atomic transaction that updates the user table and inserts a mutation into `sync_outbox` simultaneously. If the device restarts or loses power, pending changes are never lost.
-* **Zero Lock-In:** Switch seamlessly between Supabase, Convex, Firestore, or your own REST/GraphQL server without rewriting your UI layer.
-5. **[Server API Routing](./server.md)**
-   - Create server route handlers from one typed config
-   - Add middleware and use provider-specific server services
+* **Zero Lock-In:** Switch seamlessly between your own self-hosted sync server, Supabase, Convex, Firestore, or custom backends without rewriting your UI layer.
+
+
+
