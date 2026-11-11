@@ -130,6 +130,28 @@ export interface EmailConfig {
   options?: any;
 }
 
+export interface SelfHostedServerConfigOptions {
+  /**
+   * Endpoint base URL for the sync API (e.g. 'https://api.mycompany.com/api/sync').
+   */
+  url: string;
+
+  /**
+   * Optional secret or JWT auth token sent in `Authorization: Bearer <token>`.
+   */
+  token?: string;
+
+  /**
+   * Custom HTTP request headers.
+   */
+  headers?: Record<string, string>;
+
+  /**
+   * Polling interval in milliseconds for live change detection. Default: 5000.
+   */
+  pollIntervalMs?: number;
+}
+
 export interface LocalLiteConfig {
   /**
    * Local SQLite Database instance, name, factory function, or LocalDBAdapter.
@@ -189,6 +211,12 @@ export interface LocalLiteConfig {
    * Firebase / Firestore backend connection options.
    */
   firebase?: FirebaseConfigOptions;
+
+  /**
+   * Self-hosted sync backend options (using endpoints created with createSyncEndpoint() in local-lite/server).
+   * Enables complete cloud-adapter independence and self-hosting data sovereignty.
+   */
+  server?: SelfHostedServerConfigOptions;
 
   /**
    * Custom remote adapter (overrides Supabase / Convex / Firebase).

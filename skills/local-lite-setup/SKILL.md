@@ -121,13 +121,26 @@ export const syncConfig = defineSyncConfig({
   },
 
   // 7. Remote Backend (choose one or omit for local-only)
-  // localOnly: true, // Set to true if not syncing to a remote server
-  supabase: {
-    url: process.env.EXPO_PUBLIC_SUPABASE_URL!,
-    anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  // Option A: Turnkey Self-Hosted Server (Zero cloud dependencies)
+  server: {
+    url: 'https://api.mydomain.com/api/sync',
+    token: process.env.EXPO_PUBLIC_SYNC_SECRET,
+  },
+  // Option B: Supabase
+  // supabase: { url: process.env.EXPO_PUBLIC_SUPABASE_URL!, anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY! },
+  // Option C: Convex
+  // convex: { client: convexClient },
+  // Option D: Pure Local-Only
+  // localOnly: true,
+
+  // 8. Offline Email Delivery Configuration
+  email: {
+    provider: 'resend', // 'nodemailer' | 'resend' | 'sendgrid' | 'postmark' | 'dev'
+    apiKey: process.env.EXPO_PUBLIC_RESEND_API_KEY,
+    defaults: { from: 'Support <support@mydomain.com>' },
   },
 
-  // 8. Sync tuning
+  // 9. Sync tuning
   pushIntervalMs: 500,
   pullIntervalMs: 5000,
   conflictResolver: 'last-write-wins',

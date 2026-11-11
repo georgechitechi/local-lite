@@ -187,8 +187,20 @@ export function SyncInspector({
       { id: 'retry', label: '🔄 Retry Failed', onPress: handleRetryFailed, bg: currentTheme.actionBg, color: currentTheme.actionText },
       { id: 'reset', label: '⏪ Reset Cursor', onPress: handleResetCursor, bg: currentTheme.actionBg, color: currentTheme.actionText },
       { id: 'clear-outbox', label: 'Clear Stuck Outbox', onPress: handleClearOutbox, disabled: status.pendingCount === 0, bg: '#EF4444', color: '#FFFFFF' },
+      {
+        id: 'flush-actions',
+        label: '📨 Flush Actions & Email',
+        onPress: () =>
+          runAction(
+            'Flushing actions & email...',
+            (res: any) => `Flushed: ${res?.completed ?? 0} sent, ${res?.failed ?? 0} failed`,
+            () => client!.actions.flush()
+          ),
+        bg: '#8B5CF6',
+        color: '#FFFFFF',
+      },
     ],
-    [handlePush, handlePull, handleRetryFailed, handleResetCursor, handleClearOutbox, currentTheme.actionBg, currentTheme.actionText, status.pendingCount]
+    [handlePush, handlePull, handleRetryFailed, handleResetCursor, handleClearOutbox, runAction, client, currentTheme.actionBg, currentTheme.actionText, status.pendingCount]
   );
 
   const triggerLabel =
@@ -369,7 +381,7 @@ export function SyncInspector({
                   ))}
                 </View>
                 <View style={[rnStyles.btnRow, { marginTop: 8 }]}>
-                  {actionButtons.slice(4, 5).map((btn) => (
+                  {actionButtons.slice(4, 6).map((btn) => (
                     <TouchableOpacity
                       key={btn.id}
                       onPress={btn.onPress}

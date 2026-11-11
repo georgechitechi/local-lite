@@ -66,7 +66,8 @@ console.log('Enqueued email ID:', emailAction.id);
 | `bcc` | `string \| string[]` | Optional blind carbon copy recipient(s). |
 | `template` | `string` | Optional template identifier (for template-based engines). |
 | `templateData` | `Record<string, any>` | Optional variables passed to your email template. |
-| `attachments` | `EmailAttachment[]` | Array of `{ filename, content?, url?, contentType? }`. |
+| `attachments` | `EmailAttachment[]` | Array of `{ filename, content?, url?, contentType? }`. Auto-hydrates mobile `file://` URIs. |
+| `react` | `ReactNode \| () => ReactNode` | Optional React Email JSX component rendered to HTML & text automatically. |
 | `headers` | `Record<string, string>` | Optional custom MIME headers. |
 | `idempotencyKey` | `string` | Unique key preventing duplicate action execution. |
 | `ttlMs` | `number` | Expiration window in milliseconds from time of enqueuing. |

@@ -21,6 +21,9 @@ Implement `RemoteDBAdapter` (exported from `local-lite`, with `SyncOperation`, `
   - `scope` may be an object or a (possibly async) function. If setup is async, guard against cleanup running before setup finishes (generation counter or cancelled flag) so listeners do not leak.
 - `setSyncScope?(scope)`: optional; implement it if the backend filters by scope, and re-subscribe live listeners when scope changes.
 
+> [!TIP]
+> **Built-in Self-Hosted Adapter**: Before writing a custom adapter from scratch, consider using `SelfHostedRemoteAdapter` (or `server: { url, token }` in `defineSyncConfig`) paired with `createSyncEndpoint()` from `local-lite/server`. It implements an idempotent push/pull sync protocol out-of-the-box.
+
 ## Skeleton
 
 ```typescript

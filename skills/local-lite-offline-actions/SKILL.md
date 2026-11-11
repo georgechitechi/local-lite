@@ -13,43 +13,84 @@ Guide for executing queued actions, running background jobs, persisting key-valu
 
 The Action Manager handles complex business logic mutations that must be queued offline and executed reliably when connectivity is restored:
 
-### Enqueueing an Action
+### Type-Safe Action Contracts (`defineAction`)
+Validate payloads before writing to SQLite using runtime schema validators (custom predicates or Zod/TypeBox schemas):
+
 ```typescript
-import { getSyncClient } from './sync.config';
-
-const client = await getSyncClient();
-
-// Enqueue an action (e.g. sending an email, processing a payment, or syncing with third-party API)
-const action = await client.actions.enqueue({
-  type: 'SEND_INVITATION',
-  payload: {
-    inviteeEmail: 'colleague@example.com',
-    teamId: 'team_xyz',
+// Define action with runtime schema validation
+client.actions.defineAction({
+  name: 'PROCESS_PAYMENT',
+  schema: (payload: any) => {
+    if (!payload.amount || payload.amount <= 0) throw new Error('Positive amount required');
+    if (!payload.currency) throw new Error('Currency required');
+    return payload;
   },
-  maxRetries: 5,
-  retryDelayMs: 2000,
+  handler: async (action, context) => {
+    const res = await fetch('https://api.stripe.com/v1/payment_intents', {
+      method: 'POST',
+      body: JSON.stringify(action.payload),
+    });
+    return await res.json();
+  },
 });
-
-console.log('Queued action:', action.id, action.status);
 ```
 
-### Registering Action Handlers
-Register handlers that execute when the device is online:
+### Rate Limiting & Concurrency Control
+Configure worker concurrency and token-bucket rate limiting to avoid tripping downstream API rate limits:
 
 ```typescript
-client.actions.registerHandler('SEND_INVITATION', async (payload) => {
-  const res = await fetch('https://api.example.com/invites', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Invitation failed with status ${res.status}`);
-  }
-
-  return await res.json();
+const client = await createSyncClient({
+  database: 'app.db',
+  // Concurrency & rate-limiting for action outbox
+  // ActionManager options can be configured directly or on client actions
 });
+```
+
+### Inbuilt Offline Email Queue (`client.actions.sendEmail`)
+Enqueue transactional emails with 0ms local write latency:
+
+```typescript
+const emailAction = await client.actions.sendEmail({
+  to: 'user@example.com',
+  subject: 'Order #{{orderId}} Confirmed',
+  html: '<h2>Thanks {{name}}!</h2>',
+  templateData: { name: 'Alice', orderId: 1042 },
+  idempotencyKey: 'order_1042',
+  attachments: [
+    { filename: 'receipt.pdf', url: 'file:///data/user/0/receipt.pdf' } // Auto-hydrates mobile file:// URIs
+  ],
+  react: <ReceiptEmail orderId={1042} />, // Optional React Email JSX rendering
+});
+```
+
+### Unified Email Providers (`local-lite/email`)
+Dispatch via Nodemailer SMTP, HTTP APIs (Resend, SendGrid, Postmark), or In-Memory Dev Mode:
+
+```typescript
+import { createEmailHandler, DevMailbox } from 'local-lite/email';
+
+// 1. In-Memory Dev Mode (no external credentials needed in development)
+client.actions.registerEmailHandler(
+  createEmailHandler({ provider: 'dev' })
+);
+console.log('Dev Mailbox:', DevMailbox.getInbox());
+
+// 2. Nodemailer SMTP
+client.actions.registerEmailHandler(
+  createEmailHandler({
+    transport: { host: 'smtp.mailgun.org', port: 587, auth: { user: '...', pass: '...' } },
+    defaultFrom: '"Support" <support@myapp.com>',
+  })
+);
+
+// 3. HTTP Provider (Resend, SendGrid, Postmark)
+client.actions.registerEmailHandler(
+  createEmailHandler({
+    provider: 'resend',
+    apiKey: process.env.RESEND_API_KEY,
+    defaultFrom: 'onboarding@resend.dev',
+  })
+);
 ```
 
 ---

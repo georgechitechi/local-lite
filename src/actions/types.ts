@@ -2,6 +2,23 @@ import { LocalDBAdapter } from '../adapters/local/index.js';
 import { CustomLogger } from '../utils/logger.js';
 import { NetworkStatusProvider } from '../core/types.js';
 
+export type ActionSchemaValidator<T = any> =
+  | ((payload: unknown) => T | boolean | Promise<T | boolean>)
+  | {
+      parse: (val: unknown) => T;
+    }
+  | {
+      safeParse: (val: unknown) => { success: boolean; data?: T; error?: any };
+    };
+
+export interface ActionDefinition<TPayload = any, TResult = any> {
+  name: string;
+  schema?: ActionSchemaValidator<TPayload>;
+  handler?: ActionHandler<TPayload, TResult>;
+  maxRetries?: number;
+  defaultTtlMs?: number;
+}
+
 export type ActionStatus = 'PENDING' | 'EXECUTING' | 'COMPLETED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
 
 export interface ActionRecord<TPayload = any, TResult = any> {
@@ -60,6 +77,13 @@ export interface FlushActionsResult {
   skipped: number;
 }
 
+export interface ActionRateLimitConfig {
+  /** Maximum number of actions allowed per time window */
+  max: number;
+  /** Window duration in milliseconds (e.g. 1000 for 1 second) */
+  windowMs: number;
+}
+
 export interface ActionManagerOptions {
   tableName?: string;
   defaultMaxRetries?: number;
@@ -68,6 +92,15 @@ export interface ActionManagerOptions {
   autoFlushOnEnqueue?: boolean;
   network?: NetworkStatusProvider;
   logger?: boolean | CustomLogger;
+  /**
+   * Maximum concurrent action executions during flush.
+   * Default: 1 (strictly sequential). Set higher (e.g. 3 or 5) for parallel dispatch.
+   */
+  concurrency?: number;
+  /**
+   * Rate limiting throttle across action dispatches (e.g. { max: 10, windowMs: 1000 }).
+   */
+  rateLimit?: ActionRateLimitConfig;
 }
 
 export interface EmailAttachment {
@@ -90,6 +123,8 @@ export interface EmailPayload {
   templateData?: Record<string, any>;
   headers?: Record<string, string>;
   attachments?: EmailAttachment[];
+  /** React Email component or JSX element to render automatically */
+  react?: any;
   metadata?: Record<string, any>;
 }
 

@@ -2,6 +2,7 @@ import { RemoteDBAdapter } from '../adapters/remote/index.js';
 import { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 import { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 import { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
+import { SelfHostedRemoteAdapter } from '../adapters/remote/self-hosted.js';
 import { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
 import { safeDynamicImport, safeDynamicRequire } from '../utils/dynamic.js';
 import { LocalLiteConfig } from './types.js';
@@ -40,6 +41,18 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
       pullQuery: config.convex.pullQuery,
       deletedColumn: config.convex.deletedColumn,
       updatedAtColumn: config.convex.updatedAtColumn,
+    });
+  }
+
+  // 4. Self-hosted sync backend
+  if (config.server?.url) {
+    return new SelfHostedRemoteAdapter({
+      url: config.server.url,
+      token: config.server.token,
+      headers: config.server.headers,
+      tables: config.tables,
+      primaryKey: config.primaryKey,
+      pollIntervalMs: config.server.pollIntervalMs,
     });
   }
 

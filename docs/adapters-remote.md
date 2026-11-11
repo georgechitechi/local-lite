@@ -242,7 +242,45 @@ export const config = defineSyncConfig({
 
 ---
 
-## 4. In-Memory Simulated Demo Backend
+## 4. Turnkey Self-Hosted Sync Server (`SelfHostedRemoteAdapter`)
+
+To synchronize without relying on any third-party cloud service (Supabase, Convex, Firebase), use `local-lite`'s built-in self-hosted sync backend:
+
+### Client Setup (`sync.config.ts`)
+```typescript
+import { defineSyncConfig } from 'local-lite/config';
+
+export const config = defineSyncConfig({
+  tables: ['todos', 'notes'],
+  server: {
+    url: 'https://api.mycompany.com/api/sync',
+    token: process.env.SYNC_SECRET_TOKEN,
+  },
+});
+```
+
+### Server Setup (Node.js / Bun / Next.js / Edge)
+On your backend, mount `createSyncEndpoint()` from `local-lite/server`:
+
+```typescript
+import { createServer, defineServerConfig, createSyncEndpoint, MemoryServerSyncStorage } from 'local-lite/server';
+
+export const apiServer = createServer(
+  defineServerConfig({
+    config: {},
+    endpoints: {
+      '/api/sync': createSyncEndpoint({
+        secret: process.env.SYNC_SECRET_TOKEN,
+        storage: new MemoryServerSyncStorage(),
+      }),
+    },
+  })
+);
+```
+
+---
+
+## 5. In-Memory Simulated Demo Backend
 
 For mock testing, automated unit tests, and prototyping when you don't have internet access or cloud credentials:
 
@@ -257,7 +295,7 @@ export const config = defineSyncConfig({
 
 ---
 
-## 5. Custom Remote Adapters
+## 6. Custom Remote Adapters
 
 Implement `RemoteDBAdapter` to connect `local-lite` to your own REST, GraphQL, or WebSocket servers:
 

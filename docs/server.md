@@ -91,6 +91,57 @@ Unknown paths return `404`; paths with no configured method return `405` and an 
 
 Middleware runs in declaration order and can authenticate, add request-level checks, or short-circuit with a response. Call `next()` exactly once to continue. Put route-specific authorization and input validation in the endpoint or a narrowly scoped middleware; registering an endpoint does not itself grant access to its data.
 
+## Turnkey Server Endpoints
+
+`local-lite/server` provides pre-built, turnkey endpoints for self-hosted database synchronization and offline-enqueued email dispatching.
+
+### 1. Turnkey Self-Hosted Sync Endpoint (`createSyncEndpoint`)
+
+Mount an out-of-the-box sync backend endpoint supporting push, pull, delta tracking, and Last-Write-Wins conflict resolution—with zero external cloud services required:
+
+```ts
+import { createServer, defineServerConfig, createSyncEndpoint, MemoryServerSyncStorage } from 'local-lite/server';
+
+export const apiServer = createServer(
+  defineServerConfig({
+    config: {},
+    endpoints: {
+      '/api/sync': createSyncEndpoint({
+        secret: process.env.SYNC_SECRET_TOKEN,
+        storage: new MemoryServerSyncStorage(), // Or persistent storage
+      }),
+    },
+  })
+);
+```
+
+Connect mobile and web clients simply by setting `server: { url: 'https://api.domain.com/api/sync', token: '...' }` in `defineSyncConfig`.
+
+### 2. Turnkey Email Relay Endpoint (`createEmailEndpoint`)
+
+Mount a pre-configured email relay endpoint that receives offline-queued emails from mobile devices and dispatches them via Nodemailer or cloud providers:
+
+```ts
+import { createServer, defineServerConfig, createEmailEndpoint } from 'local-lite/server';
+
+export const apiServer = createServer(
+  defineServerConfig({
+    config: {},
+    endpoints: {
+      '/api/send-email': createEmailEndpoint({
+        secret: process.env.EMAIL_API_SECRET,
+        transport: {
+          host: 'smtp.mailgun.org',
+          port: 587,
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        },
+        defaultFrom: '"My App" <noreply@myapp.com>',
+      }),
+    },
+  })
+);
+```
+
 ## API reference
 
 - `defineServerConfig(config)` validates the endpoint map and preserves its configuration type.

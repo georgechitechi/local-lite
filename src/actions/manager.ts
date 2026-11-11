@@ -3,6 +3,7 @@ import { EventEmitter } from '../reactive/event-emitter.js';
 import { generateUUID } from '../utils/uuid.js';
 import { ActionStore, DEFAULT_ACTIONS_TABLE } from './store.js';
 import {
+  ActionDefinition,
   ActionFilterOptions,
   ActionHandler,
   ActionHandlerContext,
@@ -23,6 +24,8 @@ export class ActionManager {
   private options: ActionManagerOptions;
   private tableName: string;
   private handlers = new Map<string, ActionHandler<any, any>>();
+  private definitions = new Map<string, ActionDefinition<any, any>>();
+  private rateLimitTimestamps: number[] = [];
   private isFlushing = false;
   private flushRerunRequested = false;
   private networkUnsubscribe?: () => void;
@@ -81,6 +84,31 @@ export class ActionManager {
   ): Promise<ActionRecord<TPayload, TResult>> {
     if (!opts.action || typeof opts.action !== 'string') {
       throw new Error('Action name is required and must be a string');
+    }
+
+    // 0. Runtime Schema Validation if an action definition exists
+    let payload = opts.payload;
+    const definition = this.definitions.get(opts.action);
+    if (definition?.schema) {
+      const validator = definition.schema as any;
+      if (typeof validator.safeParse === 'function') {
+        const res = validator.safeParse(payload);
+        if (!res.success) {
+          const errDetail = res.error?.message || JSON.stringify(res.error);
+          throw new Error(`Schema validation failed for action '${opts.action}': ${errDetail}`);
+        }
+        payload = res.data ?? payload;
+      } else if (typeof validator.parse === 'function') {
+        payload = validator.parse(payload);
+      } else if (typeof validator === 'function') {
+        const res = await validator(payload);
+        if (res === false) {
+          throw new Error(`Schema validation failed for action '${opts.action}'`);
+        }
+        if (typeof res === 'object' && res !== null) {
+          payload = res;
+        }
+      }
     }
 
     // 1. Idempotency check: if key already exists, return existing record
@@ -151,6 +179,26 @@ export class ActionManager {
   }
 
   /**
+   * Registers a type-safe action definition with optional runtime schema validation.
+   */
+  defineAction<TPayload = any, TResult = any>(
+    definition: ActionDefinition<TPayload, TResult>
+  ): () => void {
+    if (!definition.name) {
+      throw new Error('Action definition name is required');
+    }
+    this.definitions.set(definition.name, definition);
+    if (definition.handler) {
+      this.registerHandler(definition.name, definition.handler);
+    }
+    return () => {
+      if (this.definitions.get(definition.name) === definition) {
+        this.definitions.delete(definition.name);
+      }
+    };
+  }
+
+  /**
    * Registers a local executor for a specific action name.
    * Returns an unregister function.
    */
@@ -196,6 +244,99 @@ export class ActionManager {
     return this.flushPromise;
   }
 
+  private async waitForRateLimit(): Promise<void> {
+    if (!this.options.rateLimit) return;
+    const { max, windowMs } = this.options.rateLimit;
+    while (true) {
+      const now = Date.now();
+      this.rateLimitTimestamps = this.rateLimitTimestamps.filter((t) => now - t < windowMs);
+      if (this.rateLimitTimestamps.length < max) {
+        this.rateLimitTimestamps.push(now);
+        return;
+      }
+      const oldest = this.rateLimitTimestamps[0];
+      const waitTime = Math.max(10, windowMs - (now - oldest) + 5);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  }
+
+  private async processAction(
+    action: ActionRecord,
+    context: ActionHandlerContext,
+    result: FlushActionsResult
+  ): Promise<void> {
+    result.processed++;
+    const now = Date.now();
+
+    // 1. Check TTL expiration
+    if (action.expiresAt && action.expiresAt <= now) {
+      await ActionStore.updateStatus(this.db, this.tableName, action.id, 'EXPIRED');
+      const expiredRecord = { ...action, status: 'EXPIRED' as const };
+      result.expired++;
+      this.events.emit('action:expired', expiredRecord);
+      return;
+    }
+
+    // 2. Lookup handler
+    const handler = this.handlers.get(action.action);
+    if (!handler) {
+      // No local handler; leave as PENDING for remote sync replication
+      result.skipped++;
+      return;
+    }
+
+    // 3. Mark EXECUTING
+    await ActionStore.updateStatus(this.db, this.tableName, action.id, 'EXECUTING');
+    this.events.emit('action:executing', { ...action, status: 'EXECUTING' as const });
+
+    // 4. Rate-limiting throttle
+    await this.waitForRateLimit();
+
+    // 5. Execute handler
+    try {
+      const res = await handler(action, context);
+      const executedAt = Date.now();
+      await ActionStore.updateStatus(this.db, this.tableName, action.id, 'COMPLETED', {
+        executedAt,
+        result: res ?? null,
+      });
+      result.completed++;
+      this.events.emit('action:completed', {
+        ...action,
+        status: 'COMPLETED' as const,
+        executedAt,
+        result: res ?? null,
+      });
+    } catch (err: any) {
+      const nextRetry = action.retryCount + 1;
+      const isFinalFailure = nextRetry >= action.maxRetries;
+      const newStatus = isFinalFailure ? 'FAILED' : 'PENDING';
+      const errorMsg = err instanceof Error ? err.message : String(err);
+
+      await ActionStore.updateStatus(this.db, this.tableName, action.id, newStatus, {
+        retryCount: nextRetry,
+        lastError: errorMsg,
+      });
+
+      if (isFinalFailure) {
+        result.failed++;
+        this.events.emit('action:failed', {
+          ...action,
+          status: 'FAILED' as const,
+          retryCount: nextRetry,
+          lastError: errorMsg,
+        });
+      } else {
+        this.events.emit('action:retry', {
+          ...action,
+          status: 'PENDING' as const,
+          retryCount: nextRetry,
+          lastError: errorMsg,
+        });
+      }
+    }
+  }
+
   private async performFlush(): Promise<FlushActionsResult> {
     const result: FlushActionsResult = {
       processed: 0,
@@ -224,74 +365,25 @@ export class ActionManager {
           isOnline: this.isOnlineFn,
         };
 
-        for (const action of pending) {
-          result.processed++;
-          const now = Date.now();
-
-          // 1. Check TTL expiration
-          if (action.expiresAt && action.expiresAt <= now) {
-            await ActionStore.updateStatus(this.db, this.tableName, action.id, 'EXPIRED');
-            const expiredRecord = { ...action, status: 'EXPIRED' as const };
-            result.expired++;
-            this.events.emit('action:expired', expiredRecord);
-            continue;
+        const concurrency = Math.max(1, this.options.concurrency ?? 1);
+        if (concurrency === 1) {
+          for (const action of pending) {
+            await this.processAction(action, context, result);
           }
-
-          // 2. Lookup handler
-          const handler = this.handlers.get(action.action);
-          if (!handler) {
-            // No local handler; leave as PENDING for remote sync replication
-            result.skipped++;
-            continue;
-          }
-
-          // 3. Mark EXECUTING
-          await ActionStore.updateStatus(this.db, this.tableName, action.id, 'EXECUTING');
-          this.events.emit('action:executing', { ...action, status: 'EXECUTING' as const });
-
-          // 4. Execute handler
-          try {
-            const res = await handler(action, context);
-            const executedAt = Date.now();
-            await ActionStore.updateStatus(this.db, this.tableName, action.id, 'COMPLETED', {
-              executedAt,
-              result: res ?? null,
-            });
-            result.completed++;
-            this.events.emit('action:completed', {
-              ...action,
-              status: 'COMPLETED' as const,
-              executedAt,
-              result: res ?? null,
-            });
-          } catch (err: any) {
-            const nextRetry = action.retryCount + 1;
-            const isFinalFailure = nextRetry >= action.maxRetries;
-            const newStatus = isFinalFailure ? 'FAILED' : 'PENDING';
-            const errorMsg = err instanceof Error ? err.message : String(err);
-
-            await ActionStore.updateStatus(this.db, this.tableName, action.id, newStatus, {
-              retryCount: nextRetry,
-              lastError: errorMsg,
-            });
-
-            if (isFinalFailure) {
-              result.failed++;
-              this.events.emit('action:failed', {
-                ...action,
-                status: 'FAILED' as const,
-                retryCount: nextRetry,
-                lastError: errorMsg,
-              });
-            } else {
-              this.events.emit('action:retry', {
-                ...action,
-                status: 'PENDING' as const,
-                retryCount: nextRetry,
-                lastError: errorMsg,
-              });
+        } else {
+          let index = 0;
+          const workers = Array.from(
+            { length: Math.min(concurrency, pending.length) },
+            async () => {
+              while (index < pending.length) {
+                const item = pending[index++];
+                if (item) {
+                  await this.processAction(item, context, result);
+                }
+              }
             }
-          }
+          );
+          await Promise.all(workers);
         }
       } while (this.flushRerunRequested);
     } finally {}

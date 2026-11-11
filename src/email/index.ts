@@ -1,5 +1,7 @@
 import type { Transporter, SendMailOptions, SentMessageInfo, TransportOptions } from 'nodemailer';
-import type { ActionHandlerContext, ActionRecord, EmailHandler, EmailPayload } from '../actions/types.js';
+import type { ActionHandlerContext, ActionRecord, EmailAttachment, EmailHandler, EmailPayload } from '../actions/types.js';
+
+import { safeDynamicImport } from '../utils/dynamic.js';
 
 export type EmailProviderType =
   | 'nodemailer'
@@ -7,6 +9,8 @@ export type EmailProviderType =
   | 'sendgrid'
   | 'postmark'
   | 'http'
+  | 'dev'
+  | 'preview'
   | 'custom';
 
 export interface EmailHandlerOptions {
@@ -25,7 +29,7 @@ export interface EmailHandlerOptions {
    * Custom template renderer invoked when `template` or `templateData` is provided in EmailPayload.
    */
   renderTemplate?: (
-    template: string | undefined,
+    template: any,
     data: Record<string, any> | undefined,
     payload: EmailPayload
   ) => Promise<{ html?: string; text?: string }> | { html?: string; text?: string };
@@ -69,6 +73,8 @@ export interface EmailDeliveryConfig extends EmailHandlerOptions {
   headers?: Record<string, string>;
   /** Custom fetch implementation */
   fetch?: typeof fetch;
+  /** Silent dev mode logging */
+  silentDev?: boolean;
 }
 
 export type NodemailerHandlerOptions = EmailHandlerOptions;
@@ -83,6 +89,43 @@ export interface EmailSendResult {
 }
 
 export type NodemailerSendResult = EmailSendResult;
+
+export type ConcreteEmailHandler = (
+  payload: EmailPayload,
+  record: ActionRecord<EmailPayload>,
+  context: ActionHandlerContext
+) => Promise<EmailSendResult>;
+
+export interface DevSentEmail {
+  id: string;
+  sentAt: number;
+  mailOptions: SendMailOptions;
+  payload: EmailPayload;
+  record: ActionRecord<EmailPayload>;
+}
+
+/**
+ * In-memory Dev Mailbox for inspecting locally dispatched emails during development.
+ */
+export class DevMailbox {
+  private static inbox: DevSentEmail[] = [];
+
+  static getInbox(): DevSentEmail[] {
+    return [...this.inbox];
+  }
+
+  static getLatest(): DevSentEmail | undefined {
+    return this.inbox[this.inbox.length - 1];
+  }
+
+  static clear(): void {
+    this.inbox = [];
+  }
+
+  static record(email: DevSentEmail): void {
+    this.inbox.push(email);
+  }
+}
 
 /**
  * Dynamically loads the nodemailer module if not already available.
@@ -117,6 +160,70 @@ function interpolate(templateStr: string, data: Record<string, any>): string {
     const val = data[key];
     return val !== undefined ? String(val) : '';
   });
+}
+
+/**
+ * Renders a React element or JSX component into clean HTML and plaintext fallback.
+ */
+export async function renderReactEmail(element: any): Promise<{ html: string; text: string }> {
+  if (!element) return { html: '', text: '' };
+
+  const component = typeof element === 'function' ? element() : element;
+
+  // 1. Try @react-email/render if installed
+  try {
+    const reactEmail = await safeDynamicImport('@react-email/render');
+    const render = reactEmail?.render || reactEmail?.default?.render;
+    if (typeof render === 'function') {
+      const html = await render(component);
+      const text = await render(component, { plainText: true });
+      return { html, text };
+    }
+  } catch {}
+
+  // 2. Try react-dom/server
+  try {
+    const ReactDOMServer = await safeDynamicImport('react-dom/server');
+    const renderToStaticMarkup =
+      ReactDOMServer?.renderToStaticMarkup || ReactDOMServer?.default?.renderToStaticMarkup;
+    if (typeof renderToStaticMarkup === 'function') {
+      const html = renderToStaticMarkup(component);
+      const text = html.replace(/<[^>]*>/g, '').trim();
+      return { html, text };
+    }
+  } catch {}
+
+  return { html: String(component), text: String(component) };
+}
+
+/**
+ * Hydrates an attachment from a mobile file:// URI or local file path if possible.
+ */
+export async function hydrateAttachment(att: EmailAttachment): Promise<any> {
+  const item: any = { filename: att.filename };
+  if (att.contentType) item.contentType = att.contentType;
+  if (att.content !== undefined) item.content = att.content;
+
+  if (att.url) {
+    const rawUrl = att.url;
+    if (
+      rawUrl.startsWith('file://') ||
+      (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('data:'))
+    ) {
+      const filePath = rawUrl.startsWith('file://') ? rawUrl.slice(7) : rawUrl;
+      try {
+        const fs = await import('node:fs/promises');
+        const buffer = await fs.readFile(filePath);
+        item.content = buffer;
+        return item;
+      } catch {
+        item.path = rawUrl;
+        return item;
+      }
+    }
+    item.path = rawUrl;
+  }
+  return item;
 }
 
 /**
@@ -178,6 +285,14 @@ async function prepareMailOptions(
 ): Promise<SendMailOptions> {
   let mailOptions = buildMailOptions(payload, options);
 
+  // 1. React Email / JSX rendering support
+  if (payload.react) {
+    const rendered = await renderReactEmail(payload.react);
+    mailOptions.html = rendered.html;
+    if (!mailOptions.text && rendered.text) mailOptions.text = rendered.text;
+  }
+
+  // 2. Custom template rendering
   if (options.renderTemplate && (payload.template || payload.templateData)) {
     const rendered = await options.renderTemplate(
       payload.template,
@@ -193,6 +308,12 @@ async function prepareMailOptions(
     if (typeof mailOptions.text === 'string') {
       mailOptions.text = interpolate(mailOptions.text, payload.templateData);
     }
+  }
+
+  // 3. Auto-hydrate attachments (mobile file:// URIs)
+  if (payload.attachments && payload.attachments.length > 0) {
+    const hydrated = await Promise.all(payload.attachments.map((a) => hydrateAttachment(a)));
+    mailOptions.attachments = hydrated;
   }
 
   if (options.beforeSend) {
@@ -221,7 +342,7 @@ async function prepareMailOptions(
 export function createNodemailerHandler(
   transporterOrOptions: NodemailerTransportInput,
   handlerOptions: NodemailerHandlerOptions = {}
-): EmailHandler {
+): ConcreteEmailHandler {
   let cachedTransporter: Transporter | null =
     transporterOrOptions && typeof (transporterOrOptions as any).sendMail === 'function'
       ? (transporterOrOptions as Transporter)
@@ -261,7 +382,7 @@ export function createNodemailerHandler(
  * Creates an EmailHandler for local-lite ActionManager that dispatches emails
  * via HTTP APIs (e.g. Resend, SendGrid, Postmark, or custom webhooks/endpoints).
  */
-export function createHttpEmailHandler(options: HttpEmailHandlerOptions): EmailHandler {
+export function createHttpEmailHandler(options: HttpEmailHandlerOptions): ConcreteEmailHandler {
   const fetchFn = options.fetch || globalThis.fetch;
   if (!fetchFn) {
     throw new Error('A global or configured fetch function is required for HTTP email dispatch.');
@@ -298,7 +419,7 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): EmailH
         bcc: mailOptions.bcc,
         reply_to: mailOptions.replyTo,
         headers: mailOptions.headers,
-        attachments: payload.attachments,
+        attachments: mailOptions.attachments,
       };
     } else if (provider === 'sendgrid') {
       url = options.endpoint || 'https://api.sendgrid.com/v3/mail/send';
@@ -344,14 +465,13 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): EmailH
         ReplyTo: mailOptions.replyTo,
       };
     } else {
-      // Generic HTTP / custom endpoint
       url = options.endpoint || '/api/email';
       if (options.apiKey && !headers['Authorization']) {
         headers['Authorization'] = `Bearer ${options.apiKey}`;
       }
       body = {
         ...mailOptions,
-        attachments: payload.attachments,
+        attachments: mailOptions.attachments,
         template: payload.template,
         templateData: payload.templateData,
       };
@@ -402,11 +522,58 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): EmailH
 }
 
 /**
+ * Creates a local dev email handler that stores outgoing emails in DevMailbox
+ * and logs an interactive terminal preview without sending real network requests.
+ */
+export function createDevEmailHandler(options: EmailHandlerOptions & { silent?: boolean } = {}): ConcreteEmailHandler {
+  return async (
+    payload: EmailPayload,
+    record: ActionRecord<EmailPayload>,
+    _context: ActionHandlerContext
+  ): Promise<EmailSendResult> => {
+    const mailOptions = await prepareMailOptions(payload, options, record);
+    const sentRecord: DevSentEmail = {
+      id: `dev-${record.id}`,
+      sentAt: Date.now(),
+      mailOptions,
+      payload,
+      record,
+    };
+
+    DevMailbox.record(sentRecord);
+
+    if (!options.silent) {
+      const toStr = Array.isArray(mailOptions.to) ? mailOptions.to.join(', ') : mailOptions.to;
+      const previewText = (mailOptions.text || mailOptions.html || '').toString().slice(0, 120);
+      console.log(
+        `[local-lite:email:dev] Dispatched to: ${toStr} | Subject: "${mailOptions.subject}" | Body: "${previewText}"`
+      );
+    }
+
+    const result: EmailSendResult = {
+      messageId: sentRecord.id,
+      response: { dev: true, previewUrl: `dev://mailbox/${sentRecord.id}` },
+      accepted: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+    };
+
+    if (options.afterSend) {
+      await options.afterSend(result, payload, record);
+    }
+
+    return result;
+  };
+}
+
+/**
  * Universal email handler factory that creates a dispatch handler
  * supporting Nodemailer (SMTP, Sendmail), HTTP providers (Resend, SendGrid, Postmark),
- * or custom webhooks.
+ * local dev mailbox, or custom webhooks.
  */
-export function createEmailHandler(config: EmailDeliveryConfig): EmailHandler {
+export function createEmailHandler(config: EmailDeliveryConfig): ConcreteEmailHandler {
+  if (config.provider === 'dev' || config.provider === 'preview') {
+    return createDevEmailHandler({ ...config, silent: config.silentDev });
+  }
+
   if (config.transport || config.provider === 'nodemailer') {
     return createNodemailerHandler(config.transport || config, config);
   }
@@ -421,7 +588,6 @@ export function createEmailHandler(config: EmailDeliveryConfig): EmailHandler {
     return createHttpEmailHandler(config as HttpEmailHandlerOptions);
   }
 
-  // If apiKey is provided without transport, default to Resend
   if (config.apiKey) {
     return createHttpEmailHandler({
       ...config,
@@ -430,7 +596,6 @@ export function createEmailHandler(config: EmailDeliveryConfig): EmailHandler {
   }
 
   throw new Error(
-    "Invalid email configuration: Provide either 'transport' (for Nodemailer/SMTP) or 'provider'/'endpoint'/'apiKey' (for HTTP delivery)."
+    "Invalid email configuration: Provide 'transport' (for Nodemailer/SMTP), 'provider' ('resend'|'sendgrid'|'postmark'|'dev'), or 'endpoint' (for HTTP delivery)."
   );
 }
-

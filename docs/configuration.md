@@ -174,6 +174,40 @@ firebase: {
 }
 ```
 
+#### `server` (Turnkey Self-Hosted Sync Server)
+Connect directly to a self-hosted backend using endpoints generated with `createSyncEndpoint()` from `local-lite/server`:
+
+```typescript
+server: {
+  url: 'https://api.mycompany.com/api/sync',
+  token: process.env.SYNC_SECRET_TOKEN, // Sent in Authorization: Bearer <token>
+  pollIntervalMs: 5000,                  // Polling interval for live delta sync
+}
+```
+
+#### `email` (Unified Offline Email Delivery)
+Configures direct offline-queued email dispatching without needing cloud database adapters:
+
+```typescript
+// Option 1: Nodemailer SMTP (Node / Desktop)
+email: {
+  transport: { host: 'smtp.mailgun.org', port: 587, auth: { user: '...', pass: '...' } },
+  defaults: { from: 'Support <support@mycompany.com>' },
+}
+
+// Option 2: HTTP Provider (Resend, SendGrid, Postmark) - Works directly in Expo & Web
+email: {
+  provider: 'resend',
+  apiKey: process.env.EXPO_PUBLIC_RESEND_API_KEY,
+  defaults: { from: 'onboarding@resend.dev' },
+}
+
+// Option 3: Local Dev Mailbox (Captures in memory without sending network requests)
+email: {
+  provider: 'dev',
+}
+```
+
 #### `remote`
 Pass an object implementing `RemoteDBAdapter` to connect to custom REST, GraphQL, or WebSocket servers.
 

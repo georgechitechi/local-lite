@@ -22,6 +22,7 @@ export { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
 export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
+export { SelfHostedRemoteAdapter } from '../adapters/remote/self-hosted.js';
 export { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
 export type { RemoteDBAdapter } from '../adapters/remote/index.js';
 
