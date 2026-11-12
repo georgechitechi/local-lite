@@ -144,4 +144,86 @@ describe('Turnkey Self-Hosted Sync Backend & Client Adapter', () => {
     client1.stop();
     client2.stop();
   });
+
+  it('supports remote RPC function calls via adapter.call()', async () => {
+    const serverDef = defineServerConfig({
+      config: {},
+      endpoints: {
+        '/api/sync/email': {
+          POST: async ({ request }) => {
+            const body = await request.json();
+            return Response.json({ success: true, messageId: 'msg-123', to: body.to });
+          },
+        },
+      },
+    });
+    const rpcServer = createServer(serverDef);
+
+    const client = await createSyncClient({
+      database: new MockDB(),
+      tables: ['tasks'],
+      server: {
+        url: 'http://localhost:3000/api/sync',
+        token: 'test-token',
+      },
+      autoStart: false,
+    });
+    (client as any).remote.fetchFn = async (input: any, init: any) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      const req = new Request(url, init);
+      return await rpcServer.fetch(req);
+    };
+
+    const result = await client.call('email', { to: 'tenant@example.com' });
+    expect(result.success).toBe(true);
+    expect(result.messageId).toBe('msg-123');
+    expect(result.to).toBe('tenant@example.com');
+
+    client.stop();
+  });
+
+  it('supports custom async authHandler and onBeforePull on createSyncEndpoint', async () => {
+    const authEndpoint = createSyncEndpoint({
+      storage: serverStorage,
+      authHandler: async (req) => {
+        const auth = req.headers.get('authorization');
+        if (auth === 'Bearer valid-jwt-token') {
+          return { id: 'user-1', allowedTables: ['notes'] };
+        }
+        return false;
+      },
+      onBeforePull: async (tables, _since, _limit, _req, auth) => {
+        return {
+          tables: tables.filter((t) => auth?.allowedTables?.includes(t)),
+        };
+      },
+    });
+
+    const customServer = createServer(
+      defineServerConfig({
+        config: {},
+        endpoints: {
+          '/api/sync': authEndpoint,
+        },
+      })
+    );
+
+    // 1. Unauthenticated request -> 401
+    const unauthRes = await customServer.fetch(
+      new Request('http://localhost:3000/api/sync?tables=notes', {
+        headers: { Authorization: 'Bearer invalid-token' },
+      })
+    );
+    expect(unauthRes.status).toBe(401);
+
+    // 2. Authenticated request -> 200 with scoped pull
+    const authRes = await customServer.fetch(
+      new Request('http://localhost:3000/api/sync?tables=notes,secrets', {
+        headers: { Authorization: 'Bearer valid-jwt-token' },
+      })
+    );
+    expect(authRes.status).toBe(200);
+    const data = await authRes.json();
+    expect(data.success).toBe(true);
+  });
 });

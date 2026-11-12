@@ -77,7 +77,6 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
-      headers['X-Sync-Secret'] = this.token;
     }
     return headers;
   }
@@ -174,5 +173,42 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
 
   setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
     this.syncScope = scope;
+  }
+
+  /**
+   * Executes a remote function call or RPC across self-hosted endpoints.
+   */
+  async call<T = any>(functionName: string, args: Record<string, any> = {}): Promise<T> {
+    const actionEndpoints: Record<string, string> = {
+      'payments/stk': '/payments/stk',
+      'contracts/renewal': '/contracts/renewal',
+      'contracts/termination': '/contracts/termination',
+      'tenant-self-service': '/tenant-self-service',
+      'email': '/email',
+    };
+    const normalized = functionName
+      .replace(/^functions\//, '')
+      .replace('contracts:sendRenewalReminder', 'contracts/renewal')
+      .replace('contracts:sendTerminationNotice', 'contracts/termination')
+      .replace('payments:initiateDaraja', 'payments/stk')
+      .replace('tenantSelfService:createSelfServiceLink', 'tenant-self-service')
+      .replace('email:send', 'email')
+      .replace(':', '/');
+    const endpoint = actionEndpoints[normalized] || `/${normalized}`;
+    const fullUrl = `${this.url}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    const response = await this.fetchFn(fullUrl, {
+      method: 'POST',
+      headers: this.getRequestHeaders(),
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      throw new Error(`Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`);
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return (await response.json()) as T;
+    }
+    return (await response.text()) as unknown as T;
   }
 }

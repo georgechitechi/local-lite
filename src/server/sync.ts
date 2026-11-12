@@ -164,8 +164,26 @@ export interface ServerSyncEndpointOptions {
    */
   onBeforePush?: (
     operations: SyncOperation[],
-    request: Request
+    request: Request,
+    auth?: any
   ) => Promise<SyncOperation[] | void> | SyncOperation[] | void;
+
+  /**
+   * Custom authentication / authorization validator (e.g. JWT, OAuth, RLS user).
+   * If returns false, returns 401 Unauthorized. If returns user data, passes to hooks.
+   */
+  authHandler?: (request: Request) => Promise<any> | any;
+
+  /**
+   * Hook called before pulling deltas to filter or scope the query (e.g. for Row-Level Security).
+   */
+  onBeforePull?: (
+    tables: string[],
+    since: number,
+    limit: number,
+    request: Request,
+    auth?: any
+  ) => Promise<{ tables?: string[]; since?: number; limit?: number; filter?: any } | void> | { tables?: string[]; since?: number; limit?: number; filter?: any } | void;
 }
 
 /**
@@ -176,20 +194,27 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Origin': options.corsOrigin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Sync-Secret',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 
-  const verifyAuth = (request: Request): boolean => {
+  const verifyAuth = async (request: Request): Promise<any> => {
+    if (options.authHandler) {
+      const authUser = await options.authHandler(request);
+      if (!authUser) return false;
+      return authUser;
+    }
     if (!options.secret) return true;
-    const authHeader = request.headers.get('authorization') || request.headers.get('x-sync-secret');
-    return authHeader === `Bearer ${options.secret}` || authHeader === options.secret;
+    const authHeader = request.headers.get('authorization');
+    const match = authHeader === `Bearer ${options.secret}`;
+    return match ? { type: 'admin', isAdmin: true } : false;
   };
 
   // POST: Push batch of mutations (or combined push+pull batch)
   const handlePost = async ({ request }: ApiRequestContext<unknown>): Promise<Response> => {
-    if (!verifyAuth(request)) {
+    const auth = await verifyAuth(request);
+    if (!auth) {
       return Response.json(
-        { error: 'Unauthorized: Invalid sync secret' },
+        { error: 'Unauthorized: Invalid sync authentication' },
         { status: 401, headers: corsHeaders }
       );
     }
@@ -207,7 +232,7 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
     let operations: SyncOperation[] = Array.isArray(body?.operations) ? body.operations : [];
 
     if (options.onBeforePush) {
-      const modified = await options.onBeforePush(operations, request);
+      const modified = await options.onBeforePush(operations, request, auth);
       if (Array.isArray(modified)) operations = modified;
     }
 
@@ -215,8 +240,16 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
 
     // If client requested a combined batch sync (push + pull in single roundtrip):
     if (Array.isArray(body?.tables)) {
-      const since = Number(body.since ?? 0);
-      const pullResult = await storage.getDeltas(body.tables, since, body.limit ? Number(body.limit) : 500);
+      let tables = body.tables;
+      let since = Number(body.since ?? 0);
+      let limit = body.limit ? Number(body.limit) : 500;
+      if (options.onBeforePull) {
+        const pullMod = await options.onBeforePull(tables, since, limit, request, auth);
+        if (pullMod?.tables) tables = pullMod.tables;
+        if (pullMod?.since !== undefined) since = pullMod.since;
+        if (pullMod?.limit !== undefined) limit = pullMod.limit;
+      }
+      const pullResult = await storage.getDeltas(tables, since, limit);
       return Response.json(
         {
           success: true,
@@ -241,9 +274,10 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
 
   // GET: Pull deltas since cursor/timestamp
   const handleGet = async ({ request }: ApiRequestContext<unknown>): Promise<Response> => {
-    if (!verifyAuth(request)) {
+    const auth = await verifyAuth(request);
+    if (!auth) {
       return Response.json(
-        { error: 'Unauthorized: Invalid sync secret' },
+        { error: 'Unauthorized: Invalid sync authentication' },
         { status: 401, headers: corsHeaders }
       );
     }
@@ -253,9 +287,16 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
     const sinceParam = url.searchParams.get('since');
     const limitParam = url.searchParams.get('limit');
 
-    const tables = tablesParam ? tablesParam.split(',').map((t) => t.trim()).filter(Boolean) : [];
-    const since = sinceParam ? Number(sinceParam) : 0;
-    const limit = limitParam ? Number(limitParam) : 500;
+    let tables = tablesParam ? tablesParam.split(',').map((t) => t.trim()).filter(Boolean) : [];
+    let since = sinceParam ? Number(sinceParam) : 0;
+    let limit = limitParam ? Number(limitParam) : 500;
+
+    if (options.onBeforePull) {
+      const pullMod = await options.onBeforePull(tables, since, limit, request, auth);
+      if (pullMod?.tables) tables = pullMod.tables;
+      if (pullMod?.since !== undefined) since = pullMod.since;
+      if (pullMod?.limit !== undefined) limit = pullMod.limit;
+    }
 
     const result = await storage.getDeltas(tables, since, limit);
 
