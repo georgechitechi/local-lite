@@ -59,8 +59,8 @@ describe('Generic Action Outbox & Inbuilt Email Queue', () => {
     await expect(client.actions.sendEmail({ subject: 'Test' })).rejects.toThrow(
       "Email 'to' recipient is required",
     );
-    // @ts-expect-error Missing required subject
     await expect(
+      // @ts-expect-error Missing required subject
       client.actions.sendEmail({ to: 'bob@example.com' }),
     ).rejects.toThrow("Email 'subject' is required");
   });

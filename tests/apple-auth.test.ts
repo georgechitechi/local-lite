@@ -10,8 +10,13 @@ import {
 describe('AppleAuthClient', () => {
   const sampleUser: AppleUser = {
     id: 'apple-user-001',
+    userId: 'apple-user-001',
     email: 'parent@privaterelay.appleid.com',
+    emailVerified: true,
     name: 'Jane Doe',
+    displayName: 'Jane Doe',
+    provider: 'apple',
+    providerAccountId: 'apple-user-001',
     givenName: 'Jane',
     familyName: 'Doe',
     identityToken:

@@ -6,12 +6,10 @@ describe('Remote Provider RPC & Automations Adapter', () => {
   describe('ConvexRemoteAdapter', () => {
     it('supports call (action/mutation), queryRemote, automations, and backups', async () => {
       const mockClient = {
-        action: vi
-          .fn()
-          .mockResolvedValue({
-            success: true,
-            url: 'https://example.com/link',
-          }),
+        action: vi.fn().mockResolvedValue({
+          success: true,
+          url: 'https://example.com/link',
+        }),
         query: vi.fn().mockImplementation((name) => {
           if (name === 'functions/automations:listMine') {
             return Promise.resolve([
@@ -81,12 +79,10 @@ describe('Remote Provider RPC & Automations Adapter', () => {
             .fn()
             .mockResolvedValue({ data: { message: 'invoked' }, error: null }),
         },
-        rpc: vi
-          .fn()
-          .mockResolvedValue({
-            data: [{ id: 'auto_1', name: 'Nightly', enabled: true }],
-            error: null,
-          }),
+        rpc: vi.fn().mockResolvedValue({
+          data: [{ id: 'auto_1', name: 'Nightly', enabled: true }],
+          error: null,
+        }),
         storage: {
           from: vi.fn().mockReturnValue({
             list: vi.fn().mockResolvedValue({
@@ -99,11 +95,9 @@ describe('Remote Provider RPC & Automations Adapter', () => {
               ],
               error: null,
             }),
-            createSignedUrl: vi
-              .fn()
-              .mockResolvedValue({
-                data: { signedUrl: 'https://signed.supabase.co/file' },
-              }),
+            createSignedUrl: vi.fn().mockResolvedValue({
+              data: { signedUrl: 'https://signed.supabase.co/file' },
+            }),
           }),
         },
       };

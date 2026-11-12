@@ -314,7 +314,7 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
       const u3 = createStorageUploader('firebase', mockFirebase);
       expect(typeof u3.upload).toBe('function');
 
-      expect(() => createStorageUploader('invalid' as any)).toThrow(
+      expect(() => createStorageUploader('invalid' as any, {}, {})).toThrow(
         'Unsupported storage provider',
       );
     });

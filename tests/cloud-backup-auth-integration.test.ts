@@ -184,7 +184,9 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
     const originalData = new TextEncoder().encode(
       'Super sensitive medical and child data',
     );
-    let restoredData = new Uint8Array();
+    // Keep the backing-buffer type broad enough for the Uint8Array accepted by
+    // importDatabase (which may be backed by ArrayBuffer or SharedArrayBuffer).
+    let restoredData: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
     const db = {
       exportDatabase: async () => originalData,

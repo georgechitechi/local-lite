@@ -79,7 +79,7 @@ describe('encrypted database backups', () => {
 
   it('full backup and restore cycle with createEncryptedDatabaseBackup', async () => {
     const stored = new Map<string, Uint8Array>();
-    let restoredBytes = new Uint8Array();
+    let restoredBytes: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
     const database: BackupDatabase = {
       exportDatabase: async () => sampleData,

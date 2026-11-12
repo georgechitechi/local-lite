@@ -191,6 +191,7 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
           text: 'Inspect me in memory',
         },
         { id: 'act-123' } as any as any,
+        {} as any,
       );
 
       expect(res?.messageId).toContain('dev-act-123');

@@ -69,10 +69,12 @@ function database() {
 describe.skipIf(
   !existsSync(
     new URL('../example/node_modules/convex/package.json', import.meta.url),
-  ),
+  ) || !existsSync(new URL('../example/convex/sync.ts', import.meta.url)),
 )('example Convex sync protocol', () => {
   it('merges updates, ignores retries and stale writes, and delivers offline deletions', async () => {
-    const { pullDeltas, pushBatch } = await import('../example/convex/sync');
+    const { pullDeltas, pushBatch } = await import(
+      new URL('../example/convex/sync.ts', import.meta.url).href
+    );
     const ctx = { db: database() };
     const push = (operations: any[]) =>
       (pushBatch as any)._handler(ctx, { operations });
