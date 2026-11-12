@@ -1,4 +1,78 @@
 import type { ApiEndpoint, ApiRequestContext } from './index.js';
+import type { ActionHandlerContext, ActionRecord, EmailPayload } from '../actions/types.js';
+import {
+  type ConcreteEmailHandler,
+  type EmailHandlerOptions,
+  type EmailMailOptions,
+  type EmailSendResult,
+  prepareMailOptions,
+} from '../email/index.js';
+
+export type NodemailerTransportInput = {
+  sendMail?: (options: EmailMailOptions) => Promise<any>;
+  [key: string]: any;
+} | string;
+
+export async function loadNodemailer(): Promise<any> {
+  try {
+    const mod = await import('nodemailer');
+    return mod.default || mod;
+  } catch {
+    throw new Error(
+      "The 'nodemailer' package is required to send emails via Nodemailer transport. Please install it via 'npm install nodemailer'.",
+    );
+  }
+}
+
+export async function resolveTransporter(
+  input: NodemailerTransportInput,
+  defaults?: Partial<EmailMailOptions>,
+): Promise<any> {
+  if (input && typeof input !== 'string' && typeof input.sendMail === 'function') {
+    return input;
+  }
+  const nodemailer = await loadNodemailer();
+  return nodemailer.createTransport(input, defaults);
+}
+
+export function createNodemailerHandler(
+  transporterOrOptions: NodemailerTransportInput,
+  handlerOptions: EmailHandlerOptions = {},
+): ConcreteEmailHandler {
+  let cachedTransporter: any =
+    transporterOrOptions &&
+    typeof transporterOrOptions !== 'string' &&
+    typeof transporterOrOptions.sendMail === 'function'
+      ? transporterOrOptions
+      : null;
+
+  const getTransporter = async () => {
+    if (!cachedTransporter) {
+      cachedTransporter = await resolveTransporter(
+        transporterOrOptions,
+        handlerOptions.defaults,
+      );
+    }
+    return cachedTransporter;
+  };
+
+  return async (
+    payload: EmailPayload,
+    record: ActionRecord<EmailPayload>,
+    _context: ActionHandlerContext,
+  ): Promise<EmailSendResult> => {
+    const transporter = await getTransporter();
+    const mailOptions = await prepareMailOptions(payload, handlerOptions, record);
+    const info = await transporter.sendMail(mailOptions);
+    await handlerOptions.afterSend?.(info, payload, record);
+    return {
+      messageId: info.messageId,
+      response: info.response,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    };
+  };
+}
 
 export interface EmailEndpointOptions {
   /**
@@ -110,7 +184,6 @@ export function createEmailEndpoint(
       if (options.dispatch) {
         result = await options.dispatch(payload, request);
       } else if (options.transport || (!options.provider && !options.apiKey)) {
-        const { createNodemailerHandler } = await import('../email/index.js');
         const handler = createNodemailerHandler(options.transport || {}, {
           defaultFrom: options.defaultFrom,
         });

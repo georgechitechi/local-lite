@@ -5,11 +5,13 @@ import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { MockDB } from './helpers/mock-db.js';
 import {
-  createNodemailerHandler,
   createHttpEmailHandler,
   buildMailOptions,
-  resolveTransporter,
 } from '../src/email/index.js';
+import {
+  createNodemailerHandler,
+  resolveTransporter,
+} from '../src/server/email.js';
 import { createSyncClient } from '../src/config/index.js';
 
 describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
@@ -424,17 +426,12 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
   });
 
   describe('createSyncClient config.email auto-wiring', () => {
-    it('automatically wires Nodemailer transport via createSyncClient', async () => {
-      let dispatchedMail: any = null;
+    it('rejects Nodemailer transport in the client entry point', async () => {
       const testTransporter = nodemailer.createTransport({
         jsonTransport: true,
       });
-      vi.spyOn(testTransporter, 'sendMail').mockImplementation(async (mail) => {
-        dispatchedMail = mail;
-        return { messageId: 'auto-wire-id' } as any;
-      });
 
-      const syncClient = await createSyncClient({
+      await expect(createSyncClient({
         database: db,
         inMemoryRemote: true,
         email: {
@@ -443,25 +440,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
             from: '"Auto App" <auto@example.com>',
           },
         },
-      });
-
-      const action = await syncClient.actions.sendEmail({
-        to: 'client@company.com',
-        subject: 'Auto Configured',
-        text: 'Sending via config.email without manual wiring!',
-      });
-
-      const flushResult = await syncClient.actions.flush();
-      expect(flushResult.completed).toBe(1);
-      expect(dispatchedMail).not.toBeNull();
-      expect(dispatchedMail.to).toBe('client@company.com');
-      expect(dispatchedMail.from).toBe('"Auto App" <auto@example.com>');
-
-      const record = await syncClient.actions.get(action.id);
-      expect(record?.status).toBe('COMPLETED');
-      expect(record?.result?.messageId).toBe('auto-wire-id');
-
-      syncClient.stop();
+      })).rejects.toThrow('Nodemailer email delivery is server-only');
     });
 
     it('automatically wires HTTP provider (e.g. Resend) via createSyncClient', async () => {

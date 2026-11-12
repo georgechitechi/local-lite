@@ -92,6 +92,11 @@ export async function createSyncClient(
 
   // 6. Direct Email Dispatch (Nodemailer, Resend, SendGrid, Postmark, HTTP, etc.)
   if (config.email) {
+    if (config.email.transport || config.email.provider === 'nodemailer') {
+      throw new Error(
+        "Nodemailer email delivery is server-only. Import 'local-lite/server' and register createNodemailerHandler from your server runtime.",
+      );
+    }
     const { createEmailHandler } = await import('../email/index.js');
     const emailHandler = createEmailHandler({
       provider: config.email.provider,

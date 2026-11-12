@@ -361,9 +361,10 @@ const emailAction = await client.actions.sendEmail({
 
 // ⚡ 2. Direct email dispatch (Nodemailer SMTP, Resend, SendGrid, Postmark, or HTTP webhook)
 import { createEmailHandler } from 'local-lite/email';
+import { createNodemailerHandler } from 'local-lite/server';
 
-// Nodemailer transport:
-client.actions.registerEmailHandler(createEmailHandler({
+// Nodemailer transport (server only):
+client.actions.registerEmailHandler(createNodemailerHandler({
   transport: { host: 'smtp.example.com', port: 587, auth: { user: '...', pass: '...' } },
   defaultFrom: 'Support <support@mycompany.com>',
 }));
@@ -371,7 +372,7 @@ client.actions.registerEmailHandler(createEmailHandler({
 // Or HTTP provider (e.g., Resend):
 // client.actions.registerEmailHandler(createEmailHandler({ provider: 'resend', apiKey: '...' }));
 
-// Or configure directly in defineSyncConfig({ email: { transport: { ... } } })!
+// HTTP providers can be configured directly in defineSyncConfig.
 
 // ⚡ 3. Enqueue arbitrary asynchronous actions (e.g., push notifications, analytics)
 await client.actions.enqueue({

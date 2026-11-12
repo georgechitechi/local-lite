@@ -1,9 +1,4 @@
 import type {
-  Transporter,
-  SendMailOptions,
-  TransportOptions,
-} from 'nodemailer';
-import type {
   ActionHandlerContext,
   ActionRecord,
   EmailAttachment,
@@ -32,7 +27,7 @@ export interface EmailHandlerOptions {
   /**
    * Additional default options merged into every outgoing email.
    */
-  defaults?: Partial<SendMailOptions> & Record<string, any>;
+  defaults?: Partial<EmailMailOptions> & Record<string, any>;
 
   /**
    * Custom template renderer invoked when `template` or `templateData` is provided in EmailPayload.
@@ -89,8 +84,20 @@ export interface EmailDeliveryConfig extends EmailHandlerOptions {
 }
 
 export type NodemailerHandlerOptions = EmailHandlerOptions;
-export type NodemailerTransportInput =
-  Transporter | TransportOptions | string | any;
+
+export interface EmailMailOptions {
+  to?: any;
+  from?: any;
+  subject?: string;
+  text?: string;
+  html?: string;
+  cc?: any;
+  bcc?: any;
+  replyTo?: any;
+  headers?: Record<string, any>;
+  attachments?: any[];
+  [key: string]: any;
+}
 
 export interface EmailSendResult {
   messageId: string;
@@ -111,7 +118,7 @@ export type ConcreteEmailHandler = (
 export interface DevSentEmail {
   id: string;
   sentAt: number;
-  mailOptions: SendMailOptions;
+  mailOptions: EmailMailOptions;
   payload: EmailPayload;
   record: ActionRecord<EmailPayload>;
 }
@@ -137,34 +144,6 @@ export class DevMailbox {
   static record(email: DevSentEmail): void {
     this.inbox.push(email);
   }
-}
-
-/**
- * Dynamically loads the nodemailer module if not already available.
- */
-export async function loadNodemailer(): Promise<any> {
-  try {
-    const mod = await import('nodemailer');
-    return mod.default || mod;
-  } catch (err: any) {
-    throw new Error(
-      "The 'nodemailer' package is required to send emails via Nodemailer transport. Please install it via 'npm install nodemailer'.",
-    );
-  }
-}
-
-/**
- * Resolves or instantiates a Nodemailer Transporter instance.
- */
-export async function resolveTransporter(
-  input: NodemailerTransportInput,
-  defaults?: Partial<SendMailOptions>,
-): Promise<Transporter> {
-  if (input && typeof input.sendMail === 'function') {
-    return input as Transporter;
-  }
-  const nm = await loadNodemailer();
-  return nm.createTransport(input, defaults);
 }
 
 function interpolate(templateStr: string, data: Record<string, any>): string {
@@ -249,8 +228,8 @@ export async function hydrateAttachment(att: EmailAttachment): Promise<any> {
 export function buildMailOptions(
   payload: EmailPayload,
   options: EmailHandlerOptions = {},
-): SendMailOptions {
-  const mailOptions: SendMailOptions = {
+): EmailMailOptions {
+  const mailOptions: EmailMailOptions = {
     ...options.defaults,
     to: payload.to,
     subject: payload.subject,
@@ -297,11 +276,11 @@ export function buildMailOptions(
   return mailOptions;
 }
 
-async function prepareMailOptions(
+export async function prepareMailOptions(
   payload: EmailPayload,
   options: EmailHandlerOptions,
   record: ActionRecord<EmailPayload>,
-): Promise<SendMailOptions> {
+): Promise<EmailMailOptions> {
   let mailOptions = buildMailOptions(payload, options);
 
   // 1. React Email / JSX rendering support
@@ -354,57 +333,6 @@ async function prepareMailOptions(
   }
 
   return mailOptions;
-}
-
-/**
- * Creates an EmailHandler for local-lite ActionManager that sends emails
- * directly via Nodemailer (SMTP, Sendmail, SES, etc.).
- */
-export function createNodemailerHandler(
-  transporterOrOptions: NodemailerTransportInput,
-  handlerOptions: NodemailerHandlerOptions = {},
-): ConcreteEmailHandler {
-  let cachedTransporter: Transporter | null =
-    transporterOrOptions &&
-    typeof (transporterOrOptions as any).sendMail === 'function'
-      ? (transporterOrOptions as Transporter)
-      : null;
-
-  const getTransporter = async (): Promise<Transporter> => {
-    if (!cachedTransporter) {
-      cachedTransporter = await resolveTransporter(
-        transporterOrOptions,
-        handlerOptions.defaults,
-      );
-    }
-    return cachedTransporter;
-  };
-
-  return async (
-    payload: EmailPayload,
-    record: ActionRecord<EmailPayload>,
-    _context: ActionHandlerContext,
-  ): Promise<EmailSendResult> => {
-    const transporter = await getTransporter();
-    const mailOptions = await prepareMailOptions(
-      payload,
-      handlerOptions,
-      record,
-    );
-
-    const info = await transporter.sendMail(mailOptions);
-
-    if (handlerOptions.afterSend) {
-      await handlerOptions.afterSend(info, payload, record);
-    }
-
-    return {
-      messageId: info.messageId,
-      response: info.response,
-      accepted: info.accepted,
-      rejected: info.rejected,
-    };
-  };
 }
 
 /**
@@ -646,7 +574,9 @@ export function createEmailHandler(
   }
 
   if (config.transport || config.provider === 'nodemailer') {
-    return createNodemailerHandler(config.transport || config, config);
+    throw new Error(
+      "Nodemailer email delivery is server-only. Import 'local-lite/server' for SMTP delivery.",
+    );
   }
 
   if (

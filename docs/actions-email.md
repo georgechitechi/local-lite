@@ -84,7 +84,7 @@ console.log('Enqueued email ID:', emailAction.id);
 
 #### Option A: Declarative Configuration via `defineSyncConfig`
 
-You can configure email delivery directly in `defineSyncConfig`. `local-lite` will automatically instantiate the transport and register the action handler:
+You can configure HTTP email delivery directly in `defineSyncConfig`. SMTP/Nodemailer must be registered from a server runtime using `local-lite/server`.
 
 **Using Nodemailer (SMTP / Transport):**
 ```typescript
@@ -128,16 +128,17 @@ const client = await createSyncClient(
 );
 ```
 
-#### Option B: Standalone Handlers (`local-lite/email`)
+#### Option B: Standalone Handlers
 
-You can also create standalone handlers using `createEmailHandler`, `createNodemailerHandler`, or `createHttpEmailHandler`:
+Use `createEmailHandler` or `createHttpEmailHandler` from `local-lite/email` for client-safe HTTP delivery. For SMTP, use `createNodemailerHandler` from `local-lite/server`.
 
 ```typescript
 import { createEmailHandler } from 'local-lite/email';
+import { createNodemailerHandler } from 'local-lite/server';
 
 // 1. Nodemailer SMTP transport
 client.actions.registerEmailHandler(
-  createEmailHandler({
+  createNodemailerHandler({
     transport: { host: 'smtp.sendgrid.net', port: 587, auth: { user: 'apikey', pass: process.env.SENDGRID_API_KEY } },
     defaultFrom: 'Support <support@mycompany.com>',
   })
