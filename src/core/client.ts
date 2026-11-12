@@ -1,5 +1,9 @@
 import { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
-import { RemoteAutomationJob, RemoteBackupArchive, RemoteDBAdapter } from '../adapters/remote/index.js';
+import {
+  RemoteAutomationJob,
+  RemoteBackupArchive,
+  RemoteDBAdapter,
+} from '../adapters/remote/index.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import { SyncWorker, SyncWorkerOptions } from './sync-worker.js';
 import { TableManager } from './table-manager.js';
@@ -28,7 +32,11 @@ import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier, isInternalTable } from '../utils/sql.js';
 import { isDeletedRecord, applyQueryOptions } from './query.js';
-import { QueryBuilder, AggregateSpec, AggregateResult } from './query-builder.js';
+import {
+  QueryBuilder,
+  AggregateSpec,
+  AggregateResult,
+} from './query-builder.js';
 import {
   exportTablesToJson,
   importTablesFromJson,
@@ -48,37 +56,17 @@ import {
   type EncryptedBackupOptions,
   type RestoreEncryptedBackupOptions,
 } from '../backups/index.js';
-import {
-  ActionManager,
-  type ActionManagerOptions,
-} from '../actions/index.js';
-import {
-  ApiKeyManager,
-  type ApiKeyManagerOptions,
-} from '../keys/index.js';
-import {
-  KVManager,
-  type KVStoreOptions,
-} from '../kv/index.js';
-import {
-  SearchManager,
-} from '../search/index.js';
+import { ActionManager, type ActionManagerOptions } from '../actions/index.js';
+import { ApiKeyManager, type ApiKeyManagerOptions } from '../keys/index.js';
+import { KVManager, type KVStoreOptions } from '../kv/index.js';
+import { SearchManager } from '../search/index.js';
 import {
   BlobStorageManager,
   type BlobStorageManagerOptions,
 } from '../storage/index.js';
-import {
-  JobScheduler,
-  type JobSchedulerOptions,
-} from '../scheduler/index.js';
-import {
-  SessionManager,
-  type SessionManagerOptions,
-} from '../auth/session.js';
-import {
-  LocalAuthEngine,
-  type LocalAuthEngineOptions,
-} from '../auth/local.js';
+import { JobScheduler, type JobSchedulerOptions } from '../scheduler/index.js';
+import { SessionManager, type SessionManagerOptions } from '../auth/session.js';
+import { LocalAuthEngine, type LocalAuthEngineOptions } from '../auth/local.js';
 
 export type OnDeleteAction = 'cascade' | 'restrict' | 'setNull' | 'noAction';
 
@@ -113,7 +101,9 @@ export interface LocalFirstClientConfig {
   coalesceOutbox?: boolean;
   jsonColumns?: Record<string, string[]>;
   autoHydrateJSON?: boolean;
-  syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  syncScope?:
+    | Record<string, any>
+    | (() => Record<string, any> | Promise<Record<string, any>>);
   autoPauseOnBackground?: boolean;
   /**
    * Stamp an "updated at" column on every local INSERT/UPDATE write so reactive
@@ -135,7 +125,7 @@ export interface LocalFirstClientConfig {
 }
 
 function normalizeSchemaMigrations(
-  migrations: SchemaMigration[]
+  migrations: SchemaMigration[],
 ): Array<{ version: number; up: string[] }> {
   if (!Array.isArray(migrations)) {
     throw new TypeError('schemaMigrations must be an array.');
@@ -147,37 +137,54 @@ function normalizeSchemaMigrations(
         !migration ||
         typeof migration !== 'object' ||
         !Number.isSafeInteger(migration.version) ||
-        migration.version < 1
+        migration.version < 1,
     )
   ) {
-    throw new TypeError('Each schema migration must have a positive integer version.');
+    throw new TypeError(
+      'Each schema migration must have a positive integer version.',
+    );
   }
 
   const ordered = [...migrations].sort((a, b) => a.version - b.version);
   return ordered.map((migration, index) => {
     const expectedVersion = index + 1;
-    if (!migration || !Number.isSafeInteger(migration.version) || migration.version !== expectedVersion) {
+    if (
+      !migration ||
+      !Number.isSafeInteger(migration.version) ||
+      migration.version !== expectedVersion
+    ) {
       throw new TypeError(
-        `schemaMigrations must use consecutive integer versions starting at 1; expected version ${expectedVersion}.`
+        `schemaMigrations must use consecutive integer versions starting at 1; expected version ${expectedVersion}.`,
       );
     }
 
-    const statements = Array.isArray(migration.up) ? migration.up : [migration.up];
+    const statements = Array.isArray(migration.up)
+      ? migration.up
+      : [migration.up];
     if (
       statements.length === 0 ||
-      statements.some((statement) => typeof statement !== 'string' || statement.trim().length === 0)
+      statements.some(
+        (statement) =>
+          typeof statement !== 'string' || statement.trim().length === 0,
+      )
     ) {
-      throw new TypeError(`schemaMigrations version ${migration.version} must contain non-empty SQL.`);
+      throw new TypeError(
+        `schemaMigrations version ${migration.version} must contain non-empty SQL.`,
+      );
     }
 
-    return { version: migration.version, up: statements.map((statement) => statement.trim()) };
+    return {
+      version: migration.version,
+      up: statements.map((statement) => statement.trim()),
+    };
   });
 }
 
 function hasFunctionFilter(value: any): boolean {
   if (typeof value === 'function') return true;
   if (Array.isArray(value)) return value.some(hasFunctionFilter);
-  if (value && typeof value === 'object') return Object.values(value).some(hasFunctionFilter);
+  if (value && typeof value === 'object')
+    return Object.values(value).some(hasFunctionFilter);
   return false;
 }
 
@@ -191,18 +198,22 @@ async function executeFindById<T>(
   id: string,
   primaryKey: string,
   hydrateRow: (t: string, r: any) => T,
-  includeDeleted?: boolean
+  includeDeleted?: boolean,
 ): Promise<T | null> {
   const safeTable = escapeIdentifier(tableName);
   const safePk = escapeIdentifier(primaryKey);
   try {
-    const rows = await db.execute(`SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`, [id]);
+    const rows = await db.execute(
+      `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
+      [id],
+    );
     if (!rows || rows.length === 0) return null;
     const row = hydrateRow(tableName, rows[0]);
     return !includeDeleted && isDeletedRecord(row) ? null : row;
   } catch (err: any) {
     const msg = String(err?.message || err || '');
-    if (msg.includes('no such table') || msg.includes('no such column')) return null;
+    if (msg.includes('no such table') || msg.includes('no such column'))
+      return null;
     throw err;
   }
 }
@@ -213,20 +224,26 @@ async function executeFindByIds<T>(
   ids: string[],
   primaryKey: string,
   hydrateRow: (t: string, r: any) => T,
-  includeDeleted?: boolean
+  includeDeleted?: boolean,
 ): Promise<T[]> {
   if (!ids || ids.length === 0) return [];
   const safeTable = escapeIdentifier(tableName);
   const safePk = escapeIdentifier(primaryKey);
   const placeholders = ids.map(() => '?').join(', ');
   try {
-    const rows = await db.execute(`SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`, ids);
+    const rows = await db.execute(
+      `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
+      ids,
+    );
     if (!rows || rows.length === 0) return [];
     const hydrated = rows.map((r) => hydrateRow(tableName, r));
-    return !includeDeleted ? hydrated.filter((r) => !isDeletedRecord(r)) : hydrated;
+    return !includeDeleted
+      ? hydrated.filter((r) => !isDeletedRecord(r))
+      : hydrated;
   } catch (err: any) {
     const msg = String(err?.message || err || '');
-    if (msg.includes('no such table') || msg.includes('no such column')) return [];
+    if (msg.includes('no such table') || msg.includes('no such column'))
+      return [];
     throw err;
   }
 }
@@ -235,16 +252,19 @@ export class TransactionalClient {
   constructor(
     private parent: LocalFirstClient,
     private tx: LocalTransaction,
-    private queuedTableEvents: Array<{ tableName: string; event: TableChangeEvent }>,
-    private queuedOutboxIds: string[]
-  ) { }
+    private queuedTableEvents: Array<{
+      tableName: string;
+      event: TableChangeEvent;
+    }>,
+    private queuedOutboxIds: string[],
+  ) {}
 
   async mutate(
     tableName: string,
     rowId: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     if (operation === 'DELETE') {
       await this.deleteRelated(tableName, rowId, new Set(), options);
@@ -258,26 +278,29 @@ export class TransactionalClient {
     tableName: string,
     rowId: string,
     visited: Set<string>,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     const key = `${tableName}:${rowId}`;
     if (visited.has(key)) return;
     visited.add(key);
 
     const relationships = this.parent.relationships.filter(
-      (relationship) => relationship.references === tableName
+      (relationship) => relationship.references === tableName,
     );
 
     for (const relationship of relationships) {
-      const relatedRows = await this.findMany<Record<string, any>>(relationship.table, {
-        where: { [relationship.foreignKey]: rowId },
-      });
+      const relatedRows = await this.findMany<Record<string, any>>(
+        relationship.table,
+        {
+          where: { [relationship.foreignKey]: rowId },
+        },
+      );
       if (relatedRows.length === 0) continue;
 
       const action = relationship.onDelete ?? 'noAction';
       if (action === 'restrict' || action === 'noAction') {
         throw new Error(
-          `Cannot delete ${tableName} record while ${relationship.table} records still reference it.`
+          `Cannot delete ${tableName} record while ${relationship.table} records still reference it.`,
         );
       }
 
@@ -289,7 +312,7 @@ export class TransactionalClient {
               relationship.table,
               String(childId),
               { [relationship.foreignKey]: null },
-              options
+              options,
             );
           }
         }
@@ -299,7 +322,12 @@ export class TransactionalClient {
       for (const row of relatedRows) {
         const childId = row[this.parent.getPrimaryKey()];
         if (childId !== undefined && childId !== null) {
-          await this.deleteRelated(relationship.table, String(childId), visited, options);
+          await this.deleteRelated(
+            relationship.table,
+            String(childId),
+            visited,
+            options,
+          );
         }
       }
     }
@@ -312,7 +340,7 @@ export class TransactionalClient {
     rowId: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     const pk = options.primaryKey ?? this.parent.getPrimaryKey();
     const timestamp = options.customTimestamp ?? Date.now();
@@ -324,7 +352,7 @@ export class TransactionalClient {
       operation,
       payload,
       pk,
-      this.parent.localMutationOptions(timestamp)
+      this.parent.localMutationOptions(timestamp),
     );
 
     if (!options.skipOutbox) {
@@ -334,7 +362,7 @@ export class TransactionalClient {
         rowId,
         operation,
         payload,
-        timestamp
+        timestamp,
       );
       if (outboxId) {
         this.queuedOutboxIds.push(outboxId);
@@ -356,7 +384,7 @@ export class TransactionalClient {
     tableName: string,
     rowIdOrPayload: string | Record<string, any>,
     payloadOrOptions?: Record<string, any> | MutateOptions,
-    options?: MutateOptions
+    options?: MutateOptions,
   ): Promise<string> {
     let rowId: string;
     let payload: Record<string, any>;
@@ -380,7 +408,7 @@ export class TransactionalClient {
     tableName: string,
     rowId: string,
     payload: Record<string, any>,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     await this.mutate(tableName, rowId, 'UPDATE', payload, options);
   }
@@ -388,7 +416,7 @@ export class TransactionalClient {
   async updateMany(
     tableName: string,
     updates: Array<{ id: string; payload: Record<string, any> }>,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     for (const u of updates) {
       await this.update(tableName, u.id, u.payload, options);
@@ -398,7 +426,7 @@ export class TransactionalClient {
   async delete(
     tableName: string,
     rowId: string,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     await this.mutate(tableName, rowId, 'DELETE', null, options);
   }
@@ -406,21 +434,41 @@ export class TransactionalClient {
   async findById<T = any>(
     tableName: string,
     id: string,
-    options?: { includeDeleted?: boolean }
+    options?: { includeDeleted?: boolean },
   ): Promise<T | null> {
-    return executeFindById<T>(this.tx, tableName, id, this.parent.getPrimaryKey(), (t, r) => this.parent.hydrateRow<T>(t, r), options?.includeDeleted);
+    return executeFindById<T>(
+      this.tx,
+      tableName,
+      id,
+      this.parent.getPrimaryKey(),
+      (t, r) => this.parent.hydrateRow<T>(t, r),
+      options?.includeDeleted,
+    );
   }
 
   async findByIds<T = any>(
     tableName: string,
     ids: string[],
-    options?: { includeDeleted?: boolean }
+    options?: { includeDeleted?: boolean },
   ): Promise<T[]> {
-    return executeFindByIds<T>(this.tx, tableName, ids, this.parent.getPrimaryKey(), (t, r) => this.parent.hydrateRow<T>(t, r), options?.includeDeleted);
+    return executeFindByIds<T>(
+      this.tx,
+      tableName,
+      ids,
+      this.parent.getPrimaryKey(),
+      (t, r) => this.parent.hydrateRow<T>(t, r),
+      options?.includeDeleted,
+    );
   }
 
-  async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    if (!this.parent.db.supportsSqlPushdown || shouldUseClientSideQuery(options)) {
+  async findMany<T = any>(
+    tableName: string,
+    options?: QueryOptions,
+  ): Promise<T[]> {
+    if (
+      !this.parent.db.supportsSqlPushdown ||
+      shouldUseClientSideQuery(options)
+    ) {
       const rows = await this.from<T>(tableName).execute();
       return applyQueryOptions<T>(rows, options);
     }
@@ -477,7 +525,9 @@ export class LocalFirstClient {
 
   constructor(config: LocalFirstClientConfig) {
     if ('migrations' in config) {
-      throw new TypeError('The migrations option has been removed. Use schemaMigrations instead.');
+      throw new TypeError(
+        'The migrations option has been removed. Use schemaMigrations instead.',
+      );
     }
     this.db = config.local;
     this.remote = config.remote;
@@ -488,21 +538,33 @@ export class LocalFirstClient {
     this.tables = config.tables ?? [];
     this.relationships = config.relationships ?? [];
     for (const relationship of this.relationships) {
-      if (!relationship.table || !relationship.foreignKey || !relationship.references) {
-        throw new TypeError('Each relationship requires table, foreignKey, and references.');
+      if (
+        !relationship.table ||
+        !relationship.foreignKey ||
+        !relationship.references
+      ) {
+        throw new TypeError(
+          'Each relationship requires table, foreignKey, and references.',
+        );
       }
       if (this.tables.length > 0) {
         for (const tableName of [relationship.table, relationship.references]) {
           if (!this.tables.includes(tableName)) {
-            throw new TypeError(`Relationship table "${tableName}" must be included in config.tables.`);
+            throw new TypeError(
+              `Relationship table "${tableName}" must be included in config.tables.`,
+            );
           }
         }
       }
       if (
         relationship.onDelete !== undefined &&
-        !['cascade', 'restrict', 'setNull', 'noAction'].includes(relationship.onDelete)
+        !['cascade', 'restrict', 'setNull', 'noAction'].includes(
+          relationship.onDelete,
+        )
       ) {
-        throw new TypeError(`Unsupported onDelete action: ${relationship.onDelete}`);
+        throw new TypeError(
+          `Unsupported onDelete action: ${relationship.onDelete}`,
+        );
       }
     }
     const relationshipKeys = new Set<string>();
@@ -510,12 +572,14 @@ export class LocalFirstClient {
       const key = `${relationship.references}\0${relationship.table}\0${relationship.foreignKey}`;
       if (relationshipKeys.has(key)) {
         throw new TypeError(
-          `Duplicate relationship for ${relationship.table}.${relationship.foreignKey} referencing ${relationship.references}.`
+          `Duplicate relationship for ${relationship.table}.${relationship.foreignKey} referencing ${relationship.references}.`,
         );
       }
       relationshipKeys.add(key);
     }
-    this.schemaMigrations = normalizeSchemaMigrations(config.schemaMigrations ?? []);
+    this.schemaMigrations = normalizeSchemaMigrations(
+      config.schemaMigrations ?? [],
+    );
     this.autoStart = config.autoStart ?? true;
     this.jsonColumns = config.jsonColumns ?? {};
     this.autoHydrateJSON = config.autoHydrateJSON ?? false;
@@ -525,7 +589,8 @@ export class LocalFirstClient {
         ? null
         : typeof touch === 'string'
           ? touch
-          : ((this.remote as any)?.updatedAtColumn as string | undefined) || 'updated_at';
+          : ((this.remote as any)?.updatedAtColumn as string | undefined) ||
+            'updated_at';
     this.schemaManager = new SchemaManager();
     this.maintenance = new DatabaseMaintenance(this.db, () => [
       ...this.tables,
@@ -543,16 +608,22 @@ export class LocalFirstClient {
     const actionNetwork = config.actions?.network ?? config.network;
     this.keys = new ApiKeyManager(this.db, config.keys);
     this.kv = new KVManager(this.db, this.events, config.kv);
-    this.search = new SearchManager(this.db, this.events, (table, id) => this.findById(table, id));
+    this.search = new SearchManager(this.db, this.events, (table, id) =>
+      this.findById(table, id),
+    );
     let storageUploader = config.storage?.uploader;
     if (!storageUploader && config.storage) {
       if (
         typeof (this.remote as any)?.createStorageUploader === 'function' &&
-        (config.storage.autoRemote !== false &&
-          (config.storage.autoRemote || config.storage.bucket || config.storage.uploadMutation))
+        config.storage.autoRemote !== false &&
+        (config.storage.autoRemote ||
+          config.storage.bucket ||
+          config.storage.uploadMutation)
       ) {
         try {
-          storageUploader = (this.remote as any).createStorageUploader(config.storage);
+          storageUploader = (this.remote as any).createStorageUploader(
+            config.storage,
+          );
         } catch {}
       }
     }
@@ -571,7 +642,7 @@ export class LocalFirstClient {
       this.db,
       this.session,
       this.events,
-      config.auth || config.localAuth
+      config.auth || config.localAuth,
     );
 
     this.actions = new ActionManager(
@@ -581,7 +652,7 @@ export class LocalFirstClient {
       {
         network: actionNetwork,
         ...config.actions,
-      }
+      },
     );
 
     const workerOptions: SyncWorkerOptions = {
@@ -601,7 +672,12 @@ export class LocalFirstClient {
       autoPauseOnBackground: config.autoPauseOnBackground,
     };
 
-    this.syncWorker = new SyncWorker(this.db, this.remote, this.events, workerOptions);
+    this.syncWorker = new SyncWorker(
+      this.db,
+      this.remote,
+      this.events,
+      workerOptions,
+    );
   }
 
   getPrimaryKey(): string {
@@ -614,7 +690,9 @@ export class LocalFirstClient {
    */
   async call<T = any>(functionName: string, args: any = {}): Promise<T> {
     if (!this.remote || typeof this.remote.call !== 'function') {
-      throw new Error(`The current remote adapter does not support remote function calls (call).`);
+      throw new Error(
+        `The current remote adapter does not support remote function calls (call).`,
+      );
     }
     return this.remote.call<T>(functionName, args);
   }
@@ -624,7 +702,9 @@ export class LocalFirstClient {
    */
   async queryRemote<T = any>(queryName: string, args: any = {}): Promise<T> {
     if (!this.remote || typeof this.remote.queryRemote !== 'function') {
-      throw new Error(`The current remote adapter does not support remote queries (queryRemote).`);
+      throw new Error(
+        `The current remote adapter does not support remote queries (queryRemote).`,
+      );
     }
     return this.remote.queryRemote<T>(queryName, args);
   }
@@ -641,7 +721,10 @@ export class LocalFirstClient {
         return [];
       },
       setEnabled: async (jobId: string, enabled: boolean): Promise<void> => {
-        if (this.remote && typeof this.remote.setAutomationEnabled === 'function') {
+        if (
+          this.remote &&
+          typeof this.remote.setAutomationEnabled === 'function'
+        ) {
           return this.remote.setAutomationEnabled(jobId, enabled);
         }
         throw new Error('Remote adapter does not support remote automations.');
@@ -694,7 +777,10 @@ export class LocalFirstClient {
       for (const col of cols) {
         if (typeof copy[col] === 'string') {
           const val = copy[col].trim();
-          if ((val.startsWith('{') && val.endsWith('}')) || (val.startsWith('[') && val.endsWith(']'))) {
+          if (
+            (val.startsWith('{') && val.endsWith('}')) ||
+            (val.startsWith('[') && val.endsWith(']'))
+          ) {
             try {
               copy[col] = JSON.parse(val);
             } catch {
@@ -738,7 +824,7 @@ export class LocalFirstClient {
     operation: SyncOp,
     payload: Record<string, any> | null,
     timestamp: number,
-    pendingOutboxMap?: Map<string, OutboxRecord>
+    pendingOutboxMap?: Map<string, OutboxRecord>,
   ): Promise<string | undefined> {
     const pendingKey = tableName + ':' + rowId;
     if (this.coalesceOutbox) {
@@ -752,7 +838,13 @@ export class LocalFirstClient {
             pendingOutboxMap?.delete(pendingKey);
             return undefined;
           }
-          await OutboxStore.updateOperation(tx, existing.id, 'DELETE', null, timestamp);
+          await OutboxStore.updateOperation(
+            tx,
+            existing.id,
+            'DELETE',
+            null,
+            timestamp,
+          );
           if (pendingOutboxMap) {
             existing.operation = 'DELETE';
             existing.payload = null;
@@ -770,7 +862,13 @@ export class LocalFirstClient {
           return existing.id;
         }
         if (operation === 'INSERT') {
-          await OutboxStore.updateOperation(tx, existing.id, 'INSERT', payload, timestamp);
+          await OutboxStore.updateOperation(
+            tx,
+            existing.id,
+            'INSERT',
+            payload,
+            timestamp,
+          );
           if (pendingOutboxMap) {
             existing.operation = 'INSERT';
             existing.payload = payload;
@@ -781,10 +879,24 @@ export class LocalFirstClient {
       }
     }
     const outboxId = generateUUID();
-    await OutboxStore.insertRecord(tx, { id: outboxId, tableName, rowId, operation, payload, timestamp });
+    await OutboxStore.insertRecord(tx, {
+      id: outboxId,
+      tableName,
+      rowId,
+      operation,
+      payload,
+      timestamp,
+    });
     pendingOutboxMap?.set(pendingKey, {
-      id: outboxId, tableName, rowId, operation, payload, timestamp,
-      status: 'PENDING', retryCount: 0, lastError: null,
+      id: outboxId,
+      tableName,
+      rowId,
+      operation,
+      payload,
+      timestamp,
+      status: 'PENDING',
+      retryCount: 0,
+      lastError: null,
     });
     return outboxId;
   }
@@ -844,23 +956,25 @@ export class LocalFirstClient {
         `CREATE TABLE IF NOT EXISTS schema_migrations (
           version INTEGER PRIMARY KEY,
           applied_at INTEGER NOT NULL
-        );`
+        );`,
       );
       const rows = await tx.execute(
-        'SELECT version FROM schema_migrations ORDER BY version ASC'
+        'SELECT version FROM schema_migrations ORDER BY version ASC',
       );
       const appliedVersions = rows.map((row) => Number(row.version));
 
       for (let index = 0; index < appliedVersions.length; index += 1) {
         if (appliedVersions[index] !== index + 1) {
-          throw new Error('The schema_migrations table contains a missing or invalid version.');
+          throw new Error(
+            'The schema_migrations table contains a missing or invalid version.',
+          );
         }
       }
 
       let currentVersion = appliedVersions.at(-1) ?? 0;
       if (currentVersion > this.schemaMigrations.length) {
         throw new Error(
-          `Database schema version ${currentVersion} is newer than the latest available migration (${this.schemaMigrations.length}).`
+          `Database schema version ${currentVersion} is newer than the latest available migration (${this.schemaMigrations.length}).`,
         );
       }
 
@@ -873,7 +987,7 @@ export class LocalFirstClient {
 
         await tx.execute(
           'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
-          [migration.version, Date.now()]
+          [migration.version, Date.now()],
         );
         currentVersion = migration.version;
       }
@@ -889,19 +1003,30 @@ export class LocalFirstClient {
     rowId: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     if (operation === 'DELETE') {
       if (options.tx) {
-        const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
+        const queuedEvents: Array<{
+          tableName: string;
+          event: TableChangeEvent;
+        }> = [];
         const queuedOutboxIds: string[] = [];
-        const txClient = new TransactionalClient(this, options.tx, queuedEvents, queuedOutboxIds);
+        const txClient = new TransactionalClient(
+          this,
+          options.tx,
+          queuedEvents,
+          queuedOutboxIds,
+        );
         await txClient.delete(tableName, rowId, options);
         for (const item of queuedEvents) {
           this.events.emit(item.tableName, item.event);
         }
         if (queuedOutboxIds.length > 0) {
-          this.events.emit('sync_outbox', { operation: 'INSERT', rowId: 'batch' });
+          this.events.emit('sync_outbox', {
+            operation: 'INSERT',
+            rowId: 'batch',
+          });
           this.syncWorker.schedulePush(20);
         }
       } else {
@@ -924,7 +1049,7 @@ export class LocalFirstClient {
         operation,
         payload,
         pk,
-        this.localMutationOptions(timestamp)
+        this.localMutationOptions(timestamp),
       );
 
       // 2. Insert into sync_outbox (if not skipped)
@@ -935,7 +1060,7 @@ export class LocalFirstClient {
           rowId,
           operation,
           payload,
-          timestamp
+          timestamp,
         );
       }
     };
@@ -968,17 +1093,26 @@ export class LocalFirstClient {
    * Executes multiple mutations in a single atomic database transaction.
    * Inserts all corresponding outbox entries together and schedules a single push.
    */
-  async batch(mutations: BatchMutation[], options: MutateOptions = {}): Promise<string[]> {
+  async batch(
+    mutations: BatchMutation[],
+    options: MutateOptions = {},
+  ): Promise<string[]> {
     if (!mutations || mutations.length === 0) return [];
 
     const generatedIds: string[] = [];
-    const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
+    const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> =
+      [];
     const queuedOutboxIds: string[] = [];
     const pendingOutboxOps: SyncOperation[] = [];
     let pendingOutboxMap: Map<string, OutboxRecord> | undefined;
 
     const executeInTx = async (tx: LocalTransaction) => {
-      const txClient = new TransactionalClient(this, tx, queuedEvents, queuedOutboxIds);
+      const txClient = new TransactionalClient(
+        this,
+        tx,
+        queuedEvents,
+        queuedOutboxIds,
+      );
       if (this.coalesceOutbox && mutations.length > 1) {
         pendingOutboxMap = await OutboxStore.getActivePendingMap(tx);
       }
@@ -991,7 +1125,8 @@ export class LocalFirstClient {
             ? String(payload[pk])
             : generateUUID());
         generatedIds.push(rowId);
-        const timestamp = m.customTimestamp ?? options.customTimestamp ?? Date.now();
+        const timestamp =
+          m.customTimestamp ?? options.customTimestamp ?? Date.now();
         const skipOutbox = m.skipOutbox ?? options.skipOutbox ?? false;
 
         if (m.operation === 'DELETE') {
@@ -1010,7 +1145,7 @@ export class LocalFirstClient {
           m.operation,
           payload,
           pk,
-          this.localMutationOptions(timestamp)
+          this.localMutationOptions(timestamp),
         );
 
         if (!skipOutbox) {
@@ -1022,7 +1157,7 @@ export class LocalFirstClient {
               m.operation,
               payload,
               timestamp,
-              pendingOutboxMap
+              pendingOutboxMap,
             );
             if (outboxId) {
               queuedOutboxIds.push(outboxId);
@@ -1082,7 +1217,7 @@ export class LocalFirstClient {
   async insertMany(
     tableName: string,
     records: Record<string, any>[],
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<string[]> {
     const pk = options.primaryKey ?? this.primaryKey;
     const mutations: BatchMutation[] = records.map((record) => {
@@ -1103,12 +1238,20 @@ export class LocalFirstClient {
    * If the callback resolves, all changes and outbox records commit and events are emitted.
    * If the callback throws, SQLite rolls back and no change events are emitted.
    */
-  async transaction<T>(action: (txClient: TransactionalClient) => Promise<T>): Promise<T> {
-    const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> = [];
+  async transaction<T>(
+    action: (txClient: TransactionalClient) => Promise<T>,
+  ): Promise<T> {
+    const queuedEvents: Array<{ tableName: string; event: TableChangeEvent }> =
+      [];
     const queuedOutboxIds: string[] = [];
 
     const result = await this.db.transaction(async (tx) => {
-      const txClient = new TransactionalClient(this, tx, queuedEvents, queuedOutboxIds);
+      const txClient = new TransactionalClient(
+        this,
+        tx,
+        queuedEvents,
+        queuedOutboxIds,
+      );
       return await action(txClient);
     });
 
@@ -1127,7 +1270,7 @@ export class LocalFirstClient {
   /**
    * Convenience helper to insert a record into a table.
    * Auto-generates a UUID if rowId is omitted or passed inside payload.
-   * 
+   *
    * Example:
    * await client.insert('todos', { title: 'Buy milk' });
    * await client.insert('todos', 'custom-id', { title: 'Buy milk' });
@@ -1136,7 +1279,7 @@ export class LocalFirstClient {
     tableName: string,
     rowIdOrPayload: string | Record<string, any>,
     payloadOrOptions?: Record<string, any> | MutateOptions,
-    options?: MutateOptions
+    options?: MutateOptions,
   ): Promise<string> {
     let rowId: string;
     let payload: Record<string, any>;
@@ -1158,7 +1301,7 @@ export class LocalFirstClient {
 
   /**
    * Convenience helper to update an existing record by ID.
-   * 
+   *
    * Example:
    * await client.update('todos', 'todo-1', { completed: 1 });
    */
@@ -1166,7 +1309,7 @@ export class LocalFirstClient {
     tableName: string,
     rowId: string,
     payload: Record<string, any>,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     await this.mutate(tableName, rowId, 'UPDATE', payload, options);
   }
@@ -1184,7 +1327,7 @@ export class LocalFirstClient {
   async updateMany(
     tableName: string,
     updates: Array<{ id: string; payload: Record<string, any> }>,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     if (!updates || updates.length === 0) return;
     const mutations: BatchMutation[] = updates.map((u) => ({
@@ -1198,14 +1341,14 @@ export class LocalFirstClient {
 
   /**
    * Convenience helper to delete a record by ID.
-   * 
+   *
    * Example:
    * await client.delete('todos', 'todo-1');
    */
   async delete(
     tableName: string,
     rowId: string,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<void> {
     await this.mutate(tableName, rowId, 'DELETE', null, options);
   }
@@ -1245,7 +1388,10 @@ export class LocalFirstClient {
   /**
    * Executes a native SQLite COUNT(*) query and returns the count directly.
    */
-  async count(tableName: string, options?: { where?: WhereFilter }): Promise<number> {
+  async count(
+    tableName: string,
+    options?: { where?: WhereFilter },
+  ): Promise<number> {
     const qb = this.from(tableName);
     if (options?.where) qb.where(options.where);
     return qb.count();
@@ -1254,7 +1400,11 @@ export class LocalFirstClient {
   /**
    * Executes a native SQLite SUM(column) query and returns the sum directly.
    */
-  async sum(tableName: string, column: string, options?: { where?: WhereFilter }): Promise<number> {
+  async sum(
+    tableName: string,
+    column: string,
+    options?: { where?: WhereFilter },
+  ): Promise<number> {
     const qb = this.from(tableName);
     if (options?.where) qb.where(options.where);
     return qb.sum(column);
@@ -1263,7 +1413,11 @@ export class LocalFirstClient {
   /**
    * Executes a native SQLite AVG(column) query and returns the average directly.
    */
-  async avg(tableName: string, column: string, options?: { where?: WhereFilter }): Promise<number | null> {
+  async avg(
+    tableName: string,
+    column: string,
+    options?: { where?: WhereFilter },
+  ): Promise<number | null> {
     const qb = this.from(tableName);
     if (options?.where) qb.where(options.where);
     return qb.avg(column);
@@ -1280,14 +1434,19 @@ export class LocalFirstClient {
    *   avg: ['amount']
    * });
    */
-  async aggregate(tableName: string, spec: AggregateSpec): Promise<AggregateResult> {
+  async aggregate(
+    tableName: string,
+    spec: AggregateSpec,
+  ): Promise<AggregateResult> {
     const projections: string[] = [];
     if (spec.count) {
       projections.push('COUNT(*) AS "_count"');
     }
     if (spec.sum) {
       for (const col of spec.sum) {
-        projections.push(`COALESCE(SUM("${col.replace(/"/g, '""')}"), 0) AS "sum_${col}"`);
+        projections.push(
+          `COALESCE(SUM("${col.replace(/"/g, '""')}"), 0) AS "sum_${col}"`,
+        );
       }
     }
     if (spec.avg) {
@@ -1320,7 +1479,8 @@ export class LocalFirstClient {
     const result: AggregateResult = {};
 
     if (spec.count) {
-      result.count = typeof row._count === 'number' ? row._count : Number(row._count) || 0;
+      result.count =
+        typeof row._count === 'number' ? row._count : Number(row._count) || 0;
     }
     if (spec.sum) {
       result.sum = {};
@@ -1333,7 +1493,8 @@ export class LocalFirstClient {
       result.avg = {};
       for (const col of spec.avg) {
         const val = row[`avg_${col}`];
-        result.avg[col] = val === null || val === undefined ? null : Number(val) || 0;
+        result.avg[col] =
+          val === null || val === undefined ? null : Number(val) || 0;
       }
     }
     if (spec.min) {
@@ -1352,7 +1513,10 @@ export class LocalFirstClient {
     return result;
   }
 
-  async findMany<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
+  async findMany<T = any>(
+    tableName: string,
+    options?: QueryOptions,
+  ): Promise<T[]> {
     if (!this.db.supportsSqlPushdown || shouldUseClientSideQuery(options)) {
       const rows = await this.from<T>(tableName).execute();
       return applyQueryOptions<T>(rows, options);
@@ -1377,28 +1541,41 @@ export class LocalFirstClient {
   /**
    * Convenience export of tables to JSON.
    */
-  async exportToJson(tables?: string[], options?: ExportJsonOptions): Promise<string> {
+  async exportToJson(
+    tables?: string[],
+    options?: ExportJsonOptions,
+  ): Promise<string> {
     return exportTablesToJson(this, tables, options);
   }
 
   /**
    * Convenience import of tables from JSON.
    */
-  async importFromJson(jsonString: string, options?: ImportJsonOptions): Promise<ImportSummary> {
+  async importFromJson(
+    jsonString: string,
+    options?: ImportJsonOptions,
+  ): Promise<ImportSummary> {
     return importTablesFromJson(this, jsonString, options);
   }
 
   /**
    * Convenience export of a table to RFC-4180 CSV.
    */
-  async exportToCsv(tableName: string, options?: ExportCsvOptions): Promise<string> {
+  async exportToCsv(
+    tableName: string,
+    options?: ExportCsvOptions,
+  ): Promise<string> {
     return exportTableToCsv(this, tableName, options);
   }
 
   /**
    * Convenience import of RFC-4180 CSV into a table.
    */
-  async importFromCsv(tableName: string, csvString: string, options?: ImportCsvOptions): Promise<{ rowCount: number }> {
+  async importFromCsv(
+    tableName: string,
+    csvString: string,
+    options?: ImportCsvOptions,
+  ): Promise<{ rowCount: number }> {
     return importTableFromCsv(this, tableName, csvString, options);
   }
 
@@ -1411,17 +1588,31 @@ export class LocalFirstClient {
   async findById<T = any>(
     tableName: string,
     id: string,
-    options?: { includeDeleted?: boolean }
+    options?: { includeDeleted?: boolean },
   ): Promise<T | null> {
-    return executeFindById<T>(this.db, tableName, id, this.primaryKey, (t, r) => this.hydrateRow<T>(t, r), options?.includeDeleted);
+    return executeFindById<T>(
+      this.db,
+      tableName,
+      id,
+      this.primaryKey,
+      (t, r) => this.hydrateRow<T>(t, r),
+      options?.includeDeleted,
+    );
   }
 
   async findByIds<T = any>(
     tableName: string,
     ids: string[],
-    options?: { includeDeleted?: boolean }
+    options?: { includeDeleted?: boolean },
   ): Promise<T[]> {
-    return executeFindByIds<T>(this.db, tableName, ids, this.primaryKey, (t, r) => this.hydrateRow<T>(t, r), options?.includeDeleted);
+    return executeFindByIds<T>(
+      this.db,
+      tableName,
+      ids,
+      this.primaryKey,
+      (t, r) => this.hydrateRow<T>(t, r),
+      options?.includeDeleted,
+    );
   }
 
   /**
@@ -1433,7 +1624,7 @@ export class LocalFirstClient {
     rowId: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    options: MutateOptions = {}
+    options: MutateOptions = {},
   ): Promise<string> {
     const outboxId = generateUUID();
     const timestamp = options.customTimestamp ?? Date.now();
@@ -1538,7 +1729,11 @@ export class LocalFirstClient {
   /**
    * Dynamically sets or updates the active sync scope.
    */
-  setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
+  setSyncScope(
+    scope?:
+      | Record<string, any>
+      | (() => Record<string, any> | Promise<Record<string, any>>),
+  ): void {
     this.syncWorker.setSyncScope(scope);
   }
 
@@ -1569,7 +1764,9 @@ export class LocalFirstClient {
    * Resets local state by stopping sync and deleting or dropping all managed tables,
    * clearing the sync_outbox and _sync_meta stores, and resetting the sync cursor.
    */
-  async reset(options: { dropTables?: boolean; includeInternal?: boolean } = {}): Promise<void> {
+  async reset(
+    options: { dropTables?: boolean; includeInternal?: boolean } = {},
+  ): Promise<void> {
     this.stop();
 
     const internalTables = [
@@ -1586,7 +1783,7 @@ export class LocalFirstClient {
         'sync_outbox',
         'sync_meta',
         ...(options.includeInternal ? internalTables : []),
-      ])
+      ]),
     );
     for (const table of tablesToReset) {
       try {
@@ -1609,7 +1806,7 @@ export class LocalFirstClient {
     this.events.emit('reset', { dropTables: options.dropTables ?? false });
   }
 
-    /**
+  /**
    * Checks if a table name belongs to internal system, FTS, or engine tables.
    */
   isInternalTable(tableName: string): boolean {
@@ -1621,16 +1818,20 @@ export class LocalFirstClient {
    * By default, internal tables (FTS shadow tables, local-lite engine tables) are excluded.
    * Pass `{ includeInternal: true }` to include internal tables.
    */
-  async getTables(options: { includeInternal?: boolean } = {}): Promise<string[]> {
+  async getTables(
+    options: { includeInternal?: boolean } = {},
+  ): Promise<string[]> {
     const includeInternal = options.includeInternal ?? false;
     const allTables = await this.getAllTableNames(options);
     if (includeInternal) {
       return allTables;
     }
-    return allTables.filter(name => !isInternalTable(name));
+    return allTables.filter((name) => !isInternalTable(name));
   }
 
-  async getAllTableNames(options: { includeInternal?: boolean } = {}): Promise<string[]> {
+  async getAllTableNames(
+    options: { includeInternal?: boolean } = {},
+  ): Promise<string[]> {
     const includeInternal = options.includeInternal ?? false;
     const list = new Set(this.tables);
     if (includeInternal) {
@@ -1654,7 +1855,7 @@ export class LocalFirstClient {
       // Non-SQLite database adapter, fallback to configured tables
     }
     if (!includeInternal) {
-      return Array.from(list).filter(name => !isInternalTable(name));
+      return Array.from(list).filter((name) => !isInternalTable(name));
     }
     return Array.from(list);
   }
@@ -1750,13 +1951,18 @@ export class LocalFirstClient {
       const text = new TextDecoder().decode(data);
       const parsed = JSON.parse(text);
       if (parsed.tables && typeof parsed.tables === 'object') {
-        await this.db.transaction(async tx => {
+        await this.db.transaction(async (tx) => {
           for (const [table, rows] of Object.entries(parsed.tables)) {
             const safeTable = escapeIdentifier(table);
             if (Array.isArray(rows) && rows.length > 0) {
               for (const row of rows) {
                 if (row && typeof row === 'object') {
-                  await this.schemaManager.ensureColumns(tx, table, row, this.primaryKey);
+                  await this.schemaManager.ensureColumns(
+                    tx,
+                    table,
+                    row,
+                    this.primaryKey,
+                  );
                 }
               }
               await tx.execute(`DELETE FROM ${safeTable}`);
@@ -1764,9 +1970,11 @@ export class LocalFirstClient {
                 const cols = Object.keys(row);
                 const safeCols = cols.map(escapeIdentifier).join(', ');
                 const placeholders = cols.map(() => '?').join(', ');
-                const values = cols.map(c => {
+                const values = cols.map((c) => {
                   const val = row[c];
-                  return val !== null && typeof val === 'object' ? JSON.stringify(val) : val;
+                  return val !== null && typeof val === 'object'
+                    ? JSON.stringify(val)
+                    : val;
                 });
                 await tx.execute(
                   `INSERT INTO ${safeTable} (${safeCols}) VALUES (${placeholders})`,
@@ -1785,7 +1993,9 @@ export class LocalFirstClient {
         return;
       }
     } catch (err: any) {
-      throw new Error(`Failed to import backup snapshot: ${err?.message || err}`);
+      throw new Error(
+        `Failed to import backup snapshot: ${err?.message || err}`,
+      );
     }
   }
 

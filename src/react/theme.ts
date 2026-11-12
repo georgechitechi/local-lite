@@ -48,7 +48,7 @@ export const lightTheme: SyncThemeColors = {
 
 export function resolveSyncTheme(
   themeProp?: 'auto' | 'dark' | 'light' | Partial<SyncThemeColors>,
-  systemColorScheme?: 'dark' | 'light' | null
+  systemColorScheme?: 'dark' | 'light' | null,
 ): SyncThemeColors {
   if (typeof themeProp === 'object' && themeProp !== null) {
     const base = themeProp.isDark === false ? lightTheme : darkTheme;
@@ -59,8 +59,8 @@ export function resolveSyncTheme(
     themeProp && themeProp !== 'auto'
       ? themeProp
       : systemColorScheme === 'light'
-      ? 'light'
-      : 'dark';
+        ? 'light'
+        : 'dark';
 
   return mode === 'light' ? lightTheme : darkTheme;
 }

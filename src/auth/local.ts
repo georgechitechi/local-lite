@@ -117,7 +117,7 @@ export interface RemoteAuthExchangeContext<TMetadata = any> {
 }
 
 export type RemoteAuthHandler<TMetadata = any> = (
-  context: RemoteAuthExchangeContext<TMetadata>
+  context: RemoteAuthExchangeContext<TMetadata>,
 ) => Promise<{ token: string; [key: string]: any } | null>;
 
 export interface SignUpOptions<TMetadata = Record<string, any>> {
@@ -179,7 +179,8 @@ export interface CreateResetTokenResult {
  * Generates cryptographically secure random bytes across Web, Expo/React Native, and Node.js.
  */
 export function getCryptoRandomBytes(length: number): Uint8Array {
-  const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const cryptoObj =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (cryptoObj?.getRandomValues) {
     try {
       return cryptoObj.getRandomValues(new Uint8Array(length));
@@ -213,7 +214,7 @@ export async function derivePbkdf2Key(
   password: string,
   salt: Uint8Array,
   iterations: number,
-  algorithm: string = DEFAULT_PASSWORD_ALGORITHM
+  algorithm: string = DEFAULT_PASSWORD_ALGORITHM,
 ): Promise<Uint8Array> {
   const isSha256 = algorithm.toUpperCase().includes('SHA256');
   const dkLen = isSha256 ? 32 : 64;
@@ -221,7 +222,10 @@ export async function derivePbkdf2Key(
   const hashFn = isSha256 ? sha256 : sha512;
 
   // 1. Try hardware-accelerated WebCrypto if supported
-  const subtle = typeof globalThis !== 'undefined' ? (globalThis as any).crypto?.subtle : undefined;
+  const subtle =
+    typeof globalThis !== 'undefined'
+      ? (globalThis as any).crypto?.subtle
+      : undefined;
   if (subtle?.importKey && subtle?.deriveBits) {
     try {
       const keyMaterial = await subtle.importKey(
@@ -229,7 +233,7 @@ export async function derivePbkdf2Key(
         utf8ToBytes(password),
         { name: 'PBKDF2' },
         false,
-        ['deriveBits']
+        ['deriveBits'],
       );
       const derivedBits = await subtle.deriveBits(
         {
@@ -239,7 +243,7 @@ export async function derivePbkdf2Key(
           hash: hashName,
         },
         keyMaterial,
-        dkLen * 8
+        dkLen * 8,
       );
       return new Uint8Array(derivedBits);
     } catch {
@@ -270,14 +274,24 @@ export async function derivePbkdf2Key(
  */
 export async function hashPassword(
   password: string,
-  options: { saltBytes?: number; iterations?: number; algorithm?: string } = {}
-): Promise<{ hash: string; salt: string; iterations: number; algorithm: string }> {
+  options: { saltBytes?: number; iterations?: number; algorithm?: string } = {},
+): Promise<{
+  hash: string;
+  salt: string;
+  iterations: number;
+  algorithm: string;
+}> {
   const saltLen = options.saltBytes ?? DEFAULT_SALT_BYTES;
   const iterations = options.iterations ?? DEFAULT_PASSWORD_ITERATIONS;
   const algorithm = options.algorithm ?? DEFAULT_PASSWORD_ALGORITHM;
   const salt = getCryptoRandomBytes(saltLen);
 
-  const derivedKey = await derivePbkdf2Key(password, salt, iterations, algorithm);
+  const derivedKey = await derivePbkdf2Key(
+    password,
+    salt,
+    iterations,
+    algorithm,
+  );
 
   return {
     hash: bytesToHex(derivedKey),
@@ -295,13 +309,21 @@ export async function verifyPassword(
   expectedHashHex: string,
   saltHex: string,
   iterations: number,
-  algorithm: string = DEFAULT_PASSWORD_ALGORITHM
+  algorithm: string = DEFAULT_PASSWORD_ALGORITHM,
 ): Promise<boolean> {
   try {
     const salt = hexToBytes(saltHex);
-    const derivedKey = await derivePbkdf2Key(password, salt, iterations, algorithm);
+    const derivedKey = await derivePbkdf2Key(
+      password,
+      salt,
+      iterations,
+      algorithm,
+    );
     const actualHashHex = bytesToHex(derivedKey);
-    return timingSafeEqual(actualHashHex.toLowerCase(), expectedHashHex.toLowerCase());
+    return timingSafeEqual(
+      actualHashHex.toLowerCase(),
+      expectedHashHex.toLowerCase(),
+    );
   } catch {
     return false;
   }
@@ -310,7 +332,10 @@ export async function verifyPassword(
 /**
  * Generates an opaque random token and its corresponding SHA-256 hash.
  */
-export function generateCryptoToken(lengthBytes: number = 32): { token: string; hash: string } {
+export function generateCryptoToken(lengthBytes: number = 32): {
+  token: string;
+  hash: string;
+} {
   const bytes = getCryptoRandomBytes(lengthBytes);
   const token = bytesToHex(bytes);
   const hash = bytesToHex(sha256(utf8ToBytes(token)));
@@ -320,11 +345,16 @@ export function generateCryptoToken(lengthBytes: number = 32): { token: string; 
 /**
  * Converts a raw database row into a sanitized user object without secret credentials.
  */
-export function mapStoredUserRow<TMetadata = any>(row: any): LocalUser<TMetadata> {
+export function mapStoredUserRow<TMetadata = any>(
+  row: any,
+): LocalUser<TMetadata> {
   let metadata: TMetadata | null = null;
   if (row.metadata) {
     try {
-      metadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+      metadata =
+        typeof row.metadata === 'string'
+          ? JSON.parse(row.metadata)
+          : row.metadata;
     } catch {
       metadata = row.metadata as TMetadata;
     }
@@ -340,7 +370,10 @@ export function mapStoredUserRow<TMetadata = any>(row: any): LocalUser<TMetadata
     status: (row.status as UserStatus) || 'active',
     failedLoginAttempts: Number(row.failed_login_attempts || 0),
     lockedUntil: row.locked_until != null ? Number(row.locked_until) : null,
-    emailVerified: row.email_verified === 1 || row.email_verified === '1' || row.email_verified === true,
+    emailVerified:
+      row.email_verified === 1 ||
+      row.email_verified === '1' ||
+      row.email_verified === true,
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0),
     lastLoginAt: row.last_login_at != null ? Number(row.last_login_at) : null,
@@ -369,9 +402,10 @@ export class LocalAuthEngine {
 
   constructor(
     private db: DBExecutable,
-    sessionOrManager?: SessionManager | SessionManagerOptions | LocalAuthEngineOptions,
+    sessionOrManager?:
+      SessionManager | SessionManagerOptions | LocalAuthEngineOptions,
     private events?: EventEmitter,
-    options: LocalAuthEngineOptions = {}
+    options: LocalAuthEngineOptions = {},
   ) {
     let resolvedOptions = options;
     let resolvedSession: SessionManager | SessionManagerOptions | undefined =
@@ -400,17 +434,25 @@ export class LocalAuthEngine {
     this.algorithm = resolvedOptions.algorithm || DEFAULT_PASSWORD_ALGORITHM;
     this.iterations = resolvedOptions.iterations || DEFAULT_PASSWORD_ITERATIONS;
     this.saltBytes = resolvedOptions.saltBytes || DEFAULT_SALT_BYTES;
-    this.maxFailedAttempts = resolvedOptions.maxFailedAttempts ?? DEFAULT_LOCKOUT_ATTEMPTS;
-    this.lockoutDurationMs = resolvedOptions.lockoutDurationMs ?? DEFAULT_LOCKOUT_DURATION_MS;
-    this.resetTokenExpiryMs = resolvedOptions.resetTokenExpiryMs ?? DEFAULT_RESET_TOKEN_EXPIRY_MS;
-    this.minPasswordLength = resolvedOptions.minPasswordLength ?? DEFAULT_MIN_PASSWORD_LENGTH;
+    this.maxFailedAttempts =
+      resolvedOptions.maxFailedAttempts ?? DEFAULT_LOCKOUT_ATTEMPTS;
+    this.lockoutDurationMs =
+      resolvedOptions.lockoutDurationMs ?? DEFAULT_LOCKOUT_DURATION_MS;
+    this.resetTokenExpiryMs =
+      resolvedOptions.resetTokenExpiryMs ?? DEFAULT_RESET_TOKEN_EXPIRY_MS;
+    this.minPasswordLength =
+      resolvedOptions.minPasswordLength ?? DEFAULT_MIN_PASSWORD_LENGTH;
     this.customPasswordValidator = resolvedOptions.validatePassword;
     this.remoteAuthHandler = resolvedOptions.remoteAuthHandler;
 
     if (resolvedSession instanceof SessionManager) {
       this.sessionManager = resolvedSession;
     } else {
-      this.sessionManager = new SessionManager(this.db, this.events, resolvedSession);
+      this.sessionManager = new SessionManager(
+        this.db,
+        this.events,
+        resolvedSession,
+      );
     }
   }
 
@@ -431,7 +473,10 @@ export class LocalAuthEngine {
   /**
    * Triggers token exchange with the registered remote sync provider for the active session.
    */
-  async exchangeRemoteAuth(): Promise<{ token: string; [key: string]: any } | null> {
+  async exchangeRemoteAuth(): Promise<{
+    token: string;
+    [key: string]: any;
+  } | null> {
     if (!this.remoteAuthHandler) return null;
     const session = await this.sessionManager.getActiveSession();
     if (!session || !session.userId) return null;
@@ -523,13 +568,17 @@ export class LocalAuthEngine {
   /**
    * Registers a new user with high-level crypto credentials.
    */
-  async signUp<TMetadata = any>(options: SignUpOptions<TMetadata>): Promise<SignInResult<TMetadata>> {
+  async signUp<TMetadata = any>(
+    options: SignUpOptions<TMetadata>,
+  ): Promise<SignInResult<TMetadata>> {
     const email = (options.email || '').trim().toLowerCase();
     if (!email || !email.includes('@')) {
       throw new Error('A valid email address is required.');
     }
 
-    const username = options.username ? options.username.trim().toLowerCase() : null;
+    const username = options.username
+      ? options.username.trim().toLowerCase()
+      : null;
     this.assertValidPassword(options.password);
 
     // Uniqueness checks
@@ -553,7 +602,9 @@ export class LocalAuthEngine {
       algorithm: this.algorithm,
     });
 
-    const metadataStr = options.metadata ? JSON.stringify(options.metadata) : null;
+    const metadataStr = options.metadata
+      ? JSON.stringify(options.metadata)
+      : null;
     const role = options.role || 'user';
     const emailVerified = options.emailVerified ? 1 : 0;
 
@@ -577,7 +628,7 @@ export class LocalAuthEngine {
         emailVerified,
         now,
         now,
-      ]
+      ],
     );
 
     const user: LocalUser<TMetadata> = {
@@ -626,7 +677,9 @@ export class LocalAuthEngine {
    * Authenticates a user by email or username using constant-time PBKDF2 comparison.
    * Handles brute-force protection, account locking, and session initialization.
    */
-  async signIn<TMetadata = any>(options: SignInOptions): Promise<SignInResult<TMetadata>> {
+  async signIn<TMetadata = any>(
+    options: SignInOptions,
+  ): Promise<SignInResult<TMetadata>> {
     const identifier = (options.identifier || '').trim().toLowerCase();
     const password = options.password || '';
 
@@ -636,14 +689,21 @@ export class LocalAuthEngine {
 
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlUsersTable} WHERE lower(email) = ? OR lower(username) = ? LIMIT 1;`,
-      [identifier, identifier]
+      [identifier, identifier],
     );
 
-    const row = (rows && rows.length > 0 ? rows[0] : null) as StoredUserRow | null;
+    const row = (
+      rows && rows.length > 0 ? rows[0] : null
+    ) as StoredUserRow | null;
 
     if (!row) {
       // Dummy verification to mitigate timing attacks against non-existent accounts
-      await verifyPassword('dummy_password', '0'.repeat(128), '0'.repeat(32), Math.min(this.iterations, 5_000));
+      await verifyPassword(
+        'dummy_password',
+        '0'.repeat(128),
+        '0'.repeat(32),
+        Math.min(this.iterations, 5_000),
+      );
       throw new Error('Invalid email/username or password.');
     }
 
@@ -653,7 +713,7 @@ export class LocalAuthEngine {
     if (row.locked_until && row.locked_until > now) {
       const waitMinutes = Math.ceil((row.locked_until - now) / 60000);
       throw new Error(
-        `Account is temporarily locked due to consecutive failed login attempts. Please try again in ${waitMinutes} minute(s).`
+        `Account is temporarily locked due to consecutive failed login attempts. Please try again in ${waitMinutes} minute(s).`,
       );
     }
 
@@ -668,7 +728,7 @@ export class LocalAuthEngine {
       row.password_hash,
       row.salt,
       row.iterations,
-      row.algorithm
+      row.algorithm,
     );
 
     if (!isValid) {
@@ -688,13 +748,13 @@ export class LocalAuthEngine {
 
       await this.db.execute(
         `UPDATE ${this.sqlUsersTable} SET failed_login_attempts = ?, locked_until = ?, status = ?, updated_at = ? WHERE id = ?;`,
-        [attempts, lockedUntil, newStatus, now, row.id]
+        [attempts, lockedUntil, newStatus, now, row.id],
       );
 
       if (lockedUntil) {
         const waitMinutes = Math.ceil(this.lockoutDurationMs / 60000);
         throw new Error(
-          `Account has been locked due to ${attempts} failed attempts. Please try again in ${waitMinutes} minute(s).`
+          `Account has been locked due to ${attempts} failed attempts. Please try again in ${waitMinutes} minute(s).`,
         );
       }
 
@@ -704,11 +764,14 @@ export class LocalAuthEngine {
     // Reset failed attempts and update last login timestamp
     await this.db.execute(
       `UPDATE ${this.sqlUsersTable} SET failed_login_attempts = 0, locked_until = NULL, status = 'active', last_login_at = ?, updated_at = ? WHERE id = ?;`,
-      [now, now, row.id]
+      [now, now, row.id],
     );
 
     // Auto-upgrade legacy or slower hashes to modern PBKDF2-SHA256 standard
-    if (row.algorithm !== this.algorithm || row.iterations !== this.iterations) {
+    if (
+      row.algorithm !== this.algorithm ||
+      row.iterations !== this.iterations
+    ) {
       try {
         const upgraded = await hashPassword(password, {
           saltBytes: this.saltBytes,
@@ -717,7 +780,13 @@ export class LocalAuthEngine {
         });
         await this.db.execute(
           `UPDATE ${this.sqlUsersTable} SET password_hash = ?, salt = ?, iterations = ?, algorithm = ? WHERE id = ?;`,
-          [upgraded.hash, upgraded.salt, upgraded.iterations, upgraded.algorithm, row.id]
+          [
+            upgraded.hash,
+            upgraded.salt,
+            upgraded.iterations,
+            upgraded.algorithm,
+            row.id,
+          ],
         );
       } catch {
         // Non-critical upgrade
@@ -764,20 +833,29 @@ export class LocalAuthEngine {
   async signOut(): Promise<void> {
     const current = await this.sessionManager.getActiveSession();
     await this.sessionManager.clearSession();
-    this.events?.emit(this.usersTable, { operation: 'SIGN_OUT', userId: current?.userId });
+    this.events?.emit(this.usersTable, {
+      operation: 'SIGN_OUT',
+      userId: current?.userId,
+    });
   }
 
   /**
    * Subscribes to authentication state changes (sign in, sign out, user updates).
    */
-  onAuthStateChange(listener: (user: LocalUser<any> | null) => void): () => void {
+  onAuthStateChange(
+    listener: (user: LocalUser<any> | null) => void,
+  ): () => void {
     if (!this.events) return () => {};
     const unsubs = [
       this.events.on(this.usersTable, () => {
-        this.getCurrentUser().then(listener).catch(() => {});
+        this.getCurrentUser()
+          .then(listener)
+          .catch(() => {});
       }),
       this.events.on('_local_sessions', () => {
-        this.getCurrentUser().then(listener).catch(() => {});
+        this.getCurrentUser()
+          .then(listener)
+          .catch(() => {});
       }),
     ];
     return () => {
@@ -788,8 +866,11 @@ export class LocalAuthEngine {
   /**
    * Retrieves the currently authenticated local user based on the active session.
    */
-  async getCurrentUser<TMetadata = any>(): Promise<LocalUser<TMetadata> | null> {
-    const session = await this.sessionManager.getActiveSession<LocalUser<TMetadata>>();
+  async getCurrentUser<
+    TMetadata = any,
+  >(): Promise<LocalUser<TMetadata> | null> {
+    const session =
+      await this.sessionManager.getActiveSession<LocalUser<TMetadata>>();
     if (!session || !session.userId) return null;
     return this.getUserById<TMetadata>(session.userId);
   }
@@ -804,10 +885,12 @@ export class LocalAuthEngine {
   /**
    * Finds a user by unique ID.
    */
-  async getUserById<TMetadata = any>(id: string): Promise<LocalUser<TMetadata> | null> {
+  async getUserById<TMetadata = any>(
+    id: string,
+  ): Promise<LocalUser<TMetadata> | null> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlUsersTable} WHERE id = ? LIMIT 1;`,
-      [id]
+      [id],
     );
     if (!rows || rows.length === 0) return null;
     return mapStoredUserRow<TMetadata>(rows[0]);
@@ -816,10 +899,12 @@ export class LocalAuthEngine {
   /**
    * Finds a user by email address (case-insensitive).
    */
-  async getUserByEmail<TMetadata = any>(email: string): Promise<LocalUser<TMetadata> | null> {
+  async getUserByEmail<TMetadata = any>(
+    email: string,
+  ): Promise<LocalUser<TMetadata> | null> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlUsersTable} WHERE lower(email) = ? LIMIT 1;`,
-      [email.trim().toLowerCase()]
+      [email.trim().toLowerCase()],
     );
     if (!rows || rows.length === 0) return null;
     return mapStoredUserRow<TMetadata>(rows[0]);
@@ -828,10 +913,12 @@ export class LocalAuthEngine {
   /**
    * Finds a user by username (case-insensitive).
    */
-  async getUserByUsername<TMetadata = any>(username: string): Promise<LocalUser<TMetadata> | null> {
+  async getUserByUsername<TMetadata = any>(
+    username: string,
+  ): Promise<LocalUser<TMetadata> | null> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlUsersTable} WHERE lower(username) = ? LIMIT 1;`,
-      [username.trim().toLowerCase()]
+      [username.trim().toLowerCase()],
     );
     if (!rows || rows.length === 0) return null;
     return mapStoredUserRow<TMetadata>(rows[0]);
@@ -843,10 +930,12 @@ export class LocalAuthEngine {
   async changePassword(options: ChangePasswordOptions): Promise<void> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlUsersTable} WHERE id = ? LIMIT 1;`,
-      [options.userId]
+      [options.userId],
     );
 
-    const row = (rows && rows.length > 0 ? rows[0] : null) as StoredUserRow | null;
+    const row = (
+      rows && rows.length > 0 ? rows[0] : null
+    ) as StoredUserRow | null;
     if (!row) {
       throw new Error('User not found.');
     }
@@ -856,7 +945,7 @@ export class LocalAuthEngine {
       row.password_hash,
       row.salt,
       row.iterations,
-      row.algorithm
+      row.algorithm,
     );
 
     if (!isOldValid) {
@@ -873,7 +962,14 @@ export class LocalAuthEngine {
 
     await this.db.execute(
       `UPDATE ${this.sqlUsersTable} SET password_hash = ?, salt = ?, iterations = ?, algorithm = ?, updated_at = ? WHERE id = ?;`,
-      [creds.hash, creds.salt, creds.iterations, creds.algorithm, now, options.userId]
+      [
+        creds.hash,
+        creds.salt,
+        creds.iterations,
+        creds.algorithm,
+        now,
+        options.userId,
+      ],
     );
 
     this.events?.emit(this.usersTable, {
@@ -885,11 +981,13 @@ export class LocalAuthEngine {
   /**
    * Generates a cryptographically secure, single-use password reset token with expiration.
    */
-  async createPasswordResetToken(emailOrUsername: string): Promise<CreateResetTokenResult> {
+  async createPasswordResetToken(
+    emailOrUsername: string,
+  ): Promise<CreateResetTokenResult> {
     const identifier = (emailOrUsername || '').trim().toLowerCase();
     const rows = await this.db.execute(
       `SELECT id FROM ${this.sqlUsersTable} WHERE lower(email) = ? OR lower(username) = ? LIMIT 1;`,
-      [identifier, identifier]
+      [identifier, identifier],
     );
 
     if (!rows || rows.length === 0) {
@@ -905,7 +1003,7 @@ export class LocalAuthEngine {
     await this.db.execute(
       `INSERT INTO ${this.sqlTokensTable} (id, user_id, token_hash, type, expires_at, created_at, used_at)
        VALUES (?, ?, ?, 'reset_password', ?, ?, NULL);`,
-      [tokenId, userId, hash, expiresAt, now]
+      [tokenId, userId, hash, expiresAt, now],
     );
 
     return { token, expiresAt };
@@ -914,7 +1012,10 @@ export class LocalAuthEngine {
   /**
    * Resets a user's password using a valid cryptographic reset token.
    */
-  async resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
+  async resetPasswordWithToken(
+    token: string,
+    newPassword: string,
+  ): Promise<void> {
     if (!token || !token.trim()) {
       throw new Error('A valid reset token is required.');
     }
@@ -926,7 +1027,7 @@ export class LocalAuthEngine {
 
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlTokensTable} WHERE token_hash = ? AND type = 'reset_password' AND used_at IS NULL AND expires_at > ? LIMIT 1;`,
-      [tokenHash, now]
+      [tokenHash, now],
     );
 
     if (!rows || rows.length === 0) {
@@ -944,13 +1045,13 @@ export class LocalAuthEngine {
     // Invalidate token
     await this.db.execute(
       `UPDATE ${this.sqlTokensTable} SET used_at = ? WHERE id = ?;`,
-      [now, tokenRow.id]
+      [now, tokenRow.id],
     );
 
     // Update password and unlock account
     await this.db.execute(
       `UPDATE ${this.sqlUsersTable} SET password_hash = ?, salt = ?, iterations = ?, algorithm = ?, failed_login_attempts = 0, locked_until = NULL, status = 'active', updated_at = ? WHERE id = ?;`,
-      [creds.hash, creds.salt, creds.iterations, creds.algorithm, now, userId]
+      [creds.hash, creds.salt, creds.iterations, creds.algorithm, now, userId],
     );
 
     this.events?.emit(this.usersTable, {
@@ -964,7 +1065,7 @@ export class LocalAuthEngine {
    */
   async updateUser<TMetadata = any>(
     id: string,
-    updates: UpdateUserOptions<TMetadata>
+    updates: UpdateUserOptions<TMetadata>,
   ): Promise<LocalUser<TMetadata>> {
     const existing = await this.getUserById<TMetadata>(id);
     if (!existing) {
@@ -977,11 +1078,14 @@ export class LocalAuthEngine {
 
     if (updates.email !== undefined) {
       const email = updates.email.trim().toLowerCase();
-      if (!email.includes('@')) throw new Error('A valid email address is required.');
+      if (!email.includes('@'))
+        throw new Error('A valid email address is required.');
       if (email !== existing.email) {
         const conflict = await this.getUserByEmail(email);
         if (conflict && conflict.id !== id) {
-          throw new Error('Email address is already in use by another account.');
+          throw new Error(
+            'Email address is already in use by another account.',
+          );
         }
       }
       setClauses.push('email = ?');
@@ -989,7 +1093,9 @@ export class LocalAuthEngine {
     }
 
     if (updates.username !== undefined) {
-      const username = updates.username ? updates.username.trim().toLowerCase() : null;
+      const username = updates.username
+        ? updates.username.trim().toLowerCase()
+        : null;
       if (username && username !== existing.username) {
         const conflict = await this.getUserByUsername(username);
         if (conflict && conflict.id !== id) {
@@ -1028,7 +1134,7 @@ export class LocalAuthEngine {
     params.push(id);
     await this.db.execute(
       `UPDATE ${this.sqlUsersTable} SET ${setClauses.join(', ')} WHERE id = ?;`,
-      params
+      params,
     );
 
     const updated = (await this.getUserById<TMetadata>(id))!;
@@ -1039,7 +1145,10 @@ export class LocalAuthEngine {
       await this.sessionManager.updateUser(updated);
     }
 
-    this.events?.emit(this.usersTable, { operation: 'USER_UPDATED', user: updated });
+    this.events?.emit(this.usersTable, {
+      operation: 'USER_UPDATED',
+      user: updated,
+    });
     return updated;
   }
 
@@ -1047,15 +1156,23 @@ export class LocalAuthEngine {
    * Permanently deletes a user, their associated tokens, and clears any active session.
    */
   async deleteUser(id: string): Promise<void> {
-    await this.db.execute(`DELETE FROM ${this.sqlTokensTable} WHERE user_id = ?;`, [id]);
-    await this.db.execute(`DELETE FROM ${this.sqlUsersTable} WHERE id = ?;`, [id]);
+    await this.db.execute(
+      `DELETE FROM ${this.sqlTokensTable} WHERE user_id = ?;`,
+      [id],
+    );
+    await this.db.execute(`DELETE FROM ${this.sqlUsersTable} WHERE id = ?;`, [
+      id,
+    ]);
 
     const active = await this.sessionManager.getActiveSession();
     if (active && active.userId === id) {
       await this.sessionManager.clearSession();
     }
 
-    this.events?.emit(this.usersTable, { operation: 'USER_DELETED', userId: id });
+    this.events?.emit(this.usersTable, {
+      operation: 'USER_DELETED',
+      userId: id,
+    });
   }
 
   /**
@@ -1068,10 +1185,14 @@ export class LocalAuthEngine {
 
     await this.db.execute(
       `UPDATE ${this.sqlUsersTable} SET status = 'locked', locked_until = ?, updated_at = ? WHERE id = ?;`,
-      [lockedUntil, now, userId]
+      [lockedUntil, now, userId],
     );
 
-    this.events?.emit(this.usersTable, { operation: 'ACCOUNT_LOCKED', userId, lockedUntil });
+    this.events?.emit(this.usersTable, {
+      operation: 'ACCOUNT_LOCKED',
+      userId,
+      lockedUntil,
+    });
   }
 
   /**
@@ -1081,17 +1202,25 @@ export class LocalAuthEngine {
     const now = Date.now();
     await this.db.execute(
       `UPDATE ${this.sqlUsersTable} SET status = 'active', failed_login_attempts = 0, locked_until = NULL, updated_at = ? WHERE id = ?;`,
-      [now, userId]
+      [now, userId],
     );
 
-    this.events?.emit(this.usersTable, { operation: 'ACCOUNT_UNLOCKED', userId });
+    this.events?.emit(this.usersTable, {
+      operation: 'ACCOUNT_UNLOCKED',
+      userId,
+    });
   }
 
   /**
    * Lists local users with optional role, status filtering, and pagination.
    */
   async listUsers<TMetadata = any>(
-    options: { limit?: number; offset?: number; status?: UserStatus; role?: string } = {}
+    options: {
+      limit?: number;
+      offset?: number;
+      status?: UserStatus;
+      role?: string;
+    } = {},
   ): Promise<LocalUser<TMetadata>[]> {
     const conditions: string[] = [];
     const params: any[] = [];
@@ -1106,13 +1235,14 @@ export class LocalAuthEngine {
       params.push(options.role);
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const limit = options.limit ?? 50;
     const offset = options.offset ?? 0;
 
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlUsersTable} ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?;`,
-      [...params, limit, offset]
+      [...params, limit, offset],
     );
 
     return (rows || []).map((r) => mapStoredUserRow<TMetadata>(r));
@@ -1123,7 +1253,9 @@ export class LocalAuthEngine {
       throw new Error('A password must be provided.');
     }
     if (password.length < this.minPasswordLength) {
-      throw new Error(`Password must be at least ${this.minPasswordLength} characters long.`);
+      throw new Error(
+        `Password must be at least ${this.minPasswordLength} characters long.`,
+      );
     }
     if (this.customPasswordValidator) {
       const res = this.customPasswordValidator(password);

@@ -3,7 +3,10 @@ import { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 import { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 import { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
 import { SelfHostedRemoteAdapter } from '../adapters/remote/self-hosted.js';
-import { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
+import {
+  MemoryDemoRemoteAdapter,
+  NoopRemoteAdapter,
+} from '../adapters/remote/demo.js';
 import { safeDynamicImport, safeDynamicRequire } from '../utils/dynamic.js';
 import { LocalLiteConfig } from './types.js';
 
@@ -15,7 +18,9 @@ const SUPABASE_PKG = ['@supabase', 'supabase-js'].join('/');
  * Resolves or instantiates the appropriate RemoteDBAdapter based on the provided configuration.
  * Supports Supabase, Convex, Firebase / Firestore, in-memory demo adapter, local-only mode, or custom adapters.
  */
-export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<RemoteDBAdapter> {
+export async function resolveRemoteAdapter(
+  config: LocalLiteConfig,
+): Promise<RemoteDBAdapter> {
   // 1. Explicit custom remote adapter
   if (config.remote) {
     return config.remote;
@@ -70,14 +75,20 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
 
   // 4. Supabase with pre-configured client
   if (config.supabase?.client) {
-    return new SupabaseRemoteAdapter(config.supabase.client, getSupabaseOptions());
+    return new SupabaseRemoteAdapter(
+      config.supabase.client,
+      getSupabaseOptions(),
+    );
   }
 
   // 5. Supabase with URL + anonKey (lazy dynamic import)
   if (config.supabase?.url && config.supabase?.anonKey) {
     let supabaseModule = safeDynamicRequire(SUPABASE_PKG);
 
-    if (!supabaseModule && typeof (globalThis as any)?.supabase?.createClient === 'function') {
+    if (
+      !supabaseModule &&
+      typeof (globalThis as any)?.supabase?.createClient === 'function'
+    ) {
       supabaseModule = (globalThis as any).supabase;
     }
 
@@ -87,11 +98,15 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
 
     if (!supabaseModule) {
       throw new Error(
-        'To initialize Supabase from url and anonKey, please install @supabase/supabase-js or provide a pre-configured client to config.supabase.client'
+        'To initialize Supabase from url and anonKey, please install @supabase/supabase-js or provide a pre-configured client to config.supabase.client',
       );
     }
-    const createClientFn = supabaseModule.createClient || supabaseModule.default?.createClient;
-    const supabaseClient = createClientFn(config.supabase.url, config.supabase.anonKey);
+    const createClientFn =
+      supabaseModule.createClient || supabaseModule.default?.createClient;
+    const supabaseClient = createClientFn(
+      config.supabase.url,
+      config.supabase.anonKey,
+    );
     return new SupabaseRemoteAdapter(supabaseClient, getSupabaseOptions());
   }
 
@@ -106,6 +121,6 @@ export async function resolveRemoteAdapter(config: LocalLiteConfig): Promise<Rem
   }
 
   throw new Error(
-    'No remote adapter configured. Please specify config.supabase, config.convex, config.firebase, or config.remote. For local-only use, set config.localOnly: true. For demos, set config.inMemoryRemote: true.'
+    'No remote adapter configured. Please specify config.supabase, config.convex, config.firebase, or config.remote. For local-only use, set config.localOnly: true. For demos, set config.inMemoryRemote: true.',
   );
 }

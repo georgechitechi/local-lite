@@ -1,5 +1,6 @@
 import { resolveUnifiedUserId, type AuthUser } from './identity.js';
-export const APPLE_AUTHORIZATION_ENDPOINT = 'https://appleid.apple.com/auth/authorize';
+export const APPLE_AUTHORIZATION_ENDPOINT =
+  'https://appleid.apple.com/auth/authorize';
 export const APPLE_TOKEN_ENDPOINT = 'https://appleid.apple.com/auth/token';
 export const DEFAULT_APPLE_AUTH_SCOPES = ['name', 'email'];
 
@@ -78,7 +79,8 @@ export interface AppleAuthClientOptions {
 }
 
 function secureRandomBytes(length: number): Uint8Array {
-  const crypto = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const crypto =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (!crypto?.getRandomValues) {
     const fallback = new Uint8Array(length);
     for (let i = 0; i < length; i++) {
@@ -98,9 +100,11 @@ function base64UrlEncode(bytes: Uint8Array): string {
     const second = bytes[index + 1];
     const third = bytes[index + 2];
     result += alphabet[first >> 2];
-    result += alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
+    result +=
+      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
     if (second !== undefined) {
-      result += alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
+      result +=
+        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
     }
     if (third !== undefined) result += alphabet[third & 63];
   }
@@ -115,9 +119,10 @@ function parseJwtClaims(jwt: string): Record<string, any> {
     while (base64.length % 4) {
       base64 += '=';
     }
-    const json = typeof atob === 'function'
-      ? atob(base64)
-      : Buffer.from(base64, 'base64').toString('utf8');
+    const json =
+      typeof atob === 'function'
+        ? atob(base64)
+        : Buffer.from(base64, 'base64').toString('utf8');
     return JSON.parse(json);
   } catch {
     return {};
@@ -141,14 +146,14 @@ export function createInMemoryAppleTokenStore(): AppleAuthTokenStore {
   let storedUser: AppleUser | null = null;
   return {
     getTokens: async () => storedTokens,
-    setTokens: async tokens => {
+    setTokens: async (tokens) => {
       storedTokens = tokens;
     },
     removeTokens: async () => {
       storedTokens = null;
     },
     getUser: async () => storedUser,
-    setUser: async user => {
+    setUser: async (user) => {
       storedUser = user;
     },
   };
@@ -165,13 +170,13 @@ export function createAppleAuthTokenStore(
       const raw = await storage.getItem(tokensKey);
       return validateTokens(raw) ? raw : null;
     },
-    setTokens: tokens => storage.setItem(tokensKey, tokens),
+    setTokens: (tokens) => storage.setItem(tokensKey, tokens),
     removeTokens: () => storage.removeItem(tokensKey),
     getUser: async () => {
       const raw = await storage.getItem(userKey);
       return validateUser(raw) ? raw : null;
     },
-    setUser: async user => {
+    setUser: async (user) => {
       if (user) {
         await storage.setItem(userKey, user);
       } else {
@@ -188,7 +193,9 @@ export class AppleAuthClient {
 
   constructor(private readonly options: AppleAuthClientOptions) {
     if (!options.clientId?.trim()) {
-      throw new Error('Apple OAuth client ID (Service ID or App Bundle ID) is required.');
+      throw new Error(
+        'Apple OAuth client ID (Service ID or App Bundle ID) is required.',
+      );
     }
 
     if (options.tokenStore) {
@@ -224,28 +231,33 @@ export class AppleAuthClient {
    * is passed, processes and verifies it directly.
    * Otherwise, launches the PKCE web/browser authorization flow.
    */
-  async signIn(nativeCredential?: AppleNativeCredential): Promise<AppleUser | null> {
+  async signIn(
+    nativeCredential?: AppleNativeCredential,
+  ): Promise<AppleUser | null> {
     if (nativeCredential) {
       return this.processNativeCredential(nativeCredential);
     }
 
     if (!this.options.authorize) {
       throw new Error(
-        'AppleAuthClient requires an authorize callback for web/browser authorization, or a native credential passed to signIn().'
+        'AppleAuthClient requires an authorize callback for web/browser authorization, or a native credential passed to signIn().',
       );
     }
 
     if (!this.options.redirectUri) {
-      throw new Error('Apple OAuth redirectUri is required for web authorization flow.');
+      throw new Error(
+        'Apple OAuth redirectUri is required for web authorization flow.',
+      );
     }
 
     const randomBytes = this.options.randomBytes ?? secureRandomBytes;
     const state = base64UrlEncode(randomBytes(32));
     const nonce = base64UrlEncode(randomBytes(32));
 
-    const scopes = this.options.scopes && this.options.scopes.length > 0
-      ? this.options.scopes.join(' ')
-      : DEFAULT_APPLE_AUTH_SCOPES.join(' ');
+    const scopes =
+      this.options.scopes && this.options.scopes.length > 0
+        ? this.options.scopes.join(' ')
+        : DEFAULT_APPLE_AUTH_SCOPES.join(' ');
 
     const params = new URLSearchParams({
       client_id: this.options.clientId,
@@ -269,7 +281,9 @@ export class AppleAuthClient {
     }
 
     if (authorization.state && authorization.state !== state) {
-      throw new Error('Apple OAuth state validation failed. Please try connecting again.');
+      throw new Error(
+        'Apple OAuth state validation failed. Please try connecting again.',
+      );
     }
 
     if (!authorization.id_token) {
@@ -278,11 +292,15 @@ export class AppleAuthClient {
 
     const claims = parseJwtClaims(authorization.id_token);
     const id = claims.sub || 'apple-user';
-    const email = claims.email || authorization.user?.email || `${id}@privaterelay.appleid.com`;
+    const email =
+      claims.email ||
+      authorization.user?.email ||
+      `${id}@privaterelay.appleid.com`;
     const givenName = authorization.user?.name?.firstName;
     const familyName = authorization.user?.name?.lastName;
     const nameParts = [givenName, familyName].filter(Boolean);
-    const name = nameParts.length > 0 ? nameParts.join(' ') : email.split('@')[0];
+    const name =
+      nameParts.length > 0 ? nameParts.join(' ') : email.split('@')[0];
 
     const tokens: AppleAuthTokens = {
       idToken: authorization.id_token,
@@ -290,7 +308,10 @@ export class AppleAuthClient {
     };
     await this.tokenStore.setTokens(tokens);
 
-    const canonicalId = resolveUnifiedUserId({ id, email, emailVerified: Boolean(claims.email_verified ?? true) }, 'apple');
+    const canonicalId = resolveUnifiedUserId(
+      { id, email, emailVerified: Boolean(claims.email_verified ?? true) },
+      'apple',
+    );
     const user: AppleUser = {
       id: canonicalId,
       userId: canonicalId,
@@ -314,25 +335,33 @@ export class AppleAuthClient {
     return user;
   }
 
-  private async processNativeCredential(cred: AppleNativeCredential): Promise<AppleUser> {
+  private async processNativeCredential(
+    cred: AppleNativeCredential,
+  ): Promise<AppleUser> {
     const claims = cred.identityToken ? parseJwtClaims(cred.identityToken) : {};
     const id = cred.user || claims.sub;
-    const email = cred.email || claims.email || `${id}@privaterelay.appleid.com`;
+    const email =
+      cred.email || claims.email || `${id}@privaterelay.appleid.com`;
 
     const givenName = cred.fullName?.givenName || undefined;
     const familyName = cred.fullName?.familyName || undefined;
     const nameParts = [givenName, familyName].filter(Boolean);
-    const name = nameParts.length > 0 ? nameParts.join(' ') : email.split('@')[0];
+    const name =
+      nameParts.length > 0 ? nameParts.join(' ') : email.split('@')[0];
 
     const priorUser = await this.tokenStore.getUser();
     // Apple only returns full name and email on the very first sign in; preserve prior if present
     const resolvedGivenName = givenName || priorUser?.givenName;
     const resolvedFamilyName = familyName || priorUser?.familyName;
-    const resolvedName = name !== email.split('@')[0] ? name : priorUser?.name || name;
+    const resolvedName =
+      name !== email.split('@')[0] ? name : priorUser?.name || name;
 
     const rawId = String(cred.user || claims.sub || 'apple_user');
     const finalEmail = cred.email || priorUser?.email || email;
-    const canonicalId = resolveUnifiedUserId({ id: rawId, email: finalEmail, emailVerified: true }, 'apple');
+    const canonicalId = resolveUnifiedUserId(
+      { id: rawId, email: finalEmail, emailVerified: true },
+      'apple',
+    );
     const user: AppleUser = {
       id: canonicalId,
       userId: canonicalId,

@@ -83,9 +83,10 @@ export class DatabaseMaintenance {
     if (options.retentionDays !== undefined && options.retentionDays >= 0) {
       const daysMs = options.retentionDays * 24 * 60 * 60 * 1000;
       const calculatedCutoff = Date.now() - daysMs;
-      cutoffTimestamp = cutoffTimestamp !== undefined
-        ? Math.min(cutoffTimestamp, calculatedCutoff)
-        : calculatedCutoff;
+      cutoffTimestamp =
+        cutoffTimestamp !== undefined
+          ? Math.min(cutoffTimestamp, calculatedCutoff)
+          : calculatedCutoff;
     }
 
     const conditions: string[] = [];
@@ -145,7 +146,9 @@ export class DatabaseMaintenance {
   /**
    * Gathers storage metrics: table row counts, outbox status distribution, and database size.
    */
-  async getStorageStats(options: { includeInternal?: boolean } = {}): Promise<StorageStats> {
+  async getStorageStats(
+    options: { includeInternal?: boolean } = {},
+  ): Promise<StorageStats> {
     const includeInternal = options.includeInternal ?? false;
     // 1. Table row counts
     const tableCounts: Record<string, number> = {};
@@ -161,13 +164,15 @@ export class DatabaseMaintenance {
     }
 
     if (!includeInternal) {
-      tableNames = tableNames.filter(name => !isInternalTable(name));
+      tableNames = tableNames.filter((name) => !isInternalTable(name));
     }
 
     for (const tableName of tableNames) {
       try {
         const safeTable = escapeIdentifier(tableName);
-        const rows = await this.db.execute(`SELECT COUNT(*) as count FROM ${safeTable}`);
+        const rows = await this.db.execute(
+          `SELECT COUNT(*) as count FROM ${safeTable}`,
+        );
         tableCounts[tableName] = Number(rows[0]?.count ?? 0);
       } catch {
         // Table might not exist or be accessible

@@ -1,19 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import {
-  GoogleAuthClient,
-  type GoogleUser,
-} from '../src/auth/google.js';
-import {
-  MicrosoftAuthClient,
-  type MicrosoftUser,
-} from '../src/auth/microsoft.js';
-import {
-  GoogleDriveBackupClient,
-  OneDriveBackupClient,
-  performBackup,
-  performRestore,
-  type CloudBackupFile,
-} from '../src/backups/index.js';
+import { describe, expect, it } from 'vitest';
+import { GoogleAuthClient } from '../src/auth/google.js';
+import { MicrosoftAuthClient } from '../src/auth/microsoft.js';
+import { performBackup, performRestore } from '../src/backups/index.js';
 
 function response(body: object, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -28,7 +16,7 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
     const mockGoogleAuth = new GoogleAuthClient({
       clientId: 'google-client-id',
       redirectUri: 'myapp://oauth',
-      authorize: async request => {
+      authorize: async (request) => {
         authorized = true;
         return { code: 'google-auth-code', state: request.state };
       },
@@ -76,7 +64,7 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
     });
 
     const statusHistory: boolean[] = [];
-    backupClient.onStatusChange(connected => {
+    backupClient.onStatusChange((connected) => {
       statusHistory.push(connected);
     });
 
@@ -94,7 +82,9 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
       exportDatabase: async () => new TextEncoder().encode('Active SQLite DB'),
       importDatabase: async () => {},
     };
-    const fileName = await backupClient.backup(testDb, { fileName: 'my-snapshot.db' });
+    const fileName = await backupClient.backup(testDb, {
+      fileName: 'my-snapshot.db',
+    });
     expect(fileName).toBe('my-snapshot.db');
 
     // Disconnect
@@ -108,7 +98,7 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
     const mockMsAuth = new MicrosoftAuthClient({
       clientId: 'ms-client-id',
       redirectUri: 'myapp://oauth',
-      authorize: async request => {
+      authorize: async (request) => {
         msSignInCalled = true;
         return { code: 'ms-code', state: request.state };
       },
@@ -149,7 +139,7 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
     });
 
     const statusUpdates: boolean[] = [];
-    oneDriveBackup.onStatusChange(conn => statusUpdates.push(conn));
+    oneDriveBackup.onStatusChange((conn) => statusUpdates.push(conn));
 
     expect(await oneDriveBackup.isConnected()).toBe(false);
 
@@ -191,7 +181,9 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
       },
     };
 
-    const originalData = new TextEncoder().encode('Super sensitive medical and child data');
+    const originalData = new TextEncoder().encode(
+      'Super sensitive medical and child data',
+    );
     let restoredData = new Uint8Array();
 
     const db = {
@@ -221,6 +213,8 @@ describe('Cloud Backup - Auth Integration & React Patterns', () => {
     await performRestore(db, storage, fileName, {
       passphrase: 'correct-horse-battery-staple',
     });
-    expect(new TextDecoder().decode(restoredData)).toBe('Super sensitive medical and child data');
+    expect(new TextDecoder().decode(restoredData)).toBe(
+      'Super sensitive medical and child data',
+    );
   });
 });

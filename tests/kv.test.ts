@@ -24,7 +24,10 @@ describe('KVManager & Encrypted Preferences', () => {
     expect(await kv.get('theme')).toBe('dark');
     expect(await kv.get('retryCount')).toBe(42);
     expect(await kv.get('notificationsEnabled')).toBe(true);
-    expect(await kv.get('userProfile')).toEqual({ name: 'Alice', role: 'admin' });
+    expect(await kv.get('userProfile')).toEqual({
+      name: 'Alice',
+      role: 'admin',
+    });
 
     expect(await kv.has('theme')).toBe(true);
     expect(await kv.has('nonExistentKey')).toBe(false);
@@ -62,7 +65,10 @@ describe('KVManager & Encrypted Preferences', () => {
 
   it('encrypts and decrypts secret preferences using AES-256-GCM', async () => {
     const secretKey = 'my-super-secure-passphrase-999';
-    const secretValue = { stripeApiKey: 'sk_live_123456789', webhookSecret: 'whsec_abcdef' };
+    const secretValue = {
+      stripeApiKey: 'sk_live_123456789',
+      webhookSecret: 'whsec_abcdef',
+    };
 
     await kv.setSecret('paymentConfig', secretValue, { passphrase: secretKey });
 
@@ -78,7 +84,9 @@ describe('KVManager & Encrypted Preferences', () => {
     expect(decrypted).toEqual(secretValue);
 
     // Decrypting with wrong secret throws
-    await expect(kv.getSecret('paymentConfig', 'wrong-passphrase')).rejects.toThrow();
+    await expect(
+      kv.getSecret('paymentConfig', 'wrong-passphrase'),
+    ).rejects.toThrow();
   });
 
   it('seamlessly integrates into LocalFirstClient via client.kv', async () => {

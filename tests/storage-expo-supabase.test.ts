@@ -16,8 +16,11 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
 
     constructor(...parts: any[]) {
       this.uri = parts.reduce((path, part) => {
-        const segment = typeof part === 'object' && part ? part.uri : String(part);
-        return path ? `${path.replace(/\/+$/, '')}/${segment.replace(/^\/+/, '')}` : segment;
+        const segment =
+          typeof part === 'object' && part ? part.uri : String(part);
+        return path
+          ? `${path.replace(/\/+$/, '')}/${segment.replace(/^\/+/, '')}`
+          : segment;
       }, '');
     }
 
@@ -32,12 +35,15 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
 
     constructor(...parts: any[]) {
       this.uri = parts.reduce((path, part) => {
-        const segment = typeof part === 'object' && part ? part.uri : String(part);
-        return path ? `${path.replace(/\/+$/, '')}/${segment.replace(/^\/+/, '')}` : segment;
+        const segment =
+          typeof part === 'object' && part ? part.uri : String(part);
+        return path
+          ? `${path.replace(/\/+$/, '')}/${segment.replace(/^\/+/, '')}`
+          : segment;
       }, '');
       const lastSlash = this.uri.lastIndexOf('/');
       this.parentDirectory = new MockDirectory(
-        lastSlash === -1 ? 'file:///' : this.uri.substring(0, lastSlash)
+        lastSlash === -1 ? 'file:///' : this.uri.substring(0, lastSlash),
       );
     }
 
@@ -89,7 +95,7 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
 
   it('rejects the removed legacy FileSystem module option', () => {
     expect(() => new ExpoFileDriver({ fileSystem: {} } as any)).toThrow(
-      'ExpoFileDriver no longer accepts fileSystem'
+      'ExpoFileDriver no longer accepts fileSystem',
     );
   });
 
@@ -98,7 +104,9 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
       const originalBytes = new Uint8Array([0, 1, 2, 255, 128, 64, 32]);
       const fileUri = await driver.write('photos/room.jpg', originalBytes);
 
-      expect(fileUri).toBe('file:///data/user/0/com.app/files/local-lite-blobs/photos/room.jpg');
+      expect(fileUri).toBe(
+        'file:///data/user/0/com.app/files/local-lite-blobs/photos/room.jpg',
+      );
       const exists = await driver.exists('photos/room.jpg');
       expect(exists).toBe(true);
 
@@ -125,7 +133,9 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
       mockFileStore.set(sourceUri, new Uint8Array([1, 2, 3]));
 
       const destUri = await driver.copyFrom(sourceUri, 'avatars/profile.jpg');
-      expect(destUri).toBe('file:///data/user/0/com.app/files/local-lite-blobs/avatars/profile.jpg');
+      expect(destUri).toBe(
+        'file:///data/user/0/com.app/files/local-lite-blobs/avatars/profile.jpg',
+      );
       expect(mockFileStore.get(destUri)).toEqual(new Uint8Array([1, 2, 3]));
     });
 
@@ -133,13 +143,17 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
       const remoteUrl = 'https://example.com/cdn/file.pdf';
       const destUri = await driver.downloadFrom(remoteUrl, 'docs/contract.pdf');
 
-      expect(destUri).toBe('file:///data/user/0/com.app/files/local-lite-blobs/docs/contract.pdf');
+      expect(destUri).toBe(
+        'file:///data/user/0/com.app/files/local-lite-blobs/docs/contract.pdf',
+      );
       expect(mockFileStore.get(destUri)).toEqual(new Uint8Array([10, 20, 30]));
     });
 
     it('resolves URI without reading bytes', async () => {
       const uri = await driver.getUri('gallery/thumb.png');
-      expect(uri).toBe('file:///data/user/0/com.app/files/local-lite-blobs/gallery/thumb.png');
+      expect(uri).toBe(
+        'file:///data/user/0/com.app/files/local-lite-blobs/gallery/thumb.png',
+      );
     });
   });
 
@@ -188,10 +202,14 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
           error: null,
         })),
         getPublicUrl: vi.fn((path: string) => ({
-          data: { publicUrl: `https://xyz.supabase.co/storage/v1/object/public/properties/${path}` },
+          data: {
+            publicUrl: `https://xyz.supabase.co/storage/v1/object/public/properties/${path}`,
+          },
         })),
         createSignedUrl: vi.fn(async (path: string, expiresIn: number) => ({
-          data: { signedUrl: `https://xyz.supabase.co/storage/v1/object/sign/properties/${path}?token=secret` },
+          data: {
+            signedUrl: `https://xyz.supabase.co/storage/v1/object/sign/properties/${path}?token=secret`,
+          },
           error: null,
         })),
       };
@@ -229,10 +247,10 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
         expect.objectContaining({
           contentType: 'image/jpeg',
           upsert: true,
-        })
+        }),
       );
       expect(result.remoteUrl).toBe(
-        'https://xyz.supabase.co/storage/v1/object/public/properties/houses/101/main.jpg'
+        'https://xyz.supabase.co/storage/v1/object/public/properties/houses/101/main.jpg',
       );
     });
 
@@ -255,8 +273,14 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
         updatedAt: Date.now(),
       };
 
-      const result = await uploader.upload(blobRecord, new Uint8Array([1, 2, 3]));
-      expect(mockBucket.createSignedUrl).toHaveBeenCalledWith('leases/tenant_contract.pdf', 3600);
+      const result = await uploader.upload(
+        blobRecord,
+        new Uint8Array([1, 2, 3]),
+      );
+      expect(mockBucket.createSignedUrl).toHaveBeenCalledWith(
+        'leases/tenant_contract.pdf',
+        3600,
+      );
       expect(result.remoteUrl).toContain('token=secret');
     });
 
@@ -282,8 +306,10 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
         updatedAt: Date.now(),
       };
 
-      await expect(uploader.upload(blobRecord, new Uint8Array([1]))).rejects.toThrow(
-        'Supabase Storage upload failed for "test.jpg": Bucket not found'
+      await expect(
+        uploader.upload(blobRecord, new Uint8Array([1])),
+      ).rejects.toThrow(
+        'Supabase Storage upload failed for "test.jpg": Bucket not found',
       );
     });
   });
@@ -297,9 +323,14 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
     beforeEach(async () => {
       db = new MockDB();
       mockBucket = {
-        upload: vi.fn(async (path: string) => ({ data: { path }, error: null })),
+        upload: vi.fn(async (path: string) => ({
+          data: { path },
+          error: null,
+        })),
         getPublicUrl: vi.fn((path: string) => ({
-          data: { publicUrl: `https://xyz.supabase.co/storage/v1/object/public/properties/${path}` },
+          data: {
+            publicUrl: `https://xyz.supabase.co/storage/v1/object/public/properties/${path}`,
+          },
         })),
       };
       mockSupabase = {
@@ -330,10 +361,10 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
 
       expect(record.status).toBe('UPLOADED');
       expect(record.remoteUrl).toBe(
-        'https://xyz.supabase.co/storage/v1/object/public/properties/listings/apartment.txt'
+        'https://xyz.supabase.co/storage/v1/object/public/properties/listings/apartment.txt',
       );
       expect(record.localPath).toBe(
-        'file:///data/user/0/com.app/files/local-lite-blobs/listings/apartment.txt'
+        'file:///data/user/0/com.app/files/local-lite-blobs/listings/apartment.txt',
       );
 
       // Verify file is saved locally in Expo
@@ -354,7 +385,7 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
 
       expect(record.status).toBe('UPLOADED');
       expect(record.remoteUrl).toBe(
-        'https://xyz.supabase.co/storage/v1/object/public/properties/photos/house1.jpg'
+        'https://xyz.supabase.co/storage/v1/object/public/properties/photos/house1.jpg',
       );
       expect(mockFileStore.get(record.localPath)).toEqual(sampleBytes);
     });
@@ -363,12 +394,12 @@ describe('ExpoFileDriver & Supabase Storage Integration', () => {
       const record = await storage.download(
         'cached/online-photo.jpg',
         'https://xyz.supabase.co/storage/v1/object/public/properties/online-photo.jpg',
-        { mimeType: 'image/jpeg' }
+        { mimeType: 'image/jpeg' },
       );
 
       expect(record.status).toBe('UPLOADED');
       expect(record.remoteUrl).toBe(
-        'https://xyz.supabase.co/storage/v1/object/public/properties/online-photo.jpg'
+        'https://xyz.supabase.co/storage/v1/object/public/properties/online-photo.jpg',
       );
       expect(await driver.exists('cached/online-photo.jpg')).toBe(true);
     });

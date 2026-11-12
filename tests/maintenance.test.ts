@@ -34,8 +34,12 @@ describe('Database Maintenance & Outbox Pruning', () => {
   });
 
   it('runs checkpoint() with different modes', async () => {
-    await expect(client.maintenance.checkpoint('PASSIVE')).resolves.toBeUndefined();
-    await expect(client.maintenance.checkpoint('TRUNCATE')).resolves.toBeUndefined();
+    await expect(
+      client.maintenance.checkpoint('PASSIVE'),
+    ).resolves.toBeUndefined();
+    await expect(
+      client.maintenance.checkpoint('TRUNCATE'),
+    ).resolves.toBeUndefined();
   });
 
   it('reports accurate storage stats including table counts and outbox breakdown', async () => {
@@ -69,13 +73,17 @@ describe('Database Maintenance & Outbox Pruning', () => {
     );
 
     // Prune entries older than 7 days (default statuses: COMPLETED, FAILED)
-    const prunedCount = await client.maintenance.pruneOutbox({ retentionDays: 7 });
+    const prunedCount = await client.maintenance.pruneOutbox({
+      retentionDays: 7,
+    });
 
     // Should have pruned the 10-day old COMPLETED and FAILED records (2 records)
     // The recent COMPLETED record and the pending record must remain intact!
     expect(prunedCount).toBe(2);
 
-    const remaining = await db.execute(`SELECT id FROM sync_outbox ORDER BY id ASC`);
+    const remaining = await db.execute(
+      `SELECT id FROM sync_outbox ORDER BY id ASC`,
+    );
     const remainingIds = remaining.map((r: any) => r.id);
 
     expect(remainingIds).toContain('ob-pending');
@@ -102,8 +110,15 @@ describe('Database Maintenance & Outbox Pruning', () => {
 
     expect(pruned).toBe(6);
 
-    const remaining = await db.execute(`SELECT id FROM sync_outbox ORDER BY timestamp ASC`);
+    const remaining = await db.execute(
+      `SELECT id FROM sync_outbox ORDER BY timestamp ASC`,
+    );
     expect(remaining.length).toBe(4);
-    expect(remaining.map((r: any) => r.id)).toEqual(['ob-7', 'ob-8', 'ob-9', 'ob-10']);
+    expect(remaining.map((r: any) => r.id)).toEqual([
+      'ob-7',
+      'ob-8',
+      'ob-9',
+      'ob-10',
+    ]);
   });
 });

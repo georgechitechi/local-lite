@@ -1,5 +1,14 @@
-import type { Transporter, SendMailOptions, SentMessageInfo, TransportOptions } from 'nodemailer';
-import type { ActionHandlerContext, ActionRecord, EmailAttachment, EmailHandler, EmailPayload } from '../actions/types.js';
+import type {
+  Transporter,
+  SendMailOptions,
+  TransportOptions,
+} from 'nodemailer';
+import type {
+  ActionHandlerContext,
+  ActionRecord,
+  EmailAttachment,
+  EmailPayload,
+} from '../actions/types.js';
 
 import { safeDynamicImport } from '../utils/dynamic.js';
 
@@ -31,8 +40,10 @@ export interface EmailHandlerOptions {
   renderTemplate?: (
     template: any,
     data: Record<string, any> | undefined,
-    payload: EmailPayload
-  ) => Promise<{ html?: string; text?: string }> | { html?: string; text?: string };
+    payload: EmailPayload,
+  ) =>
+    | Promise<{ html?: string; text?: string }>
+    | { html?: string; text?: string };
 
   /**
    * Hook called before sending an email. Can inspect or modify outgoing options.
@@ -40,7 +51,7 @@ export interface EmailHandlerOptions {
   beforeSend?: (
     mailOptions: any,
     payload: EmailPayload,
-    record: ActionRecord<EmailPayload>
+    record: ActionRecord<EmailPayload>,
   ) => Promise<any | void> | any | void;
 
   /**
@@ -49,7 +60,7 @@ export interface EmailHandlerOptions {
   afterSend?: (
     result: any,
     payload: EmailPayload,
-    record: ActionRecord<EmailPayload>
+    record: ActionRecord<EmailPayload>,
   ) => Promise<void> | void;
 }
 
@@ -78,7 +89,8 @@ export interface EmailDeliveryConfig extends EmailHandlerOptions {
 }
 
 export type NodemailerHandlerOptions = EmailHandlerOptions;
-export type NodemailerTransportInput = Transporter | TransportOptions | string | any;
+export type NodemailerTransportInput =
+  Transporter | TransportOptions | string | any;
 
 export interface EmailSendResult {
   messageId: string;
@@ -93,7 +105,7 @@ export type NodemailerSendResult = EmailSendResult;
 export type ConcreteEmailHandler = (
   payload: EmailPayload,
   record: ActionRecord<EmailPayload>,
-  context: ActionHandlerContext
+  context: ActionHandlerContext,
 ) => Promise<EmailSendResult>;
 
 export interface DevSentEmail {
@@ -136,7 +148,7 @@ export async function loadNodemailer(): Promise<any> {
     return mod.default || mod;
   } catch (err: any) {
     throw new Error(
-      "The 'nodemailer' package is required to send emails via Nodemailer transport. Please install it via 'npm install nodemailer'."
+      "The 'nodemailer' package is required to send emails via Nodemailer transport. Please install it via 'npm install nodemailer'.",
     );
   }
 }
@@ -146,7 +158,7 @@ export async function loadNodemailer(): Promise<any> {
  */
 export async function resolveTransporter(
   input: NodemailerTransportInput,
-  defaults?: Partial<SendMailOptions>
+  defaults?: Partial<SendMailOptions>,
 ): Promise<Transporter> {
   if (input && typeof input.sendMail === 'function') {
     return input as Transporter;
@@ -165,7 +177,9 @@ function interpolate(templateStr: string, data: Record<string, any>): string {
 /**
  * Renders a React element or JSX component into clean HTML and plaintext fallback.
  */
-export async function renderReactEmail(element: any): Promise<{ html: string; text: string }> {
+export async function renderReactEmail(
+  element: any,
+): Promise<{ html: string; text: string }> {
   if (!element) return { html: '', text: '' };
 
   const component = typeof element === 'function' ? element() : element;
@@ -185,7 +199,8 @@ export async function renderReactEmail(element: any): Promise<{ html: string; te
   try {
     const ReactDOMServer = await safeDynamicImport('react-dom/server');
     const renderToStaticMarkup =
-      ReactDOMServer?.renderToStaticMarkup || ReactDOMServer?.default?.renderToStaticMarkup;
+      ReactDOMServer?.renderToStaticMarkup ||
+      ReactDOMServer?.default?.renderToStaticMarkup;
     if (typeof renderToStaticMarkup === 'function') {
       const html = renderToStaticMarkup(component);
       const text = html.replace(/<[^>]*>/g, '').trim();
@@ -208,7 +223,9 @@ export async function hydrateAttachment(att: EmailAttachment): Promise<any> {
     const rawUrl = att.url;
     if (
       rawUrl.startsWith('file://') ||
-      (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('data:'))
+      (!rawUrl.startsWith('http://') &&
+        !rawUrl.startsWith('https://') &&
+        !rawUrl.startsWith('data:'))
     ) {
       const filePath = rawUrl.startsWith('file://') ? rawUrl.slice(7) : rawUrl;
       try {
@@ -231,7 +248,7 @@ export async function hydrateAttachment(att: EmailAttachment): Promise<any> {
  */
 export function buildMailOptions(
   payload: EmailPayload,
-  options: EmailHandlerOptions = {}
+  options: EmailHandlerOptions = {},
 ): SendMailOptions {
   const mailOptions: SendMailOptions = {
     ...options.defaults,
@@ -248,7 +265,9 @@ export function buildMailOptions(
 
   if (payload.headers) {
     mailOptions.headers = {
-      ...(typeof options.defaults?.headers === 'object' ? options.defaults.headers : {}),
+      ...(typeof options.defaults?.headers === 'object'
+        ? options.defaults.headers
+        : {}),
       ...payload.headers,
     };
   }
@@ -281,7 +300,7 @@ export function buildMailOptions(
 async function prepareMailOptions(
   payload: EmailPayload,
   options: EmailHandlerOptions,
-  record: ActionRecord<EmailPayload>
+  record: ActionRecord<EmailPayload>,
 ): Promise<SendMailOptions> {
   let mailOptions = buildMailOptions(payload, options);
 
@@ -297,7 +316,7 @@ async function prepareMailOptions(
     const rendered = await options.renderTemplate(
       payload.template,
       payload.templateData,
-      payload
+      payload,
     );
     if (rendered.html !== undefined) mailOptions.html = rendered.html;
     if (rendered.text !== undefined) mailOptions.text = rendered.text;
@@ -312,7 +331,9 @@ async function prepareMailOptions(
 
   // 3. Auto-hydrate attachments (mobile file:// URIs)
   if (payload.attachments && payload.attachments.length > 0) {
-    const hydrated = await Promise.all(payload.attachments.map((a) => hydrateAttachment(a)));
+    const hydrated = await Promise.all(
+      payload.attachments.map((a) => hydrateAttachment(a)),
+    );
     mailOptions.attachments = hydrated;
   }
 
@@ -328,7 +349,7 @@ async function prepareMailOptions(
   }
   if (!mailOptions.from) {
     throw new Error(
-      "Sender 'from' address is required to dispatch email. Provide 'from' in the email payload or set 'defaultFrom' in options."
+      "Sender 'from' address is required to dispatch email. Provide 'from' in the email payload or set 'defaultFrom' in options.",
     );
   }
 
@@ -341,16 +362,20 @@ async function prepareMailOptions(
  */
 export function createNodemailerHandler(
   transporterOrOptions: NodemailerTransportInput,
-  handlerOptions: NodemailerHandlerOptions = {}
+  handlerOptions: NodemailerHandlerOptions = {},
 ): ConcreteEmailHandler {
   let cachedTransporter: Transporter | null =
-    transporterOrOptions && typeof (transporterOrOptions as any).sendMail === 'function'
+    transporterOrOptions &&
+    typeof (transporterOrOptions as any).sendMail === 'function'
       ? (transporterOrOptions as Transporter)
       : null;
 
   const getTransporter = async (): Promise<Transporter> => {
     if (!cachedTransporter) {
-      cachedTransporter = await resolveTransporter(transporterOrOptions, handlerOptions.defaults);
+      cachedTransporter = await resolveTransporter(
+        transporterOrOptions,
+        handlerOptions.defaults,
+      );
     }
     return cachedTransporter;
   };
@@ -358,10 +383,14 @@ export function createNodemailerHandler(
   return async (
     payload: EmailPayload,
     record: ActionRecord<EmailPayload>,
-    _context: ActionHandlerContext
+    _context: ActionHandlerContext,
   ): Promise<EmailSendResult> => {
     const transporter = await getTransporter();
-    const mailOptions = await prepareMailOptions(payload, handlerOptions, record);
+    const mailOptions = await prepareMailOptions(
+      payload,
+      handlerOptions,
+      record,
+    );
 
     const info = await transporter.sendMail(mailOptions);
 
@@ -382,10 +411,14 @@ export function createNodemailerHandler(
  * Creates an EmailHandler for local-lite ActionManager that dispatches emails
  * via HTTP APIs (e.g. Resend, SendGrid, Postmark, or custom webhooks/endpoints).
  */
-export function createHttpEmailHandler(options: HttpEmailHandlerOptions): ConcreteEmailHandler {
+export function createHttpEmailHandler(
+  options: HttpEmailHandlerOptions,
+): ConcreteEmailHandler {
   const fetchFn = options.fetch || globalThis.fetch;
   if (!fetchFn) {
-    throw new Error('A global or configured fetch function is required for HTTP email dispatch.');
+    throw new Error(
+      'A global or configured fetch function is required for HTTP email dispatch.',
+    );
   }
 
   const provider = options.provider || 'http';
@@ -393,7 +426,7 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): Concre
   return async (
     payload: EmailPayload,
     record: ActionRecord<EmailPayload>,
-    _context: ActionHandlerContext
+    _context: ActionHandlerContext,
   ): Promise<EmailSendResult> => {
     const mailOptions = await prepareMailOptions(payload, options, record);
 
@@ -426,28 +459,46 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): Concre
       if (options.apiKey) {
         headers['Authorization'] = `Bearer ${options.apiKey}`;
       }
-      const toAddresses = Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to];
+      const toAddresses = Array.isArray(mailOptions.to)
+        ? mailOptions.to
+        : [mailOptions.to];
       const personalizations: any = {
-        to: toAddresses.map((email: any) => (typeof email === 'string' ? { email } : email)),
+        to: toAddresses.map((email: any) =>
+          typeof email === 'string' ? { email } : email,
+        ),
       };
       if (mailOptions.cc) {
-        const ccAddresses = Array.isArray(mailOptions.cc) ? mailOptions.cc : [mailOptions.cc];
-        personalizations.cc = ccAddresses.map((email: any) => (typeof email === 'string' ? { email } : email));
+        const ccAddresses = Array.isArray(mailOptions.cc)
+          ? mailOptions.cc
+          : [mailOptions.cc];
+        personalizations.cc = ccAddresses.map((email: any) =>
+          typeof email === 'string' ? { email } : email,
+        );
       }
       if (mailOptions.bcc) {
-        const bccAddresses = Array.isArray(mailOptions.bcc) ? mailOptions.bcc : [mailOptions.bcc];
-        personalizations.bcc = bccAddresses.map((email: any) => (typeof email === 'string' ? { email } : email));
+        const bccAddresses = Array.isArray(mailOptions.bcc)
+          ? mailOptions.bcc
+          : [mailOptions.bcc];
+        personalizations.bcc = bccAddresses.map((email: any) =>
+          typeof email === 'string' ? { email } : email,
+        );
       }
 
       const content: Array<{ type: string; value: string }> = [];
-      if (mailOptions.text) content.push({ type: 'text/plain', value: String(mailOptions.text) });
-      if (mailOptions.html) content.push({ type: 'text/html', value: String(mailOptions.html) });
+      if (mailOptions.text)
+        content.push({ type: 'text/plain', value: String(mailOptions.text) });
+      if (mailOptions.html)
+        content.push({ type: 'text/html', value: String(mailOptions.html) });
 
       body = {
         personalizations: [personalizations],
-        from: typeof mailOptions.from === 'string' ? { email: mailOptions.from } : mailOptions.from,
+        from:
+          typeof mailOptions.from === 'string'
+            ? { email: mailOptions.from }
+            : mailOptions.from,
         subject: mailOptions.subject,
-        content: content.length > 0 ? content : [{ type: 'text/plain', value: '' }],
+        content:
+          content.length > 0 ? content : [{ type: 'text/plain', value: '' }],
       };
     } else if (provider === 'postmark') {
       url = options.endpoint || 'https://api.postmarkapp.com/email';
@@ -456,12 +507,18 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): Concre
       }
       body = {
         From: mailOptions.from,
-        To: Array.isArray(mailOptions.to) ? mailOptions.to.join(',') : mailOptions.to,
+        To: Array.isArray(mailOptions.to)
+          ? mailOptions.to.join(',')
+          : mailOptions.to,
         Subject: mailOptions.subject,
         HtmlBody: mailOptions.html,
         TextBody: mailOptions.text,
-        Cc: Array.isArray(mailOptions.cc) ? mailOptions.cc.join(',') : mailOptions.cc,
-        Bcc: Array.isArray(mailOptions.bcc) ? mailOptions.bcc.join(',') : mailOptions.bcc,
+        Cc: Array.isArray(mailOptions.cc)
+          ? mailOptions.cc.join(',')
+          : mailOptions.cc,
+        Bcc: Array.isArray(mailOptions.bcc)
+          ? mailOptions.bcc.join(',')
+          : mailOptions.bcc,
         ReplyTo: mailOptions.replyTo,
       };
     } else {
@@ -490,7 +547,9 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): Concre
       } catch {
         errorText = response.statusText;
       }
-      throw new Error(`Email dispatch failed via HTTP (${response.status}): ${errorText}`);
+      throw new Error(
+        `Email dispatch failed via HTTP (${response.status}): ${errorText}`,
+      );
     }
 
     let resultData: any = {};
@@ -510,7 +569,9 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): Concre
     const sendResult: EmailSendResult = {
       messageId,
       response: resultData,
-      accepted: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+      accepted: Array.isArray(mailOptions.to)
+        ? mailOptions.to
+        : [mailOptions.to],
     };
 
     if (options.afterSend) {
@@ -525,11 +586,13 @@ export function createHttpEmailHandler(options: HttpEmailHandlerOptions): Concre
  * Creates a local dev email handler that stores outgoing emails in DevMailbox
  * and logs an interactive terminal preview without sending real network requests.
  */
-export function createDevEmailHandler(options: EmailHandlerOptions & { silent?: boolean } = {}): ConcreteEmailHandler {
+export function createDevEmailHandler(
+  options: EmailHandlerOptions & { silent?: boolean } = {},
+): ConcreteEmailHandler {
   return async (
     payload: EmailPayload,
     record: ActionRecord<EmailPayload>,
-    _context: ActionHandlerContext
+    _context: ActionHandlerContext,
   ): Promise<EmailSendResult> => {
     const mailOptions = await prepareMailOptions(payload, options, record);
     const sentRecord: DevSentEmail = {
@@ -543,17 +606,23 @@ export function createDevEmailHandler(options: EmailHandlerOptions & { silent?: 
     DevMailbox.record(sentRecord);
 
     if (!options.silent) {
-      const toStr = Array.isArray(mailOptions.to) ? mailOptions.to.join(', ') : mailOptions.to;
-      const previewText = (mailOptions.text || mailOptions.html || '').toString().slice(0, 120);
+      const toStr = Array.isArray(mailOptions.to)
+        ? mailOptions.to.join(', ')
+        : mailOptions.to;
+      const previewText = (mailOptions.text || mailOptions.html || '')
+        .toString()
+        .slice(0, 120);
       console.log(
-        `[local-lite:email:dev] Dispatched to: ${toStr} | Subject: "${mailOptions.subject}" | Body: "${previewText}"`
+        `[local-lite:email:dev] Dispatched to: ${toStr} | Subject: "${mailOptions.subject}" | Body: "${previewText}"`,
       );
     }
 
     const result: EmailSendResult = {
       messageId: sentRecord.id,
       response: { dev: true, previewUrl: `dev://mailbox/${sentRecord.id}` },
-      accepted: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+      accepted: Array.isArray(mailOptions.to)
+        ? mailOptions.to
+        : [mailOptions.to],
     };
 
     if (options.afterSend) {
@@ -569,7 +638,9 @@ export function createDevEmailHandler(options: EmailHandlerOptions & { silent?: 
  * supporting Nodemailer (SMTP, Sendmail), HTTP providers (Resend, SendGrid, Postmark),
  * local dev mailbox, or custom webhooks.
  */
-export function createEmailHandler(config: EmailDeliveryConfig): ConcreteEmailHandler {
+export function createEmailHandler(
+  config: EmailDeliveryConfig,
+): ConcreteEmailHandler {
   if (config.provider === 'dev' || config.provider === 'preview') {
     return createDevEmailHandler({ ...config, silent: config.silentDev });
   }
@@ -596,6 +667,6 @@ export function createEmailHandler(config: EmailDeliveryConfig): ConcreteEmailHa
   }
 
   throw new Error(
-    "Invalid email configuration: Provide 'transport' (for Nodemailer/SMTP), 'provider' ('resend'|'sendgrid'|'postmark'|'dev'), or 'endpoint' (for HTTP delivery)."
+    "Invalid email configuration: Provide 'transport' (for Nodemailer/SMTP), 'provider' ('resend'|'sendgrid'|'postmark'|'dev'), or 'endpoint' (for HTTP delivery).",
   );
 }

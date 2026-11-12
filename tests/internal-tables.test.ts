@@ -34,9 +34,15 @@ describe('Internal Tables Filtering', () => {
     });
 
     await client.initialize();
-    await client.db.execute('CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY, name TEXT)');
-    await client.db.execute('CREATE TABLE IF NOT EXISTS houses (id TEXT PRIMARY KEY, number TEXT)');
-    await client.db.execute('CREATE TABLE IF NOT EXISTS _fts_houses (rowid INTEGER PRIMARY KEY)');
+    await client.db.execute(
+      'CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY, name TEXT)',
+    );
+    await client.db.execute(
+      'CREATE TABLE IF NOT EXISTS houses (id TEXT PRIMARY KEY, number TEXT)',
+    );
+    await client.db.execute(
+      'CREATE TABLE IF NOT EXISTS _fts_houses (rowid INTEGER PRIMARY KEY)',
+    );
 
     const defaultTables = await client.getTables();
     expect(defaultTables.sort()).toEqual(['houses', 'properties']);
@@ -49,7 +55,9 @@ describe('Internal Tables Filtering', () => {
     expect(stats.tables['properties']).toBeDefined();
     expect(stats.tables['_fts_houses']).toBeUndefined();
 
-    const statsAll = await client.maintenance.getStorageStats({ includeInternal: true });
+    const statsAll = await client.maintenance.getStorageStats({
+      includeInternal: true,
+    });
     expect(statsAll.tables['_fts_houses']).toBeDefined();
 
     await client.close();

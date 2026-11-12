@@ -3,7 +3,8 @@
  * Works natively across Web, React Native (Hermes), Node.js, and Expo without bare global lookups.
  */
 export function generateUUID(): string {
-  const gCrypto = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const gCrypto =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (typeof gCrypto?.randomUUID === 'function') {
     try {
       return gCrypto.randomUUID();

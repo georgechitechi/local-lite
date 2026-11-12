@@ -76,7 +76,12 @@ function escapeCsvValue(val: any, delimiter: string): string {
   }
 
   // Quote if contains delimiter, double quote, or newlines
-  if (str.includes(delimiter) || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+  if (
+    str.includes(delimiter) ||
+    str.includes('"') ||
+    str.includes('\n') ||
+    str.includes('\r')
+  ) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -171,7 +176,7 @@ export async function exportTablesToJson(
 ): Promise<string> {
   let targetTables = tables && tables.length > 0 ? tables : client.tables;
   if (!options.includeInternal) {
-    targetTables = targetTables.filter(t => !isInternalTable(t));
+    targetTables = targetTables.filter((t) => !isInternalTable(t));
   }
   const result: JsonExportData = {
     version: 1,
@@ -232,7 +237,7 @@ export async function importTablesFromJson(
     importedTables.push(table);
     rowCounts[table] = 0;
 
-    await client.transaction(async tx => {
+    await client.transaction(async (tx) => {
       if (mode === 'replace') {
         const safeTable = escapeIdentifier(table);
         await tx.query(`DELETE FROM ${safeTable}`);
@@ -244,7 +249,10 @@ export async function importTablesFromJson(
         if (!id) continue;
 
         // Upsert row
-        await tx.mutate(table, id, 'INSERT', row, { primaryKey: pk, skipOutbox });
+        await tx.mutate(table, id, 'INSERT', row, {
+          primaryKey: pk,
+          skipOutbox,
+        });
         rowCounts[table]++;
       }
     });
@@ -267,24 +275,29 @@ export async function exportTableToCsv(
 
   if (rows.length === 0) {
     if (options.columns && includeHeader) {
-      return options.columns.map(c => escapeCsvValue(c, delimiter)).join(delimiter);
+      return options.columns
+        .map((c) => escapeCsvValue(c, delimiter))
+        .join(delimiter);
     }
     return '';
   }
 
   // Determine columns
-  const columns = options.columns && options.columns.length > 0
-    ? options.columns
-    : Object.keys(rows[0]);
+  const columns =
+    options.columns && options.columns.length > 0
+      ? options.columns
+      : Object.keys(rows[0]);
 
   const lines: string[] = [];
 
   if (includeHeader) {
-    lines.push(columns.map(c => escapeCsvValue(c, delimiter)).join(delimiter));
+    lines.push(
+      columns.map((c) => escapeCsvValue(c, delimiter)).join(delimiter),
+    );
   }
 
   for (const row of rows) {
-    const values = columns.map(col => escapeCsvValue(row[col], delimiter));
+    const values = columns.map((col) => escapeCsvValue(row[col], delimiter));
     lines.push(values.join(delimiter));
   }
 
@@ -319,11 +332,13 @@ export async function importTableFromCsv(
   let dataRows: string[][];
 
   if (hasHeader) {
-    columns = parsedRows[0].map(c => c.trim());
+    columns = parsedRows[0].map((c) => c.trim());
     dataRows = parsedRows.slice(1);
   } else {
     if (!options.columns || options.columns.length === 0) {
-      throw new Error('Explicit columns must be specified when CSV has no header.');
+      throw new Error(
+        'Explicit columns must be specified when CSV has no header.',
+      );
     }
     columns = options.columns;
     dataRows = parsedRows;
@@ -331,14 +346,17 @@ export async function importTableFromCsv(
 
   let importedCount = 0;
 
-  await client.transaction(async tx => {
+  await client.transaction(async (tx) => {
     if (mode === 'replace') {
       const safeTable = escapeIdentifier(tableName);
       await tx.query(`DELETE FROM ${safeTable}`);
     }
 
     for (const rowVals of dataRows) {
-      if (rowVals.length === 0 || (rowVals.length === 1 && !rowVals[0].trim())) {
+      if (
+        rowVals.length === 0 ||
+        (rowVals.length === 1 && !rowVals[0].trim())
+      ) {
         continue;
       }
 
@@ -379,7 +397,10 @@ export async function importTableFromCsv(
       const id = String(payload[pk] ?? payload.id);
       if (!id) continue;
 
-      await tx.mutate(tableName, id, 'INSERT', payload, { primaryKey: pk, skipOutbox });
+      await tx.mutate(tableName, id, 'INSERT', payload, {
+        primaryKey: pk,
+        skipOutbox,
+      });
       importedCount++;
     }
   });

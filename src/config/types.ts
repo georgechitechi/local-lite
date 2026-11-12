@@ -1,6 +1,12 @@
 import { LocalDBAdapter } from '../adapters/local/index.js';
 import { RemoteDBAdapter } from '../adapters/remote/index.js';
-import { ConflictResolver, ConflictStrategy, NetworkStatusProvider, RetryConfig, SchemaMigration } from '../core/types.js';
+import {
+  ConflictResolver,
+  ConflictStrategy,
+  NetworkStatusProvider,
+  RetryConfig,
+  SchemaMigration,
+} from '../core/types.js';
 import type { RelationshipDefinition } from '../core/client.js';
 import { SyncLogger, CustomLogger, LogLevel } from '../utils/logger.js';
 import type { LocalAuthEngineOptions } from '../auth/local.js';
@@ -91,7 +97,8 @@ export interface EmailConfig {
    * - 'postmark': Direct HTTP dispatch to Postmark API.
    * - 'http': Custom HTTP endpoint or webhook.
    */
-  provider?: 'nodemailer' | 'resend' | 'sendgrid' | 'postmark' | 'http' | 'custom';
+  provider?:
+    'nodemailer' | 'resend' | 'sendgrid' | 'postmark' | 'http' | 'custom';
 
   /**
    * Transport configuration for Nodemailer:
@@ -238,7 +245,6 @@ export interface LocalLiteConfig {
    */
   localOnly?: boolean;
 
-
   /**
    * Conflict resolution strategy. Default: 'last-write-wins'
    */
@@ -312,7 +318,9 @@ export interface LocalLiteConfig {
   /**
    * Scoped synchronization filter (e.g. { org_id: '...' } or dynamic resolver callback).
    */
-  syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  syncScope?:
+    | Record<string, any>
+    | (() => Record<string, any> | Promise<Record<string, any>>);
 
   /**
    * Stamp an "updated at" column on every local INSERT/UPDATE so reactive queries

@@ -17,8 +17,14 @@ function jsonResponse(body: object, status = 200): Response {
 
 describe('GoogleAuthClient', () => {
   const sampleUser: GoogleUser = {
-    id: resolveUnifiedUserId({ id: 'google-user-123', email: 'test@example.com', emailVerified: true }, 'google'),
-    userId: resolveUnifiedUserId({ id: 'google-user-123', email: 'test@example.com', emailVerified: true }, 'google'),
+    id: resolveUnifiedUserId(
+      { id: 'google-user-123', email: 'test@example.com', emailVerified: true },
+      'google',
+    ),
+    userId: resolveUnifiedUserId(
+      { id: 'google-user-123', email: 'test@example.com', emailVerified: true },
+      'google',
+    ),
     provider: 'google' as const,
     providerAccountId: 'google-user-123',
     email: 'test@example.com',
@@ -39,12 +45,14 @@ describe('GoogleAuthClient', () => {
     const client = new GoogleAuthClient({
       clientId: 'google-client-id-xyz',
       redirectUri: 'myapp://oauth',
-      authorize: async request => {
+      authorize: async (request) => {
         authorizationUrl = request.authorizationUrl;
-        const state = new URL(request.authorizationUrl).searchParams.get('state');
+        const state = new URL(request.authorizationUrl).searchParams.get(
+          'state',
+        );
         return { code: 'auth-code-123', state: state ?? '' };
       },
-      randomBytes: length => new Uint8Array(length).fill(9),
+      randomBytes: (length) => new Uint8Array(length).fill(9),
       fetch: async (url, init) => {
         const urlStr = String(url);
         if (urlStr.includes('oauth2.googleapis.com/token')) {
@@ -74,7 +82,7 @@ describe('GoogleAuthClient', () => {
       },
     });
 
-    client.onAuthStateChange(user => {
+    client.onAuthStateChange((user) => {
       authEvents.push(user);
     });
 
@@ -173,7 +181,7 @@ describe('GoogleAuthClient', () => {
     const client = new GoogleAuthClient({
       clientId: 'google-client-id-xyz',
       redirectUri: 'myapp://oauth',
-      authorize: async req => ({ code: 'c', state: req.state }),
+      authorize: async (req) => ({ code: 'c', state: req.state }),
       fetch: async (url: any) => {
         if (String(url).includes('/token')) {
           return jsonResponse({ access_token: 't', expires_in: 3600 });
@@ -182,7 +190,7 @@ describe('GoogleAuthClient', () => {
       },
     });
 
-    client.onAuthStateChange(u => authEvents.push(u));
+    client.onAuthStateChange((u) => authEvents.push(u));
 
     // Sign in first
     await client.signIn();
@@ -198,11 +206,11 @@ describe('GoogleAuthClient', () => {
   it('persists tokens and user info via key-value storage adapter', async () => {
     const memory = new Map<string, unknown>();
     const storage: GoogleAuthKeyValueStorage = {
-      getItem: async key => memory.get(key) ?? null,
+      getItem: async (key) => memory.get(key) ?? null,
       setItem: async (key, val) => {
         memory.set(key, val);
       },
-      removeItem: async key => {
+      removeItem: async (key) => {
         memory.delete(key);
       },
     };
@@ -215,7 +223,9 @@ describe('GoogleAuthClient', () => {
     });
     await store.setUser(sampleUser);
 
-    expect(await store.getTokens()).toMatchObject({ accessToken: 'access-123' });
+    expect(await store.getTokens()).toMatchObject({
+      accessToken: 'access-123',
+    });
     expect(await store.getUser()).toEqual(sampleUser);
 
     await store.removeTokens();

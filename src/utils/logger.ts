@@ -82,7 +82,10 @@ export class SyncLogger {
 
   error(message: string, ...args: any[]): void {
     if (!this.shouldLog('error')) return;
-    if (message.includes('Network Offline') || message.includes('Failed to reach')) {
+    if (
+      message.includes('Network Offline') ||
+      message.includes('Failed to reach')
+    ) {
       this.warn(message, ...args);
       return;
     }
@@ -104,7 +107,7 @@ export const defaultLogger = new SyncLogger();
  */
 export function createSyncLogger(
   logger?: SyncLogger | CustomLogger | boolean,
-  logLevel?: LogLevel
+  logLevel?: LogLevel,
 ): SyncLogger {
   if (logger instanceof SyncLogger) {
     return logger;
@@ -123,7 +126,7 @@ export function createSyncLogger(
  */
 export function formatSupabaseError(
   error: any,
-  context: { table?: string; operation?: string } = {}
+  context: { table?: string; operation?: string } = {},
 ): string {
   if (!error) return 'Unknown Supabase error';
   const table = context.table ? `"${context.table}"` : 'table';
@@ -176,15 +179,20 @@ export function formatSupabaseError(
  */
 export function formatFirestoreError(
   error: any,
-  context: { collection?: string; operation?: string } = {}
+  context: { collection?: string; operation?: string } = {},
 ): string {
   if (!error) return 'Unknown Firestore error';
-  const collection = context.collection ? `"${context.collection}"` : 'collection';
+  const collection = context.collection
+    ? `"${context.collection}"`
+    : 'collection';
   const op = context.operation ? ` (${context.operation})` : '';
   const code = String(error.code || '').toLowerCase();
   const rawMsg = error.message || String(error);
 
-  if (code.includes('permission-denied') || rawMsg.toLowerCase().includes('insufficient permissions')) {
+  if (
+    code.includes('permission-denied') ||
+    rawMsg.toLowerCase().includes('insufficient permissions')
+  ) {
     return `🔒 Permission Denied on collection ${collection}${op}: Check your Firestore Security Rules.`;
   }
 
@@ -192,7 +200,10 @@ export function formatFirestoreError(
     return `🔑 Unauthenticated on collection ${collection}${op}: User must be signed into Firebase Auth.`;
   }
 
-  if (code.includes('unavailable') || rawMsg.toLowerCase().includes('network')) {
+  if (
+    code.includes('unavailable') ||
+    rawMsg.toLowerCase().includes('network')
+  ) {
     return `📡 Firestore Offline: Backend unreachable. Mutations preserved in local SQLite outbox.`;
   }
 
@@ -204,18 +215,24 @@ export function formatFirestoreError(
  */
 export function formatConvexError(
   error: any,
-  context: { table?: string; operation?: string } = {}
+  context: { table?: string; operation?: string } = {},
 ): string {
   if (!error) return 'Unknown Convex error';
   const table = context.table ? `"${context.table}"` : 'table';
   const op = context.operation ? ` (${context.operation})` : '';
   const rawMsg = error.message || String(error);
 
-  if (rawMsg.toLowerCase().includes('unauthorized') || rawMsg.toLowerCase().includes('unauthenticated')) {
+  if (
+    rawMsg.toLowerCase().includes('unauthorized') ||
+    rawMsg.toLowerCase().includes('unauthenticated')
+  ) {
     return `🔒 Convex Permission Denied on ${table}${op}: Request unauthorized.`;
   }
 
-  if (rawMsg.toLowerCase().includes('network') || rawMsg.toLowerCase().includes('failed to fetch')) {
+  if (
+    rawMsg.toLowerCase().includes('network') ||
+    rawMsg.toLowerCase().includes('failed to fetch')
+  ) {
     return `📡 Convex Offline: Server unreachable. Mutations preserved in local SQLite outbox.`;
   }
 

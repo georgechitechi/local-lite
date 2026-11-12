@@ -1,17 +1,22 @@
 import { DBExecutable } from '../core/schema-manager.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import { TableChangeEvent } from '../core/types.js';
-import { SearchIndexConfig, SearchQueryOptions, SearchResult } from './types.js';
+import {
+  SearchIndexConfig,
+  SearchQueryOptions,
+  SearchResult,
+} from './types.js';
 import { SearchStore } from './store.js';
 
 export class SearchManager {
   private indices: Map<string, SearchIndexConfig> = new Map();
-  private eventListeners: Map<string, (event: TableChangeEvent) => void> = new Map();
+  private eventListeners: Map<string, (event: TableChangeEvent) => void> =
+    new Map();
 
   constructor(
     private db: DBExecutable,
     private events?: EventEmitter,
-    private getRowById?: (table: string, id: string) => Promise<any | null>
+    private getRowById?: (table: string, id: string) => Promise<any | null>,
   ) {}
 
   /**
@@ -44,9 +49,15 @@ export class SearchManager {
   /**
    * Indexes or updates a single record in the FTS index.
    */
-  async indexRecord(table: string, rowId: string, values: Record<string, any>): Promise<void> {
+  async indexRecord(
+    table: string,
+    rowId: string,
+    values: Record<string, any>,
+  ): Promise<void> {
     const config = this.indices.get(table);
-    const columns = config ? config.columns : Object.keys(values).filter((k) => k !== 'id');
+    const columns = config
+      ? config.columns
+      : Object.keys(values).filter((k) => k !== 'id');
     await SearchStore.indexRow(this.db, table, rowId, columns, values);
   }
 
@@ -60,15 +71,26 @@ export class SearchManager {
   /**
    * Rebuilds the search index for a table from an array of existing records.
    */
-  async rebuildIndex(table: string, records: Array<{ id: string } & Record<string, any>>): Promise<void> {
+  async rebuildIndex(
+    table: string,
+    records: Array<{ id: string } & Record<string, any>>,
+  ): Promise<void> {
     const config = this.indices.get(table);
     if (!config) {
-      throw new Error(`Search index not configured for table "${table}". Call createIndex first.`);
+      throw new Error(
+        `Search index not configured for table "${table}". Call createIndex first.`,
+      );
     }
 
     await SearchStore.clearFts(this.db, table);
     for (const record of records) {
-      await SearchStore.indexRow(this.db, table, record.id, config.columns, record);
+      await SearchStore.indexRow(
+        this.db,
+        table,
+        record.id,
+        config.columns,
+        record,
+      );
     }
   }
 
@@ -78,12 +100,18 @@ export class SearchManager {
   async query<T = any>(
     table: string,
     queryText: string,
-    options: SearchQueryOptions = {}
+    options: SearchQueryOptions = {},
   ): Promise<SearchResult<T>[]> {
     const config = this.indices.get(table);
     const columns = config ? config.columns : [];
 
-    const matches = await SearchStore.search(this.db, table, columns, queryText, options);
+    const matches = await SearchStore.search(
+      this.db,
+      table,
+      columns,
+      queryText,
+      options,
+    );
     const shouldHydrate = options.hydrateRow !== false;
 
     const results: SearchResult<T>[] = [];
@@ -95,7 +123,10 @@ export class SearchManager {
           data = await this.getRowById(table, match.rowId);
         } else {
           try {
-            const rows = await this.db.execute(`SELECT * FROM ${table} WHERE id = ? LIMIT 1`, [match.rowId]);
+            const rows = await this.db.execute(
+              `SELECT * FROM ${table} WHERE id = ? LIMIT 1`,
+              [match.rowId],
+            );
             data = rows && rows.length > 0 ? rows[0] : null;
           } catch {
             data = null;

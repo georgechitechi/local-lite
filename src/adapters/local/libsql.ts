@@ -23,7 +23,11 @@ function normalizeRows(res: LibSQLResultSet): any[] {
   if (rows.length === 0) return [];
 
   // If rows are already standard objects
-  if (typeof rows[0] === 'object' && !Array.isArray(rows[0]) && rows[0] !== null) {
+  if (
+    typeof rows[0] === 'object' &&
+    !Array.isArray(rows[0]) &&
+    rows[0] !== null
+  ) {
     return rows;
   }
 
@@ -61,7 +65,9 @@ export class LibSQLAdapter implements LocalDBAdapter {
     return normalizeRows(res);
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     if (typeof this.client.transaction === 'function') {
       const tx = await this.client.transaction('write');
       try {

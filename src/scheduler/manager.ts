@@ -1,18 +1,24 @@
 import { DBExecutable } from '../core/schema-manager.js';
 import { generateUUID } from '../utils/uuid.js';
-import { JobDefinition, JobRecord, JobRunRecord, JobSchedulerOptions } from './types.js';
+import {
+  JobDefinition,
+  JobRecord,
+  JobRunRecord,
+  JobSchedulerOptions,
+} from './types.js';
 import { calculateNextRun, parseScheduleToIntervalMs } from './cron.js';
 import { JobStore } from './store.js';
 
 export class JobScheduler {
-  private handlers: Map<string, (job: JobRecord) => Promise<void> | void> = new Map();
+  private handlers: Map<string, (job: JobRecord) => Promise<void> | void> =
+    new Map();
   private timer: any = null;
   private isTicking: boolean = false;
   private checkIntervalMs: number;
 
   constructor(
     private db: DBExecutable,
-    options: JobSchedulerOptions = {}
+    options: JobSchedulerOptions = {},
   ) {
     this.checkIntervalMs = options.checkIntervalMs ?? 30000;
   }
@@ -32,7 +38,8 @@ export class JobScheduler {
     const record: JobRecord = {
       id: job.id,
       name: job.name || job.id,
-      schedule: typeof job.schedule === 'string' ? job.schedule : `${intervalMs}ms`,
+      schedule:
+        typeof job.schedule === 'string' ? job.schedule : `${intervalMs}ms`,
       intervalMs,
       lastRunAt: null,
       nextRunAt,
@@ -52,7 +59,10 @@ export class JobScheduler {
   /**
    * Attaches or updates a handler function for an already registered job id.
    */
-  setHandler(jobId: string, handler: (job: JobRecord) => Promise<void> | void): void {
+  setHandler(
+    jobId: string,
+    handler: (job: JobRecord) => Promise<void> | void,
+  ): void {
     this.handlers.set(jobId, handler);
   }
 
@@ -124,11 +134,17 @@ export class JobScheduler {
       runStatus,
       finishedAt,
       durationMs,
-      runError
+      runError,
     );
 
     const nextRunAt = calculateNextRun(job.schedule, finishedAt);
-    await JobStore.updateJobSchedule(this.db, undefined, jobId, finishedAt, nextRunAt);
+    await JobStore.updateJobSchedule(
+      this.db,
+      undefined,
+      jobId,
+      finishedAt,
+      nextRunAt,
+    );
 
     return {
       id: runId,
@@ -202,14 +218,19 @@ export class JobScheduler {
   /**
    * Returns run history for a specific job or all jobs.
    */
-  async getHistory(jobId?: string, limit: number = 50): Promise<JobRunRecord[]> {
+  async getHistory(
+    jobId?: string,
+    limit: number = 50,
+  ): Promise<JobRunRecord[]> {
     return await JobStore.getRuns(this.db, undefined, jobId, limit);
   }
 
   /**
    * Prunes historical run logs older than the given age in milliseconds (default: 30 days).
    */
-  async pruneHistory(maxAgeMs: number = 30 * 24 * 60 * 60 * 1000): Promise<void> {
+  async pruneHistory(
+    maxAgeMs: number = 30 * 24 * 60 * 60 * 1000,
+  ): Promise<void> {
     const cutoff = Date.now() - maxAgeMs;
     await JobStore.pruneRuns(this.db, undefined, cutoff);
   }

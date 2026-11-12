@@ -50,7 +50,10 @@ describe('Multi-Driver SQLite Adapters', () => {
       async execute() {
         return {
           columns: ['id', 'name'],
-          rows: [['lib-1', 'Alice'], ['lib-2', 'Bob']],
+          rows: [
+            ['lib-1', 'Alice'],
+            ['lib-2', 'Bob'],
+          ],
         };
       },
       async batch() {
@@ -91,7 +94,9 @@ describe('Multi-Driver SQLite Adapters', () => {
       },
     };
     const adapter = new SqlJsAdapter(mockSqlJs);
-    const rows = await adapter.execute('SELECT * FROM test WHERE id = ?', ['1']);
+    const rows = await adapter.execute('SELECT * FROM test WHERE id = ?', [
+      '1',
+    ]);
     expect(rows).toEqual([{ id: '1', color: 'green' }]);
   });
 
@@ -110,12 +115,18 @@ describe('Multi-Driver SQLite Adapters', () => {
   });
 
   it('ExpoSQLiteAdapter executes reads directly, uses runAsync for writes, and supports transactions', async () => {
-    const getAllSpy = vi.fn().mockResolvedValue([{ id: 'expo-1', title: 'Task' }]);
-    const runAsyncSpy = vi.fn().mockResolvedValue({ changes: 1, lastInsertRowId: 10 });
+    const getAllSpy = vi
+      .fn()
+      .mockResolvedValue([{ id: 'expo-1', title: 'Task' }]);
+    const runAsyncSpy = vi
+      .fn()
+      .mockResolvedValue({ changes: 1, lastInsertRowId: 10 });
     const execAsyncSpy = vi.fn().mockResolvedValue(undefined);
-    const withTxSpy = vi.fn().mockImplementation(async (cb: () => Promise<void>) => {
-      await cb();
-    });
+    const withTxSpy = vi
+      .fn()
+      .mockImplementation(async (cb: () => Promise<void>) => {
+        await cb();
+      });
 
     const mockExpoDb = {
       getAllAsync: getAllSpy,
@@ -127,22 +138,39 @@ describe('Multi-Driver SQLite Adapters', () => {
     const adapter = new ExpoSQLiteAdapter(mockExpoDb);
 
     // 1. Read query (SELECT) uses getAllAsync directly
-    const readRows = await adapter.execute('SELECT * FROM tasks WHERE id = ?', ['expo-1']);
+    const readRows = await adapter.execute('SELECT * FROM tasks WHERE id = ?', [
+      'expo-1',
+    ]);
     expect(readRows).toEqual([{ id: 'expo-1', title: 'Task' }]);
-    expect(getAllSpy).toHaveBeenCalledWith('SELECT * FROM tasks WHERE id = ?', ['expo-1']);
+    expect(getAllSpy).toHaveBeenCalledWith('SELECT * FROM tasks WHERE id = ?', [
+      'expo-1',
+    ]);
 
     // 2. Write query with parameters uses runAsync (faster, no dummy rows)
-    const writeRows = await adapter.execute('INSERT INTO tasks (title) VALUES (?)', ['New']);
-    expect(runAsyncSpy).toHaveBeenCalledWith('INSERT INTO tasks (title) VALUES (?)', ['New']);
+    const writeRows = await adapter.execute(
+      'INSERT INTO tasks (title) VALUES (?)',
+      ['New'],
+    );
+    expect(runAsyncSpy).toHaveBeenCalledWith(
+      'INSERT INTO tasks (title) VALUES (?)',
+      ['New'],
+    );
     expect(writeRows).toEqual([{ changes: 1, lastInsertRowId: 10 }]);
 
     // 3. Parameterless DDL uses execAsync
-    await adapter.execute('CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY)');
-    expect(execAsyncSpy).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY)');
+    await adapter.execute(
+      'CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY)',
+    );
+    expect(execAsyncSpy).toHaveBeenCalledWith(
+      'CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY)',
+    );
 
     // 4. Atomic transaction execution
     const txResult = await adapter.transaction(async (tx) => {
-      await tx.execute('UPDATE tasks SET title = ? WHERE id = ?', ['Done', 'expo-1']);
+      await tx.execute('UPDATE tasks SET title = ? WHERE id = ?', [
+        'Done',
+        'expo-1',
+      ]);
       return 'tx-success';
     });
     expect(withTxSpy).toHaveBeenCalledTimes(1);

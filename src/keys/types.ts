@@ -75,7 +75,8 @@ export interface ApiKeyRecord {
   revokedAt?: number | null;
 }
 
-export type KeyVerificationStatus = 'VALID' | 'INVALID' | 'EXPIRED' | 'REVOKED' | 'MALFORMED';
+export type KeyVerificationStatus =
+  'VALID' | 'INVALID' | 'EXPIRED' | 'REVOKED' | 'MALFORMED';
 
 export interface VerifyStoredKeyResult {
   valid: boolean;

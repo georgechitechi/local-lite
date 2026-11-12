@@ -12,6 +12,9 @@ export * from './query-builder.js';
 export * from './maintenance.js';
 export * from '../reactive/event-emitter.js';
 export * from '../adapters/network/index.js';
-export type { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
+export type {
+  LocalDBAdapter,
+  LocalTransaction,
+} from '../adapters/local/index.js';
 export type { RemoteDBAdapter } from '../adapters/remote/index.js';
 export * from '../utils/logger.js';

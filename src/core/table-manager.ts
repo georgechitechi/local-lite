@@ -19,7 +19,9 @@ export interface TableMutationOptions {
 
 const defaultSchemaManager = new SchemaManager();
 
-function formatPayload(payload: Record<string, any> | null): Record<string, any> {
+function formatPayload(
+  payload: Record<string, any> | null,
+): Record<string, any> {
   const formatted: Record<string, any> = {};
   if (payload && typeof payload === 'object') {
     for (const [k, v] of Object.entries(payload)) {
@@ -35,16 +37,24 @@ async function withTouchedColumn(
   tableName: string,
   operation: SyncOp,
   payload: Record<string, any> | null,
-  options: TableMutationOptions
+  options: TableMutationOptions,
 ): Promise<Record<string, any> | null> {
   const col = options.touchColumn as string;
-  if (operation === 'INSERT' && payload && payload[col] !== undefined && payload[col] !== null) {
+  if (
+    operation === 'INSERT' &&
+    payload &&
+    payload[col] !== undefined &&
+    payload[col] !== null
+  ) {
     return payload;
   }
   if (!options.autoSchema && !(await sm.tableHasColumn(tx, tableName, col))) {
     return payload;
   }
-  return { ...(payload || {}), [col]: options.touchValue ?? new Date().toISOString() };
+  return {
+    ...(payload || {}),
+    [col]: options.touchValue ?? new Date().toISOString(),
+  };
 }
 
 export class TableManager {
@@ -60,7 +70,7 @@ export class TableManager {
     operation: SyncOp,
     payload: Record<string, any> | null,
     primaryKey: string = 'id',
-    options?: TableMutationOptions
+    options?: TableMutationOptions,
   ): Promise<void> {
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(primaryKey);
@@ -76,7 +86,14 @@ export class TableManager {
     }
 
     if (options?.touchColumn) {
-      payload = await withTouchedColumn(tx, sm, tableName, operation, payload, options);
+      payload = await withTouchedColumn(
+        tx,
+        sm,
+        tableName,
+        operation,
+        payload,
+        options,
+      );
     }
 
     const formatted = options?.autoSchema
@@ -90,7 +107,13 @@ export class TableManager {
     // and direct UPDATE when updating an existing row so omitted NOT NULL columns do not fail.
     const updateKeys = keys.filter((k) => k !== primaryKey);
     if (operation === 'UPDATE' && updateKeys.length > 0) {
-      const existing = await TableManager.fetchRow(tx, tableName, rowId, primaryKey, options);
+      const existing = await TableManager.fetchRow(
+        tx,
+        tableName,
+        rowId,
+        primaryKey,
+        options,
+      );
       if (existing) {
         const setClause = updateKeys
           .map((k) => `${escapeIdentifier(k)} = ?`)
@@ -98,7 +121,7 @@ export class TableManager {
         const setValues = [...updateKeys.map((k) => rowData[k]), rowId];
         await tx.execute(
           `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`,
-          setValues
+          setValues,
         );
         return;
       }
@@ -114,12 +137,12 @@ export class TableManager {
         .join(', ');
       await tx.execute(
         `INSERT INTO ${safeTable} (${cols}) VALUES (${placeholders}) ON CONFLICT (${safePk}) DO UPDATE SET ${updateClause}`,
-        values
+        values,
       );
     } else {
       await tx.execute(
         `INSERT OR IGNORE INTO ${safeTable} (${cols}) VALUES (${placeholders})`,
-        values
+        values,
       );
     }
   }
@@ -132,7 +155,7 @@ export class TableManager {
     tableName: string,
     rowId: string,
     primaryKey: string = 'id',
-    options?: TableMutationOptions
+    options?: TableMutationOptions,
   ): Promise<Record<string, any> | null> {
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(primaryKey);
@@ -144,7 +167,7 @@ export class TableManager {
 
     const rows = await tx.execute(
       `SELECT * FROM ${safeTable} WHERE ${safePk} = ? LIMIT 1`,
-      [rowId]
+      [rowId],
     );
 
     return rows && rows.length > 0 ? rows[0] : null;

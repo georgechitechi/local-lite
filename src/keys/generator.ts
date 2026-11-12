@@ -2,13 +2,15 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { GenerateApiKeyOptions, GeneratedApiKey } from './types.js';
 
-const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const BASE62_ALPHABET =
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 /**
  * Generates cryptographically secure random bytes across Web, Expo/React Native, and Node.js.
  */
 export function getRandomBytes(length: number): Uint8Array {
-  const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const cryptoObj =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (cryptoObj?.getRandomValues) {
     try {
       return cryptoObj.getRandomValues(new Uint8Array(length));
@@ -81,8 +83,13 @@ export function hashApiKey(key: string): string {
  * Example:
  * prop_a7F9x2K1m8P0qW4z_c4f910e2
  */
-export function generateApiKey(options: GenerateApiKeyOptions = {}): GeneratedApiKey {
-  const prefix = (options.prefix || 'key').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+export function generateApiKey(
+  options: GenerateApiKeyOptions = {},
+): GeneratedApiKey {
+  const prefix = (options.prefix || 'key')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
   const byteLength = options.byteLength ?? 24;
   const withChecksum = options.withChecksum ?? true;
 
@@ -117,7 +124,10 @@ export function generateApiKey(options: GenerateApiKeyOptions = {}): GeneratedAp
  * Verifies whether a key string is syntactically valid and has an authentic checksum.
  * Does not require a database lookup.
  */
-export function verifyApiKeyFormat(key: string, expectedPrefix?: string): boolean {
+export function verifyApiKeyFormat(
+  key: string,
+  expectedPrefix?: string,
+): boolean {
   if (!key || typeof key !== 'string') return false;
 
   const parts = key.trim().split('_');
@@ -140,7 +150,11 @@ export function verifyApiKeyFormat(key: string, expectedPrefix?: string): boolea
 /**
  * Validates a raw API key against a stored SHA-256 hash in constant time.
  */
-export function verifyApiKey(rawKey: string, storedHash: string, expectedPrefix?: string): boolean {
+export function verifyApiKey(
+  rawKey: string,
+  storedHash: string,
+  expectedPrefix?: string,
+): boolean {
   if (!verifyApiKeyFormat(rawKey, expectedPrefix)) {
     return false;
   }

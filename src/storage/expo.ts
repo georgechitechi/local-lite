@@ -41,7 +41,11 @@ export interface ExpoFileDriverOptions {
  */
 export function bytesToBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== 'undefined') {
-    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
+    return Buffer.from(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    ).toString('base64');
   }
   let binary = '';
   const len = bytes.byteLength;
@@ -80,7 +84,9 @@ export class ExpoFileDriver implements FileDriver {
 
   constructor(options: ExpoFileDriverOptions = {}) {
     if ('fileSystem' in options) {
-      throw new TypeError('ExpoFileDriver no longer accepts fileSystem. Pass File, Directory, and Paths instead.');
+      throw new TypeError(
+        'ExpoFileDriver no longer accepts fileSystem. Pass File, Directory, and Paths instead.',
+      );
     }
     this.FileClass = options.File;
     this.DirectoryClass = options.Directory;
@@ -102,12 +108,17 @@ export class ExpoFileDriver implements FileDriver {
         }
       } catch (error) {
         if (!this.FileClass) {
-          throw new Error('ExpoFileDriver requires expo-file-system SDK 58 or newer.', { cause: error });
+          throw new Error(
+            'ExpoFileDriver requires expo-file-system SDK 58 or newer.',
+            { cause: error },
+          );
         }
       }
     }
     if (!this.FileClass) {
-      throw new Error('ExpoFileDriver requires the modern File API from expo-file-system SDK 58 or newer.');
+      throw new Error(
+        'ExpoFileDriver requires the modern File API from expo-file-system SDK 58 or newer.',
+      );
     }
   }
 
@@ -132,12 +143,17 @@ export class ExpoFileDriver implements FileDriver {
       const root = this.useCache ? this.PathsObj.cache : this.PathsObj.document;
       this.resolvedBaseDir = new this.DirectoryClass(root, 'local-lite-blobs');
     } else {
-      throw new Error('ExpoFileDriver requires the modern Directory and Paths APIs from expo-file-system.');
+      throw new Error(
+        'ExpoFileDriver requires the modern Directory and Paths APIs from expo-file-system.',
+      );
     }
 
     if (this.resolvedBaseDir) {
       try {
-        if (!this.resolvedBaseDir.exists && typeof this.resolvedBaseDir.create === 'function') {
+        if (
+          !this.resolvedBaseDir.exists &&
+          typeof this.resolvedBaseDir.create === 'function'
+        ) {
           this.resolvedBaseDir.create({ idempotent: true });
         }
       } catch {}
@@ -185,7 +201,9 @@ export class ExpoFileDriver implements FileDriver {
           : `${this.resolvedBaseDir.uri}/`
         : undefined);
     if (!basePath) {
-      throw new Error('ExpoFileDriver could not resolve a base directory for the requested file.');
+      throw new Error(
+        'ExpoFileDriver could not resolve a base directory for the requested file.',
+      );
     }
 
     const safePath = safeKey
@@ -212,7 +230,9 @@ export class ExpoFileDriver implements FileDriver {
     } else if (typeof file.writeSync === 'function') {
       file.writeSync(data);
     } else {
-      throw new Error('ExpoFileDriver: The Expo File instance does not support writing.');
+      throw new Error(
+        'ExpoFileDriver: The Expo File instance does not support writing.',
+      );
     }
     return file.uri;
   }
@@ -220,12 +240,19 @@ export class ExpoFileDriver implements FileDriver {
   async read(key: string): Promise<Uint8Array | null> {
     const file = await this.resolveFile(key);
     if (!file.exists) return null;
-    if (typeof file.bytes === 'function') return new Uint8Array(await file.bytes());
-    if (typeof file.bytesSync === 'function') return new Uint8Array(file.bytesSync());
-    if (typeof file.arrayBuffer === 'function') return new Uint8Array(await file.arrayBuffer());
-    if (typeof file.base64 === 'function') return base64ToBytes(await file.base64());
-    if (typeof file.base64Sync === 'function') return base64ToBytes(file.base64Sync());
-    throw new Error('ExpoFileDriver: The Expo File instance does not support reading.');
+    if (typeof file.bytes === 'function')
+      return new Uint8Array(await file.bytes());
+    if (typeof file.bytesSync === 'function')
+      return new Uint8Array(file.bytesSync());
+    if (typeof file.arrayBuffer === 'function')
+      return new Uint8Array(await file.arrayBuffer());
+    if (typeof file.base64 === 'function')
+      return base64ToBytes(await file.base64());
+    if (typeof file.base64Sync === 'function')
+      return base64ToBytes(file.base64Sync());
+    throw new Error(
+      'ExpoFileDriver: The Expo File instance does not support reading.',
+    );
   }
 
   async delete(key: string): Promise<void> {
@@ -253,17 +280,23 @@ export class ExpoFileDriver implements FileDriver {
   async copyFrom(sourceUri: string, key: string): Promise<string> {
     const file = await this.resolveFile(key);
     const sourceFile = new this.FileClass(sourceUri);
-    if (!sourceFile.exists) throw new Error(`ExpoFileDriver: Source file "${sourceUri}" does not exist.`);
+    if (!sourceFile.exists)
+      throw new Error(
+        `ExpoFileDriver: Source file "${sourceUri}" does not exist.`,
+      );
     if (typeof sourceFile.copy === 'function') {
       await sourceFile.copy(file);
     } else {
-      const contents = typeof sourceFile.bytes === 'function'
-        ? await sourceFile.bytes()
-        : typeof sourceFile.bytesSync === 'function'
-          ? sourceFile.bytesSync()
-          : null;
+      const contents =
+        typeof sourceFile.bytes === 'function'
+          ? await sourceFile.bytes()
+          : typeof sourceFile.bytesSync === 'function'
+            ? sourceFile.bytesSync()
+            : null;
       if (!contents) {
-        throw new Error('ExpoFileDriver: The source File instance does not support copying or reading.');
+        throw new Error(
+          'ExpoFileDriver: The source File instance does not support copying or reading.',
+        );
       }
       await this.write(key, new Uint8Array(contents));
     }
@@ -278,14 +311,18 @@ export class ExpoFileDriver implements FileDriver {
 
     if (typeof this.FileClass.downloadFileAsync === 'function') {
       try {
-        await this.FileClass.downloadFileAsync(remoteUrl, file, { idempotent: true });
+        await this.FileClass.downloadFileAsync(remoteUrl, file, {
+          idempotent: true,
+        });
         return file.uri;
       } catch {}
     }
 
     const response = await fetch(remoteUrl);
     if (!response.ok) {
-      throw new Error(`Failed to download file from "${remoteUrl}": ${response.statusText}`);
+      throw new Error(
+        `Failed to download file from "${remoteUrl}": ${response.statusText}`,
+      );
     }
     const arrayBuffer = await response.arrayBuffer();
     return await this.write(key, new Uint8Array(arrayBuffer));

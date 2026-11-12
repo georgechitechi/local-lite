@@ -30,7 +30,10 @@ export function mapKVRow(r: any): KVRecord {
 }
 
 export class KVStore {
-  static async ensureSchema(db: DBExecutable, tableName: string = DEFAULT_KV_TABLE): Promise<void> {
+  static async ensureSchema(
+    db: DBExecutable,
+    tableName: string = DEFAULT_KV_TABLE,
+  ): Promise<void> {
     await db.execute(
       `CREATE TABLE IF NOT EXISTS ${tableName} (
         key TEXT PRIMARY KEY,
@@ -39,11 +42,11 @@ export class KVStore {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         expires_at INTEGER
-      );`
+      );`,
     );
 
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${tableName}_expires ON ${tableName} (expires_at);`
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_expires ON ${tableName} (expires_at);`,
     );
   }
 
@@ -54,7 +57,7 @@ export class KVStore {
     valueStr: string,
     type: string,
     now: number,
-    expiresAt: number | null
+    expiresAt: number | null,
   ): Promise<void> {
     await db.execute(
       `INSERT INTO ${tableName} (key, value, type, created_at, updated_at, expires_at)
@@ -64,16 +67,19 @@ export class KVStore {
          type = excluded.type,
          updated_at = excluded.updated_at,
          expires_at = excluded.expires_at;`,
-      [key, valueStr, type, now, now, expiresAt]
+      [key, valueStr, type, now, now, expiresAt],
     );
   }
 
   static async get(
     db: DBExecutable,
     tableName: string = DEFAULT_KV_TABLE,
-    key: string
+    key: string,
   ): Promise<KVRecord | null> {
-    const rows = await db.execute(`SELECT * FROM ${tableName} WHERE key = ? LIMIT 1;`, [key]);
+    const rows = await db.execute(
+      `SELECT * FROM ${tableName} WHERE key = ? LIMIT 1;`,
+      [key],
+    );
     if (!rows || rows.length === 0) return null;
     return mapKVRow(rows[0]);
   }
@@ -81,7 +87,7 @@ export class KVStore {
   static async delete(
     db: DBExecutable,
     tableName: string = DEFAULT_KV_TABLE,
-    key: string
+    key: string,
   ): Promise<boolean> {
     await db.execute(`DELETE FROM ${tableName} WHERE key = ?;`, [key]);
     return true;
@@ -90,17 +96,17 @@ export class KVStore {
   static async listKeys(
     db: DBExecutable,
     tableName: string = DEFAULT_KV_TABLE,
-    prefix?: string
+    prefix?: string,
   ): Promise<string[]> {
     let rows: any[];
     if (prefix) {
       rows = await db.execute(
         `SELECT key, expires_at FROM ${tableName} WHERE key LIKE ? ORDER BY key ASC;`,
-        [`${prefix}%`]
+        [`${prefix}%`],
       );
     } else {
       rows = await db.execute(
-        `SELECT key, expires_at FROM ${tableName} ORDER BY key ASC;`
+        `SELECT key, expires_at FROM ${tableName} ORDER BY key ASC;`,
       );
     }
 
@@ -112,19 +118,19 @@ export class KVStore {
 
   static async clear(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE
+    tableName: string = DEFAULT_KV_TABLE,
   ): Promise<void> {
     await db.execute(`DELETE FROM ${tableName};`);
   }
 
   static async pruneExpired(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE
+    tableName: string = DEFAULT_KV_TABLE,
   ): Promise<number> {
     const now = Date.now();
     await db.execute(
       `DELETE FROM ${tableName} WHERE expires_at IS NOT NULL AND expires_at <= ?;`,
-      [now]
+      [now],
     );
     return 0;
   }

@@ -53,7 +53,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   private customHeaders: Record<string, string>;
   private fetchFn: typeof fetch;
   private pollIntervalMs: number;
-  private syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  private syncScope?:
+    | Record<string, any>
+    | (() => Record<string, any> | Promise<Record<string, any>>);
   private activeSubscribers = new Set<(changes: DeltaChanges) => void>();
   private pollTimer?: any;
   private lastPollCursor = 0;
@@ -70,7 +72,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     this.pollIntervalMs = options.pollIntervalMs ?? 5000;
 
     if (!this.fetchFn) {
-      throw new Error('A global or configured fetch function is required for SelfHostedRemoteAdapter.');
+      throw new Error(
+        'A global or configured fetch function is required for SelfHostedRemoteAdapter.',
+      );
     }
   }
 
@@ -101,7 +105,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Self-hosted sync push failed (${response.status}): ${errText}`);
+      throw new Error(
+        `Self-hosted sync push failed (${response.status}): ${errText}`,
+      );
     }
 
     const data = await response.json();
@@ -114,7 +120,10 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pulls delta changes from the self-hosted sync backend since a given timestamp or cursor.
    */
-  async fetchChanges(sinceTimestamp: number, _scope?: Record<string, any>): Promise<DeltaChanges> {
+  async fetchChanges(
+    sinceTimestamp: number,
+    _scope?: Record<string, any>,
+  ): Promise<DeltaChanges> {
     const tablesParam = encodeURIComponent(this.tables.join(','));
     const url = `${this.url}?tables=${tablesParam}&since=${encodeURIComponent(String(sinceTimestamp))}`;
 
@@ -125,11 +134,16 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Self-hosted sync pull failed (${response.status}): ${errText}`);
+      throw new Error(
+        `Self-hosted sync pull failed (${response.status}): ${errText}`,
+      );
     }
 
     const data = await response.json();
-    this.lastPollCursor = Math.max(this.lastPollCursor, data.cursor ?? sinceTimestamp);
+    this.lastPollCursor = Math.max(
+      this.lastPollCursor,
+      data.cursor ?? sinceTimestamp,
+    );
     return data.changes ?? { timestamp: Date.now(), changes: [] };
   }
 
@@ -138,7 +152,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
    */
   subscribeToLiveChanges(
     callback: (changes: DeltaChanges) => void,
-    scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)
+    scope?:
+      | Record<string, any>
+      | (() => Record<string, any> | Promise<Record<string, any>>),
   ): () => void {
     if (scope) {
       this.syncScope = scope;
@@ -163,7 +179,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       if (this.activeSubscribers.size === 0) return;
       try {
         const changes = await this.fetchChanges(this.lastPollCursor);
-        const hasChanges = Object.values(changes).some((rows) => Array.isArray(rows) && rows.length > 0);
+        const hasChanges = Object.values(changes).some(
+          (rows) => Array.isArray(rows) && rows.length > 0,
+        );
         if (hasChanges) {
           for (const subscriber of this.activeSubscribers) {
             try {
@@ -175,20 +193,27 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     }, this.pollIntervalMs);
   }
 
-  setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
+  setSyncScope(
+    scope?:
+      | Record<string, any>
+      | (() => Record<string, any> | Promise<Record<string, any>>),
+  ): void {
     this.syncScope = scope;
   }
 
   /**
    * Executes a remote function call or RPC across self-hosted endpoints.
    */
-  async call<T = any>(functionName: string, args: Record<string, any> = {}): Promise<T> {
+  async call<T = any>(
+    functionName: string,
+    args: Record<string, any> = {},
+  ): Promise<T> {
     const actionEndpoints: Record<string, string> = {
       'payments/stk': '/payments/stk',
       'contracts/renewal': '/contracts/renewal',
       'contracts/termination': '/contracts/termination',
       'tenant-self-service': '/tenant-self-service',
-      'email': '/email',
+      email: '/email',
       'backups/create': '/backups/create',
       'backups/list': '/backups',
       'crons/toggle': '/crons/toggle',
@@ -222,10 +247,14 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       });
       if (!response.ok) {
         const errText = await response.text().catch(() => response.statusText);
-        throw new Error(`Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`);
+        throw new Error(
+          `Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`,
+        );
       }
       const data = await response.json();
-      return (isBackups ? data.archives || data.backups || [] : data.automations || []) as unknown as T;
+      return (isBackups
+        ? data.archives || data.backups || []
+        : data.automations || []) as unknown as T;
     }
 
     const endpoint = actionEndpoints[normalized] || `/${normalized}`;
@@ -237,7 +266,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     });
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`);
+      throw new Error(
+        `Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`,
+      );
     }
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -249,11 +280,20 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   /**
    * Queries a remote function or view across self-hosted endpoints.
    */
-  async queryRemote<T = any>(queryName: string, args: Record<string, any> = {}): Promise<T> {
-    if (queryName.includes('listMyBackups') || queryName.includes('listBackups')) {
+  async queryRemote<T = any>(
+    queryName: string,
+    args: Record<string, any> = {},
+  ): Promise<T> {
+    if (
+      queryName.includes('listMyBackups') ||
+      queryName.includes('listBackups')
+    ) {
       return (await this.listBackups()) as unknown as T;
     }
-    if (queryName.includes('listMine') || queryName.includes('listAutomations')) {
+    if (
+      queryName.includes('listMine') ||
+      queryName.includes('listAutomations')
+    ) {
       return (await this.listAutomations()) as unknown as T;
     }
     return this.call<T>(queryName, args);
@@ -270,7 +310,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     });
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Self-hosted listBackups failed (${response.status}): ${errText}`);
+      throw new Error(
+        `Self-hosted listBackups failed (${response.status}): ${errText}`,
+      );
     }
     const data = await response.json();
     return (data.archives || data.backups || []) as RemoteBackupArchive[];
@@ -298,7 +340,8 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
         {
           id: 'daily_contract_reminders',
           name: 'Daily Contract Reminders',
-          description: 'Automated contract expiration notifications and renewal checks',
+          description:
+            'Automated contract expiration notifications and renewal checks',
           enabled: true,
         },
       ];
@@ -319,7 +362,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     });
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Self-hosted setAutomationEnabled failed (${response.status}): ${errText}`);
+      throw new Error(
+        `Self-hosted setAutomationEnabled failed (${response.status}): ${errText}`,
+      );
     }
   }
 }

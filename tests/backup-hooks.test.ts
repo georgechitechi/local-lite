@@ -58,7 +58,7 @@ class MockCloudBackupClient implements CloudBackupClient {
 
   async deleteBackup(fileName: string): Promise<void> {
     this.stored.delete(fileName);
-    this.files = this.files.filter(f => f.id !== fileName);
+    this.files = this.files.filter((f) => f.id !== fileName);
   }
 
   getFiles() {
@@ -78,8 +78,9 @@ describe('React Backup Hooks & Client API', () => {
     let restoredBytes: Uint8Array | null = null;
 
     const database: BackupDatabase = {
-      exportDatabase: async () => new TextEncoder().encode('Snapshot of application'),
-      importDatabase: async data => {
+      exportDatabase: async () =>
+        new TextEncoder().encode('Snapshot of application'),
+      importDatabase: async (data) => {
         restoredBytes = data;
       },
     };
@@ -91,7 +92,10 @@ describe('React Backup Hooks & Client API', () => {
     expect(await mockClient.isConnected()).toBe(true);
 
     // Save
-    await mockClient.save('test-1.db', new TextEncoder().encode('Snapshot of application'));
+    await mockClient.save(
+      'test-1.db',
+      new TextEncoder().encode('Snapshot of application'),
+    );
     const files = await mockClient.list();
     expect(files.length).toBe(1);
     expect(files[0].name).toBe('test-1.db');
@@ -100,7 +104,9 @@ describe('React Backup Hooks & Client API', () => {
     const data = await mockClient.read('test-1.db');
     await database.importDatabase(data);
     expect(restoredBytes).not.toBeNull();
-    expect(new TextDecoder().decode(restoredBytes!)).toBe('Snapshot of application');
+    expect(new TextDecoder().decode(restoredBytes!)).toBe(
+      'Snapshot of application',
+    );
 
     // Delete
     await mockClient.deleteBackup('test-1.db');

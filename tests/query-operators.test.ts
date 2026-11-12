@@ -21,11 +21,71 @@ describe('Advanced Query Operators', () => {
 
     // Seed test data
     await client.batch([
-      { tableName: 'products', rowId: 'p-1', operation: 'INSERT', payload: { id: 'p-1', title: 'iPhone 15 Pro', price: 999, category: 'electronics', tag: 'flagship', rating: 4.8 } },
-      { tableName: 'products', rowId: 'p-2', operation: 'INSERT', payload: { id: 'p-2', title: 'MacBook Air M3', price: 1099, category: 'computers', tag: 'laptop', rating: 4.9 } },
-      { tableName: 'products', rowId: 'p-3', operation: 'INSERT', payload: { id: 'p-3', title: 'AirPods Pro', price: 249, category: 'audio', tag: 'earbuds', rating: 4.6 } },
-      { tableName: 'products', rowId: 'p-4', operation: 'INSERT', payload: { id: 'p-4', title: 'USB-C Cable', price: 19, category: 'accessories', tag: null, rating: 4.0 } },
-      { tableName: 'products', rowId: 'p-5', operation: 'INSERT', payload: { id: 'p-5', title: 'Magic Mouse', price: 79, category: 'accessories', tag: 'mouse', rating: 3.8 } },
+      {
+        tableName: 'products',
+        rowId: 'p-1',
+        operation: 'INSERT',
+        payload: {
+          id: 'p-1',
+          title: 'iPhone 15 Pro',
+          price: 999,
+          category: 'electronics',
+          tag: 'flagship',
+          rating: 4.8,
+        },
+      },
+      {
+        tableName: 'products',
+        rowId: 'p-2',
+        operation: 'INSERT',
+        payload: {
+          id: 'p-2',
+          title: 'MacBook Air M3',
+          price: 1099,
+          category: 'computers',
+          tag: 'laptop',
+          rating: 4.9,
+        },
+      },
+      {
+        tableName: 'products',
+        rowId: 'p-3',
+        operation: 'INSERT',
+        payload: {
+          id: 'p-3',
+          title: 'AirPods Pro',
+          price: 249,
+          category: 'audio',
+          tag: 'earbuds',
+          rating: 4.6,
+        },
+      },
+      {
+        tableName: 'products',
+        rowId: 'p-4',
+        operation: 'INSERT',
+        payload: {
+          id: 'p-4',
+          title: 'USB-C Cable',
+          price: 19,
+          category: 'accessories',
+          tag: null,
+          rating: 4.0,
+        },
+      },
+      {
+        tableName: 'products',
+        rowId: 'p-5',
+        operation: 'INSERT',
+        payload: {
+          id: 'p-5',
+          title: 'Magic Mouse',
+          price: 79,
+          category: 'accessories',
+          tag: 'mouse',
+          rating: 3.8,
+        },
+      },
     ]);
   });
 
@@ -38,13 +98,17 @@ describe('Advanced Query Operators', () => {
       where: { price: { $gte: 999 } },
     });
     expect(expensive).toHaveLength(2);
-    expect(expensive.map((p) => p.id)).toEqual(expect.arrayContaining(['p-1', 'p-2']));
+    expect(expensive.map((p) => p.id)).toEqual(
+      expect.arrayContaining(['p-1', 'p-2']),
+    );
 
     const cheap = await client.findMany('products', {
       where: { price: { $lt: 100 } },
     });
     expect(cheap).toHaveLength(2);
-    expect(cheap.map((p) => p.id)).toEqual(expect.arrayContaining(['p-4', 'p-5']));
+    expect(cheap.map((p) => p.id)).toEqual(
+      expect.arrayContaining(['p-4', 'p-5']),
+    );
 
     const nonAudio = await client.findMany('products', {
       where: { category: { $ne: 'audio' } },
@@ -59,7 +123,9 @@ describe('Advanced Query Operators', () => {
     expect(selected).toHaveLength(2);
 
     const excluded = await client.findMany('products', {
-      where: { category: { $nin: ['electronics', 'computers', 'accessories'] } },
+      where: {
+        category: { $nin: ['electronics', 'computers', 'accessories'] },
+      },
     });
     expect(excluded).toHaveLength(1);
     expect(excluded[0].id).toBe('p-3');
@@ -70,7 +136,9 @@ describe('Advanced Query Operators', () => {
       where: { title: { $contains: 'pro' } },
     });
     expect(pros).toHaveLength(2);
-    expect(pros.map((p) => p.id)).toEqual(expect.arrayContaining(['p-1', 'p-3']));
+    expect(pros.map((p) => p.id)).toEqual(
+      expect.arrayContaining(['p-1', 'p-3']),
+    );
 
     const macs = await client.findMany('products', {
       where: { title: { $startsWith: 'mac' } },
@@ -101,21 +169,17 @@ describe('Advanced Query Operators', () => {
   it('supports logical combinators: $or and $and', async () => {
     const orMatches = await client.findMany('products', {
       where: {
-        $or: [
-          { price: { $gte: 1000 } },
-          { tag: 'earbuds' },
-        ],
+        $or: [{ price: { $gte: 1000 } }, { tag: 'earbuds' }],
       },
     });
     expect(orMatches).toHaveLength(2);
-    expect(orMatches.map((p) => p.id)).toEqual(expect.arrayContaining(['p-2', 'p-3']));
+    expect(orMatches.map((p) => p.id)).toEqual(
+      expect.arrayContaining(['p-2', 'p-3']),
+    );
 
     const andMatches = await client.findMany('products', {
       where: {
-        $and: [
-          { price: { $lt: 500 } },
-          { rating: { $gte: 4.5 } },
-        ],
+        $and: [{ price: { $lt: 500 } }, { rating: { $gte: 4.5 } }],
       },
     });
     expect(andMatches).toHaveLength(1);
@@ -127,7 +191,9 @@ describe('Advanced Query Operators', () => {
       where: (row) => row.price > 100 && row.rating >= 4.8,
     });
     expect(filtered).toHaveLength(2);
-    expect(filtered.map((p) => p.id)).toEqual(expect.arrayContaining(['p-1', 'p-2']));
+    expect(filtered.map((p) => p.id)).toEqual(
+      expect.arrayContaining(['p-1', 'p-2']),
+    );
   });
 
   it('supports orderBy, limit, and offset pushdown', async () => {
@@ -151,4 +217,3 @@ describe('Advanced Query Operators', () => {
     expect(paged[1].id).toBe('p-3'); // 249
   });
 });
-

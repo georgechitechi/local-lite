@@ -3,7 +3,11 @@ import { LocalFirstClient } from '../src/core/client.js';
 import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { MockDB } from './helpers/mock-db.js';
-import { BlobStorageManager, MemoryFileDriver, RemoteStorageUploader } from '../src/storage/index.js';
+import {
+  BlobStorageManager,
+  MemoryFileDriver,
+  RemoteStorageUploader,
+} from '../src/storage/index.js';
 
 describe('BlobStorageManager & Media Storage', () => {
   let db: MockDB;
@@ -36,11 +40,15 @@ describe('BlobStorageManager & Media Storage', () => {
     const retrieved = await storage.get('documents/notes.txt');
     expect(retrieved).not.toBeNull();
     expect(retrieved?.record.id).toBe(record.id);
-    expect(new TextDecoder().decode(retrieved?.data)).toBe('Hello offline-first storage!');
+    expect(new TextDecoder().decode(retrieved?.data)).toBe(
+      'Hello offline-first storage!',
+    );
   });
 
   it('supports deletion of blob binary and metadata', async () => {
-    await storage.save('avatars/user-1.png', 'fake-image-bytes', { mimeType: 'image/png' });
+    await storage.save('avatars/user-1.png', 'fake-image-bytes', {
+      mimeType: 'image/png',
+    });
     expect(await storage.getRecord('avatars/user-1.png')).not.toBeNull();
 
     await storage.delete('avatars/user-1.png');
@@ -70,11 +78,15 @@ describe('BlobStorageManager & Media Storage', () => {
     const { uploaded, failed } = await storage.syncPending();
     expect(uploaded).toBe(1);
     expect(failed).toBe(0);
-    expect(uploadedRemoteUrls).toContain('https://cdn.example.com/reports/q3.pdf');
+    expect(uploadedRemoteUrls).toContain(
+      'https://cdn.example.com/reports/q3.pdf',
+    );
 
     const uploadedRecords = await storage.list('UPLOADED');
     expect(uploadedRecords).toHaveLength(1);
-    expect(uploadedRecords[0].remoteUrl).toBe('https://cdn.example.com/reports/q3.pdf');
+    expect(uploadedRecords[0].remoteUrl).toBe(
+      'https://cdn.example.com/reports/q3.pdf',
+    );
   });
 
   it('integrates cleanly into LocalFirstClient via client.storage', async () => {
@@ -88,7 +100,9 @@ describe('BlobStorageManager & Media Storage', () => {
     });
     await client.initialize();
 
-    const saved = await client.storage.save('lease.pdf', 'CONTRACT_BYTES', { mimeType: 'application/pdf' });
+    const saved = await client.storage.save('lease.pdf', 'CONTRACT_BYTES', {
+      mimeType: 'application/pdf',
+    });
     expect(saved.key).toBe('lease.pdf');
 
     client.stop();

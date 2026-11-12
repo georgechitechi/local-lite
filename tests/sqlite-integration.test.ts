@@ -36,7 +36,7 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
 
   it('creates sync_outbox indexes for push, pull and telemetry hot paths', async () => {
     const rows = await db.execute(
-      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sync_outbox'`
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sync_outbox'`,
     );
     const names = rows.map((r: any) => r.name);
     expect(names).toContain('idx_sync_outbox_status_ts');
@@ -45,7 +45,7 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
     // The per-row conflict lookup (run once per pulled change) must use the index.
     const detail = raw
       .prepare(
-        `EXPLAIN QUERY PLAN SELECT * FROM sync_outbox WHERE table_name = ? AND row_id = ? AND status != 'FAILED' ORDER BY timestamp DESC LIMIT 1`
+        `EXPLAIN QUERY PLAN SELECT * FROM sync_outbox WHERE table_name = ? AND row_id = ? AND status != 'FAILED' ORDER BY timestamp DESC LIMIT 1`,
       )
       .all('todos', 'x')
       .map((r: any) => String(r.detail))
@@ -60,7 +60,7 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
     await OutboxStore.markFailed(
       db,
       (await client.getOutboxRecords()).slice(0, 2).map((r) => r.id),
-      'boom'
+      'boom',
     );
 
     const counts = await OutboxStore.getCounts(db);
@@ -69,11 +69,22 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
 
   it('getAllRecords filters, orders and paginates in SQL', async () => {
     for (let i = 0; i < 6; i++) {
-      await client.insert('todos', { id: `t-${i}`, title: `Task ${i}` }, { customTimestamp: 1000 + i });
+      await client.insert(
+        'todos',
+        { id: `t-${i}`, title: `Task ${i}` },
+        { customTimestamp: 1000 + i },
+      );
     }
 
     const all = await client.getOutboxRecords();
-    expect(all.map((r) => r.rowId)).toEqual(['t-5', 't-4', 't-3', 't-2', 't-1', 't-0']);
+    expect(all.map((r) => r.rowId)).toEqual([
+      't-5',
+      't-4',
+      't-3',
+      't-2',
+      't-1',
+      't-0',
+    ]);
     expect(all[0].payload).toEqual({ id: 't-5', title: 'Task 5' });
 
     const page = await client.getOutboxRecords({ limit: 2, offset: 1 });
@@ -91,7 +102,10 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
     await client.insert('todos', { id: 'a', title: 'Alpha' });
     await client.insert('todos', { id: 'b', title: 'Beta' });
 
-    expect(await client.findById('todos', 'b')).toMatchObject({ id: 'b', title: 'Beta' });
+    expect(await client.findById('todos', 'b')).toMatchObject({
+      id: 'b',
+      title: 'Beta',
+    });
     expect(await client.findById('todos', 'zzz')).toBeNull();
     expect(await client.findById('does_not_exist', 'a')).toBeNull();
   });
@@ -104,15 +118,25 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
       pendingChecks.push(
         client.findById('todos', e.rowId).then((row) => {
           seen.push({ rowId: e.rowId, visible: row !== null });
-        })
+        }),
       );
     });
 
     await client.syncWorker.applyDeltasLocally({
       timestamp: 5000,
       changes: [
-        { tableName: 'todos', operation: 'UPDATE', rowId: 'r-1', payload: { id: 'r-1', title: 'One' } },
-        { tableName: 'todos', operation: 'UPDATE', rowId: 'r-2', payload: { id: 'r-2', title: 'Two' } },
+        {
+          tableName: 'todos',
+          operation: 'UPDATE',
+          rowId: 'r-1',
+          payload: { id: 'r-1', title: 'One' },
+        },
+        {
+          tableName: 'todos',
+          operation: 'UPDATE',
+          rowId: 'r-2',
+          payload: { id: 'r-2', title: 'Two' },
+        },
       ],
     });
     await Promise.all(pendingChecks);
@@ -133,10 +157,20 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
       client.syncWorker.applyDeltasLocally({
         timestamp: 9000,
         changes: [
-          { tableName: 'todos', operation: 'UPDATE', rowId: 'ok-1', payload: { id: 'ok-1', title: 'Ok' } },
-          { tableName: 'todos', operation: 'UPDATE', rowId: 'bad', payload: { id: 'bad', title: (() => 1) as any } },
+          {
+            tableName: 'todos',
+            operation: 'UPDATE',
+            rowId: 'ok-1',
+            payload: { id: 'ok-1', title: 'Ok' },
+          },
+          {
+            tableName: 'todos',
+            operation: 'UPDATE',
+            rowId: 'bad',
+            payload: { id: 'bad', title: (() => 1) as any },
+          },
         ],
-      })
+      }),
     ).rejects.toThrow();
 
     expect(events).toEqual([]);
@@ -148,9 +182,9 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
     await client.insert('todos', { id: 'a', title: 'Alpha' });
     await client.reset({ dropTables: true });
 
-    const tables = (await db.execute(`SELECT name FROM sqlite_master WHERE type = 'table'`)).map(
-      (r: any) => r.name
-    );
+    const tables = (
+      await db.execute(`SELECT name FROM sqlite_master WHERE type = 'table'`)
+    ).map((r: any) => r.name);
     expect(tables).not.toContain('sync_meta');
     expect(tables).not.toContain('todos');
 
@@ -172,7 +206,10 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
     });
     await draining.initialize();
 
-    const records = Array.from({ length: 120 }, (_, i) => ({ id: `d-${i}`, title: `Item ${i}` }));
+    const records = Array.from({ length: 120 }, (_, i) => ({
+      id: `d-${i}`,
+      title: `Item ${i}`,
+    }));
     await draining.insertMany('todos', records);
 
     const deadline = Date.now() + 2000;
@@ -245,8 +282,15 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
     await offlineClient.initialize();
 
     // 1. Insert then multiple updates to the same row
-    await offlineClient.insert('todos', { id: 'draft-1', title: 'Draft v1', priority: 1 });
-    await offlineClient.update('todos', 'draft-1', { title: 'Draft v2', priority: 2 });
+    await offlineClient.insert('todos', {
+      id: 'draft-1',
+      title: 'Draft v1',
+      priority: 1,
+    });
+    await offlineClient.update('todos', 'draft-1', {
+      title: 'Draft v2',
+      priority: 2,
+    });
     await offlineClient.update('todos', 'draft-1', { notes: 'Important note' });
 
     const records = await offlineClient.getOutboxRecords();
@@ -268,9 +312,16 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
 
     // 3. Update to an existing synced row becomes a single UPDATE
     // Simulate synced row already in table
-    await offlineClient.db.execute(`INSERT INTO "todos" ("id", "title") VALUES ('synced-1', 'Server Item')`);
-    await offlineClient.update('todos', 'synced-1', { title: 'Local update 1' });
-    await offlineClient.update('todos', 'synced-1', { title: 'Local update 2', priority: 5 });
+    await offlineClient.db.execute(
+      `INSERT INTO "todos" ("id", "title") VALUES ('synced-1', 'Server Item')`,
+    );
+    await offlineClient.update('todos', 'synced-1', {
+      title: 'Local update 1',
+    });
+    await offlineClient.update('todos', 'synced-1', {
+      title: 'Local update 2',
+      priority: 5,
+    });
 
     const syncedRecords = await offlineClient.getOutboxRecords();
     expect(syncedRecords).toHaveLength(1);
@@ -300,7 +351,7 @@ describe('Real SQLite performance paths (node:sqlite)', () => {
         await txClient.insert('todos', { id: `conc-${i}`, title: `Item ${i}` });
         // simulate async work inside transaction
         await new Promise((r) => setTimeout(r, 5));
-      })
+      }),
     );
 
     // None should throw "cannot start a transaction within a transaction"

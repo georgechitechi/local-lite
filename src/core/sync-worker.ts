@@ -21,7 +21,12 @@ import { OutboxStore } from './outbox-store.js';
 import { MetaStore } from './meta-store.js';
 import { TableManager } from './table-manager.js';
 import { SchemaManager } from './schema-manager.js';
-import { SyncLogger, CustomLogger, LogLevel, createSyncLogger } from '../utils/logger.js';
+import {
+  SyncLogger,
+  CustomLogger,
+  LogLevel,
+  createSyncLogger,
+} from '../utils/logger.js';
 import { safeDynamicRequire } from '../utils/dynamic.js';
 const REACT_NATIVE_PKG = ['react', 'native'].join('-');
 
@@ -34,13 +39,19 @@ const DELTA_CHUNK_SIZE = 250;
 function stableScopeValue(value: any): any {
   if (Array.isArray(value)) return value.map(stableScopeValue);
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableScopeValue(value[key])]));
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, stableScopeValue(value[key])]),
+    );
   }
   return value;
 }
 
 function getScopeCursorKey(scope?: Record<string, any>): string {
-  return scope === undefined ? 'last_synced_at' : `last_synced_at:scope:${JSON.stringify(stableScopeValue(scope))}`;
+  return scope === undefined
+    ? 'last_synced_at'
+    : `last_synced_at:scope:${JSON.stringify(stableScopeValue(scope))}`;
 }
 
 export interface SyncWorkerOptions {
@@ -56,7 +67,9 @@ export interface SyncWorkerOptions {
   autoSchema?: boolean;
   schemaManager?: SchemaManager;
   autoSync?: boolean;
-  syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  syncScope?:
+    | Record<string, any>
+    | (() => Record<string, any> | Promise<Record<string, any>>);
   autoPauseOnBackground?: boolean;
 }
 
@@ -69,7 +82,9 @@ export class SyncWorker {
   private primaryKey: string;
   private autoSchema: boolean;
   private schemaManager?: SchemaManager;
-  private syncScope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>);
+  private syncScope?:
+    | Record<string, any>
+    | (() => Record<string, any> | Promise<Record<string, any>>);
   public logger: SyncLogger;
   public retryConfig: RetryConfig;
 
@@ -114,14 +129,16 @@ export class SyncWorker {
     db: LocalDBAdapter,
     remote: RemoteDBAdapter,
     events: EventEmitter,
-    options: SyncWorkerOptions = {}
+    options: SyncWorkerOptions = {},
   ) {
     this.db = db;
     this.automaticSync = options.autoSync ?? true;
     this.remote = remote;
     this.events = events;
     this.network = options.network ?? new DefaultNetworkStatusProvider();
-    this.conflictResolver = getConflictResolver(options.conflictResolver ?? 'last-write-wins');
+    this.conflictResolver = getConflictResolver(
+      options.conflictResolver ?? 'last-write-wins',
+    );
     this.primaryKey = options.primaryKey ?? 'id';
     this.autoSchema = options.autoSchema ?? false;
     this.schemaManager = options.schemaManager;
@@ -177,13 +194,21 @@ export class SyncWorker {
     // If currently backgrounded, pause immediately and wait for foreground
     if (this.isAppBackgrounded()) {
       this.isPaused = true;
-      this.logger.info('App currently in background: sync worker paused until foreground');
+      this.logger.info(
+        'App currently in background: sync worker paused until foreground',
+      );
       this.emitStatus();
       return;
     }
 
-    this.pushIntervalTimer = setInterval(() => this.pushLocalChanges(), this.pushIntervalMs);
-    this.pullIntervalTimer = setInterval(() => this.pullRemoteChanges(), this.pullIntervalMs);
+    this.pushIntervalTimer = setInterval(
+      () => this.pushLocalChanges(),
+      this.pushIntervalMs,
+    );
+    this.pullIntervalTimer = setInterval(
+      () => this.pullRemoteChanges(),
+      this.pullIntervalMs,
+    );
 
     // Subscribe to live remote changes
     const unsubscribe = this.remote.subscribeToLiveChanges((deltas) => {
@@ -283,10 +308,16 @@ export class SyncWorker {
 
     if (this.automaticSync) {
       if (!this.pushIntervalTimer) {
-        this.pushIntervalTimer = setInterval(() => this.pushLocalChanges(), this.pushIntervalMs);
+        this.pushIntervalTimer = setInterval(
+          () => this.pushLocalChanges(),
+          this.pushIntervalMs,
+        );
       }
       if (!this.pullIntervalTimer) {
-        this.pullIntervalTimer = setInterval(() => this.pullRemoteChanges(), this.pullIntervalMs);
+        this.pullIntervalTimer = setInterval(
+          () => this.pullRemoteChanges(),
+          this.pullIntervalMs,
+        );
       }
 
       this.schedulePush(0);
@@ -319,7 +350,10 @@ export class SyncWorker {
     }
 
     // Web Page Visibility API
-    if (typeof document !== 'undefined' && typeof document.hidden === 'boolean') {
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.hidden === 'boolean'
+    ) {
       return document.hidden;
     }
 
@@ -354,7 +388,10 @@ export class SyncWorker {
     }
 
     // 2. Web Page Visibility API
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.addEventListener === 'function'
+    ) {
       const onVisibilityChange = () => {
         if (document.hidden) {
           this.pause();
@@ -388,11 +425,17 @@ export class SyncWorker {
   /**
    * Dynamically sets or updates the active sync scope (e.g. switching active businessId or userId).
    */
-  setSyncScope(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void {
+  setSyncScope(
+    scope?:
+      | Record<string, any>
+      | (() => Record<string, any> | Promise<Record<string, any>>),
+  ): void {
     this.syncScope = scope;
     this.remote.setSyncScope?.(scope);
     if (this.automaticSync && !this.isPaused) {
-      this.pullRemoteChanges().catch((err) => this.logger.error('Error pulling after sync scope change:', err));
+      this.pullRemoteChanges().catch((err) =>
+        this.logger.error('Error pulling after sync scope change:', err),
+      );
     }
   }
 
@@ -456,22 +499,30 @@ export class SyncWorker {
       this.totalPushCycles++;
       // No push is active: recover records left behind by a failed status write.
       await OutboxStore.resetStaleProcessing(this.db);
-      pendingRecords = await OutboxStore.getPending(this.db, this.maxRetries, PUSH_BATCH_SIZE);
+      pendingRecords = await OutboxStore.getPending(
+        this.db,
+        this.maxRetries,
+        PUSH_BATCH_SIZE,
+      );
 
       if (pendingRecords.length === 0) {
         return;
       }
 
       // Filter out internal/ephemeral tables (e.g. starting with '_') so they are never sent to remote backends
-      const internalRecords = pendingRecords.filter((r) => r.tableName.startsWith('_'));
+      const internalRecords = pendingRecords.filter((r) =>
+        r.tableName.startsWith('_'),
+      );
       if (internalRecords.length > 0) {
         await OutboxStore.deleteCompleted(
           this.db,
           internalRecords.map((r) => r.id),
-        ).catch(() => { });
+        ).catch(() => {});
       }
 
-      const validRecords = pendingRecords.filter((r) => !r.tableName.startsWith('_'));
+      const validRecords = pendingRecords.filter(
+        (r) => !r.tableName.startsWith('_'),
+      );
       if (validRecords.length === 0) {
         return;
       }
@@ -510,7 +561,11 @@ export class SyncWorker {
       } else if (pushRes && typeof pushRes === 'object') {
         isSuccess = Boolean(pushRes.success);
         successfulIds = pushRes.successfulIds ?? (isSuccess ? recordIds : []);
-        failedIds = pushRes.failedIds ?? (isSuccess ? [] : recordIds.filter((id) => !successfulIds.includes(id)));
+        failedIds =
+          pushRes.failedIds ??
+          (isSuccess
+            ? []
+            : recordIds.filter((id) => !successfulIds.includes(id)));
         errorsMap = pushRes.errors ?? {};
       }
 
@@ -518,7 +573,10 @@ export class SyncWorker {
         // Delete records that were pushed successfully
         await OutboxStore.deleteCompleted(this.db, successfulIds);
         this.totalPushedOperations += successfulIds.length;
-        this.events.emit('sync_outbox', { operation: 'DELETE', rowId: 'batch' });
+        this.events.emit('sync_outbox', {
+          operation: 'DELETE',
+          rowId: 'batch',
+        });
       }
 
       if (failedIds.length === 0) {
@@ -536,7 +594,8 @@ export class SyncWorker {
           this.schedulePush(0);
         }
       } else {
-        const errMsg = Object.values(errorsMap)[0] || 'Remote push returned failure';
+        const errMsg =
+          Object.values(errorsMap)[0] || 'Remote push returned failure';
         this.lastPushError = errMsg;
         const pushEvent: PushEvent = {
           success: false,
@@ -546,8 +605,15 @@ export class SyncWorker {
         };
         this.events.emit('sync:push', pushEvent);
 
-        const failedRecords = pendingRecords.filter((r) => failedIds.includes(r.id));
-        await this.handlePushFailure(failedRecords, errMsg, undefined, errorsMap);
+        const failedRecords = pendingRecords.filter((r) =>
+          failedIds.includes(r.id),
+        );
+        await this.handlePushFailure(
+          failedRecords,
+          errMsg,
+          undefined,
+          errorsMap,
+        );
 
         // If part of the batch succeeded, keep draining the rest
         if (successfulIds.length > 0 && operations.length >= PUSH_BATCH_SIZE) {
@@ -583,7 +649,7 @@ export class SyncWorker {
     records: OutboxRecord[],
     errorMessage: string,
     errorObj?: any,
-    errorsByRecordId?: Record<string, string>
+    errorsByRecordId?: Record<string, string>,
   ): Promise<void> {
     try {
       if (errorsByRecordId && Object.keys(errorsByRecordId).length > 0) {
@@ -601,19 +667,24 @@ export class SyncWorker {
       if (this.retryConfig.shouldRetry && errorObj) {
         for (const rec of records) {
           if (!this.retryConfig.shouldRetry(errorObj, rec)) {
-            await OutboxStore.markFailed(this.db, [rec.id], `Non-retryable error: ${errorMessage}`);
+            await OutboxStore.markFailed(
+              this.db,
+              [rec.id],
+              `Non-retryable error: ${errorMessage}`,
+            );
           }
         }
       }
 
       // Schedule next retry with exponential backoff & optional jitter
       const currentRetry = Math.max(...records.map((r) => r.retryCount || 0));
-      const isInfinite = !Number.isFinite(this.maxRetries) || this.maxRetries === -1;
+      const isInfinite =
+        !Number.isFinite(this.maxRetries) || this.maxRetries === -1;
       if (isInfinite || currentRetry < this.maxRetries) {
         let backoffDelay = Math.min(
           (this.retryConfig.initialDelayMs || 1000) *
-          Math.pow(this.retryConfig.backoffMultiplier || 1.5, currentRetry),
-          this.retryConfig.maxDelayMs || 30000
+            Math.pow(this.retryConfig.backoffMultiplier || 1.5, currentRetry),
+          this.retryConfig.maxDelayMs || 30000,
         );
 
         // Apply ±15% jitter if enabled to avoid synchronized retry stampedes
@@ -646,13 +717,17 @@ export class SyncWorker {
     try {
       if (!(await this.isOnline())) return;
       this.totalPullCycles++;
-      const scope = typeof this.syncScope === 'function' ? await this.syncScope() : this.syncScope;
+      const scope =
+        typeof this.syncScope === 'function'
+          ? await this.syncScope()
+          : this.syncScope;
       const cursorKey = getScopeCursorKey(scope);
       await this.loadCursor(cursorKey);
       const sinceTimestamp = this.lastPulledTimestamp;
-      const deltas = scope !== undefined
-        ? await this.remote.fetchChanges(sinceTimestamp, scope)
-        : await this.remote.fetchChanges(sinceTimestamp);
+      const deltas =
+        scope !== undefined
+          ? await this.remote.fetchChanges(sinceTimestamp, scope)
+          : await this.remote.fetchChanges(sinceTimestamp);
       const durationMs = Date.now() - startTime;
       this.lastPullDurationMs = durationMs;
       this.lastPullTimestamp = Date.now();
@@ -663,7 +738,8 @@ export class SyncWorker {
         this.totalPulledDeltas += changesCount;
         await this.applyDeltasLocally(deltas, { cursorKey });
         if (deltas.timestamp && deltas.timestamp > sinceTimestamp) {
-          if (cursorKey === this.lastSyncedAtKey) this.lastPulledTimestamp = deltas.timestamp;
+          if (cursorKey === this.lastSyncedAtKey)
+            this.lastPulledTimestamp = deltas.timestamp;
           await MetaStore.setLastSyncedAt(this.db, deltas.timestamp, cursorKey);
         }
       }
@@ -708,7 +784,7 @@ export class SyncWorker {
    */
   async applyDeltasLocally(
     deltas: DeltaChanges,
-    options: { advanceCursor?: boolean; cursorKey?: string } = {}
+    options: { advanceCursor?: boolean; cursorKey?: string } = {},
   ): Promise<void> {
     const task = async () => {
       const cursorKey = options.cursorKey ?? this.lastSyncedAtKey;
@@ -720,15 +796,23 @@ export class SyncWorker {
     };
 
     const next = this.deltaQueue.then(task, task);
-    this.deltaQueue = next.catch(() => { });
+    this.deltaQueue = next.catch(() => {});
     return await next;
   }
 
-  private async processDeltasLocally(deltas: DeltaChanges, cursorKey = this.lastSyncedAtKey): Promise<void> {
+  private async processDeltasLocally(
+    deltas: DeltaChanges,
+    cursorKey = this.lastSyncedAtKey,
+  ): Promise<void> {
     if (!deltas.changes || deltas.changes.length === 0) {
-      if (deltas.timestamp && (cursorKey !== this.lastSyncedAtKey || deltas.timestamp > this.lastPulledTimestamp)) {
+      if (
+        deltas.timestamp &&
+        (cursorKey !== this.lastSyncedAtKey ||
+          deltas.timestamp > this.lastPulledTimestamp)
+      ) {
         await MetaStore.setLastSyncedAt(this.db, deltas.timestamp, cursorKey);
-        if (cursorKey === this.lastSyncedAtKey) this.lastPulledTimestamp = deltas.timestamp;
+        if (cursorKey === this.lastSyncedAtKey)
+          this.lastPulledTimestamp = deltas.timestamp;
       }
       return;
     }
@@ -759,7 +843,10 @@ export class SyncWorker {
               change.tableName,
               change.rowId,
               this.primaryKey,
-              { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
+              {
+                autoSchema: this.autoSchema,
+                schemaManager: this.schemaManager,
+              },
             );
 
             const resolution = await Promise.resolve(
@@ -769,10 +856,11 @@ export class SyncWorker {
                 remoteChange: change,
                 localOutboxRecord: localPendingRecord,
                 localRow,
-              })
+              }),
             );
 
-            const resolutionStr = typeof resolution === 'string' ? resolution : 'merge';
+            const resolutionStr =
+              typeof resolution === 'string' ? resolution : 'merge';
             const conflictEvent: ConflictEvent = {
               tableName: change.tableName,
               rowId: change.rowId,
@@ -790,10 +878,17 @@ export class SyncWorker {
               // Remote change wins: remove the superseded local pending outbox mutation
               await OutboxStore.deleteRecord(tx, localPendingRecord.id);
               pendingOutboxMap.delete(outboxKey);
-            } else if (typeof resolution === 'object' && resolution.mergePayload) {
+            } else if (
+              typeof resolution === 'object' &&
+              resolution.mergePayload
+            ) {
               // Merge scenario
               change.payload = resolution.mergePayload;
-              await OutboxStore.updatePayload(tx, localPendingRecord.id, resolution.mergePayload);
+              await OutboxStore.updatePayload(
+                tx,
+                localPendingRecord.id,
+                resolution.mergePayload,
+              );
               localPendingRecord.payload = resolution.mergePayload;
             }
           }
@@ -806,7 +901,7 @@ export class SyncWorker {
             change.operation,
             change.payload ?? null,
             this.primaryKey,
-            { autoSchema: this.autoSchema, schemaManager: this.schemaManager }
+            { autoSchema: this.autoSchema, schemaManager: this.schemaManager },
           );
 
           // 4. Queue table change event to notify reactive listeners after commit
@@ -822,9 +917,15 @@ export class SyncWorker {
         }
 
         // Advance durable checkpoint only when a valid pull timestamp was provided
-        if (isLastChunk && deltas.timestamp && (cursorKey !== this.lastSyncedAtKey || deltas.timestamp > this.lastPulledTimestamp)) {
+        if (
+          isLastChunk &&
+          deltas.timestamp &&
+          (cursorKey !== this.lastSyncedAtKey ||
+            deltas.timestamp > this.lastPulledTimestamp)
+        ) {
           await MetaStore.setLastSyncedAt(tx, deltas.timestamp, cursorKey);
-          if (cursorKey === this.lastSyncedAtKey) this.lastPulledTimestamp = deltas.timestamp;
+          if (cursorKey === this.lastSyncedAtKey)
+            this.lastPulledTimestamp = deltas.timestamp;
         }
       });
 
@@ -840,12 +941,18 @@ export class SyncWorker {
     }
 
     if (deltas.timestamp && cursorKey === this.lastSyncedAtKey) {
-      this.lastPulledTimestamp = Math.max(this.lastPulledTimestamp, deltas.timestamp);
+      this.lastPulledTimestamp = Math.max(
+        this.lastPulledTimestamp,
+        deltas.timestamp,
+      );
     }
   }
 
   async getLastPulledTimestamp(): Promise<number> {
-    const scope = typeof this.syncScope === 'function' ? await this.syncScope() : this.syncScope;
+    const scope =
+      typeof this.syncScope === 'function'
+        ? await this.syncScope()
+        : this.syncScope;
     await this.loadCursor(getScopeCursorKey(scope));
     return this.lastPulledTimestamp;
   }

@@ -13,7 +13,7 @@ describe('database backups', () => {
     let restored = new Uint8Array();
     const database: BackupDatabase = {
       exportDatabase: async () => original,
-      importDatabase: async data => {
+      importDatabase: async (data) => {
         restored = data.slice();
       },
     };
@@ -21,7 +21,7 @@ describe('database backups', () => {
       save: async (fileName, data) => {
         stored.set(fileName, data.slice());
       },
-      read: async fileName => {
+      read: async (fileName) => {
         const data = stored.get(fileName);
         if (!data) throw new Error('File not found');
         return data;
@@ -45,7 +45,7 @@ describe('database backups', () => {
     };
     let savedName = '';
     const storage: BackupStorage = {
-      save: async fileName => {
+      save: async (fileName) => {
         savedName = fileName;
       },
       read: async () => new Uint8Array([1, 2, 3]),
@@ -72,8 +72,8 @@ describe('database backups', () => {
     await expect(
       createDatabaseBackup(database, storage, { fileName: '../backup.db' }),
     ).rejects.toThrow('single file name');
-    await expect(restoreDatabaseBackup(database, storage, '../backup.db')).rejects.toThrow(
-      'single file name',
-    );
+    await expect(
+      restoreDatabaseBackup(database, storage, '../backup.db'),
+    ).rejects.toThrow('single file name');
   });
 });

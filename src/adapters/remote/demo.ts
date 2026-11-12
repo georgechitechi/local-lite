@@ -17,7 +17,9 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
 
   async pushChanges(operations: SyncOperation[]): Promise<boolean> {
     if (this.simulatedLatencyMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, this.simulatedLatencyMs));
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.simulatedLatencyMs),
+      );
     }
     this.pushedBatches.push(operations);
     this.allPushedOperations.push(...operations);
@@ -31,10 +33,14 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
     };
   }
 
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
+  subscribeToLiveChanges(
+    callback: (changes: DeltaChanges) => void,
+  ): () => void {
     this.liveSubscribers.push(callback);
     return () => {
-      this.liveSubscribers = this.liveSubscribers.filter((subscriber) => subscriber !== callback);
+      this.liveSubscribers = this.liveSubscribers.filter(
+        (subscriber) => subscriber !== callback,
+      );
     };
   }
 
@@ -70,7 +76,9 @@ export class NoopRemoteAdapter implements RemoteDBAdapter {
     };
   }
 
-  subscribeToLiveChanges(_callback: (changes: DeltaChanges) => void): () => void {
+  subscribeToLiveChanges(
+    _callback: (changes: DeltaChanges) => void,
+  ): () => void {
     return () => {};
   }
 }

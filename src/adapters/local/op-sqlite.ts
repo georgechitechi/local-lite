@@ -1,11 +1,13 @@
 import { LocalDBAdapter, LocalTransaction } from './index.js';
 
 export interface OpSQLiteQueryResult {
-  rows?: {
-    _array?: any[];
-    length?: number;
-    item?: (i: number) => any;
-  } | any[];
+  rows?:
+    | {
+        _array?: any[];
+        length?: number;
+        item?: (i: number) => any;
+      }
+    | any[];
   insertId?: number;
   rowsAffected?: number;
 }
@@ -21,8 +23,12 @@ function extractRows(res: any): any[] {
   if (Array.isArray(res)) return res;
   if (res.rows) {
     if (Array.isArray(res.rows)) return res.rows;
-    if (res.rows._array && Array.isArray(res.rows._array)) return res.rows._array;
-    if (typeof res.rows.length === 'number' && typeof res.rows.item === 'function') {
+    if (res.rows._array && Array.isArray(res.rows._array))
+      return res.rows._array;
+    if (
+      typeof res.rows.length === 'number' &&
+      typeof res.rows.item === 'function'
+    ) {
       const arr: any[] = [];
       for (let i = 0; i < res.rows.length; i++) {
         arr.push(res.rows.item(i));
@@ -51,15 +57,18 @@ export class OpSQLiteAdapter implements LocalDBAdapter {
     return extractRows(res);
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     const run = async (): Promise<T> => {
       let result!: T;
       await this.db.transactionAsync(async (txInstance: any) => {
         const txWrapper: LocalTransaction = {
           execute: async (q: string, p: any[] = []) => {
-            const res = typeof txInstance.executeAsync === 'function'
-              ? await txInstance.executeAsync(q, p)
-              : await txInstance.execute(q, p);
+            const res =
+              typeof txInstance.executeAsync === 'function'
+                ? await txInstance.executeAsync(q, p)
+                : await txInstance.execute(q, p);
             return extractRows(res);
           },
         };

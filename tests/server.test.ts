@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   defineServerConfig,
   createServer,
@@ -70,7 +70,9 @@ describe('Server & API Router (src/server/index.ts)', () => {
       expect(server.handlers['/api/users'].GET).toBeDefined();
       expect(server.handlers['/api/users'].POST).toBeDefined();
 
-      const getReq = new Request('http://localhost:3000/api/users', { method: 'GET' });
+      const getReq = new Request('http://localhost:3000/api/users', {
+        method: 'GET',
+      });
       const getRes = await server.handlers['/api/users'].GET!(getReq);
       expect(getRes.status).toBe(200);
       expect(await getRes.json()).toEqual({ users: ['Alice', 'Bob'] });
@@ -137,13 +139,17 @@ describe('Server & API Router (src/server/index.ts)', () => {
         expect(await res.json()).toEqual({ id: '42' });
 
         const delRes = await server.fetch(
-          new Request('http://localhost/api/items/item%2099', { method: 'DELETE' }),
+          new Request('http://localhost/api/items/item%2099', {
+            method: 'DELETE',
+          }),
         );
         expect(delRes.status).toBe(200);
         expect(await delRes.json()).toEqual({ deleted: 'item 99' });
 
         const multiParamRes = await server.fetch(
-          new Request('http://localhost/api/categories/electronics/items/phones'),
+          new Request(
+            'http://localhost/api/categories/electronics/items/phones',
+          ),
         );
         expect(await multiParamRes.json()).toEqual({
           category: 'electronics',
@@ -152,7 +158,9 @@ describe('Server & API Router (src/server/index.ts)', () => {
       });
 
       it('returns 404 for unmatched routes', async () => {
-        const res = await server.fetch(new Request('http://localhost/api/unknown-route'));
+        const res = await server.fetch(
+          new Request('http://localhost/api/unknown-route'),
+        );
         expect(res.status).toBe(404);
         expect(await res.json()).toEqual({ error: 'Not Found' });
       });
@@ -198,10 +206,18 @@ describe('Server & API Router (src/server/index.ts)', () => {
           },
         });
 
-        const res = await server.fetch(new Request('http://localhost/api/test'));
+        const res = await server.fetch(
+          new Request('http://localhost/api/test'),
+        );
         expect(res.status).toBe(200);
         expect(res.headers.get('X-Custom-M1')).toBe('true');
-        expect(log).toEqual(['m1-before', 'm2-before', 'handler-secret', 'm2-after', 'm1-after']);
+        expect(log).toEqual([
+          'm1-before',
+          'm2-before',
+          'handler-secret',
+          'm2-after',
+          'm1-after',
+        ]);
       });
 
       it('allows middleware to short-circuit the request (e.g. auth check)', async () => {
@@ -211,7 +227,10 @@ describe('Server & API Router (src/server/index.ts)', () => {
             async (ctx, next) => {
               const authHeader = ctx.request.headers.get('Authorization');
               if (!authHeader) {
-                return Response.json({ error: 'Unauthorized' }, { status: 401 });
+                return Response.json(
+                  { error: 'Unauthorized' },
+                  { status: 401 },
+                );
               }
               return await next();
             },
@@ -224,7 +243,9 @@ describe('Server & API Router (src/server/index.ts)', () => {
         });
 
         // 1. Without auth
-        const unauthRes = await server.fetch(new Request('http://localhost/api/protected'));
+        const unauthRes = await server.fetch(
+          new Request('http://localhost/api/protected'),
+        );
         expect(unauthRes.status).toBe(401);
         expect(await unauthRes.json()).toEqual({ error: 'Unauthorized' });
 
@@ -254,7 +275,9 @@ describe('Server & API Router (src/server/index.ts)', () => {
           },
         });
 
-        const res = await server.fetch(new Request('http://localhost/api/buggy'));
+        const res = await server.fetch(
+          new Request('http://localhost/api/buggy'),
+        );
         expect(res.status).toBe(500);
         expect(await res.json()).toEqual({ error: 'Internal Server Error' });
       });
@@ -278,12 +301,16 @@ describe('Server & API Router (src/server/index.ts)', () => {
           },
         });
 
-        const res = await server.fetch(new Request('http://localhost/api/crash'));
+        const res = await server.fetch(
+          new Request('http://localhost/api/crash'),
+        );
         expect(res.status).toBe(500);
         expect(await res.json()).toEqual({ error: 'Internal Server Error' });
         expect(reportedError).toBeInstanceOf(Error);
         expect(reportedError.message).toBe('Database connection crashed');
-        expect((reportedContext as ApiRequestContext | null)?.path).toBe('/api/crash');
+        expect((reportedContext as ApiRequestContext | null)?.path).toBe(
+          '/api/crash',
+        );
       });
 
       it('silently ignores exceptions thrown within onError itself without masking 500', async () => {
@@ -301,11 +328,12 @@ describe('Server & API Router (src/server/index.ts)', () => {
           },
         });
 
-        const res = await server.fetch(new Request('http://localhost/api/fail'));
+        const res = await server.fetch(
+          new Request('http://localhost/api/fail'),
+        );
         expect(res.status).toBe(500);
         expect(await res.json()).toEqual({ error: 'Internal Server Error' });
       });
     });
   });
 });
-

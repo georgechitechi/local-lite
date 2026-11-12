@@ -45,15 +45,27 @@ export interface CreateDatabaseBackupOptions {
 
 export type ResolvableBackupDatabase =
   | BackupDatabase
-  | { exportDatabase(): Promise<Uint8Array>; importDatabase(data: Uint8Array): Promise<void> }
-  | { db: any; exportDatabase?(): Promise<Uint8Array>; importDatabase?(data: Uint8Array): Promise<void> };
+  | {
+      exportDatabase(): Promise<Uint8Array>;
+      importDatabase(data: Uint8Array): Promise<void>;
+    }
+  | {
+      db: any;
+      exportDatabase?(): Promise<Uint8Array>;
+      importDatabase?(data: Uint8Array): Promise<void>;
+    };
 
 export function resolveBackupDatabase(target: any): BackupDatabase {
   if (!target) {
-    throw new Error('A valid database or LocalFirstClient is required for backup.');
+    throw new Error(
+      'A valid database or LocalFirstClient is required for backup.',
+    );
   }
 
-  if (typeof target.exportDatabase === 'function' && typeof target.importDatabase === 'function') {
+  if (
+    typeof target.exportDatabase === 'function' &&
+    typeof target.importDatabase === 'function'
+  ) {
     return target as BackupDatabase;
   }
 
@@ -83,7 +95,8 @@ export async function createDatabaseBackup(
 ): Promise<string> {
   const resolved = resolveBackupDatabase(database);
   const fileName =
-    options.fileName ?? `local-lite-${new Date().toISOString().replace(/[:.]/g, '-')}.db`;
+    options.fileName ??
+    `local-lite-${new Date().toISOString().replace(/[:.]/g, '-')}.db`;
   validateFileName(fileName);
 
   const databaseBytes = await resolved.exportDatabase();

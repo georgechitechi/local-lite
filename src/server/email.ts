@@ -40,29 +40,39 @@ export interface EmailEndpointOptions {
   /**
    * Hook called before dispatching to sanitize or validate payload.
    */
-  beforeSend?: (payload: any, request: Request) => Promise<any | void> | any | void;
+  beforeSend?: (
+    payload: any,
+    request: Request,
+  ) => Promise<any | void> | any | void;
 }
 
 /**
  * Creates a turnkey Request/Response API endpoint for receiving offline-enqueued emails
  * from local-lite clients and dispatching them via Nodemailer or cloud providers.
  */
-export function createEmailEndpoint(options: EmailEndpointOptions = {}): ApiEndpoint {
+export function createEmailEndpoint(
+  options: EmailEndpointOptions = {},
+): ApiEndpoint {
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Origin': options.corsOrigin || '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-App-Secret, X-Message-ID',
+    'Access-Control-Allow-Headers':
+      'Content-Type, Authorization, X-App-Secret, X-Message-ID',
   };
 
-  const handlePost = async ({ request }: ApiRequestContext<unknown>): Promise<Response> => {
+  const handlePost = async ({
+    request,
+  }: ApiRequestContext<unknown>): Promise<Response> => {
     // 1. Check secret token if configured
     if (options.secret) {
-      const authHeader = request.headers.get('authorization') || request.headers.get('x-app-secret');
+      const authHeader =
+        request.headers.get('authorization') ||
+        request.headers.get('x-app-secret');
       const expectedBearer = `Bearer ${options.secret}`;
       if (authHeader !== expectedBearer && authHeader !== options.secret) {
         return Response.json(
           { error: 'Unauthorized: Invalid email endpoint secret' },
-          { status: 401, headers: corsHeaders }
+          { status: 401, headers: corsHeaders },
         );
       }
     }
@@ -74,14 +84,14 @@ export function createEmailEndpoint(options: EmailEndpointOptions = {}): ApiEndp
     } catch {
       return Response.json(
         { error: 'Bad Request: Invalid JSON payload' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
     if (!payload || !payload.to || !payload.subject) {
       return Response.json(
         { error: "Bad Request: Fields 'to' and 'subject' are required." },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -104,7 +114,11 @@ export function createEmailEndpoint(options: EmailEndpointOptions = {}): ApiEndp
         const handler = createNodemailerHandler(options.transport || {}, {
           defaultFrom: options.defaultFrom,
         });
-        result = await handler(payload, { id: 'srv-' + Date.now() } as any, {} as any);
+        result = await handler(
+          payload,
+          { id: 'srv-' + Date.now() } as any,
+          {} as any,
+        );
       } else {
         const { createHttpEmailHandler } = await import('../email/index.js');
         const handler = createHttpEmailHandler({
@@ -112,19 +126,23 @@ export function createEmailEndpoint(options: EmailEndpointOptions = {}): ApiEndp
           apiKey: options.apiKey,
           defaultFrom: options.defaultFrom,
         });
-        result = await handler(payload, { id: 'srv-' + Date.now() } as any, {} as any);
+        result = await handler(
+          payload,
+          { id: 'srv-' + Date.now() } as any,
+          {} as any,
+        );
       }
 
       const messageId = result?.messageId || result?.id || `msg-${Date.now()}`;
       return Response.json(
         { ok: true, id: messageId, result },
-        { status: 200, headers: corsHeaders }
+        { status: 200, headers: corsHeaders },
       );
     } catch (err: any) {
       const message = err instanceof Error ? err.message : String(err);
       return Response.json(
         { error: 'Email dispatch failed: ' + message },
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers: corsHeaders },
       );
     }
   };
@@ -138,4 +156,3 @@ export function createEmailEndpoint(options: EmailEndpointOptions = {}): ApiEndp
     OPTIONS: handleOptions,
   };
 }
-

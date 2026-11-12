@@ -10,7 +10,9 @@ import {
 } from '../src/backups/index.js';
 
 describe('encrypted database backups', () => {
-  const sampleData = new TextEncoder().encode('SQLite format 3\x00 table records demo');
+  const sampleData = new TextEncoder().encode(
+    'SQLite format 3\x00 table records demo',
+  );
   const testPassphrase = 'super-secret-user-passphrase-2026';
   const fastIterations = 100; // For fast test runs
 
@@ -42,7 +44,9 @@ describe('encrypted database backups', () => {
     });
 
     await expect(
-      decryptBackupData(encrypted, 'wrong-password-here', { iterations: fastIterations }),
+      decryptBackupData(encrypted, 'wrong-password-here', {
+        iterations: fastIterations,
+      }),
     ).rejects.toThrow(/Incorrect passphrase or corrupted database backup/);
   });
 
@@ -55,14 +59,22 @@ describe('encrypted database backups', () => {
     encrypted[encrypted.length - 1] ^= 0xff;
 
     await expect(
-      decryptBackupData(encrypted, testPassphrase, { iterations: fastIterations }),
+      decryptBackupData(encrypted, testPassphrase, {
+        iterations: fastIterations,
+      }),
     ).rejects.toThrow(/Incorrect passphrase or corrupted database backup/);
   });
 
   it('rejects empty or whitespace-only passphrases', async () => {
-    await expect(encryptBackupData(sampleData, '')).rejects.toThrow(/passphrase is required/);
-    await expect(encryptBackupData(sampleData, '   ')).rejects.toThrow(/passphrase is required/);
-    await expect(decryptBackupData(sampleData, '')).rejects.toThrow(/passphrase is required/);
+    await expect(encryptBackupData(sampleData, '')).rejects.toThrow(
+      /passphrase is required/,
+    );
+    await expect(encryptBackupData(sampleData, '   ')).rejects.toThrow(
+      /passphrase is required/,
+    );
+    await expect(decryptBackupData(sampleData, '')).rejects.toThrow(
+      /passphrase is required/,
+    );
   });
 
   it('full backup and restore cycle with createEncryptedDatabaseBackup', async () => {
@@ -71,7 +83,7 @@ describe('encrypted database backups', () => {
 
     const database: BackupDatabase = {
       exportDatabase: async () => sampleData,
-      importDatabase: async data => {
+      importDatabase: async (data) => {
         restoredBytes = data.slice();
       },
     };
@@ -80,7 +92,7 @@ describe('encrypted database backups', () => {
       save: async (fileName, data) => {
         stored.set(fileName, data.slice());
       },
-      read: async fileName => {
+      read: async (fileName) => {
         const file = stored.get(fileName);
         if (!file) throw new Error('File not found');
         return file;

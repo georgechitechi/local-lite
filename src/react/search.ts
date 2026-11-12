@@ -19,7 +19,7 @@ export function useSearch<T = any>(
   client: LocalFirstClient | null | undefined,
   table: string,
   queryText: string,
-  options?: UseSearchOptions
+  options?: UseSearchOptions,
 ): { results: SearchResult<T>[]; loading: boolean; error: Error | null } {
   const [results, setResults] = useState<SearchResult<T>[]>([]);
   const [loading, setLoading] = useState<boolean>(false);

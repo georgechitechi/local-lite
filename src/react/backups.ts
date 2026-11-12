@@ -24,8 +24,14 @@ export interface UseCloudBackupResult {
   connect: () => Promise<boolean>;
   disconnect: () => Promise<void>;
   refreshBackups: () => Promise<CloudBackupFile[]>;
-  backup: (options?: { fileName?: string; passphrase?: string }) => Promise<string>;
-  restore: (fileNameOrId: string, options?: { passphrase?: string }) => Promise<void>;
+  backup: (options?: {
+    fileName?: string;
+    passphrase?: string;
+  }) => Promise<string>;
+  restore: (
+    fileNameOrId: string,
+    options?: { passphrase?: string },
+  ) => Promise<void>;
   deleteBackup: (fileNameOrId: string) => Promise<void>;
 }
 
@@ -82,7 +88,7 @@ export function useCloudBackup(
 
     client
       .isConnected()
-      .then(async connected => {
+      .then(async (connected) => {
         if (!isMounted) return;
         setIsConnected(connected);
         setIsLoading(false);
@@ -92,12 +98,14 @@ export function useCloudBackup(
             if (isMounted) setBackups(list);
           } catch (listErr: any) {
             if (isMounted) {
-              setError(listErr instanceof Error ? listErr : new Error(String(listErr)));
+              setError(
+                listErr instanceof Error ? listErr : new Error(String(listErr)),
+              );
             }
           }
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (!isMounted) return;
         setError(err instanceof Error ? err : new Error(String(err)));
         setIsLoading(false);
@@ -105,7 +113,7 @@ export function useCloudBackup(
 
     let unsubscribe: (() => void) | undefined;
     if (typeof client.onStatusChange === 'function') {
-      unsubscribe = client.onStatusChange(async connected => {
+      unsubscribe = client.onStatusChange(async (connected) => {
         if (!isMounted) return;
         setIsConnected(connected);
         if (connected && autoRefresh) {
@@ -114,7 +122,9 @@ export function useCloudBackup(
             if (isMounted) setBackups(list);
           } catch (listErr: any) {
             if (isMounted) {
-              setError(listErr instanceof Error ? listErr : new Error(String(listErr)));
+              setError(
+                listErr instanceof Error ? listErr : new Error(String(listErr)),
+              );
             }
           }
         } else if (!connected) {
@@ -168,11 +178,16 @@ export function useCloudBackup(
   }, [client]);
 
   const backup = useCallback(
-    async (backupOptions?: { fileName?: string; passphrase?: string }): Promise<string> => {
+    async (backupOptions?: {
+      fileName?: string;
+      passphrase?: string;
+    }): Promise<string> => {
       if (!client) throw new Error('Cloud backup client is not initialized.');
       const currentDb = databaseRef.current;
       if (!currentDb) {
-        throw new Error('A database instance or LocalFirstClient must be provided to create a backup.');
+        throw new Error(
+          'A database instance or LocalFirstClient must be provided to create a backup.',
+        );
       }
 
       setError(null);
@@ -224,7 +239,9 @@ export function useCloudBackup(
       if (!client) throw new Error('Cloud backup client is not initialized.');
       const currentDb = databaseRef.current;
       if (!currentDb) {
-        throw new Error('A database instance or LocalFirstClient must be provided to restore a backup.');
+        throw new Error(
+          'A database instance or LocalFirstClient must be provided to restore a backup.',
+        );
       }
 
       setError(null);
@@ -258,7 +275,9 @@ export function useCloudBackup(
         } else if (typeof client.delete === 'function') {
           await client.delete(fileNameOrId);
         } else {
-          throw new Error('Delete operation is not supported by this cloud storage client.');
+          throw new Error(
+            'Delete operation is not supported by this cloud storage client.',
+          );
         }
 
         if (autoRefresh) {

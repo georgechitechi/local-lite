@@ -1,8 +1,16 @@
-import { BlobRecord, RemoteStorageUploader, RemoteStorageUploadResult } from './types.js';
+import {
+  BlobRecord,
+  RemoteStorageUploader,
+  RemoteStorageUploadResult,
+} from './types.js';
 
 export interface FirebaseStorageModule {
   ref?: (storage: any, path: string) => any;
-  uploadBytes?: (ref: any, data: Uint8Array | Blob | ArrayBuffer, metadata?: any) => Promise<any>;
+  uploadBytes?: (
+    ref: any,
+    data: Uint8Array | Blob | ArrayBuffer,
+    metadata?: any,
+  ) => Promise<any>;
   getDownloadURL?: (ref: any) => Promise<string>;
   deleteObject?: (ref: any) => Promise<void>;
 }
@@ -33,7 +41,8 @@ export interface FirebaseStorageUploaderOptions {
   /**
    * Optional custom metadata attached to uploaded blobs.
    */
-  customMetadata?: Record<string, string> | ((blob: BlobRecord) => Record<string, string>);
+  customMetadata?:
+    Record<string, string> | ((blob: BlobRecord) => Record<string, string>);
 
   /**
    * Cache control HTTP header (e.g. 'public, max-age=31536000').
@@ -52,10 +61,12 @@ export interface FirebaseStorageUploaderInstance extends RemoteStorageUploader {
  */
 export function createFirebaseStorageUploader(
   storageOrApp: any,
-  options: FirebaseStorageUploaderOptions = {}
+  options: FirebaseStorageUploaderOptions = {},
 ): FirebaseStorageUploaderInstance {
   if (!storageOrApp) {
-    throw new Error('Firebase Storage instance, app, or modular client must be provided.');
+    throw new Error(
+      'Firebase Storage instance, app, or modular client must be provided.',
+    );
   }
 
   // Determine storage instance
@@ -94,12 +105,15 @@ export function createFirebaseStorageUploader(
       return typeof b.file === 'function' ? b.file(path) : b;
     }
     throw new Error(
-      'Cannot resolve Firebase Storage reference. Pass storageModule ({ ref, uploadBytes, getDownloadURL }) or a FirebaseStorage instance.'
+      'Cannot resolve Firebase Storage reference. Pass storageModule ({ ref, uploadBytes, getDownloadURL }) or a FirebaseStorage instance.',
     );
   };
 
   return {
-    async upload(blob: BlobRecord, data: Uint8Array): Promise<RemoteStorageUploadResult> {
+    async upload(
+      blob: BlobRecord,
+      data: Uint8Array,
+    ): Promise<RemoteStorageUploadResult> {
       const remotePath = resolveRemotePath(blob.key, blob);
       const fileRef = getRef(remotePath);
 
@@ -158,7 +172,9 @@ export function createFirebaseStorageUploader(
         return { remoteUrl, metadata };
       }
 
-      throw new Error('Unsupported Firebase Storage client: missing uploadBytes, put, or save method.');
+      throw new Error(
+        'Unsupported Firebase Storage client: missing uploadBytes, put, or save method.',
+      );
     },
 
     async getDownloadUrl(keyOrPath: string): Promise<string> {

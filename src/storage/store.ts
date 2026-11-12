@@ -7,7 +7,8 @@ export function mapBlobRow(r: any): BlobRecord {
   let meta: Record<string, any> | undefined;
   if (r.metadata) {
     try {
-      meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
+      meta =
+        typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
     } catch {
       meta = undefined;
     }
@@ -30,7 +31,10 @@ export function mapBlobRow(r: any): BlobRecord {
 }
 
 export class BlobStore {
-  static async ensureSchema(db: DBExecutable, tableName: string = DEFAULT_BLOBS_TABLE): Promise<void> {
+  static async ensureSchema(
+    db: DBExecutable,
+    tableName: string = DEFAULT_BLOBS_TABLE,
+  ): Promise<void> {
     await db.execute(
       `CREATE TABLE IF NOT EXISTS ${tableName} (
         id TEXT PRIMARY KEY,
@@ -45,21 +49,21 @@ export class BlobStore {
         metadata TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
-      );`
+      );`,
     );
 
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${tableName}_status ON ${tableName} (status);`
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_status ON ${tableName} (status);`,
     );
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${tableName}_key ON ${tableName} (key);`
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_key ON ${tableName} (key);`,
     );
   }
 
   static async insertOrUpdate(
     db: DBExecutable,
     tableName: string = DEFAULT_BLOBS_TABLE,
-    record: BlobRecord
+    record: BlobRecord,
   ): Promise<void> {
     const metaStr = record.metadata ? JSON.stringify(record.metadata) : null;
     await db.execute(
@@ -88,16 +92,19 @@ export class BlobStore {
         metaStr,
         record.createdAt,
         record.updatedAt,
-      ]
+      ],
     );
   }
 
   static async getByKey(
     db: DBExecutable,
     tableName: string = DEFAULT_BLOBS_TABLE,
-    key: string
+    key: string,
   ): Promise<BlobRecord | null> {
-    const rows = await db.execute(`SELECT * FROM ${tableName} WHERE key = ? LIMIT 1;`, [key]);
+    const rows = await db.execute(
+      `SELECT * FROM ${tableName} WHERE key = ? LIMIT 1;`,
+      [key],
+    );
     if (!rows || rows.length === 0) return null;
     return mapBlobRow(rows[0]);
   }
@@ -105,9 +112,12 @@ export class BlobStore {
   static async getById(
     db: DBExecutable,
     tableName: string = DEFAULT_BLOBS_TABLE,
-    id: string
+    id: string,
   ): Promise<BlobRecord | null> {
-    const rows = await db.execute(`SELECT * FROM ${tableName} WHERE id = ? LIMIT 1;`, [id]);
+    const rows = await db.execute(
+      `SELECT * FROM ${tableName} WHERE id = ? LIMIT 1;`,
+      [id],
+    );
     if (!rows || rows.length === 0) return null;
     return mapBlobRow(rows[0]);
   }
@@ -115,16 +125,18 @@ export class BlobStore {
   static async list(
     db: DBExecutable,
     tableName: string = DEFAULT_BLOBS_TABLE,
-    status?: BlobUploadStatus
+    status?: BlobUploadStatus,
   ): Promise<BlobRecord[]> {
     let rows: any[];
     if (status) {
       rows = await db.execute(
         `SELECT * FROM ${tableName} WHERE status = ? ORDER BY created_at DESC;`,
-        [status]
+        [status],
       );
     } else {
-      rows = await db.execute(`SELECT * FROM ${tableName} ORDER BY created_at DESC;`);
+      rows = await db.execute(
+        `SELECT * FROM ${tableName} ORDER BY created_at DESC;`,
+      );
     }
     return (rows || []).map(mapBlobRow);
   }
@@ -134,18 +146,18 @@ export class BlobStore {
     tableName: string = DEFAULT_BLOBS_TABLE,
     id: string,
     status: BlobUploadStatus,
-    remoteUrl?: string | null
+    remoteUrl?: string | null,
   ): Promise<void> {
     const now = Date.now();
     if (remoteUrl !== undefined) {
       await db.execute(
         `UPDATE ${tableName} SET status = ?, remote_url = ?, updated_at = ? WHERE id = ?;`,
-        [status, remoteUrl, now, id]
+        [status, remoteUrl, now, id],
       );
     } else {
       await db.execute(
         `UPDATE ${tableName} SET status = ?, updated_at = ? WHERE id = ?;`,
-        [status, now, id]
+        [status, now, id],
       );
     }
   }
@@ -153,14 +165,14 @@ export class BlobStore {
   static async deleteByKey(
     db: DBExecutable,
     tableName: string = DEFAULT_BLOBS_TABLE,
-    key: string
+    key: string,
   ): Promise<void> {
     await db.execute(`DELETE FROM ${tableName} WHERE key = ?;`, [key]);
   }
 
   static async clear(
     db: DBExecutable,
-    tableName: string = DEFAULT_BLOBS_TABLE
+    tableName: string = DEFAULT_BLOBS_TABLE,
   ): Promise<void> {
     await db.execute(`DELETE FROM ${tableName};`);
   }

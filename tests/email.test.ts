@@ -5,7 +5,6 @@ import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { MockDB } from './helpers/mock-db.js';
 import {
-  createEmailHandler,
   createNodemailerHandler,
   createHttpEmailHandler,
   buildMailOptions,
@@ -52,7 +51,11 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
         replyTo: 'reply@example.com',
         headers: { 'X-Custom-Header': 'val-123' },
         attachments: [
-          { filename: 'doc.pdf', url: 'https://example.com/doc.pdf', contentType: 'application/pdf' },
+          {
+            filename: 'doc.pdf',
+            url: 'https://example.com/doc.pdf',
+            contentType: 'application/pdf',
+          },
           { filename: 'note.txt', content: 'hello file' },
         ],
       };
@@ -96,7 +99,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
       client.actions.registerEmailHandler(
         createNodemailerHandler(transporter, {
           defaultFrom: 'noreply@locallite.dev',
-        })
+        }),
       );
 
       const action = await client.actions.sendEmail({
@@ -130,7 +133,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
       client.actions.registerEmailHandler(
         createNodemailerHandler(transporter, {
           defaultFrom: 'noreply@locallite.dev',
-        })
+        }),
       );
 
       await client.actions.sendEmail({
@@ -145,7 +148,9 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
 
       expect(sentMail).not.toBeNull();
       expect(sentMail.text).toBe('Hello Alice, your total is 99 USD.');
-      expect(sentMail.html).toBe('<p>Hello Alice, your total is <b>99 USD</b>.</p>');
+      expect(sentMail.html).toBe(
+        '<p>Hello Alice, your total is <b>99 USD</b>.</p>',
+      );
     });
 
     it('supports custom renderTemplate hook', async () => {
@@ -168,7 +173,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
             }
             return {};
           },
-        })
+        }),
       );
 
       await client.actions.sendEmail({
@@ -202,7 +207,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
             afterCalled = true;
             expect(info.messageId).toBeDefined();
           },
-        })
+        }),
       );
 
       await client.actions.sendEmail({
@@ -219,13 +224,17 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
 
     it('retries failed sends up to maxRetries before marking FAILED', async () => {
       const failingTransporter = {
-        sendMail: vi.fn().mockRejectedValue(new Error('SMTP Connection Refused (ECONNREFUSED)')),
+        sendMail: vi
+          .fn()
+          .mockRejectedValue(
+            new Error('SMTP Connection Refused (ECONNREFUSED)'),
+          ),
       };
 
       client.actions.registerEmailHandler(
         createNodemailerHandler(failingTransporter as any, {
           defaultFrom: 'noreply@locallite.dev',
-        })
+        }),
       );
 
       const action = await client.actions.sendEmail({
@@ -271,7 +280,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
           apiKey: 're_test_key_123',
           defaultFrom: 'onboarding@resend.dev',
           fetch: mockFetch as any,
-        })
+        }),
       );
 
       const action = await client.actions.sendEmail({
@@ -284,7 +293,9 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
       expect(flushResult.completed).toBe(1);
 
       expect(capturedUrl).toBe('https://api.resend.com/emails');
-      expect(capturedOptions.headers['Authorization']).toBe('Bearer re_test_key_123');
+      expect(capturedOptions.headers['Authorization']).toBe(
+        'Bearer re_test_key_123',
+      );
       const body = JSON.parse(capturedOptions.body);
       expect(body.to).toBe('customer@acme.com');
       expect(body.from).toBe('onboarding@resend.dev');
@@ -313,7 +324,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
           apiKey: 'SG.test_key',
           defaultFrom: 'mailer@company.com',
           fetch: mockFetch as any,
-        })
+        }),
       );
 
       await client.actions.sendEmail({
@@ -324,7 +335,9 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
 
       await client.actions.flush();
 
-      expect(capturedOptions.headers['Authorization']).toBe('Bearer SG.test_key');
+      expect(capturedOptions.headers['Authorization']).toBe(
+        'Bearer SG.test_key',
+      );
       const body = JSON.parse(capturedOptions.body);
       expect(body.personalizations[0].to).toEqual([
         { email: 'user1@company.com' },
@@ -352,7 +365,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
           apiKey: 'postmark-token-xyz',
           defaultFrom: 'alerts@domain.com',
           fetch: mockFetch as any,
-        })
+        }),
       );
 
       await client.actions.sendEmail({
@@ -363,7 +376,9 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
 
       await client.actions.flush();
 
-      expect(capturedOptions.headers['X-Postmark-Server-Token']).toBe('postmark-token-xyz');
+      expect(capturedOptions.headers['X-Postmark-Server-Token']).toBe(
+        'postmark-token-xyz',
+      );
       const body = JSON.parse(capturedOptions.body);
       expect(body.From).toBe('alerts@domain.com');
       expect(body.To).toBe('boss@domain.com');
@@ -391,7 +406,7 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
           headers: { 'X-Secret': 'secret-token' },
           defaultFrom: 'corp@internal.net',
           fetch: mockFetch as any,
-        })
+        }),
       );
 
       await client.actions.sendEmail({
@@ -411,7 +426,9 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
   describe('createSyncClient config.email auto-wiring', () => {
     it('automatically wires Nodemailer transport via createSyncClient', async () => {
       let dispatchedMail: any = null;
-      const testTransporter = nodemailer.createTransport({ jsonTransport: true });
+      const testTransporter = nodemailer.createTransport({
+        jsonTransport: true,
+      });
       vi.spyOn(testTransporter, 'sendMail').mockImplementation(async (mail) => {
         dispatchedMail = mail;
         return { messageId: 'auto-wire-id' } as any;
@@ -487,4 +504,3 @@ describe('Unified Email Module (Nodemailer & HTTP Providers)', () => {
     });
   });
 });
-

@@ -4,7 +4,7 @@ import {
   OneDriveBackupClient,
   MICROSOFT_GRAPH_DRIVE,
 } from '../src/backups/index.js';
-import { createInMemoryMicrosoftTokenStore, type MicrosoftAuthTokens } from '../src/auth/microsoft.js';
+import { createInMemoryMicrosoftTokenStore } from '../src/auth/microsoft.js';
 
 function createTokenStore() {
   const store = createInMemoryMicrosoftTokenStore();
@@ -26,10 +26,15 @@ describe('OneDrive backup storage', () => {
       capturedMethod = init?.method ?? 'GET';
       capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
       capturedBody = init?.body;
-      return new Response(JSON.stringify({ id: 'item-123', name: 'test.db' }), { status: 200 });
+      return new Response(JSON.stringify({ id: 'item-123', name: 'test.db' }), {
+        status: 200,
+      });
     };
 
-    const storage = new OneDriveBackupStorage(async () => 'fake-access-token', mockFetch as any);
+    const storage = new OneDriveBackupStorage(
+      async () => 'fake-access-token',
+      mockFetch as any,
+    );
     const backupData = new TextEncoder().encode('SQLite binary content');
 
     await storage.save('test-backup.db', backupData);
@@ -51,7 +56,10 @@ describe('OneDrive backup storage', () => {
       return new Response(fileBytes, { status: 200 });
     };
 
-    const storage = new OneDriveBackupStorage(async () => 'fake-token', mockFetch as any);
+    const storage = new OneDriveBackupStorage(
+      async () => 'fake-token',
+      mockFetch as any,
+    );
 
     // Read by filename
     const data1 = await storage.read('snapshot.db');
@@ -62,7 +70,9 @@ describe('OneDrive backup storage', () => {
 
     // Read by item id
     const data2 = await storage.read('item-xyz987');
-    expect(requestedUrl).toBe(`${MICROSOFT_GRAPH_DRIVE}/items/item-xyz987/content`);
+    expect(requestedUrl).toBe(
+      `${MICROSOFT_GRAPH_DRIVE}/items/item-xyz987/content`,
+    );
     expect(data2).toEqual(fileBytes);
   });
 
@@ -89,7 +99,10 @@ describe('OneDrive backup storage', () => {
       );
     };
 
-    const storage = new OneDriveBackupStorage(async () => 'fake-token', mockFetch as any);
+    const storage = new OneDriveBackupStorage(
+      async () => 'fake-token',
+      mockFetch as any,
+    );
     const files = await storage.list();
 
     expect(files.length).toBe(1);
@@ -106,7 +119,10 @@ describe('OneDrive backup storage', () => {
       return new Response('Not found', { status: 404 });
     };
 
-    const storage = new OneDriveBackupStorage(async () => 'fake-token', mockFetch as any);
+    const storage = new OneDriveBackupStorage(
+      async () => 'fake-token',
+      mockFetch as any,
+    );
     const files = await storage.list();
     expect(files).toEqual([]);
   });
@@ -116,12 +132,14 @@ describe('OneDrive backup storage', () => {
     const client = new OneDriveBackupClient({
       clientId: 'ms-client-123',
       redirectUri: 'myapp://oauth-ms',
-      authorize: async request => {
-        const state = new URL(request.authorizationUrl).searchParams.get('state');
+      authorize: async (request) => {
+        const state = new URL(request.authorizationUrl).searchParams.get(
+          'state',
+        );
         return { code: 'ms-auth-code', state: state ?? '' };
       },
       tokenStore: tokenStore.store,
-      randomBytes: len => new Uint8Array(len).fill(5),
+      randomBytes: (len) => new Uint8Array(len).fill(5),
       fetch: async (input: RequestInfo | URL) => {
         const urlStr = String(input);
         if (urlStr.includes('/oauth2/v2.0/token')) {
@@ -137,7 +155,11 @@ describe('OneDrive backup storage', () => {
         }
         if (urlStr.includes('/me')) {
           return new Response(
-            JSON.stringify({ id: 'ms-user-1', displayName: 'Jane Doe', mail: 'jane@ms.com' }),
+            JSON.stringify({
+              id: 'ms-user-1',
+              displayName: 'Jane Doe',
+              mail: 'jane@ms.com',
+            }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           );
         }

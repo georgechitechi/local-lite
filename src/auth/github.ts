@@ -1,6 +1,8 @@
 import { resolveUnifiedUserId, type AuthUser } from './identity.js';
-export const GITHUB_AUTHORIZATION_ENDPOINT = 'https://github.com/login/oauth/authorize';
-export const GITHUB_TOKEN_ENDPOINT = 'https://github.com/login/oauth/access_token';
+export const GITHUB_AUTHORIZATION_ENDPOINT =
+  'https://github.com/login/oauth/authorize';
+export const GITHUB_TOKEN_ENDPOINT =
+  'https://github.com/login/oauth/access_token';
 export const GITHUB_API_ENDPOINT = 'https://api.github.com';
 export const DEFAULT_GITHUB_AUTH_SCOPES = ['read:user', 'user:email'];
 
@@ -61,7 +63,8 @@ export interface GitHubAuthClientOptions {
 }
 
 function secureRandomBytes(length: number): Uint8Array {
-  const crypto = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const crypto =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (!crypto?.getRandomValues) {
     const fallback = new Uint8Array(length);
     for (let i = 0; i < length; i++) {
@@ -81,9 +84,11 @@ function base64UrlEncode(bytes: Uint8Array): string {
     const second = bytes[index + 1];
     const third = bytes[index + 2];
     result += alphabet[first >> 2];
-    result += alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
+    result +=
+      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
     if (second !== undefined) {
-      result += alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
+      result +=
+        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
     }
     if (third !== undefined) result += alphabet[third & 63];
   }
@@ -111,14 +116,14 @@ export function createInMemoryGitHubTokenStore(): GitHubAuthTokenStore {
   let storedUser: GitHubUser | null = null;
   return {
     getTokens: async () => storedTokens,
-    setTokens: async tokens => {
+    setTokens: async (tokens) => {
       storedTokens = tokens;
     },
     removeTokens: async () => {
       storedTokens = null;
     },
     getUser: async () => storedUser,
-    setUser: async user => {
+    setUser: async (user) => {
       storedUser = user;
     },
   };
@@ -135,13 +140,13 @@ export function createGitHubAuthTokenStore(
       const raw = await storage.getItem(tokensKey);
       return validateTokens(raw) ? raw : null;
     },
-    setTokens: tokens => storage.setItem(tokensKey, tokens),
+    setTokens: (tokens) => storage.setItem(tokensKey, tokens),
     removeTokens: () => storage.removeItem(tokensKey),
     getUser: async () => {
       const raw = await storage.getItem(userKey);
       return validateUser(raw) ? raw : null;
     },
-    setUser: async user => {
+    setUser: async (user) => {
       if (user) {
         await storage.setItem(userKey, user);
       } else {
@@ -198,13 +203,16 @@ export class GitHubAuthClient {
     const randomBytes = this.options.randomBytes ?? secureRandomBytes;
     const stateBytes = randomBytes(32);
     if (stateBytes.length !== 32) {
-      throw new Error('The randomBytes provider returned an invalid number of bytes.');
+      throw new Error(
+        'The randomBytes provider returned an invalid number of bytes.',
+      );
     }
     const state = base64UrlEncode(stateBytes);
 
-    const scopes = this.options.scopes && this.options.scopes.length > 0
-      ? this.options.scopes
-      : DEFAULT_GITHUB_AUTH_SCOPES;
+    const scopes =
+      this.options.scopes && this.options.scopes.length > 0
+        ? this.options.scopes
+        : DEFAULT_GITHUB_AUTH_SCOPES;
 
     const authorizationParams = new URLSearchParams({
       client_id: this.options.clientId,
@@ -225,14 +233,17 @@ export class GitHubAuthClient {
     }
 
     if (authorization.state !== state) {
-      throw new Error('GitHub OAuth state validation failed. Please try connecting again.');
+      throw new Error(
+        'GitHub OAuth state validation failed. Please try connecting again.',
+      );
     }
 
     if (!authorization.code) {
       throw new Error('GitHub OAuth did not return an authorization code.');
     }
 
-    const tokenEndpoint = this.options.tokenExchangeUrl || GITHUB_TOKEN_ENDPOINT;
+    const tokenEndpoint =
+      this.options.tokenExchangeUrl || GITHUB_TOKEN_ENDPOINT;
     const requestPayload: Record<string, string> = {
       client_id: this.options.clientId,
       code: authorization.code,
@@ -256,7 +267,9 @@ export class GitHubAuthClient {
     const payload = (await response.json()) as any;
     if (!response.ok || payload.error) {
       throw new Error(
-        payload.error_description || payload.error || `GitHub OAuth token exchange failed (${response.status}).`
+        payload.error_description ||
+          payload.error ||
+          `GitHub OAuth token exchange failed (${response.status}).`,
       );
     }
 
@@ -268,7 +281,9 @@ export class GitHubAuthClient {
       accessToken: payload.access_token,
       tokenType: payload.token_type,
       scope: payload.scope,
-      expiresAt: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
+      expiresAt: payload.expires_in
+        ? Date.now() + payload.expires_in * 1000
+        : undefined,
     };
 
     await this.tokenStore.setTokens(storedTokens);
@@ -343,16 +358,24 @@ export class GitHubAuthClient {
     // If email is private on profile, fetch from /user/emails endpoint
     if (!email) {
       try {
-        const emailsRes = await this.fetcher(`${GITHUB_API_ENDPOINT}/user/emails`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-            'User-Agent': 'local-lite-auth',
+        const emailsRes = await this.fetcher(
+          `${GITHUB_API_ENDPOINT}/user/emails`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/vnd.github.v3+json',
+              'User-Agent': 'local-lite-auth',
+            },
           },
-        });
+        );
         if (emailsRes.ok) {
-          const emails = (await emailsRes.json()) as Array<{ email: string; primary: boolean; verified: boolean }>;
-          const primary = emails.find(e => e.primary && e.verified) || emails[0];
+          const emails = (await emailsRes.json()) as Array<{
+            email: string;
+            primary: boolean;
+            verified: boolean;
+          }>;
+          const primary =
+            emails.find((e) => e.primary && e.verified) || emails[0];
           if (primary) email = primary.email;
         }
       } catch {
@@ -361,8 +384,13 @@ export class GitHubAuthClient {
     }
 
     const rawId = String(raw.id ?? raw.sub ?? 'github_user');
-    const normalizedEmail = email ? email.trim().toLowerCase() : `${raw.login}@users.noreply.github.com`;
-    const id = resolveUnifiedUserId({ id: rawId, email: normalizedEmail, emailVerified: true }, 'github');
+    const normalizedEmail = email
+      ? email.trim().toLowerCase()
+      : `${raw.login}@users.noreply.github.com`;
+    const id = resolveUnifiedUserId(
+      { id: rawId, email: normalizedEmail, emailVerified: true },
+      'github',
+    );
     const name = raw.name || raw.login || 'GitHub User';
     const avatarUrl = raw.avatar_url || null;
 

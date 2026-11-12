@@ -48,9 +48,16 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
       amount: 100,
       updated_at: '2020-01-01T00:00:00.000Z',
     });
-    expect((await getRow(db, 'r1')).updated_at).toBe('2020-01-01T00:00:00.000Z');
+    expect((await getRow(db, 'r1')).updated_at).toBe(
+      '2020-01-01T00:00:00.000Z',
+    );
 
-    await client.update('receipts', 'r1', { amount: 250 }, { customTimestamp: Date.UTC(2030, 0, 1) });
+    await client.update(
+      'receipts',
+      'r1',
+      { amount: 250 },
+      { customTimestamp: Date.UTC(2030, 0, 1) },
+    );
     const row = await getRow(db, 'r1');
     expect(row.amount).toBe(250);
     expect(row.updated_at).toBe('2030-01-01T00:00:00.000Z');
@@ -58,15 +65,24 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
 
   it('overrides a stale updated_at spread into an update payload', async () => {
     const db = await makeClient({ autoSchema: true });
-    await client.insert('receipts', { id: 'r1', amount: 1, updated_at: '2020-01-01T00:00:00.000Z' });
+    await client.insert('receipts', {
+      id: 'r1',
+      amount: 1,
+      updated_at: '2020-01-01T00:00:00.000Z',
+    });
     const stale = await getRow(db, 'r1');
     await client.update('receipts', 'r1', { ...stale, amount: 2 });
-    expect((await getRow(db, 'r1')).updated_at).not.toBe('2020-01-01T00:00:00.000Z');
+    expect((await getRow(db, 'r1')).updated_at).not.toBe(
+      '2020-01-01T00:00:00.000Z',
+    );
   });
 
   it('keeps an explicit updated_at on insert and stamps one when missing', async () => {
     const db = await makeClient({ autoSchema: true });
-    await client.insert('receipts', { id: 'a', updated_at: '2021-05-05T00:00:00.000Z' });
+    await client.insert('receipts', {
+      id: 'a',
+      updated_at: '2021-05-05T00:00:00.000Z',
+    });
     await client.insert('receipts', { id: 'b' });
     expect((await getRow(db, 'a')).updated_at).toBe('2021-05-05T00:00:00.000Z');
     expect((await getRow(db, 'b')).updated_at).toEqual(expect.any(String));
@@ -82,7 +98,14 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
     ]);
 
     await client.updateMany('receipts', [{ id: 'm1', payload: { amount: 1 } }]);
-    await client.batch([{ tableName: 'receipts', rowId: 'm2', operation: 'UPDATE', payload: { amount: 2 } }]);
+    await client.batch([
+      {
+        tableName: 'receipts',
+        rowId: 'm2',
+        operation: 'UPDATE',
+        payload: { amount: 2 },
+      },
+    ]);
     await client.transaction(async (tx) => {
       await tx.update('receipts', 'm3', { amount: 3 });
     });
@@ -102,10 +125,12 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
 
   it('skips stamping when the column does not exist on a manual schema', async () => {
     const db = await makeClient({
-      schemaMigrations: [{
-        version: 1,
-        up: 'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL);',
-      }],
+      schemaMigrations: [
+        {
+          version: 1,
+          up: 'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL);',
+        },
+      ],
     });
     await client.insert('receipts', { id: 'r1', amount: 1 });
     await client.update('receipts', 'r1', { amount: 2 });
@@ -116,18 +141,29 @@ describe('touchUpdatedAt (local updated_at stamping)', () => {
 
   it('stamps on a manual schema that has the column', async () => {
     const db = await makeClient({
-      schemaMigrations: [{
-        version: 1,
-        up: 'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL, updated_at TEXT);',
-      }],
+      schemaMigrations: [
+        {
+          version: 1,
+          up: 'CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, amount REAL, updated_at TEXT);',
+        },
+      ],
     });
-    await client.insert('receipts', { id: 'r1', amount: 1, updated_at: '2020-01-01T00:00:00.000Z' });
+    await client.insert('receipts', {
+      id: 'r1',
+      amount: 1,
+      updated_at: '2020-01-01T00:00:00.000Z',
+    });
     await client.update('receipts', 'r1', { amount: 2 });
-    expect((await getRow(db, 'r1')).updated_at).not.toBe('2020-01-01T00:00:00.000Z');
+    expect((await getRow(db, 'r1')).updated_at).not.toBe(
+      '2020-01-01T00:00:00.000Z',
+    );
   });
 
   it('supports a custom column name and can be disabled', async () => {
-    let db = await makeClient({ autoSchema: true, touchUpdatedAt: 'modified_at' });
+    let db = await makeClient({
+      autoSchema: true,
+      touchUpdatedAt: 'modified_at',
+    });
     await client.update('receipts', 'r1', { amount: 1 });
     let row = await getRow(db, 'r1');
     expect(row.modified_at).toEqual(expect.any(String));

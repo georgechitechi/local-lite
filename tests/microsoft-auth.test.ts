@@ -17,8 +17,22 @@ function jsonResponse(body: object, status = 200): Response {
 
 describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
   const sampleUser: MicrosoftUser = {
-    id: resolveUnifiedUserId({ id: 'ms-user-789', email: 'developer@outlook.com', emailVerified: true }, 'microsoft'),
-    userId: resolveUnifiedUserId({ id: 'ms-user-789', email: 'developer@outlook.com', emailVerified: true }, 'microsoft'),
+    id: resolveUnifiedUserId(
+      {
+        id: 'ms-user-789',
+        email: 'developer@outlook.com',
+        emailVerified: true,
+      },
+      'microsoft',
+    ),
+    userId: resolveUnifiedUserId(
+      {
+        id: 'ms-user-789',
+        email: 'developer@outlook.com',
+        emailVerified: true,
+      },
+      'microsoft',
+    ),
     provider: 'microsoft' as const,
     providerAccountId: 'ms-user-789',
     email: 'developer@outlook.com',
@@ -40,11 +54,11 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
     const client = new MicrosoftAuthClient({
       clientId: 'ms-client-id-xyz',
       redirectUri: 'myapp://oauth',
-      authorize: async request => {
+      authorize: async (request) => {
         authorizationUrl = request.authorizationUrl;
         return { code: 'ms-auth-code-123', state: request.state };
       },
-      randomBytes: length => new Uint8Array(length).fill(3),
+      randomBytes: (length) => new Uint8Array(length).fill(3),
       fetch: async (url, init) => {
         const urlStr = String(url);
         if (urlStr.includes('/oauth2/v2.0/token')) {
@@ -73,7 +87,7 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
       },
     });
 
-    client.onAuthStateChange(user => authEvents.push(user));
+    client.onAuthStateChange((user) => authEvents.push(user));
 
     const user = await client.signIn();
 
@@ -157,11 +171,11 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
   it('persists tokens and user info via key-value storage adapter', async () => {
     const memory = new Map<string, unknown>();
     const storage: MicrosoftAuthKeyValueStorage = {
-      getItem: async key => memory.get(key) ?? null,
+      getItem: async (key) => memory.get(key) ?? null,
       setItem: async (key, val) => {
         memory.set(key, val);
       },
-      removeItem: async key => {
+      removeItem: async (key) => {
         memory.delete(key);
       },
     };

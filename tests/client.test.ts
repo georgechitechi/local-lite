@@ -90,20 +90,37 @@ describe('LocalFirstClient Core', () => {
   });
 
   it('provides zero-SQL declarative queries via findMany and findById', async () => {
-    await client.insert('items', { id: 'item-1', name: 'Zebra', category: 'animals' });
-    await client.insert('items', { id: 'item-2', name: 'Apple', category: 'fruits' });
-    await client.insert('items', { id: 'item-3', name: 'Banana', category: 'fruits' });
+    await client.insert('items', {
+      id: 'item-1',
+      name: 'Zebra',
+      category: 'animals',
+    });
+    await client.insert('items', {
+      id: 'item-2',
+      name: 'Apple',
+      category: 'fruits',
+    });
+    await client.insert('items', {
+      id: 'item-3',
+      name: 'Banana',
+      category: 'fruits',
+    });
 
     // Full table read
     const all = await client.findMany('items');
     expect(all).toHaveLength(3);
 
     // Filtered
-    const fruits = await client.findMany('items', { where: { category: 'fruits' } });
+    const fruits = await client.findMany('items', {
+      where: { category: 'fruits' },
+    });
     expect(fruits).toHaveLength(2);
 
     // Sorted
-    const sorted = await client.findMany('items', { orderBy: 'name', order: 'asc' });
+    const sorted = await client.findMany('items', {
+      orderBy: 'name',
+      order: 'asc',
+    });
     expect(sorted[0].name).toBe('Apple');
     expect(sorted[1].name).toBe('Banana');
     expect(sorted[2].name).toBe('Zebra');

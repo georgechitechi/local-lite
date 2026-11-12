@@ -14,15 +14,18 @@ export function safeDynamicRequire(pkgName: string): any {
     }
     // In Metro bundler (__r), calling require(variableString) triggers Metro's
     // unknownModuleError console.error before throwing. Skip non-literal require in Metro.
-    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).__r === 'function') {
+    if (
+      typeof globalThis !== 'undefined' &&
+      typeof (globalThis as any).__r === 'function'
+    ) {
       return undefined;
     }
     const req =
       typeof __non_webpack_require__ !== 'undefined'
         ? __non_webpack_require__
         : typeof require === 'function'
-        ? require
-        : undefined;
+          ? require
+          : undefined;
     return req ? req(pkgName) : undefined;
   } catch {
     return undefined;
@@ -35,12 +38,18 @@ export async function safeDynamicImport(pkgName: string): Promise<any> {
     if (syncMod !== undefined) {
       return syncMod;
     }
-    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).__r === 'function') {
+    if (
+      typeof globalThis !== 'undefined' &&
+      typeof (globalThis as any).__r === 'function'
+    ) {
       return undefined;
     }
     // Metro's AST worker rejects `import(dynamicVariable)` with "Invalid call at line ...: import(...)".
     // Evaluating via new Function bypasses the bundler AST parser entirely while working in Node/browser.
-    const dynamicImport = new Function('specifier', 'return import(specifier);');
+    const dynamicImport = new Function(
+      'specifier',
+      'return import(specifier);',
+    );
     return await dynamicImport(pkgName);
   } catch {
     return undefined;

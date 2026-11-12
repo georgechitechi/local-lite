@@ -73,7 +73,11 @@ export interface AggregateResult {
  * Compiles a single column comparison value into one or more SQL fragments.
  * Supports null, boolean, scalar, and operator-object forms ($eq, $gt, $in, …).
  */
-function compileComparison(safeCol: string, val: any, params: any[]): string | null {
+function compileComparison(
+  safeCol: string,
+  val: any,
+  params: any[],
+): string | null {
   if (val === null) {
     return `${safeCol} IS NULL`;
   }
@@ -131,24 +135,29 @@ function compileComparison(safeCol: string, val: any, params: any[]): string | n
       subClauses.push(`${safeCol} NOT IN (${placeholders})`);
       params.push(...ninVal);
     }
-    const containsVal = ops.$contains !== undefined ? ops.$contains : ops.contains;
+    const containsVal =
+      ops.$contains !== undefined ? ops.$contains : ops.contains;
     if (containsVal !== undefined) {
       subClauses.push(`${safeCol} LIKE ?`);
       params.push(`%${containsVal}%`);
     }
-    const startsWithVal = ops.$startsWith !== undefined ? ops.$startsWith : ops.startsWith;
+    const startsWithVal =
+      ops.$startsWith !== undefined ? ops.$startsWith : ops.startsWith;
     if (startsWithVal !== undefined) {
       subClauses.push(`${safeCol} LIKE ?`);
       params.push(`${startsWithVal}%`);
     }
-    const endsWithVal = ops.$endsWith !== undefined ? ops.$endsWith : ops.endsWith;
+    const endsWithVal =
+      ops.$endsWith !== undefined ? ops.$endsWith : ops.endsWith;
     if (endsWithVal !== undefined) {
       subClauses.push(`${safeCol} LIKE ?`);
       params.push(`%${endsWithVal}`);
     }
     const nullVal = ops.$null !== undefined ? ops.$null : ops.null;
     if (nullVal !== undefined) {
-      subClauses.push(nullVal ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`);
+      subClauses.push(
+        nullVal ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`,
+      );
     }
 
     if (subClauses.length > 0) {
@@ -161,7 +170,10 @@ function compileComparison(safeCol: string, val: any, params: any[]): string | n
 /**
  * Recursively compiles a where-conditions object (including $or / $and) into SQL clauses.
  */
-function compileWhereConditions(where: Record<string, any>, params: any[]): string[] {
+function compileWhereConditions(
+  where: Record<string, any>,
+  params: any[],
+): string[] {
   const clauses: string[] = [];
 
   // Handle $or — compile each branch, join with OR
@@ -277,13 +289,21 @@ export class QueryBuilder<T = any> {
       if (value !== undefined) {
         const rawOp = String(operatorOrValue).toLowerCase().trim();
         const opKey =
-          rawOp === '>=' ? '$gte' :
-          rawOp === '<=' ? '$lte' :
-          rawOp === '>' ? '$gt' :
-          rawOp === '<' ? '$lt' :
-          rawOp === '!=' || rawOp === '<>' ? '$ne' :
-          rawOp === '=' || rawOp === '==' ? '$eq' :
-          rawOp === 'like' ? '$contains' : '$eq';
+          rawOp === '>='
+            ? '$gte'
+            : rawOp === '<='
+              ? '$lte'
+              : rawOp === '>'
+                ? '$gt'
+                : rawOp === '<'
+                  ? '$lt'
+                  : rawOp === '!=' || rawOp === '<>'
+                    ? '$ne'
+                    : rawOp === '=' || rawOp === '=='
+                      ? '$eq'
+                      : rawOp === 'like'
+                        ? '$contains'
+                        : '$eq';
 
         const existing =
           typeof this.whereConditions[columnOrFilter] === 'object' &&
@@ -303,7 +323,10 @@ export class QueryBuilder<T = any> {
   /**
    * Orders query results by column and direction.
    */
-  orderBy(column: string, direction: 'asc' | 'desc' | 'ASC' | 'DESC' = 'ASC'): this {
+  orderBy(
+    column: string,
+    direction: 'asc' | 'desc' | 'ASC' | 'DESC' = 'ASC',
+  ): this {
     this.orderColumn = column;
     this.orderDirection = direction.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     return this;
@@ -347,7 +370,8 @@ export class QueryBuilder<T = any> {
   applyOptions(options?: QueryOptions): this {
     if (!options) return this;
     if (options.select) this.select(options.select);
-    if (options.where && typeof options.where === 'object') this.where(options.where);
+    if (options.where && typeof options.where === 'object')
+      this.where(options.where);
     if (options.orderBy) this.orderBy(options.orderBy, options.order || 'ASC');
     if (typeof options.limit === 'number') this.limit(options.limit);
     if (typeof options.offset === 'number') this.offset(options.offset);
@@ -376,7 +400,9 @@ export class QueryBuilder<T = any> {
     // Build WHERE clauses (delegates to module-scoped helpers)
     const whereClauses: string[] = [];
     if (this.whereConditions && typeof this.whereConditions === 'object') {
-      whereClauses.push(...compileWhereConditions(this.whereConditions, params));
+      whereClauses.push(
+        ...compileWhereConditions(this.whereConditions, params),
+      );
     }
 
     // Push down soft-deletion check on primary table if deleted column exists and not explicitly overridden
@@ -385,11 +411,16 @@ export class QueryBuilder<T = any> {
         ? (this.client as LocalFirstClient).schemaManager
         : (this.client as any).parent?.schemaManager;
 
-    if (!this.includeDeleted && schemaManager?.hasColumn(this.tableName, 'deleted')) {
+    if (
+      !this.includeDeleted &&
+      schemaManager?.hasColumn(this.tableName, 'deleted')
+    ) {
       const delCol = this.tableName.includes('.')
         ? `${formatColumnIdentifier(this.tableName)}."deleted"`
         : `"${this.tableName.replace(/"/g, '""')}"."deleted"`;
-      whereClauses.push(`(${delCol} IS NULL OR (${delCol} != 1 AND ${delCol} != 'true'))`);
+      whereClauses.push(
+        `(${delCol} IS NULL OR (${delCol} != 1 AND ${delCol} != 'true'))`,
+      );
     }
 
     if (whereClauses.length > 0) {
@@ -431,7 +462,9 @@ export class QueryBuilder<T = any> {
         ? (this.client as LocalFirstClient).schemaManager
         : (this.client as any).parent?.schemaManager;
     const db =
-      'db' in this.client ? (this.client as LocalFirstClient).db : (this.client as any).tx;
+      'db' in this.client
+        ? (this.client as LocalFirstClient).db
+        : (this.client as any).tx;
     if (schemaManager && db) {
       await schemaManager.ensureTableIntrospected(db, this.tableName);
       for (const j of this.joins) {
@@ -445,7 +478,9 @@ export class QueryBuilder<T = any> {
       const hydrator =
         'hydrateRow' in this.client
           ? (this.client as any).hydrateRow.bind(this.client)
-          : (this.client as any).parent?.hydrateRow?.bind((this.client as any).parent);
+          : (this.client as any).parent?.hydrateRow?.bind(
+              (this.client as any).parent,
+            );
       if (hydrator && rawRows && rawRows.length > 0) {
         return rawRows.map((r: any) => hydrator(this.tableName, r));
       }
@@ -514,7 +549,9 @@ export class QueryBuilder<T = any> {
     try {
       const rows = await this.execute();
       const avgVal = (rows[0] as any)?._avg;
-      return avgVal === null || avgVal === undefined ? null : Number(avgVal) || 0;
+      return avgVal === null || avgVal === undefined
+        ? null
+        : Number(avgVal) || 0;
     } finally {
       this.selectCols = originalSelect;
     }

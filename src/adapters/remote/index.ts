@@ -21,13 +21,22 @@ export interface RemoteBackupArchive {
 export interface RemoteDBAdapter {
   pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult>;
   /** Return a complete batch through timestamp; reject on partial failure. Supports optional scope for data filtering. */
-  fetchChanges(sinceTimestamp: number, scope?: Record<string, any>): Promise<DeltaChanges>;
+  fetchChanges(
+    sinceTimestamp: number,
+    scope?: Record<string, any>,
+  ): Promise<DeltaChanges>;
   /** Live events do not advance the durable pull checkpoint; return a cleanup function. */
   subscribeToLiveChanges(
     callback: (changes: DeltaChanges) => void,
-    scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>),
+    scope?:
+      | Record<string, any>
+      | (() => Record<string, any> | Promise<Record<string, any>>),
   ): () => void;
-  setSyncScope?(scope?: Record<string, any> | (() => Record<string, any> | Promise<Record<string, any>>)): void;
+  setSyncScope?(
+    scope?:
+      | Record<string, any>
+      | (() => Record<string, any> | Promise<Record<string, any>>),
+  ): void;
 
   /** Call a remote cloud action/function/RPC */
   call?<T = any>(functionName: string, args?: any): Promise<T>;

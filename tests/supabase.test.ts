@@ -46,13 +46,13 @@ describe('SupabaseRemoteAdapter', () => {
         id: 'row-1',
         title: 'First Task',
         deleted: false,
-      })
+      }),
     );
     expect(updateSpy).toHaveBeenCalledTimes(1);
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         deleted: true,
-      })
+      }),
     );
   });
 
@@ -76,9 +76,30 @@ describe('SupabaseRemoteAdapter', () => {
     });
 
     const success = await adapter.pushChanges([
-      { id: 'del-1', tableName: 'tasks', rowId: 't-1', operation: 'DELETE', payload: null, timestamp: 1000 },
-      { id: 'del-2', tableName: 'tasks', rowId: 't-2', operation: 'DELETE', payload: null, timestamp: 2000 },
-      { id: 'del-3', tableName: 'tasks', rowId: 't-3', operation: 'DELETE', payload: null, timestamp: 3000 },
+      {
+        id: 'del-1',
+        tableName: 'tasks',
+        rowId: 't-1',
+        operation: 'DELETE',
+        payload: null,
+        timestamp: 1000,
+      },
+      {
+        id: 'del-2',
+        tableName: 'tasks',
+        rowId: 't-2',
+        operation: 'DELETE',
+        payload: null,
+        timestamp: 2000,
+      },
+      {
+        id: 'del-3',
+        tableName: 'tasks',
+        rowId: 't-3',
+        operation: 'DELETE',
+        payload: null,
+        timestamp: 3000,
+      },
     ]);
 
     expect(success).toBe(true);
@@ -90,8 +111,18 @@ describe('SupabaseRemoteAdapter', () => {
 
   it('fetches delta changes using updated_at cursor and extracts max server timestamp', async () => {
     const mockData = [
-      { id: 't1', title: 'Task 1', updated_at: '2026-10-13T06:00:00.000Z', deleted: false },
-      { id: 't2', title: 'Task 2', updated_at: '2026-10-13T06:05:00.000Z', deleted: true },
+      {
+        id: 't1',
+        title: 'Task 1',
+        updated_at: '2026-10-13T06:00:00.000Z',
+        deleted: false,
+      },
+      {
+        id: 't2',
+        title: 'Task 2',
+        updated_at: '2026-10-13T06:05:00.000Z',
+        deleted: true,
+      },
     ];
 
     const mockSupabase = {
@@ -116,7 +147,9 @@ describe('SupabaseRemoteAdapter', () => {
     expect(result.changes).toHaveLength(2);
     expect(result.changes[0].operation).toBe('UPDATE');
     expect(result.changes[1].operation).toBe('DELETE');
-    expect(result.timestamp).toBe(new Date('2026-10-13T06:05:00.000Z').getTime());
+    expect(result.timestamp).toBe(
+      new Date('2026-10-13T06:05:00.000Z').getTime(),
+    );
   });
 
   it('safely handles null/uninitialized client without throwing Cannot read property channel of null', async () => {
@@ -195,4 +228,3 @@ describe('SupabaseRemoteAdapter', () => {
     if (typeof unsub === 'function') unsub();
   });
 });
-

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createEmailEndpoint } from '../src/server/email.js';
 import { createServer, defineServerConfig } from '../src/server/index.js';
 import { ActionManager } from '../src/actions/manager.js';
@@ -30,7 +30,7 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
           endpoints: {
             '/api/send-email': endpoint,
           },
-        })
+        }),
       );
 
       // 1. Unauthorized request
@@ -47,7 +47,7 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer super-secret-token',
+          Authorization: 'Bearer super-secret-token',
         },
         body: JSON.stringify({
           to: 'customer@test.com',
@@ -121,9 +121,18 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
         activeWorkers--;
       });
 
-      await manager.enqueue({ action: 'parallel_task', payload: { item: 'a' } });
-      await manager.enqueue({ action: 'parallel_task', payload: { item: 'b' } });
-      await manager.enqueue({ action: 'parallel_task', payload: { item: 'c' } });
+      await manager.enqueue({
+        action: 'parallel_task',
+        payload: { item: 'a' },
+      });
+      await manager.enqueue({
+        action: 'parallel_task',
+        payload: { item: 'b' },
+      });
+      await manager.enqueue({
+        action: 'parallel_task',
+        payload: { item: 'c' },
+      });
 
       const res = await manager.flush();
       expect(res.completed).toBe(3);
@@ -153,7 +162,7 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
         manager.enqueue({
           action: 'create_invoice',
           payload: { amount: -50 },
-        })
+        }),
       ).rejects.toThrow('Amount must be positive');
 
       // Should succeed when valid
@@ -181,8 +190,7 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
           subject: 'Dev Test Email',
           text: 'Inspect me in memory',
         },
-        { id: 'act-123' } as any,
-        {} as any
+        { id: 'act-123' } as any as any,
       );
 
       expect(res?.messageId).toContain('dev-act-123');
@@ -203,7 +211,10 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
 
   describe('Mobile Attachment Hydration', () => {
     it('preserves existing attachments and handles file path normalization', async () => {
-      const att = { filename: 'photo.jpg', url: 'https://cdn.example.com/photo.jpg' };
+      const att = {
+        filename: 'photo.jpg',
+        url: 'https://cdn.example.com/photo.jpg',
+      };
       const hydrated = await hydrateAttachment(att);
       expect(hydrated.filename).toBe('photo.jpg');
       expect(hydrated.path).toBe('https://cdn.example.com/photo.jpg');

@@ -25,11 +25,11 @@ export class EventEmitter {
   emit(event: string, data: any): void {
     const eventSet = this.listeners.get(event);
     if (eventSet) {
-      eventSet.forEach(callback => {
+      eventSet.forEach((callback) => {
         try {
           callback(data);
         } catch (err) {
-          console.error("Emitter error:", err);
+          console.error('Emitter error:', err);
         }
       });
     }

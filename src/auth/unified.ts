@@ -56,7 +56,8 @@ export class UnifiedAuthManager {
     this.local = config.local;
     this.sessionManager = config.sessionManager;
     this.unifyByEmail = config.unifyByEmail !== false;
-    this.emailNamespace = config.emailNamespace || DEFAULT_UNIFIED_EMAIL_NAMESPACE;
+    this.emailNamespace =
+      config.emailNamespace || DEFAULT_UNIFIED_EMAIL_NAMESPACE;
 
     this.bindProviderListeners();
   }
@@ -64,14 +65,14 @@ export class UnifiedAuthManager {
   private bindProviderListeners() {
     if (this.google) {
       this.unsubscribers.push(
-        this.google.onAuthStateChange(user => {
+        this.google.onAuthStateChange((user) => {
           if (!user) return;
           const unified = createUnifiedAuthUser(user, 'google', {
             namespace: this.emailNamespace,
             requireVerifiedEmail: this.unifyByEmail,
           });
           this.notify(unified);
-        })
+        }),
       );
     }
   }
@@ -101,33 +102,50 @@ export class UnifiedAuthManager {
    */
   async signIn(
     provider: SupportedAuthProvider,
-    credentials?: any
+    credentials?: any,
   ): Promise<UnifiedAuthUser | null> {
     let rawUser: any = null;
     let token: string | null = null;
     let refreshToken: string | null = null;
 
     if (provider === 'google') {
-      if (!this.google) throw new Error('GoogleAuthClient is not configured on UnifiedAuthManager.');
+      if (!this.google)
+        throw new Error(
+          'GoogleAuthClient is not configured on UnifiedAuthManager.',
+        );
       rawUser = await this.google.signIn();
       token = await this.google.getValidAccessToken().catch(() => null);
     } else if (provider === 'github') {
-      if (!this.github) throw new Error('GitHubAuthClient is not configured on UnifiedAuthManager.');
+      if (!this.github)
+        throw new Error(
+          'GitHubAuthClient is not configured on UnifiedAuthManager.',
+        );
       rawUser = await this.github.signIn();
       token = await this.github.getValidAccessToken().catch(() => null);
     } else if (provider === 'microsoft') {
-      if (!this.microsoft) throw new Error('MicrosoftAuthClient is not configured on UnifiedAuthManager.');
+      if (!this.microsoft)
+        throw new Error(
+          'MicrosoftAuthClient is not configured on UnifiedAuthManager.',
+        );
       rawUser = await this.microsoft.signIn();
       token = await this.microsoft.getValidAccessToken().catch(() => null);
     } else if (provider === 'apple') {
-      if (!this.apple) throw new Error('AppleAuthClient is not configured on UnifiedAuthManager.');
+      if (!this.apple)
+        throw new Error(
+          'AppleAuthClient is not configured on UnifiedAuthManager.',
+        );
       rawUser = await this.apple.signIn();
     } else if (provider === 'local') {
-      if (!this.local) throw new Error('LocalAuthEngine is not configured on UnifiedAuthManager.');
+      if (!this.local)
+        throw new Error(
+          'LocalAuthEngine is not configured on UnifiedAuthManager.',
+        );
       const identifier = credentials?.email || credentials?.identifier;
       const password = credentials?.password;
       if (!identifier || !password) {
-        throw new Error('Local authentication requires identifier/email and password credentials.');
+        throw new Error(
+          'Local authentication requires identifier/email and password credentials.',
+        );
       }
       const result = await this.local.signIn({ identifier, password });
       rawUser = result.user;
@@ -163,7 +181,8 @@ export class UnifiedAuthManager {
    */
   async getUser(): Promise<UnifiedAuthUser | null> {
     if (this.sessionManager) {
-      const session = await this.sessionManager.getActiveSession<UnifiedAuthUser>();
+      const session =
+        await this.sessionManager.getActiveSession<UnifiedAuthUser>();
       if (session?.user) return session.user;
     }
 

@@ -4,7 +4,11 @@ import { OutboxStore } from '../src/core/outbox-store.js';
 import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { MockDB } from './helpers/mock-db.js';
-import { useLiveRow, useLiveInfiniteQuery, useMutations } from '../src/react/index.js';
+import {
+  useLiveRow,
+  useLiveInfiniteQuery,
+  useMutations,
+} from '../src/react/index.js';
 import { SyncInspector } from '../src/devtools/index.js';
 
 describe('local-lite Architectural Enhancements', () => {
@@ -46,7 +50,10 @@ describe('local-lite Architectural Enhancements', () => {
       };
 
       const hydrated = client.hydrateRow('profiles', row);
-      expect(hydrated.preferences).toEqual({ theme: 'dark', notifications: true });
+      expect(hydrated.preferences).toEqual({
+        theme: 'dark',
+        notifications: true,
+      });
       expect(hydrated.tags).toEqual(['developer', 'admin']);
       expect(hydrated.name).toBe('Alice');
     });
@@ -85,9 +92,30 @@ describe('local-lite Architectural Enhancements', () => {
   describe('Multi-Row Outbox Batch Writes', () => {
     it('efficiently inserts multiple outbox records via OutboxStore.insertRecords', async () => {
       const ops = [
-        { id: 'op-1', tableName: 'items', rowId: 'r1', operation: 'INSERT' as const, payload: { val: 1 }, timestamp: 100 },
-        { id: 'op-2', tableName: 'items', rowId: 'r2', operation: 'UPDATE' as const, payload: { val: 2 }, timestamp: 101 },
-        { id: 'op-3', tableName: 'items', rowId: 'r3', operation: 'DELETE' as const, payload: {}, timestamp: 102 },
+        {
+          id: 'op-1',
+          tableName: 'items',
+          rowId: 'r1',
+          operation: 'INSERT' as const,
+          payload: { val: 1 },
+          timestamp: 100,
+        },
+        {
+          id: 'op-2',
+          tableName: 'items',
+          rowId: 'r2',
+          operation: 'UPDATE' as const,
+          payload: { val: 2 },
+          timestamp: 101,
+        },
+        {
+          id: 'op-3',
+          tableName: 'items',
+          rowId: 'r3',
+          operation: 'DELETE' as const,
+          payload: {},
+          timestamp: 102,
+        },
       ];
 
       await OutboxStore.insertRecords(db, ops);
@@ -95,7 +123,11 @@ describe('local-lite Architectural Enhancements', () => {
       const outbox = db.getAll('sync_outbox');
       expect(outbox).toHaveLength(3);
       expect(outbox.map((o) => o.id)).toEqual(['op-1', 'op-2', 'op-3']);
-      expect(outbox.map((o) => o.table_name)).toEqual(['items', 'items', 'items']);
+      expect(outbox.map((o) => o.table_name)).toEqual([
+        'items',
+        'items',
+        'items',
+      ]);
     });
   });
 
@@ -113,12 +145,16 @@ describe('local-lite Architectural Enhancements', () => {
 
       const fetchSpy = vi.spyOn(remote, 'fetchChanges');
       await client.syncWorker.pullRemoteChanges();
-      expect(fetchSpy).toHaveBeenLastCalledWith(0, { organization_id: 'org-initial' });
+      expect(fetchSpy).toHaveBeenLastCalledWith(0, {
+        organization_id: 'org-initial',
+      });
 
       // Update active organization
       activeOrg = 'org-updated';
       await client.syncWorker.pullRemoteChanges();
-      expect(fetchSpy).toHaveBeenLastCalledWith(expect.any(Number), { organization_id: 'org-updated' });
+      expect(fetchSpy).toHaveBeenLastCalledWith(expect.any(Number), {
+        organization_id: 'org-updated',
+      });
     });
   });
 
@@ -168,10 +204,22 @@ describe('local-lite Architectural Enhancements', () => {
 
   describe('Automatic Soft-Delete Omission', () => {
     beforeEach(async () => {
-      await client.insert('items', 'active-1', { name: 'Active 1', deleted: 0 });
-      await client.insert('items', 'active-2', { name: 'Active 2', deleted: null });
-      await client.insert('items', 'deleted-1', { name: 'Deleted 1', deleted: 1 });
-      await client.insert('items', 'deleted-2', { name: 'Deleted 2', deleted: true });
+      await client.insert('items', 'active-1', {
+        name: 'Active 1',
+        deleted: 0,
+      });
+      await client.insert('items', 'active-2', {
+        name: 'Active 2',
+        deleted: null,
+      });
+      await client.insert('items', 'deleted-1', {
+        name: 'Deleted 1',
+        deleted: 1,
+      });
+      await client.insert('items', 'deleted-2', {
+        name: 'Deleted 2',
+        deleted: true,
+      });
     });
 
     it('omits deleted: 1 and deleted: true records by default in findMany', async () => {
@@ -187,26 +235,45 @@ describe('local-lite Architectural Enhancements', () => {
     it('returns deleted records when includeDeleted: true or explicit deleted where is passed', async () => {
       const all = await client.findMany('items', { includeDeleted: true });
       expect(all.map((r: any) => r.id)).toEqual(
-        expect.arrayContaining(['active-1', 'active-2', 'deleted-1', 'deleted-2'])
+        expect.arrayContaining([
+          'active-1',
+          'active-2',
+          'deleted-1',
+          'deleted-2',
+        ]),
       );
 
-      const onlyDeleted = await client.findMany('items', { where: { deleted: 1 } });
+      const onlyDeleted = await client.findMany('items', {
+        where: { deleted: 1 },
+      });
       expect(onlyDeleted.map((r: any) => r.id)).toContain('deleted-1');
     });
 
     it('omits deleted records in findById and findByIds by default', async () => {
       expect(await client.findById('items', 'deleted-1')).toBeNull();
-      expect(await client.findById('items', 'deleted-1', { includeDeleted: true })).toMatchObject({
+      expect(
+        await client.findById('items', 'deleted-1', { includeDeleted: true }),
+      ).toMatchObject({
         id: 'deleted-1',
       });
 
-      const batched = await client.findByIds('items', ['active-1', 'deleted-1']);
+      const batched = await client.findByIds('items', [
+        'active-1',
+        'deleted-1',
+      ]);
       expect(batched.map((r: any) => r.id)).toEqual(['active-1']);
 
-      const batchedWithDeleted = await client.findByIds('items', ['active-1', 'deleted-1'], {
-        includeDeleted: true,
-      });
-      expect(batchedWithDeleted.map((r: any) => r.id)).toEqual(['active-1', 'deleted-1']);
+      const batchedWithDeleted = await client.findByIds(
+        'items',
+        ['active-1', 'deleted-1'],
+        {
+          includeDeleted: true,
+        },
+      );
+      expect(batchedWithDeleted.map((r: any) => r.id)).toEqual([
+        'active-1',
+        'deleted-1',
+      ]);
     });
   });
 

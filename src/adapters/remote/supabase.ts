@@ -1,6 +1,16 @@
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
-import { RemoteAutomationJob, RemoteBackupArchive, RemoteDBAdapter } from './index.js';
-import { DeltaChange, DeltaChanges, PushResult, SyncOp, SyncOperation } from '../../core/types.js';
+import {
+  RemoteAutomationJob,
+  RemoteBackupArchive,
+  RemoteDBAdapter,
+} from './index.js';
+import {
+  DeltaChange,
+  DeltaChanges,
+  PushResult,
+  SyncOp,
+  SyncOperation,
+} from '../../core/types.js';
 import {
   SyncLogger,
   CustomLogger,
@@ -111,7 +121,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
   constructor(
     clientOrOptions?: SupabaseClientResolver | SupabaseAdapterOptions,
-    maybeOptions: SupabaseAdapterOptions = {}
+    maybeOptions: SupabaseAdapterOptions = {},
   ) {
     let client: SupabaseClientResolver;
     let options: SupabaseAdapterOptions;
@@ -138,7 +148,8 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.updatedAtColumn = options.updatedAtColumn ?? 'updated_at';
     this.primaryKey = options.primaryKey ?? 'id';
     this.deletedColumn = options.deletedColumn ?? 'deleted';
-    this.deletedValue = options.deletedValue !== undefined ? options.deletedValue : true;
+    this.deletedValue =
+      options.deletedValue !== undefined ? options.deletedValue : true;
     this.pushRpcName = options.pushRpcName;
     this.schema = options.schema ?? 'public';
     this.channelName = options.channelName ?? 'local_first_sync';
@@ -176,14 +187,22 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     this.clientResolver = client;
     const newClient = this.getClient();
 
-    if (this.activeChannel && previousClient?.removeChannel && previousClient !== newClient) {
+    if (
+      this.activeChannel &&
+      previousClient?.removeChannel &&
+      previousClient !== newClient
+    ) {
       try {
         previousClient.removeChannel(this.activeChannel);
       } catch {}
       this.activeChannel = undefined;
     }
 
-    if (this.activeLiveCallback && newClient && typeof newClient.channel === 'function') {
+    if (
+      this.activeLiveCallback &&
+      newClient &&
+      typeof newClient.channel === 'function'
+    ) {
       this.subscribeToLiveChanges(this.activeLiveCallback);
     }
   }
@@ -198,14 +217,18 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes outbox operations to Supabase.
    */
-  async pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult> {
+  async pushChanges(
+    operations: SyncOperation[],
+  ): Promise<boolean | PushResult> {
     if (!operations || operations.length === 0) {
       return true;
     }
 
     const client = this.getClient();
     if (!client) {
-      this.logger.debug('Supabase client is not available; skipping remote push.');
+      this.logger.debug(
+        'Supabase client is not available; skipping remote push.',
+      );
       return false;
     }
 
@@ -223,7 +246,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       });
 
       if (error) {
-        this.logger.error(formatSupabaseError(error, { operation: 'batch_rpc' }));
+        this.logger.error(
+          formatSupabaseError(error, { operation: 'batch_rpc' }),
+        );
         return false;
       }
       return true;
@@ -255,7 +280,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             const rowData = this.buildRowData(batch[0]);
             const { error } = await client.from(op.tableName).upsert(rowData);
             if (error) {
-              const msg = formatSupabaseError(error, { table: op.tableName, operation: 'INSERT' });
+              const msg = formatSupabaseError(error, {
+                table: op.tableName,
+                operation: 'INSERT',
+              });
               this.logger.error(msg);
               failedIds.push(batch[0].id);
               errors[batch[0].id] = msg;
@@ -263,7 +291,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               successfulIds.push(batch[0].id);
             }
           } catch (err: any) {
-            const msg = formatSupabaseError(err, { table: op.tableName, operation: 'INSERT' });
+            const msg = formatSupabaseError(err, {
+              table: op.tableName,
+              operation: 'INSERT',
+            });
             this.logger.error(msg);
             failedIds.push(batch[0].id);
             errors[batch[0].id] = msg;
@@ -274,16 +305,24 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             for (const item of batch) {
               try {
                 const singleRow = this.buildRowData(item);
-                const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
+                const { error: singleErr } = await client
+                  .from(op.tableName)
+                  .upsert(singleRow);
                 if (singleErr) {
-                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
+                  const msg = formatSupabaseError(singleErr, {
+                    table: op.tableName,
+                    operation: 'INSERT',
+                  });
                   failedIds.push(item.id);
                   errors[item.id] = msg;
                 } else {
                   successfulIds.push(item.id);
                 }
               } catch (singleErr: any) {
-                const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'INSERT' });
+                const msg = formatSupabaseError(singleErr, {
+                  table: op.tableName,
+                  operation: 'INSERT',
+                });
                 failedIds.push(item.id);
                 errors[item.id] = msg;
               }
@@ -332,7 +371,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               .eq(this.primaryKey, op.rowId);
 
             if (error) {
-              const msg = formatSupabaseError(error, { table: op.tableName, operation: 'DELETE' });
+              const msg = formatSupabaseError(error, {
+                table: op.tableName,
+                operation: 'DELETE',
+              });
               this.logger.error(msg);
               failedIds.push(op.id);
               errors[op.id] = msg;
@@ -340,7 +382,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               successfulIds.push(op.id);
             }
           } catch (err: any) {
-            const msg = formatSupabaseError(err, { table: op.tableName, operation: 'DELETE' });
+            const msg = formatSupabaseError(err, {
+              table: op.tableName,
+              operation: 'DELETE',
+            });
             this.logger.error(msg);
             failedIds.push(op.id);
             errors[op.id] = msg;
@@ -365,14 +410,20 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
                     .update(patch)
                     .eq(this.primaryKey, item.rowId);
                   if (singleErr) {
-                    const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'DELETE' });
+                    const msg = formatSupabaseError(singleErr, {
+                      table: op.tableName,
+                      operation: 'DELETE',
+                    });
                     failedIds.push(item.id);
                     errors[item.id] = msg;
                   } else {
                     successfulIds.push(item.id);
                   }
                 } catch (singleErr: any) {
-                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'DELETE' });
+                  const msg = formatSupabaseError(singleErr, {
+                    table: op.tableName,
+                    operation: 'DELETE',
+                  });
                   failedIds.push(item.id);
                   errors[item.id] = msg;
                 }
@@ -408,14 +459,22 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               .select(this.primaryKey);
 
             if (error) {
-              const msg = formatSupabaseError(error, { table: op.tableName, operation: 'UPDATE' });
+              const msg = formatSupabaseError(error, {
+                table: op.tableName,
+                operation: 'UPDATE',
+              });
               this.logger.error(msg);
               failedIds.push(item.id);
               errors[item.id] = msg;
             } else if (!data || data.length === 0) {
-              const { error: upsertErr } = await client.from(op.tableName).upsert(patch);
+              const { error: upsertErr } = await client
+                .from(op.tableName)
+                .upsert(patch);
               if (upsertErr) {
-                const msg = formatSupabaseError(upsertErr, { table: op.tableName, operation: 'UPSERT_FALLBACK' });
+                const msg = formatSupabaseError(upsertErr, {
+                  table: op.tableName,
+                  operation: 'UPSERT_FALLBACK',
+                });
                 this.logger.error(msg);
                 failedIds.push(item.id);
                 errors[item.id] = msg;
@@ -426,7 +485,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               successfulIds.push(item.id);
             }
           } catch (err: any) {
-            const msg = formatSupabaseError(err, { table: op.tableName, operation: 'UPDATE' });
+            const msg = formatSupabaseError(err, {
+              table: op.tableName,
+              operation: 'UPDATE',
+            });
             this.logger.error(msg);
             failedIds.push(item.id);
             errors[item.id] = msg;
@@ -443,16 +505,24 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
               for (const item of batch) {
                 try {
                   const singleRow = this.buildRowData(item);
-                  const { error: singleErr } = await client.from(op.tableName).upsert(singleRow);
+                  const { error: singleErr } = await client
+                    .from(op.tableName)
+                    .upsert(singleRow);
                   if (singleErr) {
-                    const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'UPDATE' });
+                    const msg = formatSupabaseError(singleErr, {
+                      table: op.tableName,
+                      operation: 'UPDATE',
+                    });
                     failedIds.push(item.id);
                     errors[item.id] = msg;
                   } else {
                     successfulIds.push(item.id);
                   }
                 } catch (singleErr: any) {
-                  const msg = formatSupabaseError(singleErr, { table: op.tableName, operation: 'UPDATE' });
+                  const msg = formatSupabaseError(singleErr, {
+                    table: op.tableName,
+                    operation: 'UPDATE',
+                  });
                   failedIds.push(item.id);
                   errors[item.id] = msg;
                 }
@@ -486,10 +556,15 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Fetches delta changes from Supabase since a given timestamp.
    * Reads updated records and checks `deleted: true` to propagate soft deletes.
    */
-  async fetchChanges(sinceTimestamp: number, scope?: Record<string, any>): Promise<DeltaChanges> {
+  async fetchChanges(
+    sinceTimestamp: number,
+    scope?: Record<string, any>,
+  ): Promise<DeltaChanges> {
     const client = this.getClient();
     if (!client) {
-      this.logger.debug('Supabase client is not available; skipping fetchChanges.');
+      this.logger.debug(
+        'Supabase client is not available; skipping fetchChanges.',
+      );
       return {
         timestamp: sinceTimestamp,
         changes: [],
@@ -497,11 +572,13 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     }
 
     const changes: DeltaChange[] = [];
-    const sinceIso = sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : null;
+    const sinceIso =
+      sinceTimestamp > 0 ? new Date(sinceTimestamp).toISOString() : null;
     let maxServerTimestamp = sinceTimestamp;
 
     const fetchTableDeltas = async (table: string): Promise<DeltaChange[]> => {
-      const isTableScoped = !this.scopedTables || this.scopedTables.includes(table);
+      const isTableScoped =
+        !this.scopedTables || this.scopedTables.includes(table);
       const tableChanges: DeltaChange[] = [];
       let hasMore = true;
       let currentSinceIso = sinceIso;
@@ -511,7 +588,11 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
         if (isTableScoped && scope && typeof scope === 'object') {
           for (const [col, val] of Object.entries(scope)) {
-            if (val !== undefined && val !== null && typeof query.eq === 'function') {
+            if (
+              val !== undefined &&
+              val !== null &&
+              typeof query.eq === 'function'
+            ) {
               query = query.eq(col, val);
             }
           }
@@ -535,18 +616,24 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         // gracefully fallback to querying without the scope filter so synchronization doesn't halt.
         if (
           error &&
-          (error.code === '42703' || String(error.message || '').includes('does not exist')) &&
+          (error.code === '42703' ||
+            String(error.message || '').includes('does not exist')) &&
           isTableScoped
         ) {
           this.logger.debug(
-            `[local-lite] Column in scope does not exist on table "${table}". Retrying without scope filter.`
+            `[local-lite] Column in scope does not exist on table "${table}". Retrying without scope filter.`,
           );
           let fallbackQuery = client.from(table).select('*');
           if (currentSinceIso) {
-            fallbackQuery = fallbackQuery.gt(this.updatedAtColumn, currentSinceIso);
+            fallbackQuery = fallbackQuery.gt(
+              this.updatedAtColumn,
+              currentSinceIso,
+            );
           }
           if (typeof fallbackQuery.order === 'function') {
-            fallbackQuery = fallbackQuery.order(this.updatedAtColumn, { ascending: true });
+            fallbackQuery = fallbackQuery.order(this.updatedAtColumn, {
+              ascending: true,
+            });
           }
           if (typeof fallbackQuery.limit === 'function') {
             fallbackQuery = fallbackQuery.limit(this.fetchLimit);
@@ -578,7 +665,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           }
 
           // Stop paging if unpaginated query or fewer rows than limit returned
-          if (typeof query.limit !== 'function' || data.length < this.fetchLimit) {
+          if (
+            typeof query.limit !== 'function' ||
+            data.length < this.fetchLimit
+          ) {
             hasMore = false;
           } else {
             const lastRow = data[data.length - 1];
@@ -609,18 +699,24 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             return await fetchTableDeltas(table);
           } catch (err: any) {
             const msg = formatSupabaseError(err, { table, operation: 'PULL' });
-            if (msg.includes('Network Offline') || msg.includes('Failed to reach')) {
+            if (
+              msg.includes('Network Offline') ||
+              msg.includes('Failed to reach')
+            ) {
               this.logger.warn(msg);
             } else {
               this.logger.error(msg);
             }
             throw err;
           }
-        })
+        }),
       );
       for (const tableChanges of results) {
         for (const change of tableChanges) {
-          if (change.timestamp !== undefined && change.timestamp > maxServerTimestamp) {
+          if (
+            change.timestamp !== undefined &&
+            change.timestamp > maxServerTimestamp
+          ) {
             maxServerTimestamp = change.timestamp;
           }
           changes.push(change);
@@ -652,11 +748,16 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   /**
    * Helper to determine if a record represents a soft delete.
    */
-  private isSoftDeleted(record: Record<string, any> | null | undefined): boolean {
+  private isSoftDeleted(
+    record: Record<string, any> | null | undefined,
+  ): boolean {
     if (!record) return false;
     const val = record[this.deletedColumn];
     if (val === true || val === 1) return true;
-    if (val && !['false', '0', 'null', 'undefined'].includes(String(val).toLowerCase())) {
+    if (
+      val &&
+      !['false', '0', 'null', 'undefined'].includes(String(val).toLowerCase())
+    ) {
       return true;
     }
     return false;
@@ -666,7 +767,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Subscribes to live realtime postgres_changes from Supabase.
    * Batches rapid burst events in the same microtask turn into a single SQLite sync transaction.
    */
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
+  subscribeToLiveChanges(
+    callback: (changes: DeltaChanges) => void,
+  ): () => void {
     this.activeLiveCallback = callback;
     const client = this.getClient();
 
@@ -689,7 +792,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     }
 
     if (!client || typeof client.channel !== 'function') {
-      this.logger.debug('Supabase client is not available; skipping live changes subscription.');
+      this.logger.debug(
+        'Supabase client is not available; skipping live changes subscription.',
+      );
       return () => {
         this.activeLiveCallback = undefined;
         this.destroy();
@@ -712,7 +817,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       if (pendingLiveChanges.length === 0) return;
       const toSend = pendingLiveChanges;
       pendingLiveChanges = [];
-      const maxTimestamp = Math.max(...toSend.map((c) => c.timestamp || 0), Date.now());
+      const maxTimestamp = Math.max(
+        ...toSend.map((c) => c.timestamp || 0),
+        Date.now(),
+      );
       callback({
         timestamp: maxTimestamp,
         changes: toSend,
@@ -756,7 +864,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
             isScheduled = true;
             scheduleFlush(flushLiveChanges);
           }
-        }
+        },
       );
     }
 
@@ -792,7 +900,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Helper to create a remote storage uploader targeting Supabase Storage buckets.
    * Connects local-lite offline blob/file storage directly to Supabase Storage.
    */
-  createStorageUploader(options: SupabaseStorageUploaderOptions): SupabaseStorageUploaderInstance {
+  createStorageUploader(
+    options: SupabaseStorageUploaderOptions,
+  ): SupabaseStorageUploaderInstance {
     return createSupabaseStorageUploader(this.getClient(), options);
   }
 
@@ -805,7 +915,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
 
     if (typeof client.functions?.invoke === 'function') {
       try {
-        const { data, error } = await client.functions.invoke(functionName, { body: args });
+        const { data, error } = await client.functions.invoke(functionName, {
+          body: args,
+        });
         if (!error) return data as T;
         if (error?.status !== 404 && !error?.message?.includes?.('not found')) {
           throw error;
@@ -824,7 +936,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       return data as T;
     }
 
-    throw new Error('Supabase client does not support functions or rpc invocation.');
+    throw new Error(
+      'Supabase client does not support functions or rpc invocation.',
+    );
   }
 
   /**
@@ -851,7 +965,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
    * Enables or disables an automated cron job on Supabase.
    */
   async setAutomationEnabled(jobId: string, enabled: boolean): Promise<void> {
-    return this.call<void>('set_automation_enabled', { job_id: jobId, enabled });
+    return this.call<void>('set_automation_enabled', {
+      job_id: jobId,
+      enabled,
+    });
   }
 
   /**
@@ -864,7 +981,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         const { data, error } = await client.storage.from('backups').list();
         if (!error && Array.isArray(data)) {
           return data.map((file: any) => ({
-            createdAt: new Date(file.created_at || file.updated_at || Date.now()).getTime(),
+            createdAt: new Date(
+              file.created_at || file.updated_at || Date.now(),
+            ).getTime(),
             status: 'succeeded',
             fileName: file.name,
             sizeBytes: file.metadata?.size,
@@ -882,7 +1001,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   async getDownloadUrl(fileIdOrKey: string): Promise<string | null> {
     const client = this.getClient();
     if (typeof client?.storage?.from === 'function') {
-      const { data } = await client.storage.from('backups').createSignedUrl(fileIdOrKey, 3600);
+      const { data } = await client.storage
+        .from('backups')
+        .createSignedUrl(fileIdOrKey, 3600);
       return data?.signedUrl ?? null;
     }
     return null;

@@ -1,4 +1,8 @@
-import { BlobRecord, RemoteStorageUploader, RemoteStorageUploadResult } from './types.js';
+import {
+  BlobRecord,
+  RemoteStorageUploader,
+  RemoteStorageUploadResult,
+} from './types.js';
 
 export interface ConvexStorageUploaderOptions {
   /**
@@ -10,7 +14,8 @@ export interface ConvexStorageUploaderOptions {
   /**
    * Optional arguments passed to uploadMutation.
    */
-  uploadMutationArgs?: Record<string, any> | ((blob: BlobRecord) => Record<string, any>);
+  uploadMutationArgs?:
+    Record<string, any> | ((blob: BlobRecord) => Record<string, any>);
 
   /**
    * Optional name or function reference for Convex query that gets a serving URL from a storageId.
@@ -51,22 +56,30 @@ export interface ConvexStorageUploaderInstance extends RemoteStorageUploader {
  */
 export function createConvexStorageUploader(
   convex: any,
-  options: ConvexStorageUploaderOptions = {}
+  options: ConvexStorageUploaderOptions = {},
 ): ConvexStorageUploaderInstance {
   const uploadMutation = options.uploadMutation ?? 'sync:generateUploadUrl';
-  const fetchFn = options.fetchFn ?? (typeof fetch !== 'undefined' ? fetch : undefined);
+  const fetchFn =
+    options.fetchFn ?? (typeof fetch !== 'undefined' ? fetch : undefined);
 
   if (!convex) {
-    throw new Error('Convex client must be provided to createConvexStorageUploader.');
+    throw new Error(
+      'Convex client must be provided to createConvexStorageUploader.',
+    );
   }
 
   // Cache of key/storageId mapping
   const storageIdMap = new Map<string, string>();
 
   return {
-    async upload(blob: BlobRecord, data: Uint8Array): Promise<RemoteStorageUploadResult> {
+    async upload(
+      blob: BlobRecord,
+      data: Uint8Array,
+    ): Promise<RemoteStorageUploadResult> {
       if (!fetchFn) {
-        throw new Error('Fetch API is not available in the current environment.');
+        throw new Error(
+          'Fetch API is not available in the current environment.',
+        );
       }
 
       // 1. Generate upload URL via mutation
@@ -85,7 +98,9 @@ export function createConvexStorageUploader(
       }
 
       if (!postUrl || typeof postUrl !== 'string') {
-        throw new Error(`Convex generateUploadUrl mutation did not return a valid URL: ${JSON.stringify(postUrl)}`);
+        throw new Error(
+          `Convex generateUploadUrl mutation did not return a valid URL: ${JSON.stringify(postUrl)}`,
+        );
       }
 
       // 2. POST binary data to upload URL
@@ -98,14 +113,19 @@ export function createConvexStorageUploader(
       });
 
       if (!response.ok) {
-        throw new Error(`Convex file upload failed with status ${response.status}: ${response.statusText}`);
+        throw new Error(
+          `Convex file upload failed with status ${response.status}: ${response.statusText}`,
+        );
       }
 
       const jsonResult = await response.json();
-      const storageId: string = jsonResult?.storageId || jsonResult?.id || jsonResult;
+      const storageId: string =
+        jsonResult?.storageId || jsonResult?.id || jsonResult;
 
       if (!storageId) {
-        throw new Error('Convex upload response did not contain a valid storageId.');
+        throw new Error(
+          'Convex upload response did not contain a valid storageId.',
+        );
       }
 
       storageIdMap.set(blob.key, storageId);

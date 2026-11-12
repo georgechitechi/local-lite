@@ -9,7 +9,10 @@ export class SearchStore {
   /**
    * Ensures the FTS5 virtual table exists for the given table and columns.
    */
-  static async ensureFtsTable(db: DBExecutable, config: SearchIndexConfig): Promise<void> {
+  static async ensureFtsTable(
+    db: DBExecutable,
+    config: SearchIndexConfig,
+  ): Promise<void> {
     const ftsTable = getFtsTableName(config.table);
     const cols = config.columns.map((c) => c.trim()).filter(Boolean);
     const tokenize = config.tokenize || 'unicode61';
@@ -37,7 +40,7 @@ export class SearchStore {
     table: string,
     rowId: string,
     columns: string[],
-    values: Record<string, any>
+    values: Record<string, any>,
   ): Promise<void> {
     const ftsTable = getFtsTableName(table);
 
@@ -58,14 +61,18 @@ export class SearchStore {
 
     await db.execute(
       `INSERT INTO ${ftsTable} (${cols.join(', ')}) VALUES (${placeholders});`,
-      params
+      params,
     );
   }
 
   /**
    * Removes a single row from the FTS table.
    */
-  static async removeRow(db: DBExecutable, table: string, rowId: string): Promise<void> {
+  static async removeRow(
+    db: DBExecutable,
+    table: string,
+    rowId: string,
+  ): Promise<void> {
     const ftsTable = getFtsTableName(table);
     await db.execute(`DELETE FROM ${ftsTable} WHERE row_id = ?;`, [rowId]);
   }
@@ -86,7 +93,7 @@ export class SearchStore {
     table: string,
     columns: string[],
     queryText: string,
-    options: SearchQueryOptions = {}
+    options: SearchQueryOptions = {},
   ): Promise<Array<{ rowId: string; rank: number; snippet?: string }>> {
     const ftsTable = getFtsTableName(table);
     const limit = options.limit ?? 20;
@@ -133,7 +140,10 @@ export class SearchStore {
       }));
     } catch (err: any) {
       // In case snippet() function is unavailable in the environment, fallback to rank-only search
-      if (err?.message?.includes('snippet') || err?.message?.includes('no such function')) {
+      if (
+        err?.message?.includes('snippet') ||
+        err?.message?.includes('no such function')
+      ) {
         const fallbackSql = `
           SELECT row_id, rank
           FROM ${ftsTable}

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   AppleAuthClient,
   createAppleAuthTokenStore,
@@ -14,7 +14,8 @@ describe('AppleAuthClient', () => {
     name: 'Jane Doe',
     givenName: 'Jane',
     familyName: 'Doe',
-    identityToken: 'header.eyJzdWIiOiJhcHBsZS11c2VyLTAwMSIsImVtYWlsIjoicGFyZW50QHByaXZhdGVyZWxheS5hcHBsZWlkLmNvbSJ9.sig',
+    identityToken:
+      'header.eyJzdWIiOiJhcHBsZS11c2VyLTAwMSIsImVtYWlsIjoicGFyZW50QHByaXZhdGVyZWxheS5hcHBsZWlkLmNvbSJ9.sig',
   };
 
   it('signs in with native Apple credential (iOS / expo-apple-authentication)', async () => {
@@ -23,13 +24,14 @@ describe('AppleAuthClient', () => {
       clientId: 'com.example.app',
     });
 
-    client.onAuthStateChange(user => authEvents.push(user));
+    client.onAuthStateChange((user) => authEvents.push(user));
 
     const user = await client.signIn({
       user: 'apple-user-001',
       email: 'parent@privaterelay.appleid.com',
       fullName: { givenName: 'Jane', familyName: 'Doe' },
-      identityToken: 'header.eyJzdWIiOiJhcHBsZS11c2VyLTAwMSIsImVtYWlsIjoicGFyZW50QHByaXZhdGVyZWxheS5hcHBsZWlkLmNvbSJ9.signature',
+      identityToken:
+        'header.eyJzdWIiOiJhcHBsZS11c2VyLTAwMSIsImVtYWlsIjoicGFyZW50QHByaXZhdGVyZWxheS5hcHBsZWlkLmNvbSJ9.signature',
       authorizationCode: 'auth-code-apple',
     });
 
@@ -49,10 +51,11 @@ describe('AppleAuthClient', () => {
     const client = new AppleAuthClient({
       clientId: 'com.example.service',
       redirectUri: 'https://example.com/oauth/apple',
-      authorize: async req => {
+      authorize: async (req) => {
         authUrl = req.authorizationUrl;
         return {
-          id_token: 'header.eyJzdWIiOiJhcHBsZS11c2VyLTk5OSIsImVtYWlsIjoidXNlckBleGFtcGxlLmNvbSJ9.signature',
+          id_token:
+            'header.eyJzdWIiOiJhcHBsZS11c2VyLTk5OSIsImVtYWlsIjoidXNlckBleGFtcGxlLmNvbSJ9.signature',
           state: req.state,
           user: { name: { firstName: 'Taylor', lastName: 'Swift' } },
         };
@@ -86,11 +89,11 @@ describe('AppleAuthClient', () => {
   it('persists tokens and user info via key-value storage adapter', async () => {
     const memory = new Map<string, unknown>();
     const storage: AppleAuthKeyValueStorage = {
-      getItem: async key => memory.get(key) ?? null,
+      getItem: async (key) => memory.get(key) ?? null,
       setItem: async (key, val) => {
         memory.set(key, val);
       },
-      removeItem: async key => {
+      removeItem: async (key) => {
         memory.delete(key);
       },
     };
@@ -99,7 +102,9 @@ describe('AppleAuthClient', () => {
     await store.setTokens({ idToken: 'token-apple-123' });
     await store.setUser(sampleUser);
 
-    expect(await store.getTokens()).toMatchObject({ idToken: 'token-apple-123' });
+    expect(await store.getTokens()).toMatchObject({
+      idToken: 'token-apple-123',
+    });
     expect(await store.getUser()).toEqual(sampleUser);
 
     await store.removeTokens();

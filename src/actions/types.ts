@@ -19,7 +19,8 @@ export interface ActionDefinition<TPayload = any, TResult = any> {
   defaultTtlMs?: number;
 }
 
-export type ActionStatus = 'PENDING' | 'EXECUTING' | 'COMPLETED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+export type ActionStatus =
+  'PENDING' | 'EXECUTING' | 'COMPLETED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
 
 export interface ActionRecord<TPayload = any, TResult = any> {
   id: string;
@@ -52,7 +53,7 @@ export interface ActionHandlerContext {
 
 export type ActionHandler<TPayload = any, TResult = any> = (
   action: ActionRecord<TPayload, TResult>,
-  context: ActionHandlerContext
+  context: ActionHandlerContext,
 ) => Promise<TResult | void> | TResult | void;
 
 export interface ActionFilterOptions {
@@ -135,10 +136,13 @@ export interface SendEmailOptions extends EmailPayload {
   maxRetries?: number;
 }
 
-export type EmailHandlerResult = { messageId?: string; [key: string]: any } | void;
+export type EmailHandlerResult = {
+  messageId?: string;
+  [key: string]: any;
+} | void;
 
 export type EmailHandler = (
   email: EmailPayload,
   action: ActionRecord<EmailPayload, any>,
-  context: ActionHandlerContext
+  context: ActionHandlerContext,
 ) => Promise<EmailHandlerResult> | EmailHandlerResult;

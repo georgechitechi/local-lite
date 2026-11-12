@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { BlobRecord, RemoteStorageUploader, RemoteStorageUploadResult } from './types.js';
+import {
+  BlobRecord,
+  RemoteStorageUploader,
+  RemoteStorageUploadResult,
+} from './types.js';
 
 export interface SupabaseStorageUploaderOptions {
   /**
@@ -51,7 +55,7 @@ export interface SupabaseStorageUploaderInstance extends RemoteStorageUploader {
  */
 export function createSupabaseStorageUploader(
   supabase: SupabaseClient | any,
-  options: SupabaseStorageUploaderOptions
+  options: SupabaseStorageUploaderOptions,
 ): SupabaseStorageUploaderInstance {
   const bucketName = options.bucket;
 
@@ -73,7 +77,10 @@ export function createSupabaseStorageUploader(
   };
 
   return {
-    async upload(blob: BlobRecord, data: Uint8Array): Promise<RemoteStorageUploadResult> {
+    async upload(
+      blob: BlobRecord,
+      data: Uint8Array,
+    ): Promise<RemoteStorageUploadResult> {
       const bucket = getBucket();
       const remotePath = resolveRemotePath(blob.key, blob);
 
@@ -89,19 +96,17 @@ export function createSupabaseStorageUploader(
       const { error } = await bucket.upload(remotePath, data, uploadOptions);
       if (error) {
         throw new Error(
-          `Supabase Storage upload failed for "${remotePath}": ${error.message || JSON.stringify(error)}`
+          `Supabase Storage upload failed for "${remotePath}": ${error.message || JSON.stringify(error)}`,
         );
       }
 
       if (options.urlType === 'signed') {
         const expiresIn = options.signedUrlExpiresIn ?? 86400;
-        const { data: signedData, error: signedErr } = await bucket.createSignedUrl(
-          remotePath,
-          expiresIn
-        );
+        const { data: signedData, error: signedErr } =
+          await bucket.createSignedUrl(remotePath, expiresIn);
         if (signedErr || !signedData?.signedUrl) {
           throw new Error(
-            `Failed to create signed URL for "${remotePath}": ${signedErr?.message || 'unknown error'}`
+            `Failed to create signed URL for "${remotePath}": ${signedErr?.message || 'unknown error'}`,
           );
         }
         return { remoteUrl: signedData.signedUrl };
@@ -118,13 +123,19 @@ export function createSupabaseStorageUploader(
       return data.publicUrl;
     },
 
-    async createSignedUrl(keyOrPath: string, expiresIn: number = 86400): Promise<string> {
+    async createSignedUrl(
+      keyOrPath: string,
+      expiresIn: number = 86400,
+    ): Promise<string> {
       const bucket = getBucket();
       const remotePath = resolveRemotePath(keyOrPath);
-      const { data, error } = await bucket.createSignedUrl(remotePath, expiresIn);
+      const { data, error } = await bucket.createSignedUrl(
+        remotePath,
+        expiresIn,
+      );
       if (error || !data?.signedUrl) {
         throw new Error(
-          `Failed to create signed URL for "${remotePath}": ${error?.message || 'unknown error'}`
+          `Failed to create signed URL for "${remotePath}": ${error?.message || 'unknown error'}`,
         );
       }
       return data.signedUrl;
@@ -143,7 +154,9 @@ export function createSupabaseStorageUploader(
       if (typeof bucket.remove === 'function') {
         const { error } = await bucket.remove([remotePath]);
         if (error) {
-          throw new Error(`Failed to delete "${remotePath}" from Supabase Storage: ${error.message}`);
+          throw new Error(
+            `Failed to delete "${remotePath}" from Supabase Storage: ${error.message}`,
+          );
         }
       }
     },

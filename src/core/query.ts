@@ -1,4 +1,9 @@
-import { ComparisonOperator, FieldFilter, QueryOptions, WhereFilter } from './types.js';
+import {
+  ComparisonOperator,
+  FieldFilter,
+  QueryOptions,
+  WhereFilter,
+} from './types.js';
 
 /**
  * Checks whether a single field value matches a field filter condition.
@@ -54,11 +59,27 @@ export function matchesField(fieldValue: any, filter: FieldFilter): boolean {
     return false;
   }
 
-  if (ops.$contains !== undefined || ops.$startsWith !== undefined || ops.$endsWith !== undefined) {
+  if (
+    ops.$contains !== undefined ||
+    ops.$startsWith !== undefined ||
+    ops.$endsWith !== undefined
+  ) {
     const str = fieldValue == null ? '' : String(fieldValue).toLowerCase();
-    if (ops.$contains !== undefined && !str.includes(String(ops.$contains).toLowerCase())) return false;
-    if (ops.$startsWith !== undefined && !str.startsWith(String(ops.$startsWith).toLowerCase())) return false;
-    if (ops.$endsWith !== undefined && !str.endsWith(String(ops.$endsWith).toLowerCase())) return false;
+    if (
+      ops.$contains !== undefined &&
+      !str.includes(String(ops.$contains).toLowerCase())
+    )
+      return false;
+    if (
+      ops.$startsWith !== undefined &&
+      !str.startsWith(String(ops.$startsWith).toLowerCase())
+    )
+      return false;
+    if (
+      ops.$endsWith !== undefined &&
+      !str.endsWith(String(ops.$endsWith).toLowerCase())
+    )
+      return false;
   }
 
   if (ops.$null !== undefined) {
@@ -74,7 +95,10 @@ export function matchesField(fieldValue: any, filter: FieldFilter): boolean {
 /**
  * Evaluates whether a given row matches a WhereFilter.
  */
-export function matchesWhere(row: Record<string, any>, where?: WhereFilter): boolean {
+export function matchesWhere(
+  row: Record<string, any>,
+  where?: WhereFilter,
+): boolean {
   if (!where) return true;
 
   if (typeof where === 'function') {
@@ -89,7 +113,9 @@ export function matchesWhere(row: Record<string, any>, where?: WhereFilter): boo
 
   // Handle $and combinator
   if ('$and' in where && Array.isArray(where.$and)) {
-    const andMatches = where.$and.every((subWhere) => matchesWhere(row, subWhere));
+    const andMatches = where.$and.every((subWhere) =>
+      matchesWhere(row, subWhere),
+    );
     if (!andMatches) return false;
   }
 
@@ -124,18 +150,30 @@ export function hasExplicitDeletedFilter(where?: WhereFilter): boolean {
 /**
  * Applies in-memory filtering, sorting, offset, and limit to an array of rows.
  */
-export function applyQueryOptions<T = any>(rows: T[], options?: QueryOptions): T[] {
+export function applyQueryOptions<T = any>(
+  rows: T[],
+  options?: QueryOptions,
+): T[] {
   if (!rows || rows.length === 0) return [];
 
-  const needsDeleteFilter = !options?.includeDeleted && !hasExplicitDeletedFilter(options?.where);
+  const needsDeleteFilter =
+    !options?.includeDeleted && !hasExplicitDeletedFilter(options?.where);
   const needsWhere = Boolean(options?.where);
   const needsSort = Boolean(options?.orderBy);
-  const needsSlice = (options?.offset !== undefined && options.offset > 0) ||
-                     (options?.limit !== undefined && options.limit > 0);
-  const needsSelect = Array.isArray(options?.select) && (options!.select as string[]).length > 0;
+  const needsSlice =
+    (options?.offset !== undefined && options.offset > 0) ||
+    (options?.limit !== undefined && options.limit > 0);
+  const needsSelect =
+    Array.isArray(options?.select) && (options!.select as string[]).length > 0;
 
   // Fast-path: nothing to do
-  if (!needsDeleteFilter && !needsWhere && !needsSort && !needsSlice && !needsSelect) {
+  if (
+    !needsDeleteFilter &&
+    !needsWhere &&
+    !needsSort &&
+    !needsSlice &&
+    !needsSelect
+  ) {
     return rows;
   }
 
@@ -168,15 +206,19 @@ export function applyQueryOptions<T = any>(rows: T[], options?: QueryOptions): T
       if (typeof valA === 'number' && typeof valB === 'number') {
         return isAsc ? valA - valB : valB - valA;
       }
-      return isAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+      return isAsc ? (valA > valB ? 1 : -1) : valA < valB ? 1 : -1;
     });
   }
 
   // 3. Offset and Limit
   if (needsSlice) {
     const offset = options?.offset && options.offset > 0 ? options.offset : 0;
-    const limit = options?.limit && options.limit > 0 ? options.limit : undefined;
-    result = limit !== undefined ? result.slice(offset, offset + limit) : result.slice(offset);
+    const limit =
+      options?.limit && options.limit > 0 ? options.limit : undefined;
+    result =
+      limit !== undefined
+        ? result.slice(offset, offset + limit)
+        : result.slice(offset);
   }
 
   // 4. Column projection

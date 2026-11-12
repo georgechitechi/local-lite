@@ -9,7 +9,10 @@ export interface SqlJsStatement {
 
 export interface SqlJsDatabase {
   prepare(sql: string, params?: any[]): SqlJsStatement;
-  exec(sql: string, params?: any[]): Array<{ columns: string[]; values: any[][] }>;
+  exec(
+    sql: string,
+    params?: any[],
+  ): Array<{ columns: string[]; values: any[][] }>;
   run(sql: string, params?: any[]): void;
   export?(): Uint8Array;
   close?(): void;
@@ -58,7 +61,9 @@ export class SqlJsAdapter implements LocalDBAdapter {
     }
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     this.db.run('BEGIN TRANSACTION;');
     try {
       const txWrapper: LocalTransaction = {

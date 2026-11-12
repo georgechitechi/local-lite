@@ -38,12 +38,7 @@ function areRowsEqual<T>(a: T, b: T): boolean {
     const bVal = bObj[k];
     if (aVal === bVal) continue;
 
-    if (
-      aVal &&
-      bVal &&
-      typeof aVal === 'object' &&
-      typeof bVal === 'object'
-    ) {
+    if (aVal && bVal && typeof aVal === 'object' && typeof bVal === 'object') {
       if (Array.isArray(aVal) !== Array.isArray(bVal)) return false;
       if (JSON.stringify(aVal) !== JSON.stringify(bVal)) return false;
       continue;
@@ -55,7 +50,10 @@ function areRowsEqual<T>(a: T, b: T): boolean {
   return true;
 }
 
-function areRowArraysEqual<T>(a: T[] | undefined | null, b: T[] | undefined | null): boolean {
+function areRowArraysEqual<T>(
+  a: T[] | undefined | null,
+  b: T[] | undefined | null,
+): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   if (a.length !== b.length) return false;
@@ -125,16 +123,25 @@ function getClientScope(client: LocalFirstClient | null | undefined): string {
   return 'client-' + id;
 }
 
-function getScopedCacheKey(client: LocalFirstClient | null | undefined, key: string): string {
+function getScopedCacheKey(
+  client: LocalFirstClient | null | undefined,
+  key: string,
+): string {
   return getClientScope(client) + ':' + key;
 }
 
-function getTableVersion(client: LocalFirstClient | null | undefined, tableName: string): number {
+function getTableVersion(
+  client: LocalFirstClient | null | undefined,
+  tableName: string,
+): number {
   if (!client) return 0;
   return tableVersions.get(client)?.get(tableName) || 0;
 }
 
-function advanceTableVersion(client: LocalFirstClient | null | undefined, tableName: string): number {
+function advanceTableVersion(
+  client: LocalFirstClient | null | undefined,
+  tableName: string,
+): number {
   if (!client) return 0;
   let versions = tableVersions.get(client);
   if (!versions) {
@@ -184,7 +191,7 @@ export function clearLiveQueryCache(): void {
 export function useLiveQuery<T = any>(
   client: LocalFirstClient | null | undefined,
   tableName: string,
-  queryOrOptions?: LiveQueryFn<T> | QueryOptions
+  queryOrOptions?: LiveQueryFn<T> | QueryOptions,
 ): { data: T[]; refetch: () => Promise<void>; loading: boolean } {
   const queryKey =
     typeof queryOrOptions === 'object' && queryOrOptions !== null
@@ -195,7 +202,9 @@ export function useLiveQuery<T = any>(
   const cacheKey = getScopedCacheKey(client, `${tableName}:${queryKey}`);
 
   // Read-through cache: return instant cached rows on mount (0ms latency, zero flicker)
-  const [data, setData] = useState<T[]>(() => (queryCache.get(cacheKey) as T[]) || []);
+  const [data, setData] = useState<T[]>(
+    () => (queryCache.get(cacheKey) as T[]) || [],
+  );
   const [loading, setLoading] = useState(() => !queryCache.has(cacheKey));
   const queryParamRef = useRef(queryOrOptions);
   queryParamRef.current = queryOrOptions;
@@ -204,12 +213,16 @@ export function useLiveQuery<T = any>(
     if (!client || !client.db) return;
     const versionAtStart = getTableVersion(client, tableName);
     try {
-      const res = await fetchDeduped(cacheKey + ':v' + versionAtStart, async () => {
-        const param = queryParamRef.current;
-        if (typeof param === 'function') return (await param(client)) || [];
-        if (typeof param === 'object' && param !== null) return await client.findMany<T>(tableName, param);
-        return await client.findMany<T>(tableName);
-      });
+      const res = await fetchDeduped(
+        cacheKey + ':v' + versionAtStart,
+        async () => {
+          const param = queryParamRef.current;
+          if (typeof param === 'function') return (await param(client)) || [];
+          if (typeof param === 'object' && param !== null)
+            return await client.findMany<T>(tableName, param);
+          return await client.findMany<T>(tableName);
+        },
+      );
 
       if (versionAtStart !== getTableVersion(client, tableName)) return;
       queryCache.set(cacheKey, res);
@@ -248,9 +261,7 @@ export function useLiveQuery<T = any>(
 }
 
 export type MultiQuerySpec<T = any> =
-  | string
-  | (QueryOptions & { table?: string })
-  | LiveQueryFn<T>;
+  string | (QueryOptions & { table?: string }) | LiveQueryFn<T>;
 
 export type MultiQueryInput =
   | Array<string | (QueryOptions & { table: string })>
@@ -358,12 +369,16 @@ function normalizeMultiQueries(input: MultiQueryInput): NormalizedQueryItem[] {
  * // data.projects, data.tasks, data.tags
  * ```
  */
-export function useLiveQueries<T extends Record<string, any[]> = Record<string, any[]>>(
+export function useLiveQueries<
+  T extends Record<string, any[]> = Record<string, any[]>,
+>(
   client: LocalFirstClient | null | undefined,
-  queries: MultiQueryInput
+  queries: MultiQueryInput,
 ): UseLiveQueriesResult<T> {
   const signature = useMemo(() => {
-    return JSON.stringify(queries, (_, val) => (typeof val === 'function' ? 'fn' : val));
+    return JSON.stringify(queries, (_, val) =>
+      typeof val === 'function' ? 'fn' : val,
+    );
   }, [queries]);
 
   const items = useMemo(() => normalizeMultiQueries(queries), [signature]);
@@ -394,23 +409,31 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
           try {
             const versionAtStart = getTableVersion(client, item.table);
             const scopedCacheKey = clientScope + ':' + item.cacheKey;
-            const rows = await fetchDeduped(scopedCacheKey + ':v' + versionAtStart, async () => {
-              if (item.fn) return (await item.fn(client)) || [];
-              if (item.options) return await client.findMany(item.table, item.options);
-              return await client.findMany(item.table);
-            });
-            if (versionAtStart !== getTableVersion(client, item.table)) return null;
+            const rows = await fetchDeduped(
+              scopedCacheKey + ':v' + versionAtStart,
+              async () => {
+                if (item.fn) return (await item.fn(client)) || [];
+                if (item.options)
+                  return await client.findMany(item.table, item.options);
+                return await client.findMany(item.table);
+              },
+            );
+            if (versionAtStart !== getTableVersion(client, item.table))
+              return null;
             queryCache.set(scopedCacheKey, rows);
             return { key: item.key, rows };
           } catch (err: any) {
             const msg = String(err?.message || err || '');
-            if (msg.includes('no such column') || msg.includes('no such table')) {
+            if (
+              msg.includes('no such column') ||
+              msg.includes('no such table')
+            ) {
               return { key: item.key, rows: [] };
             }
             console.error(`Error in useLiveQueries("${item.table}"):`, err);
             return { key: item.key, rows: [] };
           }
-        })
+        }),
       );
 
       setData((prev) => {
@@ -437,12 +460,14 @@ export function useLiveQueries<T extends Record<string, any[]> = Record<string, 
 
     refetch();
 
-    const tables = Array.from(new Set(items.map((i) => i.table).filter(Boolean)));
+    const tables = Array.from(
+      new Set(items.map((i) => i.table).filter(Boolean)),
+    );
     const unsubs = tables.map((tbl) =>
       client.events.on(tbl, () => {
         advanceTableVersion(client, tbl);
         scheduleRefetch();
-      })
+      }),
     );
 
     return () => {
@@ -463,15 +488,20 @@ export function useLiveRow<T = any>(
   client: LocalFirstClient | null | undefined,
   tableName: string,
   rowId: string | null | undefined,
-  options?: { includeDeleted?: boolean }
+  options?: { includeDeleted?: boolean },
 ): { data: T | null; refetch: () => Promise<void>; loading: boolean } {
-  const cacheKey = getScopedCacheKey(client, `${tableName}:row:${rowId || 'null'}:${Boolean(options?.includeDeleted)}`);
+  const cacheKey = getScopedCacheKey(
+    client,
+    `${tableName}:row:${rowId || 'null'}:${Boolean(options?.includeDeleted)}`,
+  );
   const [data, setData] = useState<T | null>(() => {
     if (!rowId) return null;
     const cached = queryCache.get(cacheKey);
     return cached && cached.length > 0 ? (cached[0] as T) : null;
   });
-  const [loading, setLoading] = useState(() => Boolean(rowId && !queryCache.has(cacheKey)));
+  const [loading, setLoading] = useState(() =>
+    Boolean(rowId && !queryCache.has(cacheKey)),
+  );
 
   const refetch = useCallback(async () => {
     if (!client || !client.db || !rowId) {
@@ -481,10 +511,13 @@ export function useLiveRow<T = any>(
     }
     try {
       const versionAtStart = getTableVersion(client, tableName);
-      const res = await fetchDeduped(cacheKey + ':v' + versionAtStart, async () => {
-        const r = await client.findById<T>(tableName, rowId, options);
-        return r ? [r] : [];
-      });
+      const res = await fetchDeduped(
+        cacheKey + ':v' + versionAtStart,
+        async () => {
+          const r = await client.findById<T>(tableName, rowId, options);
+          return r ? [r] : [];
+        },
+      );
       if (versionAtStart !== getTableVersion(client, tableName)) return;
       const row = res.length > 0 ? (res[0] as T) : null;
       if (row) {
@@ -515,7 +548,12 @@ export function useLiveRow<T = any>(
     const unsubscribe = client.events.on(tableName, (event: any) => {
       advanceTableVersion(client, tableName);
       // Precise row-level invalidation: only refetch if event affects this rowId or is a bulk event
-      if (!event || !event.rowId || event.rowId === rowId || event.rowId === 'batch') {
+      if (
+        !event ||
+        !event.rowId ||
+        event.rowId === rowId ||
+        event.rowId === 'batch'
+      ) {
         scheduleRefetch();
       }
     });
@@ -548,7 +586,7 @@ export interface UseLiveInfiniteQueryResult<T> {
 export function useLiveInfiniteQuery<T = any>(
   client: LocalFirstClient | null | undefined,
   tableName: string,
-  options: InfiniteQueryOptions = {}
+  options: InfiniteQueryOptions = {},
 ): UseLiveInfiniteQueryResult<T> {
   const pageSize = options.pageSize || options.limit || 25;
   const [pageCount, setPageCount] = useState(1);
@@ -562,41 +600,44 @@ export function useLiveInfiniteQuery<T = any>(
   const pageCountRef = useRef(pageCount);
   pageCountRef.current = pageCount;
 
-  const loadData = useCallback(async (pages: number, isNextPage: boolean = false) => {
-    if (!client || !client.db) return;
-    if (isNextPage) setIsFetchingNextPage(true);
+  const loadData = useCallback(
+    async (pages: number, isNextPage: boolean = false) => {
+      if (!client || !client.db) return;
+      if (isNextPage) setIsFetchingNextPage(true);
 
-    const versionAtStart = getTableVersion(client, tableName);
-    try {
-      const currentOpts = optionsRef.current;
-      const fetchLimit = pages * pageSize + 1; // +1 to check for hasNextPage
-      const rows = await client.findMany<T>(tableName, {
-        ...currentOpts,
-        limit: fetchLimit,
-        offset: currentOpts.offset || 0,
-      });
+      const versionAtStart = getTableVersion(client, tableName);
+      try {
+        const currentOpts = optionsRef.current;
+        const fetchLimit = pages * pageSize + 1; // +1 to check for hasNextPage
+        const rows = await client.findMany<T>(tableName, {
+          ...currentOpts,
+          limit: fetchLimit,
+          offset: currentOpts.offset || 0,
+        });
 
-      if (versionAtStart !== getTableVersion(client, tableName)) return;
-      if (rows.length > pages * pageSize) {
-        setHasNextPage(true);
-        setData(rows.slice(0, pages * pageSize));
-      } else {
-        setHasNextPage(false);
-        setData(rows);
+        if (versionAtStart !== getTableVersion(client, tableName)) return;
+        if (rows.length > pages * pageSize) {
+          setHasNextPage(true);
+          setData(rows.slice(0, pages * pageSize));
+        } else {
+          setHasNextPage(false);
+          setData(rows);
+        }
+      } catch (err: any) {
+        const msg = String(err?.message || err || '');
+        if (msg.includes('no such column') || msg.includes('no such table')) {
+          setData([]);
+          setHasNextPage(false);
+        } else {
+          console.error(`Error in useLiveInfiniteQuery("${tableName}"):`, err);
+        }
+      } finally {
+        setLoading(false);
+        if (isNextPage) setIsFetchingNextPage(false);
       }
-    } catch (err: any) {
-      const msg = String(err?.message || err || '');
-      if (msg.includes('no such column') || msg.includes('no such table')) {
-        setData([]);
-        setHasNextPage(false);
-      } else {
-        console.error(`Error in useLiveInfiniteQuery("${tableName}"):`, err);
-      }
-    } finally {
-      setLoading(false);
-      if (isNextPage) setIsFetchingNextPage(false);
-    }
-  }, [client, tableName, pageSize]);
+    },
+    [client, tableName, pageSize],
+  );
 
   const refetch = useCallback(async () => {
     await loadData(pageCountRef.current, false);
@@ -641,46 +682,52 @@ export interface UseMutationsResult<TTable extends string = string> {
   insert: <T extends Record<string, any> = Record<string, any>>(
     tableName: TTable | (string & {}),
     payload: T,
-    options?: MutateOptions
+    options?: MutateOptions,
   ) => Promise<string | undefined>;
   insertMany: <T extends Record<string, any> = Record<string, any>>(
     tableName: TTable | (string & {}),
     records: T[],
-    options?: MutateOptions
+    options?: MutateOptions,
   ) => Promise<string[] | undefined>;
   update: <T extends Record<string, any> = Record<string, any>>(
     tableName: TTable | (string & {}),
     rowId: string,
     payload: Partial<T>,
-    options?: MutateOptions
+    options?: MutateOptions,
   ) => Promise<void>;
   updateMany: <T extends Record<string, any> = Record<string, any>>(
     tableName: TTable | (string & {}),
     updates: Array<{ id: string; payload: Partial<T> }>,
-    options?: MutateOptions
+    options?: MutateOptions,
   ) => Promise<void>;
   delete: (
     tableName: TTable | (string & {}),
     rowId: string,
-    options?: MutateOptions
+    options?: MutateOptions,
   ) => Promise<void>;
   batch: (mutations: BatchMutation[]) => Promise<string[] | undefined>;
-  transaction: <T>(action: (txClient: TransactionalClient) => Promise<T>) => Promise<T | undefined>;
+  transaction: <T>(
+    action: (txClient: TransactionalClient) => Promise<T>,
+  ) => Promise<T | undefined>;
 }
 
 /**
  * Universal mutations hook providing memoized, null-safe helpers for database operations.
  */
 export function useMutations<TTable extends string = string>(
-  client: LocalFirstClient | null | undefined
+  client: LocalFirstClient | null | undefined,
 ): UseMutationsResult<TTable> {
   return useMemo(
     () => ({
       client,
       insert: (table, payload, opts) =>
-        client ? client.insert(table, payload, opts) : Promise.resolve(undefined),
+        client
+          ? client.insert(table, payload, opts)
+          : Promise.resolve(undefined),
       insertMany: (table, records, opts) =>
-        client ? client.insertMany(table, records, opts) : Promise.resolve(undefined),
+        client
+          ? client.insertMany(table, records, opts)
+          : Promise.resolve(undefined),
       update: (table, id, payload, opts) =>
         client ? client.update(table, id, payload, opts) : Promise.resolve(),
       updateMany: (table, updates, opts) =>
@@ -692,26 +739,34 @@ export function useMutations<TTable extends string = string>(
       transaction: (action) =>
         client ? client.transaction(action) : Promise.resolve(undefined),
     }),
-    [client]
+    [client],
   );
 }
 
 export interface UseDatabaseMaintenanceResult {
   stats: import('../core/maintenance.js').StorageStats | null;
   loading: boolean;
-  refreshStats: () => Promise<import('../core/maintenance.js').StorageStats | null>;
-  pruneOutbox: (options?: import('../core/maintenance.js').PruneOutboxOptions) => Promise<number>;
+  refreshStats: () => Promise<
+    import('../core/maintenance.js').StorageStats | null
+  >;
+  pruneOutbox: (
+    options?: import('../core/maintenance.js').PruneOutboxOptions,
+  ) => Promise<number>;
   vacuum: () => Promise<void>;
-  checkpoint: (mode?: import('../core/maintenance.js').CheckpointMode) => Promise<void>;
+  checkpoint: (
+    mode?: import('../core/maintenance.js').CheckpointMode,
+  ) => Promise<void>;
 }
 
 /**
  * Reactive hook for database maintenance (vacuum, WAL checkpoint, outbox pruning, and storage metrics).
  */
 export function useDatabaseMaintenance(
-  client: LocalFirstClient | null | undefined
+  client: LocalFirstClient | null | undefined,
 ): UseDatabaseMaintenanceResult {
-  const [stats, setStats] = useState<import('../core/maintenance.js').StorageStats | null>(null);
+  const [stats, setStats] = useState<
+    import('../core/maintenance.js').StorageStats | null
+  >(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const refreshStats = useCallback(async () => {
@@ -735,7 +790,7 @@ export function useDatabaseMaintenance(
       await refreshStats();
       return count;
     },
-    [client, refreshStats]
+    [client, refreshStats],
   );
 
   const vacuum = useCallback(async () => {
@@ -750,7 +805,7 @@ export function useDatabaseMaintenance(
       await client.maintenance.checkpoint(mode);
       await refreshStats();
     },
-    [client, refreshStats]
+    [client, refreshStats],
   );
 
   return {

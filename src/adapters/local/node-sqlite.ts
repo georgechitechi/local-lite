@@ -61,7 +61,9 @@ export class NodeSQLiteAdapter implements LocalDBAdapter {
     return await next;
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     const run = async (): Promise<T> => {
       this.db.exec('BEGIN IMMEDIATE');
       try {

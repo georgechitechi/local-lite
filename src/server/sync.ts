@@ -1,4 +1,9 @@
-import type { DeltaChange, DeltaChanges, SyncOperation, SyncOp } from '../core/types.js';
+import type {
+  DeltaChange,
+  DeltaChanges,
+  SyncOperation,
+  SyncOp,
+} from '../core/types.js';
 import type { ApiEndpoint, ApiRequestContext } from './index.js';
 
 export interface ServerSyncRecord {
@@ -16,8 +21,13 @@ export interface ServerSyncStorage {
    */
   applyOperations(
     operations: SyncOperation[],
-    serverTime?: number
-  ): Promise<{ applied: number; successfulIds: string[]; serverTime: number; cursor: number }>;
+    serverTime?: number,
+  ): Promise<{
+    applied: number;
+    successfulIds: string[];
+    serverTime: number;
+    cursor: number;
+  }>;
 
   /**
    * Fetches delta changes across tables since a given cursor or timestamp.
@@ -25,8 +35,13 @@ export interface ServerSyncStorage {
   getDeltas(
     tables: string[],
     since: number,
-    limit?: number
-  ): Promise<{ changes: DeltaChanges; cursor: number; hasMore: boolean; serverTime: number }>;
+    limit?: number,
+  ): Promise<{
+    changes: DeltaChanges;
+    cursor: number;
+    hasMore: boolean;
+    serverTime: number;
+  }>;
 }
 
 /**
@@ -40,8 +55,13 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
 
   async applyOperations(
     operations: SyncOperation[],
-    overrideTime?: number
-  ): Promise<{ applied: number; successfulIds: string[]; serverTime: number; cursor: number }> {
+    overrideTime?: number,
+  ): Promise<{
+    applied: number;
+    successfulIds: string[];
+    serverTime: number;
+    cursor: number;
+  }> {
     const serverTime = overrideTime ?? Date.now();
     let applied = 0;
     const successfulIds: string[] = [];
@@ -89,15 +109,20 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
   async getDeltas(
     tables: string[],
     since: number,
-    limit: number = 1000
-  ): Promise<{ changes: DeltaChanges; cursor: number; hasMore: boolean; serverTime: number }> {
+    limit: number = 1000,
+  ): Promise<{
+    changes: DeltaChanges;
+    cursor: number;
+    hasMore: boolean;
+    serverTime: number;
+  }> {
     const serverTime = Date.now();
 
     // Filter log entries that belong to requested tables and happened strictly after `since`
     const candidateEntries = this.changeLog.filter(
       (entry) =>
         (tables.length === 0 || tables.includes(entry.tableName)) &&
-        (entry.cursor > since || entry.timestamp > since)
+        (entry.cursor > since || entry.timestamp > since),
     );
 
     const hasMore = candidateEntries.length > limit;
@@ -114,13 +139,15 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
       if (entry.timestamp > maxCursor) maxCursor = entry.timestamp;
     }
 
-    const deltaList: DeltaChange[] = Array.from(latestMap.values()).map((entry) => ({
-      tableName: entry.tableName,
-      operation: entry.operation,
-      rowId: entry.rowId,
-      payload: entry.payload,
-      timestamp: entry.timestamp,
-    }));
+    const deltaList: DeltaChange[] = Array.from(latestMap.values()).map(
+      (entry) => ({
+        tableName: entry.tableName,
+        operation: entry.operation,
+        rowId: entry.rowId,
+        payload: entry.payload,
+        timestamp: entry.timestamp,
+      }),
+    );
 
     return {
       changes: {
@@ -165,7 +192,7 @@ export interface ServerSyncEndpointOptions {
   onBeforePush?: (
     operations: SyncOperation[],
     request: Request,
-    auth?: any
+    auth?: any,
   ) => Promise<SyncOperation[] | void> | SyncOperation[] | void;
 
   /**
@@ -182,14 +209,24 @@ export interface ServerSyncEndpointOptions {
     since: number,
     limit: number,
     request: Request,
-    auth?: any
-  ) => Promise<{ tables?: string[]; since?: number; limit?: number; filter?: any } | void> | { tables?: string[]; since?: number; limit?: number; filter?: any } | void;
+    auth?: any,
+  ) =>
+    | Promise<{
+        tables?: string[];
+        since?: number;
+        limit?: number;
+        filter?: any;
+      } | void>
+    | { tables?: string[]; since?: number; limit?: number; filter?: any }
+    | void;
 }
 
 /**
  * Creates turnkey push and pull API endpoints for self-hosted multi-device data synchronization.
  */
-export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): ApiEndpoint {
+export function createSyncEndpoint(
+  options: ServerSyncEndpointOptions = {},
+): ApiEndpoint {
   const storage = options.storage || new MemoryServerSyncStorage();
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Origin': options.corsOrigin || '*',
@@ -210,12 +247,14 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
   };
 
   // POST: Push batch of mutations (or combined push+pull batch)
-  const handlePost = async ({ request }: ApiRequestContext<unknown>): Promise<Response> => {
+  const handlePost = async ({
+    request,
+  }: ApiRequestContext<unknown>): Promise<Response> => {
     const auth = await verifyAuth(request);
     if (!auth) {
       return Response.json(
         { error: 'Unauthorized: Invalid sync authentication' },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -225,11 +264,13 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
     } catch {
       return Response.json(
         { error: 'Bad Request: Invalid JSON body' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
-    let operations: SyncOperation[] = Array.isArray(body?.operations) ? body.operations : [];
+    let operations: SyncOperation[] = Array.isArray(body?.operations)
+      ? body.operations
+      : [];
 
     if (options.onBeforePush) {
       const modified = await options.onBeforePush(operations, request, auth);
@@ -244,7 +285,13 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
       let since = Number(body.since ?? 0);
       let limit = body.limit ? Number(body.limit) : 500;
       if (options.onBeforePull) {
-        const pullMod = await options.onBeforePull(tables, since, limit, request, auth);
+        const pullMod = await options.onBeforePull(
+          tables,
+          since,
+          limit,
+          request,
+          auth,
+        );
         if (pullMod?.tables) tables = pullMod.tables;
         if (pullMod?.since !== undefined) since = pullMod.since;
         if (pullMod?.limit !== undefined) limit = pullMod.limit;
@@ -256,7 +303,7 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
           push: pushResult,
           pull: pullResult,
         },
-        { status: 200, headers: corsHeaders }
+        { status: 200, headers: corsHeaders },
       );
     }
 
@@ -268,17 +315,19 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
         serverTime: pushResult.serverTime,
         cursor: pushResult.cursor,
       },
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders },
     );
   };
 
   // GET: Pull deltas since cursor/timestamp
-  const handleGet = async ({ request }: ApiRequestContext<unknown>): Promise<Response> => {
+  const handleGet = async ({
+    request,
+  }: ApiRequestContext<unknown>): Promise<Response> => {
     const auth = await verifyAuth(request);
     if (!auth) {
       return Response.json(
         { error: 'Unauthorized: Invalid sync authentication' },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -287,12 +336,23 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
     const sinceParam = url.searchParams.get('since');
     const limitParam = url.searchParams.get('limit');
 
-    let tables = tablesParam ? tablesParam.split(',').map((t) => t.trim()).filter(Boolean) : [];
+    let tables = tablesParam
+      ? tablesParam
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
     let since = sinceParam ? Number(sinceParam) : 0;
     let limit = limitParam ? Number(limitParam) : 500;
 
     if (options.onBeforePull) {
-      const pullMod = await options.onBeforePull(tables, since, limit, request, auth);
+      const pullMod = await options.onBeforePull(
+        tables,
+        since,
+        limit,
+        request,
+        auth,
+      );
       if (pullMod?.tables) tables = pullMod.tables;
       if (pullMod?.since !== undefined) since = pullMod.since;
       if (pullMod?.limit !== undefined) limit = pullMod.limit;
@@ -308,7 +368,7 @@ export function createSyncEndpoint(options: ServerSyncEndpointOptions = {}): Api
         hasMore: result.hasMore,
         serverTime: result.serverTime,
       },
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders },
     );
   };
 

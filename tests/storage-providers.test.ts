@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
-  BlobStorageManager,
   MemoryFileDriver,
   createSupabaseStorageUploader,
   createConvexStorageUploader,
@@ -33,10 +32,14 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
               return { data: { path }, error: null };
             }),
             getPublicUrl: vi.fn((path: string) => ({
-              data: { publicUrl: `https://xyz.supabase.co/storage/v1/object/public/${bucket}/${path}` },
+              data: {
+                publicUrl: `https://xyz.supabase.co/storage/v1/object/public/${bucket}/${path}`,
+              },
             })),
             createSignedUrl: vi.fn(async (path: string, exp: number) => ({
-              data: { signedUrl: `https://xyz.supabase.co/storage/v1/object/sign/${bucket}/${path}?token=abc&expires=${exp}` },
+              data: {
+                signedUrl: `https://xyz.supabase.co/storage/v1/object/sign/${bucket}/${path}?token=abc&expires=${exp}`,
+              },
               error: null,
             })),
             remove: vi.fn(async (paths: string[]) => {
@@ -63,12 +66,16 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
 
       // Upload
       const result = await uploader.upload(blobRecord, testBytes);
-      expect(result.remoteUrl).toBe('https://xyz.supabase.co/storage/v1/object/public/media/photos/avatar.jpg');
+      expect(result.remoteUrl).toBe(
+        'https://xyz.supabase.co/storage/v1/object/public/media/photos/avatar.jpg',
+      );
       expect(uploadedFiles.has('media/photos/avatar.jpg')).toBe(true);
 
       // getDownloadUrl
       const dlUrl = await uploader.getDownloadUrl('photos/avatar.jpg');
-      expect(dlUrl).toBe('https://xyz.supabase.co/storage/v1/object/public/media/photos/avatar.jpg');
+      expect(dlUrl).toBe(
+        'https://xyz.supabase.co/storage/v1/object/public/media/photos/avatar.jpg',
+      );
 
       // Delete
       await uploader.delete('photos/avatar.jpg');
@@ -79,9 +86,14 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
       const mockSupabase = {
         storage: {
           from: () => ({
-            upload: async () => ({ data: { path: 'contracts/lease.pdf' }, error: null }),
+            upload: async () => ({
+              data: { path: 'contracts/lease.pdf' },
+              error: null,
+            }),
             createSignedUrl: async (path: string) => ({
-              data: { signedUrl: `https://xyz.supabase.co/storage/v1/object/sign/docs/${path}?token=xyz` },
+              data: {
+                signedUrl: `https://xyz.supabase.co/storage/v1/object/sign/docs/${path}?token=xyz`,
+              },
               error: null,
             }),
           }),
@@ -94,8 +106,13 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
         signedUrlExpiresIn: 3600,
       });
 
-      const res = await uploader.upload({ id: '1', key: 'contracts/lease.pdf' } as any, new Uint8Array([1]));
-      expect(res.remoteUrl).toContain('https://xyz.supabase.co/storage/v1/object/sign/docs/contracts/lease.pdf?token=xyz');
+      const res = await uploader.upload(
+        { id: '1', key: 'contracts/lease.pdf' } as any,
+        new Uint8Array([1]),
+      );
+      expect(res.remoteUrl).toContain(
+        'https://xyz.supabase.co/storage/v1/object/sign/docs/contracts/lease.pdf?token=xyz',
+      );
     });
   });
 
@@ -107,7 +124,10 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
 
       const mockConvexClient = {
         mutation: vi.fn(async (mutationName: any, args: any) => {
-          if (mutationName === 'sync:generateUploadUrl' || mutationName === 'generateUploadUrl') {
+          if (
+            mutationName === 'sync:generateUploadUrl' ||
+            mutationName === 'generateUploadUrl'
+          ) {
             generateCalled = true;
             return 'https://convex.cloud/api/upload/url-123';
           }
@@ -162,7 +182,9 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
       expect(generateCalled).toBe(true);
       expect(mockFetch).toHaveBeenCalled();
       expect(result.storageId).toBe('storage-id-999');
-      expect(result.remoteUrl).toBe('https://convex.cloud/api/storage/storage-id-999');
+      expect(result.remoteUrl).toBe(
+        'https://convex.cloud/api/storage/storage-id-999',
+      );
       expect(saveMutationPayload).not.toBeNull();
       expect(saveMutationPayload.storageId).toBe('storage-id-999');
 
@@ -172,7 +194,9 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
 
       // Test deletion
       await uploader.delete('storage-id-999');
-      expect(mockConvexClient.mutation).toHaveBeenCalledWith('deleteFile', { storageId: 'storage-id-999' });
+      expect(mockConvexClient.mutation).toHaveBeenCalledWith('deleteFile', {
+        storageId: 'storage-id-999',
+      });
     });
   });
 
@@ -214,7 +238,9 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
       const result = await uploader.upload(blobRecord, testBytes);
       expect(mockModularStorage.uploadBytes).toHaveBeenCalled();
       expect(storageBucket.has('uploads/inspections/hallway.jpg')).toBe(true);
-      expect(result.remoteUrl).toContain('https://firebasestorage.googleapis.com/v0/b/my-app.appspot.com/o/uploads%2Finspections%2Fhallway.jpg');
+      expect(result.remoteUrl).toContain(
+        'https://firebasestorage.googleapis.com/v0/b/my-app.appspot.com/o/uploads%2Finspections%2Fhallway.jpg',
+      );
 
       const dlUrl = await uploader.getDownloadUrl('inspections/hallway.jpg');
       expect(dlUrl).toContain('uploads%2Finspections%2Fhallway.jpg');
@@ -234,11 +260,14 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
             storageBucket.set(path, { data, meta });
             return {
               ref: {
-                getDownloadURL: async () => `https://storage.googleapis.com/compat/${path}`,
+                getDownloadURL: async () =>
+                  `https://storage.googleapis.com/compat/${path}`,
               },
             };
           }),
-          getDownloadURL: vi.fn(async () => `https://storage.googleapis.com/compat/${path}`),
+          getDownloadURL: vi.fn(
+            async () => `https://storage.googleapis.com/compat/${path}`,
+          ),
           delete: vi.fn(async () => {
             storageBucket.delete(path);
           }),
@@ -252,8 +281,13 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
         key: 'avatars/admin.png',
         mimeType: 'image/png',
       };
-      const result = await uploader.upload(blobRecord, new Uint8Array([5, 5, 5]));
-      expect(result.remoteUrl).toBe('https://storage.googleapis.com/compat/avatars/admin.png');
+      const result = await uploader.upload(
+        blobRecord,
+        new Uint8Array([5, 5, 5]),
+      );
+      expect(result.remoteUrl).toBe(
+        'https://storage.googleapis.com/compat/avatars/admin.png',
+      );
       expect(storageBucket.has('avatars/admin.png')).toBe(true);
 
       await uploader.delete('avatars/admin.png');
@@ -267,23 +301,31 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
       const mockConvex = { mutation: () => {} };
       const mockFirebase = { ref: () => {} };
 
-      const u1 = createStorageUploader('supabase', mockSupabase, { bucket: 'b' });
+      const u1 = createStorageUploader('supabase', mockSupabase, {
+        bucket: 'b',
+      });
       expect(typeof u1.upload).toBe('function');
 
-      const u2 = createStorageUploader('convex', mockConvex, { uploadMutation: 'gen' });
+      const u2 = createStorageUploader('convex', mockConvex, {
+        uploadMutation: 'gen',
+      });
       expect(typeof u2.upload).toBe('function');
 
       const u3 = createStorageUploader('firebase', mockFirebase);
       expect(typeof u3.upload).toBe('function');
 
-      expect(() => createStorageUploader('invalid' as any, {})).toThrow('Unsupported storage provider');
+      expect(() => createStorageUploader('invalid' as any)).toThrow(
+        'Unsupported storage provider',
+      );
     });
   });
 
   describe('Remote Adapter Shortcuts & LocalFirstClient Auto-Wiring', () => {
     it('ConvexRemoteAdapter exposes createStorageUploader', () => {
       const mockClient = { mutation: vi.fn(), query: vi.fn() };
-      const adapter = new ConvexRemoteAdapter(mockClient, { tables: ['posts'] });
+      const adapter = new ConvexRemoteAdapter(mockClient, {
+        tables: ['posts'],
+      });
       const uploader = adapter.createStorageUploader({ uploadMutation: 'gen' });
 
       expect(typeof uploader.upload).toBe('function');
@@ -299,7 +341,9 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
         uploadBytes: vi.fn(),
         getDownloadURL: vi.fn(),
       };
-      const uploader = adapter.createStorageUploader({ storageModule: mockStorageModule });
+      const uploader = adapter.createStorageUploader({
+        storageModule: mockStorageModule,
+      });
       expect(typeof uploader.upload).toBe('function');
     });
 
@@ -316,7 +360,10 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
         channel: () => mockChannel,
         storage: {
           from: vi.fn((bucket: string) => ({
-            upload: vi.fn(async (path: string) => ({ data: { path }, error: null })),
+            upload: vi.fn(async (path: string) => ({
+              data: { path },
+              error: null,
+            })),
             getPublicUrl: vi.fn((path: string) => ({
               data: { publicUrl: `https://supabase.co/${bucket}/${path}` },
             })),
@@ -324,7 +371,9 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
         },
       };
 
-      const remote = new SupabaseAdapter(mockSupabaseClient, { tables: ['items'] });
+      const remote = new SupabaseAdapter(mockSupabaseClient, {
+        tables: ['items'],
+      });
       const client = new LocalFirstClient({
         local: db,
         remote,

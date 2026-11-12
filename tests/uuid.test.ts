@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { generateUUID, uuidv4 } from '../src/utils/uuid.js';
 
 describe('UUID Utilities (RFC4122 v4)', () => {
-  const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const UUID_V4_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   it('generates valid RFC4122 v4 UUID strings', () => {
     const id = generateUUID();

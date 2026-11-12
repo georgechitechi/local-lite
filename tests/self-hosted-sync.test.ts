@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createSyncClient } from '../src/config/index.js';
 import { MockDB } from './helpers/mock-db.js';
-import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import {
   createSyncEndpoint,
   MemoryServerSyncStorage,
@@ -76,7 +75,11 @@ describe('Turnkey Self-Hosted Sync Backend & Client Adapter', () => {
     (client2 as any).remote.fetchFn = mockFetch;
 
     // 1. Client 1 inserts a task locally (0ms offline write)
-    await client1.insert('tasks', { id: 'task-100', title: 'Self-hosted Sync Rocks', done: false });
+    await client1.insert('tasks', {
+      id: 'task-100',
+      title: 'Self-hosted Sync Rocks',
+      done: false,
+    });
 
     // 2. Client 1 pushes to self-hosted server
     await client1.syncWorker.pushLocalChanges();
@@ -152,7 +155,11 @@ describe('Turnkey Self-Hosted Sync Backend & Client Adapter', () => {
         '/api/sync/email': {
           POST: async ({ request }) => {
             const body = await request.json();
-            return Response.json({ success: true, messageId: 'msg-123', to: body.to });
+            return Response.json({
+              success: true,
+              messageId: 'msg-123',
+              to: body.to,
+            });
           },
         },
       },
@@ -205,14 +212,14 @@ describe('Turnkey Self-Hosted Sync Backend & Client Adapter', () => {
         endpoints: {
           '/api/sync': authEndpoint,
         },
-      })
+      }),
     );
 
     // 1. Unauthenticated request -> 401
     const unauthRes = await customServer.fetch(
       new Request('http://localhost:3000/api/sync?tables=notes', {
         headers: { Authorization: 'Bearer invalid-token' },
-      })
+      }),
     );
     expect(unauthRes.status).toBe(401);
 
@@ -220,7 +227,7 @@ describe('Turnkey Self-Hosted Sync Backend & Client Adapter', () => {
     const authRes = await customServer.fetch(
       new Request('http://localhost:3000/api/sync?tables=notes,secrets', {
         headers: { Authorization: 'Bearer valid-jwt-token' },
-      })
+      }),
     );
     expect(authRes.status).toBe(200);
     const data = await authRes.json();

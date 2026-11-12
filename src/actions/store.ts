@@ -1,5 +1,10 @@
 import { DBExecutable } from '../core/schema-manager.js';
-import { ActionFilterOptions, ActionPruneOptions, ActionRecord, ActionStatus } from './types.js';
+import {
+  ActionFilterOptions,
+  ActionPruneOptions,
+  ActionRecord,
+  ActionStatus,
+} from './types.js';
 
 export const DEFAULT_ACTIONS_TABLE = '_local_actions';
 
@@ -10,7 +15,11 @@ export function mapActionRow(r: any): ActionRecord {
   return {
     id: r.id,
     action: r.action,
-    payload: r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : {},
+    payload: r.payload
+      ? typeof r.payload === 'string'
+        ? JSON.parse(r.payload)
+        : r.payload
+      : {},
     idempotencyKey: r.idempotency_key ?? null,
     status: r.status as ActionStatus,
     createdAt: Number(r.created_at || 0),
@@ -19,7 +28,11 @@ export function mapActionRow(r: any): ActionRecord {
     retryCount: Number(r.retry_count || 0),
     maxRetries: Number(r.max_retries || 3),
     lastError: r.last_error ?? null,
-    result: r.result ? (typeof r.result === 'string' ? JSON.parse(r.result) : r.result) : null,
+    result: r.result
+      ? typeof r.result === 'string'
+        ? JSON.parse(r.result)
+        : r.result
+      : null,
   };
 }
 
@@ -27,7 +40,10 @@ export class ActionStore {
   /**
    * Initializes the action outbox schema and indexes if they do not exist.
    */
-  static async ensureSchema(db: DBExecutable, tableName: string = DEFAULT_ACTIONS_TABLE): Promise<void> {
+  static async ensureSchema(
+    db: DBExecutable,
+    tableName: string = DEFAULT_ACTIONS_TABLE,
+  ): Promise<void> {
     await db.execute(
       `CREATE TABLE IF NOT EXISTS ${tableName} (
         id TEXT PRIMARY KEY,
@@ -42,26 +58,29 @@ export class ActionStore {
         max_retries INTEGER NOT NULL DEFAULT 3,
         last_error TEXT,
         result TEXT
-      );`
+      );`,
     );
 
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${tableName}_status ON ${tableName} (status, created_at);`
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_status ON ${tableName} (status, created_at);`,
     );
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${tableName}_idempotency ON ${tableName} (idempotency_key);`
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_idempotency ON ${tableName} (idempotency_key);`,
     );
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${tableName}_action ON ${tableName} (action, status);`
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_action ON ${tableName} (action, status);`,
     );
   }
 
   /**
    * Resets interrupted 'EXECUTING' records back to 'PENDING' on startup.
    */
-  static async resetStaleExecuting(db: DBExecutable, tableName: string = DEFAULT_ACTIONS_TABLE): Promise<void> {
+  static async resetStaleExecuting(
+    db: DBExecutable,
+    tableName: string = DEFAULT_ACTIONS_TABLE,
+  ): Promise<void> {
     await db.execute(
-      `UPDATE ${tableName} SET status = 'PENDING' WHERE status = 'EXECUTING';`
+      `UPDATE ${tableName} SET status = 'PENDING' WHERE status = 'EXECUTING';`,
     );
   }
 
@@ -71,7 +90,7 @@ export class ActionStore {
   static async insertRecord(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    record: ActionRecord
+    record: ActionRecord,
   ): Promise<void> {
     await db.execute(
       `INSERT INTO ${tableName} (
@@ -80,7 +99,9 @@ export class ActionStore {
       [
         record.id,
         record.action,
-        typeof record.payload === 'string' ? record.payload : JSON.stringify(record.payload ?? {}),
+        typeof record.payload === 'string'
+          ? record.payload
+          : JSON.stringify(record.payload ?? {}),
         record.idempotencyKey ?? null,
         record.status,
         record.createdAt,
@@ -89,8 +110,12 @@ export class ActionStore {
         record.retryCount,
         record.maxRetries,
         record.lastError ?? null,
-        record.result ? (typeof record.result === 'string' ? record.result : JSON.stringify(record.result)) : null,
-      ]
+        record.result
+          ? typeof record.result === 'string'
+            ? record.result
+            : JSON.stringify(record.result)
+          : null,
+      ],
     );
   }
 
@@ -100,9 +125,12 @@ export class ActionStore {
   static async findById(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    id: string
+    id: string,
   ): Promise<ActionRecord | null> {
-    const rows = await db.execute(`SELECT * FROM ${tableName} WHERE id = ? LIMIT 1;`, [id]);
+    const rows = await db.execute(
+      `SELECT * FROM ${tableName} WHERE id = ? LIMIT 1;`,
+      [id],
+    );
     if (!rows || rows.length === 0) return null;
     return mapActionRow(rows[0]);
   }
@@ -113,11 +141,11 @@ export class ActionStore {
   static async findByIdempotencyKey(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    key: string
+    key: string,
   ): Promise<ActionRecord | null> {
     const rows = await db.execute(
       `SELECT * FROM ${tableName} WHERE idempotency_key = ? LIMIT 1;`,
-      [key]
+      [key],
     );
     if (!rows || rows.length === 0) return null;
     return mapActionRow(rows[0]);
@@ -129,11 +157,11 @@ export class ActionStore {
   static async getPending(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<ActionRecord[]> {
     const rows = await db.execute(
       `SELECT * FROM ${tableName} WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT ?;`,
-      [limit]
+      [limit],
     );
     return (rows || []).map(mapActionRow);
   }
@@ -151,7 +179,7 @@ export class ActionStore {
       retryCount?: number;
       lastError?: string | null;
       result?: any;
-    } = {}
+    } = {},
   ): Promise<void> {
     const sets: string[] = ['status = ?'];
     const params: any[] = [status];
@@ -174,7 +202,10 @@ export class ActionStore {
     }
 
     params.push(id);
-    await db.execute(`UPDATE ${tableName} SET ${sets.join(', ')} WHERE id = ?;`, params);
+    await db.execute(
+      `UPDATE ${tableName} SET ${sets.join(', ')} WHERE id = ?;`,
+      params,
+    );
   }
 
   /**
@@ -183,7 +214,7 @@ export class ActionStore {
   static async list(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    filter: ActionFilterOptions = {}
+    filter: ActionFilterOptions = {},
   ): Promise<ActionRecord[]> {
     const conditions: string[] = [];
     const params: any[] = [];
@@ -191,7 +222,9 @@ export class ActionStore {
     if (filter.status) {
       if (Array.isArray(filter.status)) {
         if (filter.status.length > 0) {
-          conditions.push(`status IN (${filter.status.map(() => '?').join(', ')})`);
+          conditions.push(
+            `status IN (${filter.status.map(() => '?').join(', ')})`,
+          );
           params.push(...filter.status);
         }
       } else {
@@ -203,7 +236,9 @@ export class ActionStore {
     if (filter.action) {
       if (Array.isArray(filter.action)) {
         if (filter.action.length > 0) {
-          conditions.push(`action IN (${filter.action.map(() => '?').join(', ')})`);
+          conditions.push(
+            `action IN (${filter.action.map(() => '?').join(', ')})`,
+          );
           params.push(...filter.action);
         }
       } else {
@@ -212,7 +247,8 @@ export class ActionStore {
       }
     }
 
-    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause =
+      conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
     let limitClause = '';
     if (filter.limit !== undefined) {
       limitClause = ` LIMIT ?`;
@@ -225,7 +261,7 @@ export class ActionStore {
 
     const rows = await db.execute(
       `SELECT * FROM ${tableName}${whereClause} ORDER BY created_at DESC${limitClause};`,
-      params
+      params,
     );
     return (rows || []).map(mapActionRow);
   }
@@ -236,11 +272,11 @@ export class ActionStore {
   static async cancel(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    id: string
+    id: string,
   ): Promise<boolean> {
     await db.execute(
       `UPDATE ${tableName} SET status = 'CANCELLED' WHERE id = ? AND status = 'PENDING';`,
-      [id]
+      [id],
     );
     // In drivers that return affected rows or execute successfully
     const record = await this.findById(db, tableName, id);
@@ -253,7 +289,7 @@ export class ActionStore {
   static async prune(
     db: DBExecutable,
     tableName: string = DEFAULT_ACTIONS_TABLE,
-    options: ActionPruneOptions = {}
+    options: ActionPruneOptions = {},
   ): Promise<number> {
     const now = Date.now();
     let deletedCount = 0;
@@ -262,7 +298,7 @@ export class ActionStore {
       const cutoff = now - options.completedOlderThanMs;
       await db.execute(
         `DELETE FROM ${tableName} WHERE status = 'COMPLETED' AND executed_at IS NOT NULL AND executed_at <= ?;`,
-        [cutoff]
+        [cutoff],
       );
     }
 
@@ -270,7 +306,7 @@ export class ActionStore {
       const cutoff = now - options.failedOlderThanMs;
       await db.execute(
         `DELETE FROM ${tableName} WHERE status = 'FAILED' AND created_at <= ?;`,
-        [cutoff]
+        [cutoff],
       );
     }
 
@@ -278,7 +314,7 @@ export class ActionStore {
       const cutoff = now - options.expiredOlderThanMs;
       await db.execute(
         `DELETE FROM ${tableName} WHERE status = 'EXPIRED' AND created_at <= ?;`,
-        [cutoff]
+        [cutoff],
       );
     }
 
@@ -286,7 +322,7 @@ export class ActionStore {
       const cutoff = now - options.cancelledOlderThanMs;
       await db.execute(
         `DELETE FROM ${tableName} WHERE status = 'CANCELLED' AND created_at <= ?;`,
-        [cutoff]
+        [cutoff],
       );
     }
 

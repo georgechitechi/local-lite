@@ -19,7 +19,11 @@ function mapOutboxRow(r: any): OutboxRecord {
     tableName: r.table_name,
     rowId: r.row_id,
     operation: r.operation,
-    payload: r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : null,
+    payload: r.payload
+      ? typeof r.payload === 'string'
+        ? JSON.parse(r.payload)
+        : r.payload
+      : null,
     timestamp: Number(r.timestamp),
     status: r.status,
     retryCount: Number(r.retry_count || 0),
@@ -43,25 +47,28 @@ export class OutboxStore {
         status TEXT NOT NULL DEFAULT 'PENDING',
         retry_count INTEGER NOT NULL DEFAULT 0,
         last_error TEXT
-      );`
+      );`,
     );
     // Indexes for the hot paths: pending scans (push), per-row conflict lookups (pull),
     // and status counts (telemetry). Executed separately: many drivers prepare one statement.
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_ts ON sync_outbox (status, timestamp);`
+      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_ts ON sync_outbox (status, timestamp);`,
     );
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_retry ON sync_outbox (status, retry_count, timestamp);`
+      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_status_retry ON sync_outbox (status, retry_count, timestamp);`,
     );
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_row ON sync_outbox (table_name, row_id, timestamp);`
+      `CREATE INDEX IF NOT EXISTS idx_sync_outbox_row ON sync_outbox (table_name, row_id, timestamp);`,
     );
   }
 
   /**
    * Inserts a new outbox entry within an existing database transaction.
    */
-  static async insertRecord(tx: LocalTransaction, op: SyncOperation): Promise<void> {
+  static async insertRecord(
+    tx: LocalTransaction,
+    op: SyncOperation,
+  ): Promise<void> {
     await tx.execute(
       `INSERT INTO sync_outbox (id, table_name, row_id, operation, payload, timestamp, status, retry_count)
        VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0)`,
@@ -72,14 +79,17 @@ export class OutboxStore {
         op.operation,
         op.payload ? JSON.stringify(op.payload) : null,
         op.timestamp,
-      ]
+      ],
     );
   }
 
   /**
    * Inserts multiple outbox entries in high-throughput multi-row SQL chunks within an existing transaction.
    */
-  static async insertRecords(tx: LocalTransaction, ops: SyncOperation[]): Promise<void> {
+  static async insertRecords(
+    tx: LocalTransaction,
+    ops: SyncOperation[],
+  ): Promise<void> {
     if (!ops || ops.length === 0) return;
     const CHUNK_SIZE = 50;
     for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
@@ -94,13 +104,13 @@ export class OutboxStore {
           op.rowId,
           op.operation,
           op.payload ? JSON.stringify(op.payload) : null,
-          op.timestamp
+          op.timestamp,
         );
       }
       try {
         await tx.execute(
           `INSERT INTO sync_outbox (id, table_name, row_id, operation, payload, timestamp, status, retry_count) VALUES ${valueClauses.join(', ')}`,
-          params
+          params,
         );
       } catch {
         // Transparent fallback to per-record insert for mock drivers or custom engines
@@ -117,7 +127,7 @@ export class OutboxStore {
   static async getPending(
     db: LocalDBAdapter,
     maxRetries: number = 5,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<OutboxRecord[]> {
     const isInfinite = !Number.isFinite(maxRetries) || maxRetries === -1;
     const query = isInfinite
@@ -142,13 +152,13 @@ export class OutboxStore {
   static async findPendingByRow(
     tx: LocalTransaction,
     tableName: string,
-    rowId: string
+    rowId: string,
   ): Promise<OutboxRecord | undefined> {
     const rows = await tx.execute(
       `SELECT * FROM sync_outbox 
        WHERE table_name = ? AND row_id = ? AND status != 'FAILED' 
        ORDER BY timestamp DESC LIMIT 1`,
-      [tableName, rowId]
+      [tableName, rowId],
     );
 
     if (!rows || rows.length === 0) return undefined;
@@ -160,11 +170,13 @@ export class OutboxStore {
    * Retrieves active (non-FAILED) pending outbox records indexed by `${table_name}:${row_id}`.
    * Enables O(1) in-memory conflict lookup during delta ingestion, eliminating N+1 queries.
    */
-  static async getActivePendingMap(tx: LocalTransaction): Promise<Map<string, OutboxRecord>> {
+  static async getActivePendingMap(
+    tx: LocalTransaction,
+  ): Promise<Map<string, OutboxRecord>> {
     const map = new Map<string, OutboxRecord>();
     try {
       const rows = await tx.execute(
-        `SELECT * FROM sync_outbox WHERE status != 'FAILED' ORDER BY timestamp DESC`
+        `SELECT * FROM sync_outbox WHERE status != 'FAILED' ORDER BY timestamp DESC`,
       );
       if (!rows || rows.length === 0) return map;
 
@@ -185,12 +197,15 @@ export class OutboxStore {
   /**
    * Marks a batch of outbox IDs as 'PROCESSING'.
    */
-  static async markProcessing(db: LocalDBAdapter, ids: string[]): Promise<void> {
+  static async markProcessing(
+    db: LocalDBAdapter,
+    ids: string[],
+  ): Promise<void> {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => '?').join(',');
     await db.execute(
       `UPDATE sync_outbox SET status = 'PROCESSING' WHERE id IN (${placeholders})`,
-      ids
+      ids,
     );
   }
 
@@ -200,7 +215,9 @@ export class OutboxStore {
    */
   static async resetStaleProcessing(db: LocalDBAdapter): Promise<void> {
     try {
-      await db.execute(`UPDATE sync_outbox SET status = 'PENDING' WHERE status = 'PROCESSING'`);
+      await db.execute(
+        `UPDATE sync_outbox SET status = 'PENDING' WHERE status = 'PROCESSING'`,
+      );
     } catch {
       // Table may not exist yet
     }
@@ -209,14 +226,23 @@ export class OutboxStore {
   /**
    * Deletes a batch of successfully pushed outbox entries.
    */
-  static async deleteCompleted(db: LocalDBAdapter, ids: string[]): Promise<void> {
+  static async deleteCompleted(
+    db: LocalDBAdapter,
+    ids: string[],
+  ): Promise<void> {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => '?').join(',');
-    await db.execute(`DELETE FROM sync_outbox WHERE id IN (${placeholders})`, ids);
+    await db.execute(
+      `DELETE FROM sync_outbox WHERE id IN (${placeholders})`,
+      ids,
+    );
   }
 
   /** Deletes outbox records matching one or more safe, parameterized clauses. */
-  static async deleteMatching(db: LocalDBAdapter, clauses: OutboxDeleteClause[]): Promise<void> {
+  static async deleteMatching(
+    db: LocalDBAdapter,
+    clauses: OutboxDeleteClause[],
+  ): Promise<void> {
     const alternatives: string[] = [];
     const params: unknown[] = [];
 
@@ -231,19 +257,27 @@ export class OutboxStore {
         params.push(clause.operation);
       }
       if (clause.rowIds?.length) {
-        conditions.push(`row_id IN (${clause.rowIds.map(() => '?').join(',')})`);
+        conditions.push(
+          `row_id IN (${clause.rowIds.map(() => '?').join(',')})`,
+        );
         params.push(...clause.rowIds);
       }
       for (const [field, values] of Object.entries(clause.payloadIn ?? {})) {
         if (!/^[A-Za-z0-9_]+$/.test(field) || values.length === 0) continue;
-        conditions.push(`json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, ?) IN (${values.map(() => '?').join(',')})`);
+        conditions.push(
+          `json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END, ?) IN (${values.map(() => '?').join(',')})`,
+        );
         params.push(`$.${field}`, ...values);
       }
-      if (conditions.length > 0) alternatives.push(`(${conditions.join(' AND ')})`);
+      if (conditions.length > 0)
+        alternatives.push(`(${conditions.join(' AND ')})`);
     }
 
     if (alternatives.length === 0) return;
-    await db.execute(`DELETE FROM sync_outbox WHERE ${alternatives.join(' OR ')}`, params);
+    await db.execute(
+      `DELETE FROM sync_outbox WHERE ${alternatives.join(' OR ')}`,
+      params,
+    );
   }
 
   /**
@@ -260,18 +294,18 @@ export class OutboxStore {
     tx: LocalTransaction,
     id: string,
     payload: Record<string, any>,
-    timestamp?: number
+    timestamp?: number,
   ): Promise<void> {
     if (timestamp) {
       await tx.execute(
         `UPDATE sync_outbox SET payload = ?, timestamp = ? WHERE id = ?`,
-        [JSON.stringify(payload), timestamp, id]
+        [JSON.stringify(payload), timestamp, id],
       );
     } else {
-      await tx.execute(
-        `UPDATE sync_outbox SET payload = ? WHERE id = ?`,
-        [JSON.stringify(payload), id]
-      );
+      await tx.execute(`UPDATE sync_outbox SET payload = ? WHERE id = ?`, [
+        JSON.stringify(payload),
+        id,
+      ]);
     }
   }
 
@@ -283,12 +317,12 @@ export class OutboxStore {
     id: string,
     operation: SyncOp,
     payload: Record<string, any> | null,
-    timestamp?: number
+    timestamp?: number,
   ): Promise<void> {
     const ts = timestamp ?? Date.now();
     await tx.execute(
       `UPDATE sync_outbox SET operation = ?, payload = ?, timestamp = ? WHERE id = ?`,
-      [operation, payload ? JSON.stringify(payload) : null, ts, id]
+      [operation, payload ? JSON.stringify(payload) : null, ts, id],
     );
   }
 
@@ -298,7 +332,7 @@ export class OutboxStore {
   static async markFailed(
     db: LocalDBAdapter,
     ids: string[],
-    errorMessage: string
+    errorMessage: string,
   ): Promise<void> {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => '?').join(',');
@@ -308,7 +342,7 @@ export class OutboxStore {
            retry_count = retry_count + 1, 
            last_error = ? 
        WHERE id IN (${placeholders})`,
-      [errorMessage, ...ids]
+      [errorMessage, ...ids],
     );
   }
 
@@ -324,7 +358,7 @@ export class OutboxStore {
     try {
       // Aggregate in SQLite (index-only scan) instead of loading every row and payload into JS.
       const rows = await db.execute(
-        `SELECT status, COUNT(*) AS count FROM sync_outbox GROUP BY status`
+        `SELECT status, COUNT(*) AS count FROM sync_outbox GROUP BY status`,
       );
 
       let pending = 0;
@@ -351,7 +385,10 @@ export class OutboxStore {
    * If ids are specified, only those records are reset. Otherwise, all FAILED records are reset.
    * Returns the count of affected records.
    */
-  static async retryFailed(db: LocalDBAdapter, ids?: string[]): Promise<number> {
+  static async retryFailed(
+    db: LocalDBAdapter,
+    ids?: string[],
+  ): Promise<number> {
     try {
       if (ids && ids.length > 0) {
         const placeholders = ids.map(() => '?').join(',');
@@ -359,15 +396,19 @@ export class OutboxStore {
           `UPDATE sync_outbox 
            SET status = 'PENDING', retry_count = 0, last_error = NULL 
            WHERE status = 'FAILED' AND id IN (${placeholders})`,
-          ids
+          ids,
         );
         return ids.length;
       } else {
-        const rows = await db.execute(`SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'FAILED'`);
-        const count = Number(rows?.[0]?.count ?? (Array.isArray(rows) ? rows.length : 0));
+        const rows = await db.execute(
+          `SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'FAILED'`,
+        );
+        const count = Number(
+          rows?.[0]?.count ?? (Array.isArray(rows) ? rows.length : 0),
+        );
         if (count > 0) {
           await db.execute(
-            `UPDATE sync_outbox SET status = 'PENDING', retry_count = 0, last_error = NULL WHERE status = 'FAILED'`
+            `UPDATE sync_outbox SET status = 'PENDING', retry_count = 0, last_error = NULL WHERE status = 'FAILED'`,
           );
         }
         return count;
@@ -380,18 +421,25 @@ export class OutboxStore {
   /**
    * Permanently clears failed outbox records (removes poison-pill mutations).
    */
-  static async clearFailed(db: LocalDBAdapter, ids?: string[]): Promise<number> {
+  static async clearFailed(
+    db: LocalDBAdapter,
+    ids?: string[],
+  ): Promise<number> {
     try {
       if (ids && ids.length > 0) {
         const placeholders = ids.map(() => '?').join(',');
         await db.execute(
           `DELETE FROM sync_outbox WHERE status = 'FAILED' AND id IN (${placeholders})`,
-          ids
+          ids,
         );
         return ids.length;
       } else {
-        const rows = await db.execute(`SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'FAILED'`);
-        const count = Number(rows?.[0]?.count ?? (Array.isArray(rows) ? rows.length : 0));
+        const rows = await db.execute(
+          `SELECT COUNT(*) AS count FROM sync_outbox WHERE status = 'FAILED'`,
+        );
+        const count = Number(
+          rows?.[0]?.count ?? (Array.isArray(rows) ? rows.length : 0),
+        );
         if (count > 0) {
           await db.execute(`DELETE FROM sync_outbox WHERE status = 'FAILED'`);
         }
@@ -407,7 +455,7 @@ export class OutboxStore {
    */
   static async getAllRecords(
     db: LocalDBAdapter,
-    options?: { status?: OutboxStatus; limit?: number; offset?: number }
+    options?: { status?: OutboxStatus; limit?: number; offset?: number },
   ): Promise<OutboxRecord[]> {
     try {
       // Filter, order and paginate in SQLite so only the requested page is parsed.

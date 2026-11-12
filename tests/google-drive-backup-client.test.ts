@@ -13,7 +13,7 @@ function createTokenStore(): {
   return {
     store: {
       get: async () => tokens,
-      set: async value => {
+      set: async (value) => {
         tokens = value;
       },
       remove: async () => {
@@ -39,13 +39,15 @@ describe('Google Drive backup client', () => {
     const client = new GoogleDriveBackupClient({
       clientId: 'google-client-id',
       redirectUri: 'propertyadmin://oauth',
-      authorize: async request => {
+      authorize: async (request) => {
         authorizationUrl = request.authorizationUrl;
-        const state = new URL(request.authorizationUrl).searchParams.get('state');
+        const state = new URL(request.authorizationUrl).searchParams.get(
+          'state',
+        );
         return { code: 'authorization-code', state: state ?? '' };
       },
       tokenStore: tokenStore.store,
-      randomBytes: length => new Uint8Array(length).fill(7),
+      randomBytes: (length) => new Uint8Array(length).fill(7),
       fetch: async (_input, init) => {
         tokenRequest = init;
         return response({
@@ -59,13 +61,21 @@ describe('Google Drive backup client', () => {
     await expect(client.connect()).resolves.toBe(true);
 
     const authorization = new URL(authorizationUrl);
-    expect(authorization.searchParams.get('client_id')).toBe('google-client-id');
-    expect(authorization.searchParams.get('redirect_uri')).toBe('propertyadmin://oauth');
+    expect(authorization.searchParams.get('client_id')).toBe(
+      'google-client-id',
+    );
+    expect(authorization.searchParams.get('redirect_uri')).toBe(
+      'propertyadmin://oauth',
+    );
     expect(authorization.searchParams.get('scope')).toBe(
       'https://www.googleapis.com/auth/drive.file',
     );
-    expect(authorization.searchParams.get('code_challenge_method')).toBe('S256');
-    expect(authorization.searchParams.get('code_challenge')).toMatch(/^[\w-]{43}$/);
+    expect(authorization.searchParams.get('code_challenge_method')).toBe(
+      'S256',
+    );
+    expect(authorization.searchParams.get('code_challenge')).toMatch(
+      /^[\w-]{43}$/,
+    );
     expect(tokenRequest?.body).toContain('code_verifier=');
     expect(tokenStore.getTokens()).toMatchObject({
       accessToken: 'access-token',
@@ -80,9 +90,12 @@ describe('Google Drive backup client', () => {
     const client = new GoogleDriveBackupClient({
       clientId: 'google-client-id',
       redirectUri: 'propertyadmin://oauth',
-      authorize: async () => ({ code: 'authorization-code', state: 'wrong-state' }),
+      authorize: async () => ({
+        code: 'authorization-code',
+        state: 'wrong-state',
+      }),
       tokenStore: tokenStore.store,
-      randomBytes: length => new Uint8Array(length).fill(7),
+      randomBytes: (length) => new Uint8Array(length).fill(7),
       fetch,
     });
 
@@ -109,7 +122,9 @@ describe('Google Drive backup client', () => {
       fetch,
     });
 
-    await expect(client.getValidAccessToken()).resolves.toBe('new-access-token');
+    await expect(client.getValidAccessToken()).resolves.toBe(
+      'new-access-token',
+    );
     expect(tokenStore.getTokens()).toMatchObject({
       accessToken: 'new-access-token',
       refreshToken: 'refresh-token',
@@ -125,7 +140,7 @@ describe('Google Drive backup client', () => {
       redirectUri: 'propertyadmin://oauth',
       authorize: async () => null,
       tokenStore: tokenStore.store,
-      randomBytes: length => new Uint8Array(length).fill(7),
+      randomBytes: (length) => new Uint8Array(length).fill(7),
       fetch,
     });
 

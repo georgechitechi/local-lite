@@ -66,7 +66,7 @@ async function getNodeModules(): Promise<{ fs: NodeFS; path: NodePath }> {
       };
     }
     throw new Error(
-      'Node.js filesystem (fs) and path modules are not available in this environment.'
+      'Node.js filesystem (fs) and path modules are not available in this environment.',
     );
   }
 }
@@ -76,7 +76,7 @@ async function getNodeModules(): Promise<{ fs: NodeFS; path: NodePath }> {
  */
 export function parseSchemaIndexes(
   content: string,
-  options: { includeBusinessSyncIndexes?: boolean } = {}
+  options: { includeBusinessSyncIndexes?: boolean } = {},
 ): SchemaIndexDefinition[] {
   const lines = content.split(/\r?\n/);
   const includeBusiness = options.includeBusinessSyncIndexes ?? true;
@@ -115,7 +115,10 @@ export function parseSchemaIndexes(
     }
 
     // Skip empty relationships
-    if (line.includes('Relationships: [];') || line.includes('Relationships: []')) {
+    if (
+      line.includes('Relationships: [];') ||
+      line.includes('Relationships: []')
+    ) {
       continue;
     }
 
@@ -134,15 +137,17 @@ export function parseSchemaIndexes(
             /foreignKeyName:\s*['"]([^'"]+)['"][\s\S]*?columns:\s*\[([^\]]+)\][\s\S]*?isOneToOne:\s*(true|false)[\s\S]*?referencedRelation:\s*['"]([^'"]+)['"](?:[\s\S]*?referencedColumns:\s*\[([^\]]+)\])?/g;
           const matches = [...block.matchAll(itemRegex)];
           for (const m of matches) {
-            const columns = m[2].split(',').map(c => c.trim().replace(/['"]/g, ''));
+            const columns = m[2]
+              .split(',')
+              .map((c) => c.trim().replace(/['"]/g, ''));
             const isOneToOne = m[3] === 'true';
             const referencedRelation = m[4];
             const referencedColumns = m[5]
-              ? m[5].split(',').map(c => c.trim().replace(/['"]/g, ''))
+              ? m[5].split(',').map((c) => c.trim().replace(/['"]/g, ''))
               : undefined;
 
             const isUnique = isOneToOne ? 'UNIQUE ' : '';
-            const colSql = columns.map(c => `"${c}"`).join(', ');
+            const colSql = columns.map((c) => `"${c}"`).join(', ');
             const colSlug = columns.join('_');
             const indexName = `idx_${currentTable}_${colSlug}`;
 
@@ -172,11 +177,11 @@ export function parseSchemaIndexes(
         const idxName = `idx_${table}_biz_del`;
         if (
           !relationships.some(
-            r =>
+            (r) =>
               r.table === table &&
               r.columns.length === 2 &&
               r.columns.includes('business_id') &&
-              r.columns.includes('deleted')
+              r.columns.includes('deleted'),
           )
         ) {
           relationships.push({
@@ -184,7 +189,8 @@ export function parseSchemaIndexes(
             columns: ['business_id', 'deleted'],
             isOneToOne: false,
             sql: `CREATE INDEX IF NOT EXISTS "${idxName}" ON "${table}" ("business_id", "deleted");`,
-            comment: 'Composite business partition index for zero-latency local queries',
+            comment:
+              'Composite business partition index for zero-latency local queries',
           });
         }
       }
@@ -197,8 +203,10 @@ export function parseSchemaIndexes(
 /**
  * Generates TypeScript source code containing index definitions and an applicator helper.
  */
-export function formatSchemaIndexesCode(indexes: SchemaIndexDefinition[]): string {
-  const sqlStatements = indexes.map(i => i.sql).join('\n');
+export function formatSchemaIndexesCode(
+  indexes: SchemaIndexDefinition[],
+): string {
+  const sqlStatements = indexes.map((i) => i.sql).join('\n');
 
   return `/**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY.
@@ -237,7 +245,7 @@ export async function ensureSchemaIndexes(db: {
  */
 export async function generateSchemaIndexes(
   typesPathOrOptions: string | GenerateSchemaIndexesOptions,
-  maybeOutputPath?: string
+  maybeOutputPath?: string,
 ): Promise<GenerateSchemaIndexesResult> {
   const options: GenerateSchemaIndexesOptions =
     typeof typesPathOrOptions === 'string'
@@ -256,7 +264,9 @@ export async function generateSchemaIndexes(
   }
 
   if (!content) {
-    throw new Error('Either typesPath or typesContent must be provided to generateSchemaIndexes.');
+    throw new Error(
+      'Either typesPath or typesContent must be provided to generateSchemaIndexes.',
+    );
   }
 
   const indexes = parseSchemaIndexes(content, {

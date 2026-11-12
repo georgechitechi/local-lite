@@ -21,7 +21,9 @@ export interface RestoreEncryptedBackupOptions {
 function getRandomBytes(length: number): Uint8Array {
   const crypto = globalThis.crypto;
   if (!crypto?.getRandomValues) {
-    throw new Error('Secure random generation is unavailable for backup encryption.');
+    throw new Error(
+      'Secure random generation is unavailable for backup encryption.',
+    );
   }
   return crypto.getRandomValues(new Uint8Array(length));
 }
@@ -29,7 +31,10 @@ function getRandomBytes(length: number): Uint8Array {
 const ITERATIONS_LENGTH = 4;
 
 export function isEncryptedBackup(data: Uint8Array): boolean {
-  if (data.length < MAGIC_HEADER.length + ITERATIONS_LENGTH + SALT_LENGTH + IV_LENGTH + 16) {
+  if (
+    data.length <
+    MAGIC_HEADER.length + ITERATIONS_LENGTH + SALT_LENGTH + IV_LENGTH + 16
+  ) {
     return false;
   }
   for (let i = 0; i < MAGIC_HEADER.length; i++) {
@@ -44,7 +49,9 @@ export async function encryptBackupData(
   options: { iterations?: number } = {},
 ): Promise<Uint8Array> {
   if (!passphrase || !passphrase.trim()) {
-    throw new Error('A non-empty passphrase is required for backup encryption.');
+    throw new Error(
+      'A non-empty passphrase is required for backup encryption.',
+    );
   }
 
   const iterations = options.iterations ?? DEFAULT_ITERATIONS;
@@ -79,12 +86,17 @@ export async function encryptBackupData(
   const ciphertext = new Uint8Array(encryptedBuffer);
 
   // Payload format: [MAGIC(6)][ITERATIONS(4)][SALT(16)][IV(12)][CIPHERTEXT+TAG]
-  const headerSize = MAGIC_HEADER.length + ITERATIONS_LENGTH + SALT_LENGTH + IV_LENGTH;
+  const headerSize =
+    MAGIC_HEADER.length + ITERATIONS_LENGTH + SALT_LENGTH + IV_LENGTH;
   const result = new Uint8Array(headerSize + ciphertext.length);
 
   result.set(MAGIC_HEADER, 0);
 
-  const view = new DataView(result.buffer, result.byteOffset, result.byteLength);
+  const view = new DataView(
+    result.buffer,
+    result.byteOffset,
+    result.byteLength,
+  );
   view.setUint32(MAGIC_HEADER.length, iterations, false); // big-endian
 
   result.set(salt, MAGIC_HEADER.length + ITERATIONS_LENGTH);
@@ -100,11 +112,15 @@ export async function decryptBackupData(
   options: { iterations?: number } = {},
 ): Promise<Uint8Array> {
   if (!passphrase || !passphrase.trim()) {
-    throw new Error('A non-empty passphrase is required for backup decryption.');
+    throw new Error(
+      'A non-empty passphrase is required for backup decryption.',
+    );
   }
 
   if (!isEncryptedBackup(encryptedData)) {
-    throw new Error('Invalid backup file format: missing LLENC1 encryption header.');
+    throw new Error(
+      'Invalid backup file format: missing LLENC1 encryption header.',
+    );
   }
 
   const view = new DataView(
@@ -113,7 +129,9 @@ export async function decryptBackupData(
     encryptedData.byteLength,
   );
   const storedIterations = view.getUint32(MAGIC_HEADER.length, false);
-  const iterations = options.iterations ?? (storedIterations > 0 ? storedIterations : DEFAULT_ITERATIONS);
+  const iterations =
+    options.iterations ??
+    (storedIterations > 0 ? storedIterations : DEFAULT_ITERATIONS);
 
   const saltOffset = MAGIC_HEADER.length + ITERATIONS_LENGTH;
   const ivOffset = saltOffset + SALT_LENGTH;
@@ -173,9 +191,13 @@ export async function createEncryptedDatabaseBackup(
     throw new Error('Cannot create a backup from an empty database.');
   }
 
-  const encryptedBytes = await encryptBackupData(plainBytes, options.passphrase, {
-    iterations: options.iterations,
-  });
+  const encryptedBytes = await encryptBackupData(
+    plainBytes,
+    options.passphrase,
+    {
+      iterations: options.iterations,
+    },
+  );
 
   await storage.save(fileName, encryptedBytes);
   return fileName;

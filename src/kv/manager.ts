@@ -1,11 +1,13 @@
 import { DBExecutable } from '../core/schema-manager.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
-import {
-  decryptBackupData,
-  encryptBackupData,
-} from '../backups/encryption.js';
+import { decryptBackupData, encryptBackupData } from '../backups/encryption.js';
 import { base64UrlEncode, base64UrlDecode } from '../keys/signed-token.js';
-import { KVRecord, KVSetOptions, KVSetSecretOptions, KVStoreOptions } from './types.js';
+import {
+  KVRecord,
+  KVSetOptions,
+  KVSetSecretOptions,
+  KVStoreOptions,
+} from './types.js';
 import { DEFAULT_KV_TABLE, KVStore } from './store.js';
 
 export class KVManager {
@@ -15,10 +17,13 @@ export class KVManager {
   constructor(
     private db: DBExecutable,
     eventsOrOptions?: EventEmitter | KVStoreOptions,
-    options?: KVStoreOptions
+    options?: KVStoreOptions,
   ) {
     let opts: KVStoreOptions = {};
-    if (eventsOrOptions && typeof (eventsOrOptions as any).emit === 'function') {
+    if (
+      eventsOrOptions &&
+      typeof (eventsOrOptions as any).emit === 'function'
+    ) {
       this.events = eventsOrOptions as EventEmitter;
       opts = options || {};
     } else if (eventsOrOptions) {
@@ -35,7 +40,11 @@ export class KVManager {
    * Sets a value in the key-value store with optional TTL.
    * Emits an event on the event emitter if configured.
    */
-  async set(key: string, value: any, options: KVSetOptions = {}): Promise<void> {
+  async set(
+    key: string,
+    value: any,
+    options: KVSetOptions = {},
+  ): Promise<void> {
     const now = Date.now();
     const expiresAt =
       options.expiresAt !== undefined
@@ -61,7 +70,15 @@ export class KVManager {
       valueStr = JSON.stringify(value ?? null);
     }
 
-    await KVStore.set(this.db, this.tableName, key, valueStr, type, now, expiresAt);
+    await KVStore.set(
+      this.db,
+      this.tableName,
+      key,
+      valueStr,
+      type,
+      now,
+      expiresAt,
+    );
     this.events?.emit(this.tableName, { operation: 'SET', key, value });
   }
 
@@ -131,14 +148,24 @@ export class KVManager {
   /**
    * Stores an encrypted secret using AES-256-GCM + PBKDF2 passphrase encryption.
    */
-  async setSecret(key: string, secretValue: any, options: KVSetSecretOptions): Promise<void> {
+  async setSecret(
+    key: string,
+    secretValue: any,
+    options: KVSetSecretOptions,
+  ): Promise<void> {
     if (!options.passphrase) {
       throw new Error('Passphrase is required to store encrypted secret.');
     }
 
-    const strValue = typeof secretValue === 'string' ? secretValue : JSON.stringify(secretValue);
+    const strValue =
+      typeof secretValue === 'string'
+        ? secretValue
+        : JSON.stringify(secretValue);
     const plainBytes = new TextEncoder().encode(strValue);
-    const encryptedBytes = await encryptBackupData(plainBytes, options.passphrase);
+    const encryptedBytes = await encryptBackupData(
+      plainBytes,
+      options.passphrase,
+    );
     const encryptedBase64 = base64UrlEncode(encryptedBytes);
 
     const now = Date.now();
@@ -149,14 +176,26 @@ export class KVManager {
           ? now + options.ttlMs
           : null;
 
-    await KVStore.set(this.db, this.tableName, key, encryptedBase64, 'encrypted', now, expiresAt);
+    await KVStore.set(
+      this.db,
+      this.tableName,
+      key,
+      encryptedBase64,
+      'encrypted',
+      now,
+      expiresAt,
+    );
     this.events?.emit(this.tableName, { operation: 'SET_SECRET', key });
   }
 
   /**
    * Decrypts and retrieves a stored secret.
    */
-  async getSecret<T = any>(key: string, passphrase: string, defaultValue?: T): Promise<T | undefined> {
+  async getSecret<T = any>(
+    key: string,
+    passphrase: string,
+    defaultValue?: T,
+  ): Promise<T | undefined> {
     const record = await KVStore.get(this.db, this.tableName, key);
     if (!record) return defaultValue;
 

@@ -1,7 +1,16 @@
 import { RemoteStorageUploader, StorageProviderType } from './types.js';
-import { createSupabaseStorageUploader, SupabaseStorageUploaderOptions } from './supabase.js';
-import { createConvexStorageUploader, ConvexStorageUploaderOptions } from './convex.js';
-import { createFirebaseStorageUploader, FirebaseStorageUploaderOptions } from './firebase.js';
+import {
+  createSupabaseStorageUploader,
+  SupabaseStorageUploaderOptions,
+} from './supabase.js';
+import {
+  createConvexStorageUploader,
+  ConvexStorageUploaderOptions,
+} from './convex.js';
+import {
+  createFirebaseStorageUploader,
+  FirebaseStorageUploaderOptions,
+} from './firebase.js';
 
 export type UnifiedStorageOptions =
   | ({ provider: 'supabase' } & SupabaseStorageUploaderOptions)
@@ -15,16 +24,27 @@ export type UnifiedStorageOptions =
 export function createStorageUploader(
   provider: StorageProviderType,
   client: any,
-  options: any = {}
+  options: any = {},
 ): RemoteStorageUploader {
   switch (provider) {
     case 'supabase':
-      return createSupabaseStorageUploader(client, options as SupabaseStorageUploaderOptions);
+      return createSupabaseStorageUploader(
+        client,
+        options as SupabaseStorageUploaderOptions,
+      );
     case 'convex':
-      return createConvexStorageUploader(client, options as ConvexStorageUploaderOptions);
+      return createConvexStorageUploader(
+        client,
+        options as ConvexStorageUploaderOptions,
+      );
     case 'firebase':
-      return createFirebaseStorageUploader(client, options as FirebaseStorageUploaderOptions);
+      return createFirebaseStorageUploader(
+        client,
+        options as FirebaseStorageUploaderOptions,
+      );
     default:
-      throw new Error(`Unsupported storage provider "${provider}". Supported providers: "supabase", "convex", "firebase".`);
+      throw new Error(
+        `Unsupported storage provider "${provider}". Supported providers: "supabase", "convex", "firebase".`,
+      );
   }
 }

@@ -7,13 +7,17 @@ import type {
 } from './operations.js';
 import { performBackup, performRestore } from './operations.js';
 import type { CloudBackupFile } from './cloud-storage.js';
-import type { EncryptedBackupOptions, RestoreEncryptedBackupOptions } from './encryption.js';
+import type {
+  EncryptedBackupOptions,
+  RestoreEncryptedBackupOptions,
+} from './encryption.js';
 import type {
   MicrosoftAuthClient,
   MicrosoftAuthClientOptions,
 } from '../auth/microsoft.js';
 
-export const MICROSOFT_GRAPH_DRIVE = 'https://graph.microsoft.com/v1.0/me/drive';
+export const MICROSOFT_GRAPH_DRIVE =
+  'https://graph.microsoft.com/v1.0/me/drive';
 const BACKUP_FOLDER = 'backups';
 
 export class OneDriveBackupStorage implements BackupStorage {
@@ -62,7 +66,9 @@ export class OneDriveBackupStorage implements BackupStorage {
     });
 
     if (!response.ok) {
-      throw new Error(`OneDrive download failed (${response.status}): ${response.statusText}`);
+      throw new Error(
+        `OneDrive download failed (${response.status}): ${response.statusText}`,
+      );
     }
 
     return new Uint8Array(await response.arrayBuffer());
@@ -82,7 +88,9 @@ export class OneDriveBackupStorage implements BackupStorage {
     });
 
     if (!response.ok && response.status !== 404) {
-      throw new Error(`OneDrive delete failed (${response.status}): ${response.statusText}`);
+      throw new Error(
+        `OneDrive delete failed (${response.status}): ${response.statusText}`,
+      );
     }
   }
 
@@ -99,16 +107,23 @@ export class OneDriveBackupStorage implements BackupStorage {
     }
 
     if (!response.ok) {
-      throw new Error(`OneDrive list failed (${response.status}): ${response.statusText}`);
+      throw new Error(
+        `OneDrive list failed (${response.status}): ${response.statusText}`,
+      );
     }
 
     const result = (await response.json()) as {
-      value?: Array<{ id: string; name: string; size?: number; lastModifiedDateTime?: string }>;
+      value?: Array<{
+        id: string;
+        name: string;
+        size?: number;
+        lastModifiedDateTime?: string;
+      }>;
     };
 
     return (result.value ?? [])
-      .filter(item => item.name.endsWith('.db'))
-      .map(item => ({
+      .filter((item) => item.name.endsWith('.db'))
+      .map((item) => ({
         id: item.id,
         name: item.name,
         size: item.size,
@@ -125,7 +140,9 @@ export type OneDriveBackupClientOptions =
     };
 
 export class OneDriveBackupClient implements CloudBackupClient {
-  static AuthClientClass: (new (options: MicrosoftAuthClientOptions) => MicrosoftAuthClient) | null = null;
+  static AuthClientClass:
+    (new (options: MicrosoftAuthClientOptions) => MicrosoftAuthClient) | null =
+    null;
   private readonly storage: OneDriveBackupStorage;
   private readonly authClient: MicrosoftAuthClient;
   private readonly listeners = new Set<(connected: boolean) => void>();
@@ -162,7 +179,7 @@ export class OneDriveBackupClient implements CloudBackupClient {
       );
     }
 
-    this.authClient.onAuthStateChange(user => {
+    this.authClient.onAuthStateChange((user) => {
       this.notify(Boolean(user));
     });
   }

@@ -10,7 +10,7 @@ export class MetaStore {
       `CREATE TABLE IF NOT EXISTS sync_meta (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
-      );`
+      );`,
     );
   }
 
@@ -21,7 +21,7 @@ export class MetaStore {
     try {
       const rows = await db.execute(
         `SELECT value FROM sync_meta WHERE key = ? LIMIT 1`,
-        [key]
+        [key],
       );
       if (rows && rows.length > 0) {
         return rows[0].value ?? null;
@@ -35,17 +35,24 @@ export class MetaStore {
   /**
    * Sets a metadata value by key (atomic upsert).
    */
-  static async set(db: LocalDBAdapter | LocalTransaction, key: string, value: string): Promise<void> {
+  static async set(
+    db: LocalDBAdapter | LocalTransaction,
+    key: string,
+    value: string,
+  ): Promise<void> {
     await db.execute(
       `INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)`,
-      [key, String(value)]
+      [key, String(value)],
     );
   }
 
   /**
    * Retrieves the persisted last_synced_at cursor timestamp (in ms). Returns 0 if never synced.
    */
-  static async getLastSyncedAt(db: LocalDBAdapter, key = 'last_synced_at'): Promise<number> {
+  static async getLastSyncedAt(
+    db: LocalDBAdapter,
+    key = 'last_synced_at',
+  ): Promise<number> {
     const val = await this.get(db, key);
     if (!val) return 0;
     const parsed = parseInt(val, 10);
@@ -58,7 +65,7 @@ export class MetaStore {
   static async setLastSyncedAt(
     db: LocalDBAdapter | LocalTransaction,
     timestamp: number,
-    key = 'last_synced_at'
+    key = 'last_synced_at',
   ): Promise<void> {
     await this.set(db, key, String(timestamp));
   }
@@ -66,7 +73,10 @@ export class MetaStore {
   /**
    * Clears the persisted cursor (forces next pull to re-query active remote records).
    */
-  static async clearLastSyncedAt(db: LocalDBAdapter | LocalTransaction, key = 'last_synced_at'): Promise<void> {
+  static async clearLastSyncedAt(
+    db: LocalDBAdapter | LocalTransaction,
+    key = 'last_synced_at',
+  ): Promise<void> {
     try {
       await db.execute(`DELETE FROM sync_meta WHERE key = ?`, [key]);
     } catch {

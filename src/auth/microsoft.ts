@@ -8,7 +8,12 @@ import {
 } from '../backups/onedrive.js';
 
 export const MICROSOFT_GRAPH_ENDPOINT = 'https://graph.microsoft.com/v1.0';
-export const DEFAULT_MICROSOFT_AUTH_SCOPES = ['openid', 'profile', 'email', 'User.Read'];
+export const DEFAULT_MICROSOFT_AUTH_SCOPES = [
+  'openid',
+  'profile',
+  'email',
+  'User.Read',
+];
 
 export interface MicrosoftUser extends AuthUser {
   provider: 'microsoft';
@@ -67,7 +72,8 @@ export interface MicrosoftAuthClientOptions {
 }
 
 function secureRandomBytes(length: number): Uint8Array {
-  const crypto = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const crypto =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (!crypto?.getRandomValues) {
     const fallback = new Uint8Array(length);
     for (let i = 0; i < length; i++) {
@@ -87,9 +93,11 @@ function base64UrlEncode(bytes: Uint8Array): string {
     const second = bytes[index + 1];
     const third = bytes[index + 2];
     result += alphabet[first >> 2];
-    result += alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
+    result +=
+      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
     if (second !== undefined) {
-      result += alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
+      result +=
+        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
     }
     if (third !== undefined) result += alphabet[third & 63];
   }
@@ -102,7 +110,8 @@ function validateTokens(value: unknown): value is MicrosoftAuthTokens {
   return (
     typeof tokens.accessToken === 'string' &&
     typeof tokens.expiresAt === 'number' &&
-    (tokens.refreshToken === undefined || typeof tokens.refreshToken === 'string') &&
+    (tokens.refreshToken === undefined ||
+      typeof tokens.refreshToken === 'string') &&
     (tokens.idToken === undefined || typeof tokens.idToken === 'string')
   );
 }
@@ -122,14 +131,14 @@ export function createInMemoryMicrosoftTokenStore(): MicrosoftAuthTokenStore {
   let storedUser: MicrosoftUser | null = null;
   return {
     getTokens: async () => storedTokens,
-    setTokens: async tokens => {
+    setTokens: async (tokens) => {
       storedTokens = tokens;
     },
     removeTokens: async () => {
       storedTokens = null;
     },
     getUser: async () => storedUser,
-    setUser: async user => {
+    setUser: async (user) => {
       storedUser = user;
     },
   };
@@ -146,13 +155,13 @@ export function createMicrosoftAuthTokenStore(
       const raw = await storage.getItem(tokensKey);
       return validateTokens(raw) ? raw : null;
     },
-    setTokens: tokens => storage.setItem(tokensKey, tokens),
+    setTokens: (tokens) => storage.setItem(tokensKey, tokens),
     removeTokens: () => storage.removeItem(tokensKey),
     getUser: async () => {
       const raw = await storage.getItem(userKey);
       return validateUser(raw) ? raw : null;
     },
-    setUser: async user => {
+    setUser: async (user) => {
       if (user) {
         await storage.setItem(userKey, user);
       } else {
@@ -197,7 +206,9 @@ export class MicrosoftAuthClient {
     return `https://login.microsoftonline.com/${this.tenant}/oauth2/v2.0/token`;
   }
 
-  onAuthStateChange(listener: (user: MicrosoftUser | null) => void): () => void {
+  onAuthStateChange(
+    listener: (user: MicrosoftUser | null) => void,
+  ): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -220,16 +231,19 @@ export class MicrosoftAuthClient {
     const verifierBytes = randomBytes(32);
     const stateBytes = randomBytes(32);
     if (verifierBytes.length !== 32 || stateBytes.length !== 32) {
-      throw new Error('The randomBytes provider returned an invalid number of bytes.');
+      throw new Error(
+        'The randomBytes provider returned an invalid number of bytes.',
+      );
     }
 
     const codeVerifier = base64UrlEncode(verifierBytes);
     const codeChallenge = base64UrlEncode(sha256(utf8ToBytes(codeVerifier)));
     const state = base64UrlEncode(stateBytes);
 
-    const scopes = this.options.scopes && this.options.scopes.length > 0
-      ? this.options.scopes
-      : DEFAULT_MICROSOFT_AUTH_SCOPES;
+    const scopes =
+      this.options.scopes && this.options.scopes.length > 0
+        ? this.options.scopes
+        : DEFAULT_MICROSOFT_AUTH_SCOPES;
 
     const authorizationParams = new URLSearchParams({
       client_id: this.options.clientId,
@@ -254,7 +268,9 @@ export class MicrosoftAuthClient {
     }
 
     if (authorization.state !== state) {
-      throw new Error('Microsoft OAuth state validation failed. Please try connecting again.');
+      throw new Error(
+        'Microsoft OAuth state validation failed. Please try connecting again.',
+      );
     }
 
     if (!authorization.code) {
@@ -277,7 +293,9 @@ export class MicrosoftAuthClient {
     const payload = (await response.json()) as any;
     if (!response.ok) {
       throw new Error(
-        payload.error_description || payload.error || `Microsoft OAuth token request failed (${response.status}).`
+        payload.error_description ||
+          payload.error ||
+          `Microsoft OAuth token request failed (${response.status}).`,
       );
     }
 
@@ -352,12 +370,15 @@ export class MicrosoftAuthClient {
     }
 
     if (!tokens.refreshToken) {
-      throw new Error('Your Microsoft sign-in session expired. Please sign in again.');
+      throw new Error(
+        'Your Microsoft sign-in session expired. Please sign in again.',
+      );
     }
 
-    const scopes = this.options.scopes && this.options.scopes.length > 0
-      ? this.options.scopes
-      : DEFAULT_MICROSOFT_AUTH_SCOPES;
+    const scopes =
+      this.options.scopes && this.options.scopes.length > 0
+        ? this.options.scopes
+        : DEFAULT_MICROSOFT_AUTH_SCOPES;
 
     const response = await this.fetcher(this.tokenEndpoint, {
       method: 'POST',
@@ -373,12 +394,16 @@ export class MicrosoftAuthClient {
     const payload = (await response.json()) as any;
     if (!response.ok) {
       throw new Error(
-        payload.error_description || payload.error || `Microsoft OAuth token refresh failed (${response.status}).`
+        payload.error_description ||
+          payload.error ||
+          `Microsoft OAuth token refresh failed (${response.status}).`,
       );
     }
 
     if (!payload.access_token) {
-      throw new Error('Microsoft OAuth token refresh did not return an access token.');
+      throw new Error(
+        'Microsoft OAuth token refresh did not return an access token.',
+      );
     }
 
     const updatedTokens: MicrosoftAuthTokens = {
@@ -400,13 +425,20 @@ export class MicrosoftAuthClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch Microsoft user profile (${res.status}).`);
+      throw new Error(
+        `Failed to fetch Microsoft user profile (${res.status}).`,
+      );
     }
 
     const raw = (await res.json()) as any;
-    const email = (raw.mail || raw.userPrincipalName || '').trim().toLowerCase();
+    const email = (raw.mail || raw.userPrincipalName || '')
+      .trim()
+      .toLowerCase();
     const sub = String(raw.id || raw.sub || 'microsoft_user');
-    const id = resolveUnifiedUserId({ id: sub, email, emailVerified: true }, 'microsoft');
+    const id = resolveUnifiedUserId(
+      { id: sub, email, emailVerified: true },
+      'microsoft',
+    );
     const name = raw.displayName || email || 'Microsoft User';
 
     return {
@@ -435,7 +467,9 @@ export class MicrosoftAuthClient {
     );
   }
 
-  createOneDriveBackupClient(options?: Partial<OneDriveBackupClientOptions>): OneDriveBackupClient {
+  createOneDriveBackupClient(
+    options?: Partial<OneDriveBackupClientOptions>,
+  ): OneDriveBackupClient {
     return new OneDriveBackupClient({
       authClient: this,
       fetch: this.fetcher,
@@ -445,4 +479,3 @@ export class MicrosoftAuthClient {
 }
 
 OneDriveBackupClient.AuthClientClass = MicrosoftAuthClient;
-

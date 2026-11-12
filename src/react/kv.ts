@@ -11,7 +11,7 @@ import { LocalFirstClient } from '../core/client.js';
 export function useKV<T = any>(
   client: LocalFirstClient | null | undefined,
   key: string,
-  defaultValue?: T
+  defaultValue?: T,
 ): [T | undefined, (value: T) => Promise<void>, boolean] {
   const [value, setValueState] = useState<T | undefined>(defaultValue);
   const [loading, setLoading] = useState<boolean>(true);
@@ -57,7 +57,7 @@ export function useKV<T = any>(
       await client.kv.set(key, newValue);
       setValueState(newValue);
     },
-    [client, key]
+    [client, key],
   );
 
   return [value, setKVValue, loading];

@@ -9,7 +9,8 @@ import {
   VerifySignedTokenResult,
 } from './types.js';
 
-const B64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const B64URL_ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 const B64URL_LOOKUP = new Uint8Array(256);
 for (let i = 0; i < B64URL_ALPHABET.length; i++) {
@@ -23,9 +24,15 @@ export function base64UrlEncode(bytes: Uint8Array): string {
     const second = bytes[i + 1];
     const third = bytes[i + 2];
     result += B64URL_ALPHABET[first >> 2];
-    result += B64URL_ALPHABET[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
+    result +=
+      B64URL_ALPHABET[
+        ((first & 3) << 4) | (second === undefined ? 0 : second >> 4)
+      ];
     if (second !== undefined) {
-      result += B64URL_ALPHABET[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
+      result +=
+        B64URL_ALPHABET[
+          ((second & 15) << 2) | (third === undefined ? 0 : third >> 6)
+        ];
     }
     if (third !== undefined) {
       result += B64URL_ALPHABET[third & 63];
@@ -52,8 +59,10 @@ export function base64UrlDecode(str: string): Uint8Array {
   for (let i = 0; i < len; i += 4) {
     const c0 = B64URL_LOOKUP[clean.charCodeAt(i)];
     const c1 = B64URL_LOOKUP[clean.charCodeAt(i + 1)];
-    const c2 = clean[i + 2] === '=' ? 0 : B64URL_LOOKUP[clean.charCodeAt(i + 2)];
-    const c3 = clean[i + 3] === '=' ? 0 : B64URL_LOOKUP[clean.charCodeAt(i + 3)];
+    const c2 =
+      clean[i + 2] === '=' ? 0 : B64URL_LOOKUP[clean.charCodeAt(i + 2)];
+    const c3 =
+      clean[i + 3] === '=' ? 0 : B64URL_LOOKUP[clean.charCodeAt(i + 3)];
 
     bytes[byteIndex++] = (c0 << 2) | (c1 >> 4);
     if (clean[i + 2] !== '=' && byteIndex < byteLen) {
@@ -77,7 +86,7 @@ function computeHmacSignature(content: string, secret: string): string {
  * Format: [base64urlHeader].[base64urlPayload].[signature]
  */
 export function createSignedToken<T = Record<string, any>>(
-  options: CreateSignedTokenOptions<T>
+  options: CreateSignedTokenOptions<T>,
 ): string {
   if (!options.secret) {
     throw new Error('Signing secret is required to create a signed token.');
@@ -117,7 +126,7 @@ export function createSignedToken<T = Record<string, any>>(
 export function verifySignedToken<T = Record<string, any>>(
   token: string,
   secret: string,
-  options: { clockSkewSeconds?: number } = {}
+  options: { clockSkewSeconds?: number } = {},
 ): VerifySignedTokenResult<T> {
   if (!token || typeof token !== 'string') {
     return { valid: false, error: 'Token is missing or empty' };
@@ -128,7 +137,10 @@ export function verifySignedToken<T = Record<string, any>>(
 
   const parts = token.trim().split('.');
   if (parts.length !== 3) {
-    return { valid: false, error: 'Malformed token structure: expected 3 parts' };
+    return {
+      valid: false,
+      error: 'Malformed token structure: expected 3 parts',
+    };
   }
 
   const [headerB64, payloadB64, signature] = parts;
@@ -146,7 +158,10 @@ export function verifySignedToken<T = Record<string, any>>(
     const jsonStr = new TextDecoder().decode(base64UrlDecode(payloadB64));
     parsedPayload = JSON.parse(jsonStr);
   } catch (err: any) {
-    return { valid: false, error: `Failed to decode token payload: ${err?.message || err}` };
+    return {
+      valid: false,
+      error: `Failed to decode token payload: ${err?.message || err}`,
+    };
   }
 
   // 3. Verify Expiration
@@ -182,7 +197,7 @@ export function verifySignedToken<T = Record<string, any>>(
 export function renewSignedToken<T = Record<string, any>>(
   token: string,
   secret: string,
-  options: RenewSignedTokenOptions = {}
+  options: RenewSignedTokenOptions = {},
 ): string {
   const verification = verifySignedToken<T>(token, secret);
   if (!verification.valid && !verification.expired) {

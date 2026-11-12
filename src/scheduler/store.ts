@@ -8,7 +8,8 @@ export function mapJobRow(r: any): JobRecord {
   let payload: any = undefined;
   if (r.payload) {
     try {
-      payload = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
+      payload =
+        typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
     } catch {
       payload = r.payload;
     }
@@ -43,7 +44,7 @@ export class JobStore {
   static async ensureSchema(
     db: DBExecutable,
     jobsTable: string = DEFAULT_JOBS_TABLE,
-    runsTable: string = DEFAULT_JOB_RUNS_TABLE
+    runsTable: string = DEFAULT_JOB_RUNS_TABLE,
   ): Promise<void> {
     await db.execute(
       `CREATE TABLE IF NOT EXISTS ${jobsTable} (
@@ -56,11 +57,11 @@ export class JobStore {
         enabled INTEGER NOT NULL DEFAULT 1,
         payload TEXT,
         created_at INTEGER NOT NULL
-      );`
+      );`,
     );
 
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${jobsTable}_next ON ${jobsTable} (next_run_at);`
+      `CREATE INDEX IF NOT EXISTS idx_${jobsTable}_next ON ${jobsTable} (next_run_at);`,
     );
 
     await db.execute(
@@ -72,20 +73,21 @@ export class JobStore {
         finished_at INTEGER,
         duration_ms INTEGER,
         error TEXT
-      );`
+      );`,
     );
 
     await db.execute(
-      `CREATE INDEX IF NOT EXISTS idx_${runsTable}_job ON ${runsTable} (job_id, started_at);`
+      `CREATE INDEX IF NOT EXISTS idx_${runsTable}_job ON ${runsTable} (job_id, started_at);`,
     );
   }
 
   static async upsertJob(
     db: DBExecutable,
     jobsTable: string = DEFAULT_JOBS_TABLE,
-    job: JobRecord
+    job: JobRecord,
   ): Promise<void> {
-    const payloadStr = job.payload !== undefined ? JSON.stringify(job.payload) : null;
+    const payloadStr =
+      job.payload !== undefined ? JSON.stringify(job.payload) : null;
     await db.execute(
       `INSERT INTO ${jobsTable} (id, name, schedule, interval_ms, last_run_at, next_run_at, enabled, payload, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -107,36 +109,41 @@ export class JobStore {
         job.enabled ? 1 : 0,
         payloadStr,
         job.createdAt,
-      ]
+      ],
     );
   }
 
   static async getJob(
     db: DBExecutable,
     jobsTable: string = DEFAULT_JOBS_TABLE,
-    id: string
+    id: string,
   ): Promise<JobRecord | null> {
-    const rows = await db.execute(`SELECT * FROM ${jobsTable} WHERE id = ? LIMIT 1;`, [id]);
+    const rows = await db.execute(
+      `SELECT * FROM ${jobsTable} WHERE id = ? LIMIT 1;`,
+      [id],
+    );
     if (!rows || rows.length === 0) return null;
     return mapJobRow(rows[0]);
   }
 
   static async getAllJobs(
     db: DBExecutable,
-    jobsTable: string = DEFAULT_JOBS_TABLE
+    jobsTable: string = DEFAULT_JOBS_TABLE,
   ): Promise<JobRecord[]> {
-    const rows = await db.execute(`SELECT * FROM ${jobsTable} ORDER BY next_run_at ASC;`);
+    const rows = await db.execute(
+      `SELECT * FROM ${jobsTable} ORDER BY next_run_at ASC;`,
+    );
     return (rows || []).map(mapJobRow);
   }
 
   static async getDueJobs(
     db: DBExecutable,
     jobsTable: string = DEFAULT_JOBS_TABLE,
-    now: number = Date.now()
+    now: number = Date.now(),
   ): Promise<JobRecord[]> {
     const rows = await db.execute(
       `SELECT * FROM ${jobsTable} WHERE enabled = 1 AND next_run_at <= ? ORDER BY next_run_at ASC;`,
-      [now]
+      [now],
     );
     return (rows || []).map(mapJobRow);
   }
@@ -146,11 +153,11 @@ export class JobStore {
     jobsTable: string = DEFAULT_JOBS_TABLE,
     id: string,
     lastRunAt: number,
-    nextRunAt: number
+    nextRunAt: number,
   ): Promise<void> {
     await db.execute(
       `UPDATE ${jobsTable} SET last_run_at = ?, next_run_at = ? WHERE id = ?;`,
-      [lastRunAt, nextRunAt, id]
+      [lastRunAt, nextRunAt, id],
     );
   }
 
@@ -158,15 +165,18 @@ export class JobStore {
     db: DBExecutable,
     jobsTable: string = DEFAULT_JOBS_TABLE,
     id: string,
-    enabled: boolean
+    enabled: boolean,
   ): Promise<void> {
-    await db.execute(`UPDATE ${jobsTable} SET enabled = ? WHERE id = ?;`, [enabled ? 1 : 0, id]);
+    await db.execute(`UPDATE ${jobsTable} SET enabled = ? WHERE id = ?;`, [
+      enabled ? 1 : 0,
+      id,
+    ]);
   }
 
   static async deleteJob(
     db: DBExecutable,
     jobsTable: string = DEFAULT_JOBS_TABLE,
-    id: string
+    id: string,
   ): Promise<void> {
     await db.execute(`DELETE FROM ${jobsTable} WHERE id = ?;`, [id]);
   }
@@ -176,12 +186,12 @@ export class JobStore {
   static async recordRunStart(
     db: DBExecutable,
     runsTable: string = DEFAULT_JOB_RUNS_TABLE,
-    run: JobRunRecord
+    run: JobRunRecord,
   ): Promise<void> {
     await db.execute(
       `INSERT INTO ${runsTable} (id, job_id, status, started_at, finished_at, duration_ms, error)
        VALUES (?, ?, ?, ?, ?, ?, ?);`,
-      [run.id, run.jobId, run.status, run.startedAt, null, null, null]
+      [run.id, run.jobId, run.status, run.startedAt, null, null, null],
     );
   }
 
@@ -192,11 +202,11 @@ export class JobStore {
     status: 'SUCCESS' | 'FAILED',
     finishedAt: number,
     durationMs: number,
-    error?: string | null
+    error?: string | null,
   ): Promise<void> {
     await db.execute(
       `UPDATE ${runsTable} SET status = ?, finished_at = ?, duration_ms = ?, error = ? WHERE id = ?;`,
-      [status, finishedAt, durationMs, error ?? null, id]
+      [status, finishedAt, durationMs, error ?? null, id],
     );
   }
 
@@ -204,18 +214,18 @@ export class JobStore {
     db: DBExecutable,
     runsTable: string = DEFAULT_JOB_RUNS_TABLE,
     jobId?: string,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<JobRunRecord[]> {
     let rows: any[];
     if (jobId) {
       rows = await db.execute(
         `SELECT * FROM ${runsTable} WHERE job_id = ? ORDER BY started_at DESC LIMIT ?;`,
-        [jobId, limit]
+        [jobId, limit],
       );
     } else {
       rows = await db.execute(
         `SELECT * FROM ${runsTable} ORDER BY started_at DESC LIMIT ?;`,
-        [limit]
+        [limit],
       );
     }
     return (rows || []).map(mapJobRunRow);
@@ -224,8 +234,10 @@ export class JobStore {
   static async pruneRuns(
     db: DBExecutable,
     runsTable: string = DEFAULT_JOB_RUNS_TABLE,
-    cutoffTimestamp: number
+    cutoffTimestamp: number,
   ): Promise<void> {
-    await db.execute(`DELETE FROM ${runsTable} WHERE started_at < ?;`, [cutoffTimestamp]);
+    await db.execute(`DELETE FROM ${runsTable} WHERE started_at < ?;`, [
+      cutoffTimestamp,
+    ]);
   }
 }

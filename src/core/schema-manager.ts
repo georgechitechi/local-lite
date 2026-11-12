@@ -7,9 +7,12 @@ export interface DBExecutable {
 /**
  * Detects the appropriate SQLite column type affinity from a JavaScript runtime value.
  */
-export function detectSQLiteType(value: any): 'INTEGER' | 'REAL' | 'TEXT' | 'BLOB' {
+export function detectSQLiteType(
+  value: any,
+): 'INTEGER' | 'REAL' | 'TEXT' | 'BLOB' {
   if (typeof value === 'boolean') return 'INTEGER';
-  if (typeof value === 'number') return Number.isInteger(value) ? 'INTEGER' : 'REAL';
+  if (typeof value === 'number')
+    return Number.isInteger(value) ? 'INTEGER' : 'REAL';
   if (value instanceof Uint8Array) return 'BLOB';
   return 'TEXT';
 }
@@ -22,7 +25,8 @@ export function detectSQLiteType(value: any): 'INTEGER' | 'REAL' | 'TEXT' | 'BLO
 export function formatValueForStorage(value: any): any {
   if (value === null || value === undefined) return null;
   if (typeof value === 'boolean') return value ? 1 : 0;
-  if (typeof value === 'object' && !(value instanceof Uint8Array)) return JSON.stringify(value);
+  if (typeof value === 'object' && !(value instanceof Uint8Array))
+    return JSON.stringify(value);
   return value;
 }
 
@@ -46,17 +50,26 @@ export class SchemaManager {
    * at most once per table (cached). Unlike ensureTableIntrospected, this has no
    * side effects (no auto-indexing), so it is safe on hand-written schemas.
    */
-  async tableHasColumn(db: DBExecutable, tableName: string, column: string): Promise<boolean> {
+  async tableHasColumn(
+    db: DBExecutable,
+    tableName: string,
+    column: string,
+  ): Promise<boolean> {
     if (this.hasColumn(tableName, column)) return true;
     const probeKey = `${tableName}:__probed__`;
     if (!this.knownColumns.has(probeKey)) {
       try {
-        const tableInfo = await db.execute(`PRAGMA table_info(${escapeIdentifier(tableName)});`);
+        const tableInfo = await db.execute(
+          `PRAGMA table_info(${escapeIdentifier(tableName)});`,
+        );
         if (Array.isArray(tableInfo) && tableInfo.length > 0) {
           // Only cache once the table exists, so tables created later get re-probed.
           this.knownColumns.add(probeKey);
           for (const col of tableInfo) {
-            if (col?.name) this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
+            if (col?.name)
+              this.knownColumns.add(
+                `${tableName}:${String(col.name).toLowerCase()}`,
+              );
           }
         }
       } catch {}
@@ -67,7 +80,10 @@ export class SchemaManager {
   /**
    * Introspects table columns via PRAGMA table_info if not previously cached.
    */
-  async ensureTableIntrospected(db: DBExecutable, tableName: string): Promise<void> {
+  async ensureTableIntrospected(
+    db: DBExecutable,
+    tableName: string,
+  ): Promise<void> {
     const cacheKey = `${tableName}:__introspected__`;
     if (this.knownColumns.has(cacheKey)) return;
     this.knownColumns.add(cacheKey);
@@ -79,7 +95,9 @@ export class SchemaManager {
       if (Array.isArray(tableInfo)) {
         for (const col of tableInfo) {
           if (col?.name) {
-            this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
+            this.knownColumns.add(
+              `${tableName}:${String(col.name).toLowerCase()}`,
+            );
             cols.push(String(col.name));
           }
         }
@@ -95,17 +113,24 @@ export class SchemaManager {
     db: DBExecutable,
     tableName: string,
     safeTable: string,
-    columns: string[]
+    columns: string[],
   ): Promise<void> {
     const hasDeleted = this.knownColumns.has(`${tableName}:deleted`);
     for (const key of columns) {
       const lower = key.toLowerCase();
-      if (lower.endsWith('_id') || lower === 'deleted' || lower === 'created_at' || lower === 'updated_at') {
+      if (
+        lower.endsWith('_id') ||
+        lower === 'deleted' ||
+        lower === 'created_at' ||
+        lower === 'updated_at'
+      ) {
         const indexKey = `${tableName}:${lower}`;
         if (!this.knownIndexes.has(indexKey)) {
           this.knownIndexes.add(indexKey);
           try {
-            await db.execute(`CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${tableName}_${key}`)} ON ${safeTable} (${escapeIdentifier(key)});`);
+            await db.execute(
+              `CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${tableName}_${key}`)} ON ${safeTable} (${escapeIdentifier(key)});`,
+            );
           } catch {}
         }
       }
@@ -115,7 +140,9 @@ export class SchemaManager {
         if (!this.knownIndexes.has(compositeKey)) {
           this.knownIndexes.add(compositeKey);
           try {
-            await db.execute(`CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${tableName}_${lower}_del`)} ON ${safeTable} (${escapeIdentifier(key)}, "deleted");`);
+            await db.execute(
+              `CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${tableName}_${lower}_del`)} ON ${safeTable} (${escapeIdentifier(key)}, "deleted");`,
+            );
           } catch {}
         }
       }
@@ -128,7 +155,7 @@ export class SchemaManager {
   async ensureTable(
     db: DBExecutable,
     tableName: string,
-    primaryKey: string = 'id'
+    primaryKey: string = 'id',
   ): Promise<void> {
     if (this.knownTables.has(tableName)) return;
 
@@ -136,7 +163,7 @@ export class SchemaManager {
     const safePk = escapeIdentifier(primaryKey);
 
     await db.execute(
-      `CREATE TABLE IF NOT EXISTS ${safeTable} (${safePk} TEXT PRIMARY KEY);`
+      `CREATE TABLE IF NOT EXISTS ${safeTable} (${safePk} TEXT PRIMARY KEY);`,
     );
 
     this.knownTables.add(tableName);
@@ -151,7 +178,7 @@ export class SchemaManager {
     db: DBExecutable,
     tableName: string,
     payload: Record<string, any> | null,
-    primaryKey: string = 'id'
+    primaryKey: string = 'id',
   ): Promise<Record<string, any>> {
     await this.ensureTable(db, tableName, primaryKey);
 
@@ -163,7 +190,10 @@ export class SchemaManager {
     let cacheMiss = false;
 
     for (const key of keys) {
-      if (key !== primaryKey && !this.knownColumns.has(`${tableName}:${key.toLowerCase()}`)) {
+      if (
+        key !== primaryKey &&
+        !this.knownColumns.has(`${tableName}:${key.toLowerCase()}`)
+      ) {
         cacheMiss = true;
         break;
       }
@@ -175,7 +205,9 @@ export class SchemaManager {
         if (Array.isArray(tableInfo)) {
           for (const col of tableInfo) {
             if (col?.name) {
-              this.knownColumns.add(`${tableName}:${String(col.name).toLowerCase()}`);
+              this.knownColumns.add(
+                `${tableName}:${String(col.name).toLowerCase()}`,
+              );
             }
           }
         }
@@ -187,7 +219,9 @@ export class SchemaManager {
         if (!this.knownColumns.has(cacheKey)) {
           const detectedType = detectSQLiteType(payload[key]);
           try {
-            await db.execute(`ALTER TABLE ${safeTable} ADD COLUMN ${escapeIdentifier(key)} ${detectedType};`);
+            await db.execute(
+              `ALTER TABLE ${safeTable} ADD COLUMN ${escapeIdentifier(key)} ${detectedType};`,
+            );
           } catch {}
           this.knownColumns.add(cacheKey);
         }

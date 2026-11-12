@@ -10,7 +10,6 @@ import {
   hashPassword,
   verifyPassword,
   generateCryptoToken,
-  LocalUser,
 } from '../src/auth/local.js';
 import { useLocalAuth } from '../src/react/auth.js';
 
@@ -53,17 +52,35 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       expect(res1.salt).not.toBe(res2.salt);
       expect(res1.hash).not.toBe(res2.hash);
 
-      const isValid = await verifyPassword(password, res1.hash, res1.salt, res1.iterations, res1.algorithm);
+      const isValid = await verifyPassword(
+        password,
+        res1.hash,
+        res1.salt,
+        res1.iterations,
+        res1.algorithm,
+      );
       expect(isValid).toBe(true);
 
-      const isInvalid = await verifyPassword('WrongPassword', res1.hash, res1.salt, res1.iterations, res1.algorithm);
+      const isInvalid = await verifyPassword(
+        'WrongPassword',
+        res1.hash,
+        res1.salt,
+        res1.iterations,
+        res1.algorithm,
+      );
       expect(isInvalid).toBe(false);
     });
 
     it('hashes passwords using PBKDF2-SHA512 when requested', async () => {
       const password = 'SuperSecretPassword123!';
-      const res1 = await hashPassword(password, { iterations: 1000, algorithm: 'PBKDF2-SHA512' });
-      const res2 = await hashPassword(password, { iterations: 1000, algorithm: 'PBKDF2-SHA512' });
+      const res1 = await hashPassword(password, {
+        iterations: 1000,
+        algorithm: 'PBKDF2-SHA512',
+      });
+      const res2 = await hashPassword(password, {
+        iterations: 1000,
+        algorithm: 'PBKDF2-SHA512',
+      });
 
       expect(res1.algorithm).toBe('PBKDF2-SHA512');
       expect(res1.hash).toHaveLength(128); // 64 bytes = 128 hex chars
@@ -74,10 +91,22 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       expect(res1.hash).not.toBe(res2.hash);
 
       // Verify passwords
-      const isValid = await verifyPassword(password, res1.hash, res1.salt, res1.iterations, res1.algorithm);
+      const isValid = await verifyPassword(
+        password,
+        res1.hash,
+        res1.salt,
+        res1.iterations,
+        res1.algorithm,
+      );
       expect(isValid).toBe(true);
 
-      const isInvalid = await verifyPassword('WrongPassword', res1.hash, res1.salt, res1.iterations, res1.algorithm);
+      const isInvalid = await verifyPassword(
+        'WrongPassword',
+        res1.hash,
+        res1.salt,
+        res1.iterations,
+        res1.algorithm,
+      );
       expect(isInvalid).toBe(false);
     });
 
@@ -138,7 +167,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         auth.signUp({
           email: 'UNIQUE@locallite.dev',
           password: 'Password123!',
-        })
+        }),
       ).rejects.toThrow('An account with this email address already exists.');
     });
 
@@ -154,7 +183,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
           email: 'user2@locallite.dev',
           username: 'BOB',
           password: 'Password123!',
-        })
+        }),
       ).rejects.toThrow('This username is already taken.');
     });
 
@@ -163,12 +192,13 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         auth.signUp({
           email: 'short@locallite.dev',
           password: '123',
-        })
+        }),
       ).rejects.toThrow('Password must be at least 8 characters long.');
 
       const strictAuth = new LocalAuthEngine(db, undefined, events, {
         validatePassword: (pwd) => {
-          if (!/[A-Z]/.test(pwd)) return 'Password must contain an uppercase letter.';
+          if (!/[A-Z]/.test(pwd))
+            return 'Password must contain an uppercase letter.';
           return true;
         },
       });
@@ -177,7 +207,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         strictAuth.signUp({
           email: 'strict@locallite.dev',
           password: 'password123',
-        })
+        }),
       ).rejects.toThrow('Password must contain an uppercase letter.');
     });
   });
@@ -219,7 +249,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         auth.signIn({
           identifier: 'carol@locallite.dev',
           password: 'WrongPassword',
-        })
+        }),
       ).rejects.toThrow('Invalid email/username or password.');
     });
 
@@ -228,7 +258,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         auth.signIn({
           identifier: 'nonexistent@locallite.dev',
           password: 'AnyPassword',
-        })
+        }),
       ).rejects.toThrow('Invalid email/username or password.');
     });
 
@@ -256,22 +286,25 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
     it('locks account after max failed attempts and blocks subsequent logins', async () => {
       // 1st failed attempt
       await expect(
-        auth.signIn({ identifier: 'target@locallite.dev', password: 'Wrong1' })
+        auth.signIn({ identifier: 'target@locallite.dev', password: 'Wrong1' }),
       ).rejects.toThrow('Invalid email/username or password.');
 
       // 2nd failed attempt
       await expect(
-        auth.signIn({ identifier: 'target@locallite.dev', password: 'Wrong2' })
+        auth.signIn({ identifier: 'target@locallite.dev', password: 'Wrong2' }),
       ).rejects.toThrow('Invalid email/username or password.');
 
       // 3rd failed attempt triggers lock (maxFailedAttempts = 3)
       await expect(
-        auth.signIn({ identifier: 'target@locallite.dev', password: 'Wrong3' })
+        auth.signIn({ identifier: 'target@locallite.dev', password: 'Wrong3' }),
       ).rejects.toThrow(/Account has been locked due to 3 failed attempts/);
 
       // Subsequent login attempt (even with CORRECT password) is blocked while locked
       await expect(
-        auth.signIn({ identifier: 'target@locallite.dev', password: 'TargetPassword123!' })
+        auth.signIn({
+          identifier: 'target@locallite.dev',
+          password: 'TargetPassword123!',
+        }),
       ).rejects.toThrow(/Account is temporarily locked/);
 
       // Manual unlock
@@ -308,7 +341,10 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
 
       // Old password fails
       await expect(
-        auth.signIn({ identifier: 'passman@locallite.dev', password: 'InitialPassword123!' })
+        auth.signIn({
+          identifier: 'passman@locallite.dev',
+          password: 'InitialPassword123!',
+        }),
       ).rejects.toThrow('Invalid email/username or password.');
 
       // New password succeeds
@@ -320,7 +356,9 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
     });
 
     it('generates a password reset token and resets password', async () => {
-      const { token, expiresAt } = await auth.createPasswordResetToken('passman@locallite.dev');
+      const { token, expiresAt } = await auth.createPasswordResetToken(
+        'passman@locallite.dev',
+      );
       expect(token).toBeDefined();
       expect(expiresAt).toBeGreaterThan(Date.now());
 
@@ -336,7 +374,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
 
       // Re-using the same token fails (single use)
       await expect(
-        auth.resetPasswordWithToken(token, 'AnotherPassword123!')
+        auth.resetPasswordWithToken(token, 'AnotherPassword123!'),
       ).rejects.toThrow('Password reset token is invalid or has expired.');
     });
   });
@@ -362,8 +400,14 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
     });
 
     it('lists users and deletes users permanently', async () => {
-      await auth.signUp({ email: 'user_a@locallite.dev', password: 'Password123!' });
-      await auth.signUp({ email: 'user_b@locallite.dev', password: 'Password123!' });
+      await auth.signUp({
+        email: 'user_a@locallite.dev',
+        password: 'Password123!',
+      });
+      await auth.signUp({
+        email: 'user_b@locallite.dev',
+        password: 'Password123!',
+      });
 
       const all = await auth.listUsers();
       expect(all.length).toBeGreaterThanOrEqual(2);
@@ -436,7 +480,9 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
 
       expect(exchangeCalls).toBe(1);
       expect(session?.token).toBe(`remote_jwt_${user.id}_${session?.id}`);
-      expect(await engine.getRemoteAuthToken()).toBe(`remote_jwt_${user.id}_${session?.id}`);
+      expect(await engine.getRemoteAuthToken()).toBe(
+        `remote_jwt_${user.id}_${session?.id}`,
+      );
 
       // 2. SignOut clears session
       await engine.signOut();
@@ -449,13 +495,19 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       });
 
       expect(exchangeCalls).toBe(2);
-      expect(signInRes.session?.token).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
-      expect(await engine.getRemoteAuthToken()).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
+      expect(signInRes.session?.token).toBe(
+        `remote_jwt_${user.id}_${signInRes.session?.id}`,
+      );
+      expect(await engine.getRemoteAuthToken()).toBe(
+        `remote_jwt_${user.id}_${signInRes.session?.id}`,
+      );
 
       // 4. Manual exchangeRemoteAuth
       const manualExchange = await engine.exchangeRemoteAuth();
       expect(exchangeCalls).toBe(3);
-      expect(manualExchange?.token).toBe(`remote_jwt_${user.id}_${signInRes.session?.id}`);
+      expect(manualExchange?.token).toBe(
+        `remote_jwt_${user.id}_${signInRes.session?.id}`,
+      );
     });
   });
 
@@ -464,7 +516,8 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       const customAuth = new LocalAuthEngine(db, undefined, events, {
         iterations: 1000,
         validatePassword: (pwd) => {
-          if (!/[A-Z]/.test(pwd)) return 'Password must contain at least one uppercase letter.';
+          if (!/[A-Z]/.test(pwd))
+            return 'Password must contain at least one uppercase letter.';
           if (!/[0-9]/.test(pwd)) return false;
           return true;
         },
@@ -473,16 +526,25 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
 
       // Fails with custom string error
       await expect(
-        customAuth.signUp({ email: 'val1@test.com', password: 'alllowercase1' })
+        customAuth.signUp({
+          email: 'val1@test.com',
+          password: 'alllowercase1',
+        }),
       ).rejects.toThrow('Password must contain at least one uppercase letter.');
 
       // Fails with boolean false error
       await expect(
-        customAuth.signUp({ email: 'val2@test.com', password: 'NoNumbersHere!' })
+        customAuth.signUp({
+          email: 'val2@test.com',
+          password: 'NoNumbersHere!',
+        }),
       ).rejects.toThrow('Password does not meet complexity requirements.');
 
       // Passes validation
-      const res = await customAuth.signUp({ email: 'val3@test.com', password: 'ValidPassword1' });
+      const res = await customAuth.signUp({
+        email: 'val3@test.com',
+        password: 'ValidPassword1',
+      });
       expect(res.user.email).toBe('val3@test.com');
     });
 
@@ -496,17 +558,20 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
       await auth.updateUser(user.id, { status: 'suspended' });
 
       await expect(
-        auth.signIn({ identifier: 'suspended@locallite.dev', password: 'Password123!' })
+        auth.signIn({
+          identifier: 'suspended@locallite.dev',
+          password: 'Password123!',
+        }),
       ).rejects.toThrow('Account has been suspended. Please contact support.');
     });
 
     it('rejects invalid or non-existent password reset requests', async () => {
       await expect(
-        auth.createPasswordResetToken('nonexistent@locallite.dev')
+        auth.createPasswordResetToken('nonexistent@locallite.dev'),
       ).rejects.toThrow('No account found matching this identifier.');
 
       await expect(
-        auth.resetPasswordWithToken('invalid_token_xyz', 'NewPass123!')
+        auth.resetPasswordWithToken('invalid_token_xyz', 'NewPass123!'),
       ).rejects.toThrow('Password reset token is invalid or has expired.');
     });
 
@@ -516,16 +581,18 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         password: 'Password123!',
       });
 
-      const { token } = await auth.createPasswordResetToken('expiredtoken@locallite.dev');
+      const { token } = await auth.createPasswordResetToken(
+        'expiredtoken@locallite.dev',
+      );
 
       // Artificially expire the token in SQLite
       await db.execute(
         `UPDATE _local_user_tokens SET expires_at = ? WHERE user_id = ?;`,
-        [Date.now() - 10000, user.id]
+        [Date.now() - 10000, user.id],
       );
 
       await expect(
-        auth.resetPasswordWithToken(token, 'BrandNewPassword123!')
+        auth.resetPasswordWithToken(token, 'BrandNewPassword123!'),
       ).rejects.toThrow('Password reset token is invalid or has expired.');
     });
   });

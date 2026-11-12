@@ -12,7 +12,7 @@ export function useCoalescedRunner(fn: () => Promise<void>): () => void {
   const state = useRef({
     scheduled: false,
     running: false,
-    rerun: false
+    rerun: false,
   });
 
   return useCallback(() => {

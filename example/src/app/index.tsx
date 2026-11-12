@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,7 +21,10 @@ export default function Index() {
   const [client, setClient] = useState<LocalFirstClient | null>(null);
   const [initLoading, setInitLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('auth');
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [message, setMessage] = useState<{
+    text: string;
+    type: 'success' | 'error';
+  } | null>(null);
 
   // Form states
   const [isRegister, setIsRegister] = useState(false);
@@ -58,7 +61,10 @@ export default function Index() {
       .catch((err) => {
         if (mounted) {
           setInitLoading(false);
-          setMessage({ text: 'Client initialization failed: ' + err.message, type: 'error' });
+          setMessage({
+            text: 'Client initialization failed: ' + err.message,
+            type: 'error',
+          });
         }
       });
 
@@ -68,8 +74,15 @@ export default function Index() {
   }, []);
 
   // Use the reactive useLocalAuth hook
-  const { user, session, isSignedIn, loading: authLoading, signIn, signUp, signOut, refetchUser } =
-    useLocalAuth(client?.auth);
+  const {
+    user,
+    session,
+    isSignedIn,
+    loading: authLoading,
+    signIn,
+    signUp,
+    signOut,
+  } = useLocalAuth(client?.auth);
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });
@@ -118,7 +131,10 @@ export default function Index() {
     } catch (err: any) {
       const msg = err.message || String(err);
       if (!isRegister && msg.includes('Invalid')) {
-        showToast('Account not found or password incorrect. If you haven\'t registered yet, tap "Don\'t have an account? Register" below!', 'error');
+        showToast(
+          'Account not found or password incorrect. If you haven\'t registered yet, tap "Don\'t have an account? Register" below!',
+          'error',
+        );
       } else {
         showToast(msg, 'error');
       }
@@ -179,7 +195,10 @@ export default function Index() {
     let lastError = '';
     for (let i = 1; i <= 3; i++) {
       try {
-        await client.auth.signIn({ identifier: target, password: 'WrongPassword_' + i });
+        await client.auth.signIn({
+          identifier: target,
+          password: 'WrongPassword_' + i,
+        });
       } catch (err: any) {
         lastError = err.message;
       }
@@ -207,7 +226,9 @@ export default function Index() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0284c7" />
-        <Text style={styles.loadingText}>Initializing local SQLite auth engine...</Text>
+        <Text style={styles.loadingText}>
+          Initializing local SQLite auth engine...
+        </Text>
       </View>
     );
   }
@@ -218,15 +239,23 @@ export default function Index() {
       <View style={styles.header}>
         <Text style={styles.title}>⚡ local-lite Local Auth</Text>
         <Text style={styles.subtitle}>
-          Fully local SQLite user database, fast PBKDF2-SHA256 crypto & offline sessions
+          Fully local SQLite user database, fast PBKDF2-SHA256 crypto & offline
+          sessions
         </Text>
         <View style={styles.badgeRow}>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>DB: SQLite (Expo)</Text>
           </View>
-          <View style={[styles.badge, isSignedIn ? styles.badgeSuccess : styles.badgeMuted]}>
+          <View
+            style={[
+              styles.badge,
+              isSignedIn ? styles.badgeSuccess : styles.badgeMuted,
+            ]}
+          >
             <Text style={styles.badgeText}>
-              {isSignedIn ? `Logged in: ${user?.displayName || user?.email}` : 'Logged Out'}
+              {isSignedIn
+                ? `Logged in: ${user?.displayName || user?.email}`
+                : 'Logged Out'}
             </Text>
           </View>
         </View>
@@ -234,7 +263,12 @@ export default function Index() {
 
       {/* Toast Alert */}
       {message && (
-        <View style={[styles.alert, message.type === 'error' ? styles.alertError : styles.alertSuccess]}>
+        <View
+          style={[
+            styles.alert,
+            message.type === 'error' ? styles.alertError : styles.alertSuccess,
+          ]}
+        >
           <Text style={styles.alertText}>{message.text}</Text>
         </View>
       )}
@@ -242,37 +276,69 @@ export default function Index() {
       {/* Tab Navigation */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'auth' && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === 'auth' && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab('auth')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'auth' && styles.tabButtonTextActive]}>
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === 'auth' && styles.tabButtonTextActive,
+            ]}
+          >
             {isSignedIn ? 'Profile' : isRegister ? 'Register' : 'Sign In'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'reset' && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === 'reset' && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab('reset')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'reset' && styles.tabButtonTextActive]}>
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === 'reset' && styles.tabButtonTextActive,
+            ]}
+          >
             Reset Token
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'lockout' && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === 'lockout' && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab('lockout')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'lockout' && styles.tabButtonTextActive]}>
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === 'lockout' && styles.tabButtonTextActive,
+            ]}
+          >
             Lockout Test
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'users' && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === 'users' && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab('users')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'users' && styles.tabButtonTextActive]}>
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === 'users' && styles.tabButtonTextActive,
+            ]}
+          >
             Users DB
           </Text>
         </TouchableOpacity>
@@ -283,7 +349,9 @@ export default function Index() {
         <View style={styles.card}>
           {isSignedIn && user ? (
             <View>
-              <Text style={styles.cardHeader}>👤 Authenticated User Profile</Text>
+              <Text style={styles.cardHeader}>
+                👤 Authenticated User Profile
+              </Text>
 
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>ID:</Text>
@@ -307,7 +375,12 @@ export default function Index() {
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Status:</Text>
-                <Text style={[styles.infoVal, { color: '#16a34a', fontWeight: 'bold' }]}>
+                <Text
+                  style={[
+                    styles.infoVal,
+                    { color: '#16a34a', fontWeight: 'bold' },
+                  ]}
+                >
                   {user.status}
                 </Text>
               </View>
@@ -340,14 +413,19 @@ export default function Index() {
                 <Text style={styles.primaryButtonText}>Update Password</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.dangerButton} onPress={() => signOut()}>
+              <TouchableOpacity
+                style={styles.dangerButton}
+                onPress={() => signOut()}
+              >
                 <Text style={styles.dangerButtonText}>Sign Out</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View>
               <Text style={styles.cardHeader}>
-                {isRegister ? 'Create Local User Account' : 'Sign In with Local SQLite'}
+                {isRegister
+                  ? 'Create Local User Account'
+                  : 'Sign In with Local SQLite'}
               </Text>
 
               <Text style={styles.label}>Email Address</Text>
@@ -420,7 +498,9 @@ export default function Index() {
                 }}
               >
                 <Text style={styles.linkButtonText}>
-                  {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Register"}
+                  {isRegister
+                    ? 'Already have an account? Sign In'
+                    : "Don't have an account? Register"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -433,7 +513,8 @@ export default function Index() {
         <View style={styles.card}>
           <Text style={styles.cardHeader}>🔑 Cryptographic Password Reset</Text>
           <Text style={styles.cardDescription}>
-            Generates single-use 32-byte cryptographic tokens stored as SHA-256 hashes in `_local_user_tokens`.
+            Generates single-use 32-byte cryptographic tokens stored as SHA-256
+            hashes in `_local_user_tokens`.
           </Text>
 
           <Text style={styles.label}>Email or Username to Reset</Text>
@@ -443,13 +524,18 @@ export default function Index() {
             value={resetIdentifier}
             onChangeText={setResetIdentifier}
           />
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleGenerateResetToken}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleGenerateResetToken}
+          >
             <Text style={styles.secondaryButtonText}>Generate Reset Token</Text>
           </TouchableOpacity>
 
           {generatedToken ? (
             <View style={styles.tokenBox}>
-              <Text style={styles.tokenLabel}>Generated Single-Use Token (Copy this):</Text>
+              <Text style={styles.tokenLabel}>
+                Generated Single-Use Token (Copy this):
+              </Text>
               <Text style={styles.tokenVal} selectable>
                 {generatedToken}
               </Text>
@@ -458,7 +544,9 @@ export default function Index() {
 
           <View style={styles.divider} />
 
-          <Text style={styles.sectionSubtitle}>Redeem Token & Set New Password</Text>
+          <Text style={styles.sectionSubtitle}>
+            Redeem Token & Set New Password
+          </Text>
           <Text style={styles.label}>Reset Token</Text>
           <TextInput
             style={styles.input}
@@ -474,7 +562,10 @@ export default function Index() {
             value={resetNewPassword}
             onChangeText={setResetNewPassword}
           />
-          <TouchableOpacity style={styles.primaryButton} onPress={handleRedeemResetToken}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleRedeemResetToken}
+          >
             <Text style={styles.primaryButtonText}>Redeem Token & Reset</Text>
           </TouchableOpacity>
         </View>
@@ -483,10 +574,12 @@ export default function Index() {
       {/* TAB 3: LOCKOUT TEST */}
       {activeTab === 'lockout' && (
         <View style={styles.card}>
-          <Text style={styles.cardHeader}>🛡️ Brute-Force & Lockout Protection</Text>
+          <Text style={styles.cardHeader}>
+            🛡️ Brute-Force & Lockout Protection
+          </Text>
           <Text style={styles.cardDescription}>
-            Configured max attempts: 3. Exceeding 3 consecutive wrong passwords automatically locks the
-            account for 30 seconds.
+            Configured max attempts: 3. Exceeding 3 consecutive wrong passwords
+            automatically locks the account for 30 seconds.
           </Text>
 
           <Text style={styles.label}>Target Email</Text>
@@ -497,11 +590,19 @@ export default function Index() {
             onChangeText={setEmail}
           />
 
-          <TouchableOpacity style={[styles.dangerButton, { marginBottom: 12 }]} onPress={handleSimulateLockout}>
-            <Text style={styles.dangerButtonText}>Simulate 3 Failed Logins (Trigger Lockout)</Text>
+          <TouchableOpacity
+            style={[styles.dangerButton, { marginBottom: 12 }]}
+            onPress={handleSimulateLockout}
+          >
+            <Text style={styles.dangerButtonText}>
+              Simulate 3 Failed Logins (Trigger Lockout)
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleUnlockAccount}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleUnlockAccount}
+          >
             <Text style={styles.secondaryButtonText}>Manual Admin Unlock</Text>
           </TouchableOpacity>
         </View>
@@ -510,8 +611,16 @@ export default function Index() {
       {/* TAB 4: USERS DATABASE INSPECTOR */}
       {activeTab === 'users' && (
         <View style={styles.card}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.cardHeader}>📂 SQLite `_local_users` Table</Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Text style={styles.cardHeader}>
+              📂 SQLite `_local_users` Table
+            </Text>
             <TouchableOpacity onPress={loadAllUsers} disabled={refreshingUsers}>
               <Text style={{ color: '#0284c7', fontWeight: 'bold' }}>
                 {refreshingUsers ? 'Refreshing...' : 'Refresh'}
@@ -519,7 +628,8 @@ export default function Index() {
             </TouchableOpacity>
           </View>
           <Text style={styles.cardDescription}>
-            Live sanitized contents of SQLite `_local_users` table. Passwords & salts remain private.
+            Live sanitized contents of SQLite `_local_users` table. Passwords &
+            salts remain private.
           </Text>
 
           {allUsers.length === 0 ? (
@@ -530,11 +640,18 @@ export default function Index() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userItemTitle}>
                     {u.displayName || u.email}{' '}
-                    <Text style={{ fontSize: 12, color: '#64748b' }}>({u.role})</Text>
+                    <Text style={{ fontSize: 12, color: '#64748b' }}>
+                      ({u.role})
+                    </Text>
                   </Text>
                   <Text style={styles.userItemSub}>Email: {u.email}</Text>
-                  <Text style={styles.userItemSub}>Username: {u.username || '—'}</Text>
-                  <Text style={styles.userItemSub}>Status: {u.status} | Failed Attempts: {u.failedLoginAttempts}</Text>
+                  <Text style={styles.userItemSub}>
+                    Username: {u.username || '—'}
+                  </Text>
+                  <Text style={styles.userItemSub}>
+                    Status: {u.status} | Failed Attempts:{' '}
+                    {u.failedLoginAttempts}
+                  </Text>
                   <Text style={styles.userItemSub}>
                     Created: {new Date(u.createdAt).toLocaleTimeString()}
                   </Text>

@@ -45,13 +45,16 @@ export class NodeFileDriver implements FileDriver {
         safeDynamicRequire(NODE_FS_PROMISES_PKG) ??
         (await safeDynamicImport(NODE_FS_PROMISES_PKG));
       const path =
-        safeDynamicRequire(NODE_PATH_PKG) ?? (await safeDynamicImport(NODE_PATH_PKG));
+        safeDynamicRequire(NODE_PATH_PKG) ??
+        (await safeDynamicImport(NODE_PATH_PKG));
       if (!fs || !path) {
         throw new Error('Node fs/path unavailable');
       }
       return { fs, path };
     } catch {
-      throw new Error('NodeFileDriver is only supported in Node.js environments.');
+      throw new Error(
+        'NodeFileDriver is only supported in Node.js environments.',
+      );
     }
   }
 

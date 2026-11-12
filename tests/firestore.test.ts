@@ -58,7 +58,7 @@ describe('FirestoreRemoteAdapter', () => {
         rent: 2000,
         deleted: false,
       }),
-      { merge: true }
+      { merge: true },
     );
 
     // Verify DELETE soft-delete write
@@ -69,7 +69,7 @@ describe('FirestoreRemoteAdapter', () => {
         id: 'prop-2',
         deleted: true,
       }),
-      { merge: true }
+      { merge: true },
     );
 
     expect(commitSpy).toHaveBeenCalledTimes(1);
@@ -155,7 +155,9 @@ describe('FirestoreRemoteAdapter', () => {
 
     expect(deltas.changes[0].operation).toBe('UPDATE');
     expect(deltas.changes[0].rowId).toBe('doc-1');
-    expect(deltas.changes[0].payload).toEqual(expect.objectContaining({ name: 'Alice' }));
+    expect(deltas.changes[0].payload).toEqual(
+      expect.objectContaining({ name: 'Alice' }),
+    );
 
     expect(deltas.changes[1].operation).toBe('DELETE');
     expect(deltas.changes[1].rowId).toBe('doc-2');
@@ -232,7 +234,9 @@ describe('FirestoreRemoteAdapter', () => {
   });
 
   it('falls back to per-document writes when batch.commit fails, returning PushResult with failedIds', async () => {
-    const commitSpy = vi.fn().mockRejectedValue(new Error('Batch failed: document 2 forbidden'));
+    const commitSpy = vi
+      .fn()
+      .mockRejectedValue(new Error('Batch failed: document 2 forbidden'));
     const setSpy = vi.fn();
 
     const mockDoc1 = {
@@ -243,7 +247,9 @@ describe('FirestoreRemoteAdapter', () => {
     };
 
     const mockCollection = vi.fn().mockImplementation((table) => ({
-      doc: vi.fn().mockImplementation((id) => (id === 'p-1' ? mockDoc1 : mockDoc2)),
+      doc: vi
+        .fn()
+        .mockImplementation((id) => (id === 'p-1' ? mockDoc1 : mockDoc2)),
     }));
 
     const mockBatch = {

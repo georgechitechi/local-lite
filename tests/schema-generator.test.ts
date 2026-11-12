@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parseSchemaIndexes, formatSchemaIndexesCode, generateSchemaIndexes } from '../src/schema/index.js';
+import {
+  parseSchemaIndexes,
+  formatSchemaIndexesCode,
+  generateSchemaIndexes,
+} from '../src/schema/index.js';
 
 const SAMPLE_DATABASE_TYPES = `
 export type Database = {
@@ -58,34 +62,50 @@ export type Database = {
 
 describe('Schema Index Generator', () => {
   it('parses foreign keys and generates correct index statements', () => {
-    const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, { includeBusinessSyncIndexes: false });
+    const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, {
+      includeBusinessSyncIndexes: false,
+    });
 
     expect(indexes).toHaveLength(3);
 
     // Standard FK
-    const houseIndex = indexes.find(i => i.table === 'contracts' && i.columns.includes('house_id'));
+    const houseIndex = indexes.find(
+      (i) => i.table === 'contracts' && i.columns.includes('house_id'),
+    );
     expect(houseIndex).toBeDefined();
     expect(houseIndex?.isOneToOne).toBe(false);
-    expect(houseIndex?.sql).toBe('CREATE INDEX IF NOT EXISTS "idx_contracts_house_id" ON "contracts" ("house_id");');
+    expect(houseIndex?.sql).toBe(
+      'CREATE INDEX IF NOT EXISTS "idx_contracts_house_id" ON "contracts" ("house_id");',
+    );
 
     // Unique 1:1 FK
-    const tenantIndex = indexes.find(i => i.table === 'contracts' && i.columns.includes('tenant_id'));
+    const tenantIndex = indexes.find(
+      (i) => i.table === 'contracts' && i.columns.includes('tenant_id'),
+    );
     expect(tenantIndex).toBeDefined();
     expect(tenantIndex?.isOneToOne).toBe(true);
-    expect(tenantIndex?.sql).toBe('CREATE UNIQUE INDEX IF NOT EXISTS "idx_contracts_tenant_id" ON "contracts" ("tenant_id");');
+    expect(tenantIndex?.sql).toBe(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "idx_contracts_tenant_id" ON "contracts" ("tenant_id");',
+    );
   });
 
   it('detects tables with business_id and deleted to create composite sync indexes', () => {
-    const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, { includeBusinessSyncIndexes: true });
+    const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, {
+      includeBusinessSyncIndexes: true,
+    });
 
-    const bizIndexes = indexes.filter(i => i.columns.includes('business_id') && i.columns.includes('deleted'));
+    const bizIndexes = indexes.filter(
+      (i) => i.columns.includes('business_id') && i.columns.includes('deleted'),
+    );
     expect(bizIndexes.length).toBeGreaterThanOrEqual(2);
-    expect(bizIndexes.some(i => i.table === 'properties')).toBe(true);
-    expect(bizIndexes.some(i => i.table === 'contracts')).toBe(true);
+    expect(bizIndexes.some((i) => i.table === 'properties')).toBe(true);
+    expect(bizIndexes.some((i) => i.table === 'contracts')).toBe(true);
   });
 
   it('formats executable TypeScript code containing ensureSchemaIndexes', () => {
-    const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, { includeBusinessSyncIndexes: false });
+    const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, {
+      includeBusinessSyncIndexes: false,
+    });
     const code = formatSchemaIndexesCode(indexes);
 
     expect(code).toContain('export const SCHEMA_INDEXES');

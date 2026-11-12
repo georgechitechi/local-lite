@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LocalFirstClient } from '../src/core/client.js';
 import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
@@ -56,9 +56,13 @@ describe('Generic Action Outbox & Inbuilt Email Queue', () => {
 
   it('validates required email parameters', async () => {
     // @ts-expect-error Missing required to
-    await expect(client.actions.sendEmail({ subject: 'Test' })).rejects.toThrow("Email 'to' recipient is required");
+    await expect(client.actions.sendEmail({ subject: 'Test' })).rejects.toThrow(
+      "Email 'to' recipient is required",
+    );
     // @ts-expect-error Missing required subject
-    await expect(client.actions.sendEmail({ to: 'bob@example.com' })).rejects.toThrow("Email 'subject' is required");
+    await expect(
+      client.actions.sendEmail({ to: 'bob@example.com' }),
+    ).rejects.toThrow("Email 'subject' is required");
   });
 
   it('enforces idempotency preventing duplicate action execution', async () => {
@@ -163,7 +167,10 @@ describe('Generic Action Outbox & Inbuilt Email Queue', () => {
 
     const updated = await client.actions.get(push.id);
     expect(updated?.status).toBe('COMPLETED');
-    expect(updated?.result).toEqual({ delivered: true, deviceToken: 'fcm-xyz' });
+    expect(updated?.result).toEqual({
+      delivered: true,
+      deviceToken: 'fcm-xyz',
+    });
   });
 
   it('expires stale actions when TTL has passed without executing them', async () => {

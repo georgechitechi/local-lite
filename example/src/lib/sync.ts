@@ -1,5 +1,9 @@
 import * as SQLite from 'expo-sqlite';
-import { defineSyncConfig, createSyncClient, type LocalFirstClient } from 'local-lite/config';
+import {
+  defineSyncConfig,
+  createSyncClient,
+  type LocalFirstClient,
+} from 'local-lite/config';
 
 let clientPromise: Promise<LocalFirstClient> | null = null;
 
@@ -20,4 +24,3 @@ export function getClient(): Promise<LocalFirstClient> {
   }
   return clientPromise;
 }
-

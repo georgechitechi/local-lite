@@ -1,6 +1,12 @@
 import { RemoteDBAdapter } from './index.js';
 import { safeDynamicImport, safeDynamicRequire } from '../../utils/dynamic.js';
-import { DeltaChange, DeltaChanges, SyncOp, SyncOperation, PushResult } from '../../core/types.js';
+import {
+  DeltaChange,
+  DeltaChanges,
+  SyncOp,
+  SyncOperation,
+  PushResult,
+} from '../../core/types.js';
 import {
   SyncLogger,
   CustomLogger,
@@ -65,7 +71,9 @@ function extractTimestamp(val: any): number {
     if (val.trim() !== '' && Number.isFinite(numeric)) return numeric;
     const parsed = Date.parse(val);
     if (Number.isFinite(parsed)) return parsed;
-    throw new Error(`Firestore change has an invalid updatedAt timestamp: ${val}`);
+    throw new Error(
+      `Firestore change has an invalid updatedAt timestamp: ${val}`,
+    );
   }
   if (typeof val.toMillis === 'function') return val.toMillis();
   if (typeof val.toDate === 'function') return val.toDate().getTime();
@@ -96,7 +104,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
 
   constructor(db: any, options: FirestoreAdapterOptions = {}) {
     if (!db) {
-      throw new Error('FirestoreRemoteAdapter requires a firestore db instance.');
+      throw new Error(
+        'FirestoreRemoteAdapter requires a firestore db instance.',
+      );
     }
     this.db = db;
     this.tables = options.tables ?? [];
@@ -119,7 +129,8 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     try {
       const FIRESTORE_PKG = ['firebase', 'firestore'].join('/');
       this.firestoreModule =
-        safeDynamicRequire(FIRESTORE_PKG) ?? (await safeDynamicImport(FIRESTORE_PKG));
+        safeDynamicRequire(FIRESTORE_PKG) ??
+        (await safeDynamicImport(FIRESTORE_PKG));
       return this.firestoreModule;
     } catch {
       return null;
@@ -131,7 +142,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
    * Chunks operations into batches of 450 (below Firestore 500-write limit).
    * Falls back to individual writes if a batch fails, returning partial push results.
    */
-  async pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult> {
+  async pushChanges(
+    operations: SyncOperation[],
+  ): Promise<boolean | PushResult> {
     if (!operations || operations.length === 0) {
       return true;
     }
@@ -140,7 +153,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     const errors: Record<string, string> = {};
 
     try {
-      const isCompat = typeof this.db.batch === 'function' && typeof this.db.collection === 'function';
+      const isCompat =
+        typeof this.db.batch === 'function' &&
+        typeof this.db.collection === 'function';
       const mod = isCompat ? null : await this.getModule();
 
       const CHUNK_SIZE = 450;
@@ -176,7 +191,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
             await batch.commit();
           } catch (batchError: any) {
             this.logger.warn(
-              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`
+              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`,
             );
             for (const op of chunk) {
               try {
@@ -193,17 +208,23 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
           try {
             const batch = mod.writeBatch(this.db);
             for (const op of chunk) {
-              const docRef = mod.doc(mod.collection(this.db, op.tableName), op.rowId);
+              const docRef = mod.doc(
+                mod.collection(this.db, op.tableName),
+                op.rowId,
+              );
               batch.set(docRef, buildDocData(op), { merge: true });
             }
             await batch.commit();
           } catch (batchError: any) {
             this.logger.warn(
-              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`
+              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`,
             );
             for (const op of chunk) {
               try {
-                const docRef = mod.doc(mod.collection(this.db, op.tableName), op.rowId);
+                const docRef = mod.doc(
+                  mod.collection(this.db, op.tableName),
+                  op.rowId,
+                );
                 if (typeof mod.setDoc === 'function') {
                   await mod.setDoc(docRef, buildDocData(op), { merge: true });
                 } else {
@@ -217,7 +238,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
           }
         } else {
           throw new Error(
-            'Firestore client does not have .batch() and modular firebase/firestore writeBatch could not be loaded.'
+            'Firestore client does not have .batch() and modular firebase/firestore writeBatch could not be loaded.',
           );
         }
       }
@@ -231,7 +252,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
       }
       return true;
     } catch (error) {
-      this.logger.error(formatFirestoreError(error, { operation: 'pushChanges' }));
+      this.logger.error(
+        formatFirestoreError(error, { operation: 'pushChanges' }),
+      );
       return false;
     }
   }
@@ -267,13 +290,13 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
             } else if (mod && typeof mod.getDocs === 'function') {
               const q = mod.query(
                 mod.collection(this.db, table),
-                mod.where(this.updatedAtColumn, '>', sinceTimestamp)
+                mod.where(this.updatedAtColumn, '>', sinceTimestamp),
               );
               const snapshot = await mod.getDocs(q);
               docs = snapshot.docs || [];
             }
             return { table, docs };
-          })
+          }),
         );
 
         for (const { table, docs } of results) {
@@ -283,7 +306,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
               data[this.deletedColumn] === true ||
               data[this.deletedColumn] === 1 ||
               (data[this.deletedColumn] &&
-                !['false', '0', 'null', 'undefined'].includes(String(data[this.deletedColumn]).toLowerCase()))
+                !['false', '0', 'null', 'undefined'].includes(
+                  String(data[this.deletedColumn]).toLowerCase(),
+                )),
             );
 
             const rowTime = extractTimestamp(data[this.updatedAtColumn]);
@@ -310,7 +335,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
         changes,
       };
     } catch (error) {
-      this.logger.error(formatFirestoreError(error, { operation: 'fetchChanges' }));
+      this.logger.error(
+        formatFirestoreError(error, { operation: 'fetchChanges' }),
+      );
       throw error;
     }
   }
@@ -318,7 +345,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
   /**
    * Subscribes to live real-time query updates via onSnapshot.
    */
-  subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
+  subscribeToLiveChanges(
+    callback: (changes: DeltaChanges) => void,
+  ): () => void {
     this.destroy();
     const generation = this.liveGeneration;
 
@@ -350,7 +379,10 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
                 }));
               }
             } else if (snapshot.docs) {
-              docList = snapshot.docs.map((doc: any) => ({ doc, isRemoved: false }));
+              docList = snapshot.docs.map((doc: any) => ({
+                doc,
+                isRemoved: false,
+              }));
             }
 
             if (docList.length === 0) return;
@@ -362,7 +394,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
               const isSoftDeleted = Boolean(
                 item.isRemoved ||
                 data[this.deletedColumn] === true ||
-                data[this.deletedColumn] === 1
+                data[this.deletedColumn] === 1,
               );
 
               const rowTime = extractTimestamp(data[this.updatedAtColumn]);
@@ -399,17 +431,23 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
           } else if (mod && typeof mod.onSnapshot === 'function') {
             const q = mod.query(
               mod.collection(this.db, table),
-              mod.where(this.updatedAtColumn, '>', currentCursor)
+              mod.where(this.updatedAtColumn, '>', currentCursor),
             );
             const unsub = mod.onSnapshot(q, handleSnapshot, (err: any) => {
-              console.warn(`Firestore modular onSnapshot error on ${table}:`, err);
+              console.warn(
+                `Firestore modular onSnapshot error on ${table}:`,
+                err,
+              );
             });
             if (typeof unsub === 'function') {
               this.unsubscribers.push(unsub);
             }
           }
         } catch (err) {
-          console.warn(`Failed to initialize Firestore live listener for table ${table}:`, err);
+          console.warn(
+            `Failed to initialize Firestore live listener for table ${table}:`,
+            err,
+          );
         }
       }
     };
@@ -443,7 +481,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
    */
   createStorageUploader(
     storageOrApp?: any,
-    options: FirebaseStorageUploaderOptions = {}
+    options: FirebaseStorageUploaderOptions = {},
   ): FirebaseStorageUploaderInstance {
     let client = storageOrApp;
     let opts = options;
@@ -453,7 +491,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
       !storageOrApp.storage &&
       !storageOrApp.app &&
       typeof storageOrApp === 'object' &&
-      ('bucket' in storageOrApp || 'storageModule' in storageOrApp || 'basePath' in storageOrApp)
+      ('bucket' in storageOrApp ||
+        'storageModule' in storageOrApp ||
+        'basePath' in storageOrApp)
     ) {
       opts = storageOrApp;
       client = this.db.app || this.db;

@@ -15,13 +15,17 @@ export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
     try {
       const NetInfo = safeDynamicRequire(NETINFO_PKG);
       const netInfoInstance = NetInfo?.default || NetInfo;
-      if (netInfoInstance && typeof netInfoInstance.addEventListener === 'function') {
+      if (
+        netInfoInstance &&
+        typeof netInfoInstance.addEventListener === 'function'
+      ) {
         netInfoInstance
           .fetch()
           .then((state: any) => {
             const online =
               state.isConnected === true &&
-              (state.isInternetReachable === true || state.isInternetReachable === null);
+              (state.isInternetReachable === true ||
+                state.isInternetReachable === null);
             this.setOnline(online);
           })
           .catch(() => {});
@@ -29,7 +33,8 @@ export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
         const unsub = netInfoInstance.addEventListener((state: any) => {
           const online =
             state.isConnected === true &&
-            (state.isInternetReachable === true || state.isInternetReachable === null);
+            (state.isInternetReachable === true ||
+              state.isInternetReachable === null);
           this.setOnline(online);
         });
 
@@ -47,8 +52,14 @@ export class DefaultNetworkStatusProvider implements NetworkStatusProvider {
     }
 
     // 2. Web DOM environment fallback
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-      if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function'
+    ) {
+      if (
+        typeof navigator !== 'undefined' &&
+        typeof navigator.onLine === 'boolean'
+      ) {
         this._isOnline = navigator.onLine;
       }
 

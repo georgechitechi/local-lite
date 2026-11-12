@@ -7,7 +7,10 @@ import type {
   ResolvableBackupDatabase,
 } from './operations.js';
 import { performBackup, performRestore } from './operations.js';
-import type { EncryptedBackupOptions, RestoreEncryptedBackupOptions } from './encryption.js';
+import type {
+  EncryptedBackupOptions,
+  RestoreEncryptedBackupOptions,
+} from './encryption.js';
 import type { GoogleAuthClient } from '../auth/google.js';
 
 export interface CloudBackupFile {
@@ -21,7 +24,8 @@ export type BackupAccessTokenProvider = () => Promise<string>;
 
 const GOOGLE_API = 'https://www.googleapis.com/drive/v3';
 const GOOGLE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
-const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_AUTHORIZATION_ENDPOINT =
+  'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const BACKUP_FOLDER = 'backups';
@@ -84,9 +88,11 @@ function base64UrlEncode(bytes: Uint8Array): string {
     const second = bytes[index + 1];
     const third = bytes[index + 2];
     result += alphabet[first >> 2];
-    result += alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
+    result +=
+      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
     if (second !== undefined) {
-      result += alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
+      result +=
+        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
     }
     if (third !== undefined) result += alphabet[third & 63];
   }
@@ -99,7 +105,8 @@ function validateGoogleTokens(value: unknown): value is GoogleDriveTokens {
   return (
     typeof tokens.accessToken === 'string' &&
     typeof tokens.expiresAt === 'number' &&
-    (tokens.refreshToken === undefined || typeof tokens.refreshToken === 'string')
+    (tokens.refreshToken === undefined ||
+      typeof tokens.refreshToken === 'string')
   );
 }
 
@@ -107,7 +114,7 @@ export function createInMemoryGoogleDriveTokenStore(): GoogleDriveTokenStore {
   let stored: GoogleDriveTokens | null = null;
   return {
     get: async () => stored,
-    set: async tokens => {
+    set: async (tokens) => {
       stored = tokens;
     },
     remove: async () => {
@@ -125,7 +132,7 @@ export function createGoogleDriveTokenStore(
       const tokens = await storage.getItem(key);
       return validateGoogleTokens(tokens) ? tokens : null;
     },
-    set: tokens => storage.setItem(key, tokens),
+    set: (tokens) => storage.setItem(key, tokens),
     remove: () => storage.removeItem(key),
   };
 }
@@ -151,7 +158,11 @@ async function parseTokenResponse(response: Response): Promise<{
 }
 
 function createStoredTokens(
-  payload: { access_token?: string; refresh_token?: string; expires_in?: number },
+  payload: {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  },
   prior?: GoogleDriveTokens | null,
 ): GoogleDriveTokens {
   if (!payload.access_token) {
@@ -224,7 +235,8 @@ async function getGoogleFolderId(
   });
   if (!create.ok) throw await parseApiError(create);
   const folder = (await create.json()) as { id?: string };
-  if (!folder.id) throw new Error('Google Drive did not return a backup folder ID.');
+  if (!folder.id)
+    throw new Error('Google Drive did not return a backup folder ID.');
   return folder.id;
 }
 
@@ -299,18 +311,25 @@ export class GoogleDriveBackupStorage implements BackupStorage {
   async list(): Promise<CloudBackupFile[]> {
     const token = await this.getAccessToken();
     const folderId = await getGoogleFolderId(token, this.fetcher);
-    const query = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+    const query = encodeURIComponent(
+      `'${folderId}' in parents and trashed = false`,
+    );
     const response = await this.fetcher(
       `${GOOGLE_API}/files?q=${query}&fields=files(id,name,size,modifiedTime)&orderBy=modifiedTime%20desc&pageSize=100`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!response.ok) throw await parseApiError(response);
     const result = (await response.json()) as {
-      files?: { id: string; name: string; size?: string; modifiedTime?: string }[];
+      files?: {
+        id: string;
+        name: string;
+        size?: string;
+        modifiedTime?: string;
+      }[];
     };
     return (result.files ?? [])
-      .filter(file => file.name.endsWith('.db'))
-      .map(file => ({
+      .filter((file) => file.name.endsWith('.db'))
+      .map((file) => ({
         id: file.id,
         name: file.name,
         modifiedAt: file.modifiedTime,
@@ -335,18 +354,24 @@ export class GoogleDriveBackupClient implements CloudBackupClient {
         () => this.authClient!.getValidAccessToken(),
         this.fetcher,
       );
-      this.authClient.onAuthStateChange(user => {
+      this.authClient.onAuthStateChange((user) => {
         this.notify(Boolean(user));
       });
     } else {
       if (!options.clientId?.trim()) {
-        throw new Error('Google OAuth client ID is required when authClient is not provided.');
+        throw new Error(
+          'Google OAuth client ID is required when authClient is not provided.',
+        );
       }
       if (!options.redirectUri?.trim()) {
-        throw new Error('Google OAuth redirect URI is required when authClient is not provided.');
+        throw new Error(
+          'Google OAuth redirect URI is required when authClient is not provided.',
+        );
       }
       if (!options.authorize) {
-        throw new Error('Google OAuth authorize function is required when authClient is not provided.');
+        throw new Error(
+          'Google OAuth authorize function is required when authClient is not provided.',
+        );
       }
 
       this.tokenStore =
@@ -391,7 +416,9 @@ export class GoogleDriveBackupClient implements CloudBackupClient {
     const verifierBytes = randomBytes(32);
     const stateBytes = randomBytes(32);
     if (verifierBytes.length !== 32 || stateBytes.length !== 32) {
-      throw new Error('The randomBytes provider returned an invalid number of bytes.');
+      throw new Error(
+        'The randomBytes provider returned an invalid number of bytes.',
+      );
     }
 
     const codeVerifier = base64UrlEncode(verifierBytes);
@@ -417,7 +444,9 @@ export class GoogleDriveBackupClient implements CloudBackupClient {
       return false;
     }
     if (authorization.state !== state) {
-      throw new Error('Google OAuth state validation failed. Please try connecting again.');
+      throw new Error(
+        'Google OAuth state validation failed. Please try connecting again.',
+      );
     }
     if (!authorization.code) {
       throw new Error('Google OAuth did not return an authorization code.');

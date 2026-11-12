@@ -83,7 +83,7 @@ describe('LocalFirstClient Batch & Transactions', () => {
     const todos = await client.findMany('todos');
     expect(todos).toHaveLength(3);
     expect(todos.map((t) => t.title)).toEqual(
-      expect.arrayContaining(['Task A', 'Task B', 'Task C'])
+      expect.arrayContaining(['Task A', 'Task B', 'Task C']),
     );
   });
 
@@ -94,7 +94,10 @@ describe('LocalFirstClient Batch & Transactions', () => {
     });
 
     const result = await client.transaction(async (tx) => {
-      const invId = await tx.insert('invoices', { amount: 500, status: 'DRAFT' });
+      const invId = await tx.insert('invoices', {
+        amount: 500,
+        status: 'DRAFT',
+      });
       await tx.update('invoices', invId, { status: 'PAID' });
       return invId;
     });
@@ -117,7 +120,7 @@ describe('LocalFirstClient Batch & Transactions', () => {
       client.transaction(async (tx) => {
         await tx.insert('accounts', 'acc-1', { balance: 100 });
         throw new Error('Simulated transaction failure');
-      })
+      }),
     ).rejects.toThrow('Simulated transaction failure');
 
     // Events should not fire

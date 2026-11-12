@@ -17,8 +17,14 @@ function jsonResponse(body: object, status = 200): Response {
 
 describe('GitHubAuthClient', () => {
   const sampleUser: GitHubUser = {
-    id: resolveUnifiedUserId({ id: '123456', email: 'octocat@github.com', emailVerified: true }, 'github'),
-    userId: resolveUnifiedUserId({ id: '123456', email: 'octocat@github.com', emailVerified: true }, 'github'),
+    id: resolveUnifiedUserId(
+      { id: '123456', email: 'octocat@github.com', emailVerified: true },
+      'github',
+    ),
+    userId: resolveUnifiedUserId(
+      { id: '123456', email: 'octocat@github.com', emailVerified: true },
+      'github',
+    ),
     provider: 'github' as const,
     providerAccountId: '123456',
     login: 'octocat',
@@ -41,7 +47,7 @@ describe('GitHubAuthClient', () => {
       clientId: 'gh-client-id-xyz',
       clientSecret: 'gh-secret-xyz',
       redirectUri: 'myapp://oauth',
-      authorize: async request => {
+      authorize: async (request) => {
         authorizationUrl = request.authorizationUrl;
         return { code: 'gh-auth-code-123', state: request.state };
       },
@@ -79,7 +85,7 @@ describe('GitHubAuthClient', () => {
       },
     });
 
-    client.onAuthStateChange(user => authEvents.push(user));
+    client.onAuthStateChange((user) => authEvents.push(user));
 
     const user = await client.signIn();
 
@@ -155,11 +161,11 @@ describe('GitHubAuthClient', () => {
   it('persists tokens and user info via key-value storage adapter', async () => {
     const memory = new Map<string, unknown>();
     const storage: GitHubAuthKeyValueStorage = {
-      getItem: async key => memory.get(key) ?? null,
+      getItem: async (key) => memory.get(key) ?? null,
       setItem: async (key, val) => {
         memory.set(key, val);
       },
-      removeItem: async key => {
+      removeItem: async (key) => {
         memory.delete(key);
       },
     };

@@ -1,8 +1,10 @@
 import { v5 as uuidv5 } from 'uuid';
 
-export const DEFAULT_UNIFIED_EMAIL_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+export const DEFAULT_UNIFIED_EMAIL_NAMESPACE =
+  '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
-export type SupportedAuthProvider = 'google' | 'github' | 'microsoft' | 'apple' | 'local';
+export type SupportedAuthProvider =
+  'google' | 'github' | 'microsoft' | 'apple' | 'local';
 
 /**
  * Standardized first-class user identity across all auth providers in local-lite.
@@ -38,7 +40,11 @@ export interface IdentityResolverOptions {
  * Falls back to provider-scoped deterministic ID if unverified or email is missing.
  */
 export function resolveUnifiedUserId(
-  profile: { id: string | number; email?: string | null; emailVerified?: boolean },
+  profile: {
+    id: string | number;
+    email?: string | null;
+    emailVerified?: boolean;
+  },
   provider: SupportedAuthProvider,
   options?: IdentityResolverOptions,
 ): string {
@@ -62,7 +68,8 @@ export function createUnifiedAuthUser(
   provider: SupportedAuthProvider,
   options?: IdentityResolverOptions,
 ): AuthUser {
-  const emailRaw = typeof rawUser.email === 'string' ? rawUser.email : undefined;
+  const emailRaw =
+    typeof rawUser.email === 'string' ? rawUser.email : undefined;
   const email = emailRaw ? emailRaw.trim().toLowerCase() : '';
   const emailVerified =
     rawUser.emailVerified === true ||
@@ -70,7 +77,13 @@ export function createUnifiedAuthUser(
     provider === 'microsoft' ||
     provider === 'github';
 
-  const providerAccountId = String(rawUser.providerAccountId ?? rawUser.id ?? rawUser.sub ?? rawUser.userId ?? '');
+  const providerAccountId = String(
+    rawUser.providerAccountId ??
+      rawUser.id ??
+      rawUser.sub ??
+      rawUser.userId ??
+      '',
+  );
   const id = resolveUnifiedUserId(
     { id: providerAccountId, email, emailVerified },
     provider,
@@ -107,6 +120,7 @@ export function createUnifiedAuthUser(
     provider,
     providerAccountId,
     rawProfile: rawUser,
-    createdAt: typeof rawUser.createdAt === 'number' ? rawUser.createdAt : Date.now(),
+    createdAt:
+      typeof rawUser.createdAt === 'number' ? rawUser.createdAt : Date.now(),
   };
 }

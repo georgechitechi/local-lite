@@ -39,10 +39,16 @@ describe('Universal Data Portability (JSON & CSV)', () => {
 
   describe('JSON Portability', () => {
     it('exports and imports tables cleanly in merge mode', async () => {
-      await client.insert('contacts', { id: 'c1', name: 'Alice', phone: '123' });
+      await client.insert('contacts', {
+        id: 'c1',
+        name: 'Alice',
+        phone: '123',
+      });
       await client.insert('notes', { id: 'n1', title: 'First Note' });
 
-      const jsonStr = await exportTablesToJson(client, undefined, { pretty: true });
+      const jsonStr = await exportTablesToJson(client, undefined, {
+        pretty: true,
+      });
       expect(jsonStr).toContain('"version": 1');
       expect(jsonStr).toContain('"Alice"');
       expect(jsonStr).toContain('"First Note"');
@@ -52,7 +58,9 @@ describe('Universal Data Portability (JSON & CSV)', () => {
 
       // Modify Alice's phone in the exported JSON and re-import
       const modifiedJson = jsonStr.replace('123', '999');
-      const result = await importTablesFromJson(client, modifiedJson, { mode: 'merge' });
+      const result = await importTablesFromJson(client, modifiedJson, {
+        mode: 'merge',
+      });
 
       expect(result.tables).toEqual(['contacts', 'notes']);
       expect(result.rowCounts.contacts).toBe(1);
@@ -85,22 +93,27 @@ describe('Universal Data Portability (JSON & CSV)', () => {
     });
 
     it('rejects malformed JSON export files with helpful errors', async () => {
-      await expect(importTablesFromJson(client, 'invalid-json')).rejects.toThrow(
-        /Invalid JSON export format/,
-      );
-      await expect(importTablesFromJson(client, '{"version": 1}')).rejects.toThrow(
-        /missing tables object/,
-      );
+      await expect(
+        importTablesFromJson(client, 'invalid-json'),
+      ).rejects.toThrow(/Invalid JSON export format/);
+      await expect(
+        importTablesFromJson(client, '{"version": 1}'),
+      ).rejects.toThrow(/missing tables object/);
     });
   });
 
   describe('CSV Portability', () => {
     it('correctly parses RFC-4180 CSV strings with quotes and newlines', () => {
-      const csv = 'id,name,bio\n1,"Doe, John","Multi-line\nbio with ""quotes"""';
+      const csv =
+        'id,name,bio\n1,"Doe, John","Multi-line\nbio with ""quotes"""';
       const parsed = parseCsv(csv);
       expect(parsed.length).toBe(2);
       expect(parsed[0]).toEqual(['id', 'name', 'bio']);
-      expect(parsed[1]).toEqual(['1', 'Doe, John', 'Multi-line\nbio with "quotes"']);
+      expect(parsed[1]).toEqual([
+        '1',
+        'Doe, John',
+        'Multi-line\nbio with "quotes"',
+      ]);
     });
 
     it('exports and imports CSV tables with field escaping and type inference', async () => {
@@ -133,12 +146,16 @@ describe('Universal Data Portability (JSON & CSV)', () => {
     it('supports custom delimiter such as semicolon', async () => {
       await client.insert('contacts', { id: 'c1', name: 'Alice' });
 
-      const csv = await exportTableToCsv(client, 'contacts', { delimiter: ';' });
+      const csv = await exportTableToCsv(client, 'contacts', {
+        delimiter: ';',
+      });
       expect(csv).toContain(';');
 
       await client.reset();
 
-      const importRes = await importTableFromCsv(client, 'contacts', csv, { delimiter: ';' });
+      const importRes = await importTableFromCsv(client, 'contacts', csv, {
+        delimiter: ';',
+      });
       expect(importRes.rowCount).toBe(1);
 
       const contact = await client.findById('contacts', 'c1');

@@ -23,7 +23,9 @@ export interface UseSyncStatusResult {
  * - The 50-record outbox fetch (pendingRecords) only runs on mount and on explicit refresh().
  * - sync:push / sync:pull only trigger a lightweight pendingCount update via sync:status.
  */
-export function useSyncStatus(client: LocalFirstClient | null | undefined): UseSyncStatusResult {
+export function useSyncStatus(
+  client: LocalFirstClient | null | undefined,
+): UseSyncStatusResult {
   const [isOnline, setIsOnline] = useState(true);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
@@ -48,7 +50,9 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
       if (records) {
         setPendingRecords(records);
         const activeCount = metrics
-          ? metrics.outboxPendingCount + metrics.outboxProcessingCount + metrics.outboxFailedCount
+          ? metrics.outboxPendingCount +
+            metrics.outboxProcessingCount +
+            metrics.outboxFailedCount
           : records.length;
         setPendingCount(activeCount);
       }
@@ -68,12 +72,15 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
 
     // sync:status fires after every push/pull cycle — update scalar fields directly,
     // no DB round-trip needed. pendingCount comes from the event payload.
-    const unsubStatus = client.events.on('sync:status', (e: SyncStatusEvent) => {
-      setIsOnline(e.isOnline);
-      setIsPushing(e.isPushing);
-      setIsPulling(e.isPulling);
-      setPendingCount(e.pendingCount);
-    });
+    const unsubStatus = client.events.on(
+      'sync:status',
+      (e: SyncStatusEvent) => {
+        setIsOnline(e.isOnline);
+        setIsPushing(e.isPushing);
+        setIsPulling(e.isPulling);
+        setPendingCount(e.pendingCount);
+      },
+    );
 
     // Only refresh lastSyncedAt after a completed pull (lightweight meta query only)
     const unsubPull = client.events.on('sync:pull', async (e: any) => {
@@ -83,7 +90,9 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
           if (ts !== null && ts !== undefined) {
             setLastSyncedAt(ts > 0 ? ts : null);
           }
-        } catch { /* ignored */ }
+        } catch {
+          /* ignored */
+        }
       }
     });
 
@@ -110,7 +119,7 @@ export function useSyncStatus(client: LocalFirstClient | null | undefined): UseS
  */
 export function useSyncMetrics(
   client: LocalFirstClient | null | undefined,
-  pollIntervalMs: number = 3000
+  pollIntervalMs: number = 3000,
 ): {
   metrics: SyncMetrics | null;
   refresh: () => Promise<void>;

@@ -14,8 +14,9 @@ export type {
   FieldMergeResolverOptions,
 };
 
-
-export const lastWriteWinsResolver: ConflictResolver = (context: ConflictContext): ConflictResolution => {
+export const lastWriteWinsResolver: ConflictResolver = (
+  context: ConflictContext,
+): ConflictResolution => {
   const remoteTime = context.remoteChange.timestamp ?? 0;
   const localTime = context.localOutboxRecord?.timestamp ?? 0;
 
@@ -29,7 +30,9 @@ export const serverWinsResolver: ConflictResolver = (): ConflictResolution => {
   return 'apply-remote';
 };
 
-export const clientWinsResolver: ConflictResolver = (context: ConflictContext): ConflictResolution => {
+export const clientWinsResolver: ConflictResolver = (
+  context: ConflictContext,
+): ConflictResolution => {
   if (context.localOutboxRecord) {
     return 'keep-local';
   }
@@ -42,7 +45,7 @@ export const clientWinsResolver: ConflictResolver = (context: ConflictContext): 
  * and resolves overlapping field changes using custom rules, timestamps, or winner strategies.
  */
 export function createFieldMergeResolver(
-  options: FieldMergeResolverOptions = {}
+  options: FieldMergeResolverOptions = {},
 ): ConflictResolver {
   const defaultWinner = options.defaultWinner ?? 'newer';
   const deleteHandling = options.deleteHandling ?? 'delete-wins';
@@ -117,7 +120,7 @@ export function createFieldMergeResolver(
 }
 
 export function getConflictResolver(
-  strategyOrResolver?: ConflictStrategy | ConflictResolver
+  strategyOrResolver?: ConflictStrategy | ConflictResolver,
 ): ConflictResolver {
   if (typeof strategyOrResolver === 'function') {
     return strategyOrResolver;
@@ -135,4 +138,3 @@ export function getConflictResolver(
       return lastWriteWinsResolver;
   }
 }
-

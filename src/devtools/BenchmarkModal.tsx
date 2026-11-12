@@ -22,7 +22,8 @@ const now = (): number =>
     ? performance.now()
     : Date.now();
 
-const elapsed = (start: number): number => Math.max(0.01, Math.round((now() - start) * 100) / 100);
+const elapsed = (start: number): number =>
+  Math.max(0.01, Math.round((now() - start) * 100) / 100);
 
 const median = (values: number[]): number => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -31,7 +32,10 @@ const median = (values: number[]): number => {
 };
 
 /** Runs one untimed warm-up pass, then returns the median duration (ms) of `runs` timed passes. */
-async function timeMedian(action: () => Promise<void>, runs = 5): Promise<number> {
+async function timeMedian(
+  action: () => Promise<void>,
+  runs = 5,
+): Promise<number> {
   await action();
   const samples: number[] = [];
   for (let i = 0; i < runs; i++) {
@@ -94,7 +98,9 @@ export async function runSQLiteBenchmark(
       appTableCount = appTables.length;
 
       for (const [tableName] of appTables) {
-        const rows = await db.execute(`SELECT * FROM ${escapeIdentifier(tableName)} LIMIT 1`);
+        const rows = await db.execute(
+          `SELECT * FROM ${escapeIdentifier(tableName)} LIMIT 1`,
+        );
         if (rows[0]) {
           const sample = JSON.stringify(rows[0], (_key, value) =>
             typeof value === 'bigint' ? value.toString() : value,
@@ -104,7 +110,10 @@ export async function runSQLiteBenchmark(
       }
     }
 
-    const workloadScale = Math.min(10, Math.max(1, Math.ceil(appRowCount / 1000)));
+    const workloadScale = Math.min(
+      10,
+      Math.max(1, Math.ceil(appRowCount / 1000)),
+    );
     const scaleWorkload = (count: number) => count * workloadScale;
     const makeMetadata = (index: number, tag: string) =>
       JSON.stringify({
@@ -118,7 +127,9 @@ export async function runSQLiteBenchmark(
 
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
-    await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"').catch(() => {});
+    await db
+      .execute('DROP TABLE IF EXISTS "_sync_bench_outbox"')
+      .catch(() => {});
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS "_sync_bench_temp" (
@@ -150,7 +161,10 @@ export async function runSQLiteBenchmark(
 
     // 1. client.batch() Ingestion
     const batchCount = scaleWorkload(500);
-    onProgress?.(`Testing client.batch() atomic multi-mutation (${batchCount} rows)...`, 0.12);
+    onProgress?.(
+      `Testing client.batch() atomic multi-mutation (${batchCount} rows)...`,
+      0.12,
+    );
     const batchMutations = Array.from({ length: batchCount }, (_, i) => ({
       tableName: '_sync_bench_temp',
       operation: 'INSERT' as const,
@@ -172,7 +186,13 @@ export async function runSQLiteBenchmark(
         for (const m of batchMutations) {
           await tx.execute(
             'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-            [m.rowId, m.payload.title, m.payload.score, m.payload.metadata, m.payload.created_at],
+            [
+              m.rowId,
+              m.payload.title,
+              m.payload.score,
+              m.payload.metadata,
+              m.payload.created_at,
+            ],
           );
         }
       });
@@ -191,7 +211,10 @@ export async function runSQLiteBenchmark(
 
     // 2. client.insert() Individual Mutations
     const indivCount = scaleWorkload(40);
-    onProgress?.(`Testing client.insert() individual mutations (${indivCount} rows)...`, 0.24);
+    onProgress?.(
+      `Testing client.insert() individual mutations (${indivCount} rows)...`,
+      0.24,
+    );
     const t2Start = now();
     for (let i = 0; i < indivCount; i++) {
       const payload = {
@@ -201,11 +224,19 @@ export async function runSQLiteBenchmark(
         created_at: new Date().toISOString(),
       };
       if (client?.insert) {
-        await client.insert('_sync_bench_temp', `b-indiv-${i}`, payload, { skipOutbox: true });
+        await client.insert('_sync_bench_temp', `b-indiv-${i}`, payload, {
+          skipOutbox: true,
+        });
       } else {
         await db.execute(
           'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-          [`b-indiv-${i}`, payload.title, payload.score, payload.metadata, payload.created_at],
+          [
+            `b-indiv-${i}`,
+            payload.title,
+            payload.score,
+            payload.metadata,
+            payload.created_at,
+          ],
         );
       }
     }
@@ -222,7 +253,10 @@ export async function runSQLiteBenchmark(
 
     // 3. client.update() Reactive Updates
     const updateCount = scaleWorkload(150);
-    onProgress?.(`Testing client.update() reactive updates (${updateCount} rows)...`, 0.36);
+    onProgress?.(
+      `Testing client.update() reactive updates (${updateCount} rows)...`,
+      0.36,
+    );
     const t3Start = now();
     for (let i = 0; i < updateCount; i++) {
       const patch = {
@@ -231,7 +265,9 @@ export async function runSQLiteBenchmark(
         metadata: makeMetadata(i, 'update'),
       };
       if (client?.update) {
-        await client.update('_sync_bench_temp', `b-batch-${i}`, patch, { skipOutbox: true });
+        await client.update('_sync_bench_temp', `b-batch-${i}`, patch, {
+          skipOutbox: true,
+        });
       } else {
         await db.execute(
           'UPDATE "_sync_bench_temp" SET title = ?, score = ?, metadata = ? WHERE id = ?',
@@ -252,7 +288,10 @@ export async function runSQLiteBenchmark(
 
     // 4. client.findById() Indexed Lookups
     const findCount = scaleWorkload(400);
-    onProgress?.(`Testing client.findById() indexed point lookups (${findCount} queries)...`, 0.48);
+    onProgress?.(
+      `Testing client.findById() indexed point lookups (${findCount} queries)...`,
+      0.48,
+    );
     const t4Start = now();
     for (let i = 0; i < findCount; i++) {
       const id = `b-batch-${i % batchCount}`;
@@ -301,7 +340,8 @@ export async function runSQLiteBenchmark(
     list.push({
       name: 'client.findByIds() Batched',
       category: 'Local-Lite Client',
-      description: '400 entity lookups compiled into batched WHERE id IN (...) single-trip SQL',
+      description:
+        '400 entity lookups compiled into batched WHERE id IN (...) single-trip SQL',
       operations: totalBatchedFinds,
       durationMs: tBatchFindDuration,
       opsPerSec: Math.round((totalBatchedFinds / tBatchFindDuration) * 1000),
@@ -310,7 +350,10 @@ export async function runSQLiteBenchmark(
 
     // 6. client.findMany() with SQL Pushdown Filters
     const findManyCount = scaleWorkload(40);
-    onProgress?.(`Testing client.findMany() query filter compilation (${findManyCount} queries)...`, 0.6);
+    onProgress?.(
+      `Testing client.findMany() query filter compilation (${findManyCount} queries)...`,
+      0.6,
+    );
     const t5Start = now();
     for (let i = 0; i < findManyCount; i++) {
       if (client?.findMany) {
@@ -339,7 +382,10 @@ export async function runSQLiteBenchmark(
 
     // 6. client.findMany() with $contains (Fuzzy Substring Search)
     const searchCount = scaleWorkload(50);
-    onProgress?.(`Testing client.findMany() $contains fuzzy search (${searchCount} queries)...`, 0.7);
+    onProgress?.(
+      `Testing client.findMany() $contains fuzzy search (${searchCount} queries)...`,
+      0.7,
+    );
     const searchTokens = ['Item 1', 'Updated', 'rev', 'Large', 'nonexistent'];
     const t6Start = now();
     for (let i = 0; i < searchCount; i++) {
@@ -368,7 +414,10 @@ export async function runSQLiteBenchmark(
     });
 
     // 7. client.transaction() ACID Rollback Verification
-    onProgress?.('Testing client.transaction() ACID rollback isolation...', 0.78);
+    onProgress?.(
+      'Testing client.transaction() ACID rollback isolation...',
+      0.78,
+    );
     const rollbackStart = now();
     const rollbackCount = scaleWorkload(10);
     for (let c = 0; c < rollbackCount; c++) {
@@ -386,10 +435,10 @@ export async function runSQLiteBenchmark(
           });
         } else {
           await db.transaction(async (tx: any) => {
-            await tx.execute('INSERT INTO "_sync_bench_temp" (id, title) VALUES (?, ?)', [
-              `rb-${c}`,
-              'Pre-rollback',
-            ]);
+            await tx.execute(
+              'INSERT INTO "_sync_bench_temp" (id, title) VALUES (?, ?)',
+              [`rb-${c}`, 'Pre-rollback'],
+            );
             throw new Error('INTENTIONAL_BENCHMARK_ROLLBACK');
           });
         }
@@ -415,7 +464,10 @@ export async function runSQLiteBenchmark(
 
     // 8. Outbox Pipeline Ingestion
     const outboxCount = scaleWorkload(200);
-    onProgress?.(`Testing outbox mutation pipeline (${outboxCount} mutations)...`, 0.85);
+    onProgress?.(
+      `Testing outbox mutation pipeline (${outboxCount} mutations)...`,
+      0.85,
+    );
     const tOutboxStart = now();
     await db.transaction(async (tx: any) => {
       for (let i = 0; i < outboxCount; i++) {
@@ -447,13 +499,20 @@ export async function runSQLiteBenchmark(
 
     // 9. client.delete() Pipeline
     const deleteCount = scaleWorkload(50);
-    onProgress?.(`Testing client.delete() removal (${deleteCount} rows)...`, 0.9);
+    onProgress?.(
+      `Testing client.delete() removal (${deleteCount} rows)...`,
+      0.9,
+    );
     const tDelStart = now();
     for (let i = 0; i < deleteCount; i++) {
       if (client?.delete) {
-        await client.delete('_sync_bench_temp', `b-batch-${i}`, { skipOutbox: true });
+        await client.delete('_sync_bench_temp', `b-batch-${i}`, {
+          skipOutbox: true,
+        });
       } else {
-        await db.execute('DELETE FROM "_sync_bench_temp" WHERE id = ?', [`b-batch-${i}`]);
+        await db.execute('DELETE FROM "_sync_bench_temp" WHERE id = ?', [
+          `b-batch-${i}`,
+        ]);
       }
     }
     const tDelDuration = elapsed(tDelStart);
@@ -476,12 +535,21 @@ export async function runSQLiteBenchmark(
       for (let i = 0; i < concWriteCount; i++) {
         await tx.execute(
           'INSERT INTO "_sync_bench_temp" (id, title, score, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
-          [`wal-w-${i}`, `WAL Item ${i}`, i, '{"wal":true}', new Date().toISOString()],
+          [
+            `wal-w-${i}`,
+            `WAL Item ${i}`,
+            i,
+            '{"wal":true}',
+            new Date().toISOString(),
+          ],
         );
       }
     });
     const readPromises = Array.from({ length: concReadCount }, (_, idx) =>
-      db.execute('SELECT COUNT(*) as c FROM "_sync_bench_temp" WHERE score >= ?', [idx % 50]),
+      db.execute(
+        'SELECT COUNT(*) as c FROM "_sync_bench_temp" WHERE score >= ?',
+        [idx % 50],
+      ),
     );
     await Promise.all([writePromise, ...readPromises]);
     const tConcDuration = elapsed(tConcStart);
@@ -498,9 +566,14 @@ export async function runSQLiteBenchmark(
 
     // 11. Resilient JSON Fuzz Parsing
     const fuzzCount = scaleWorkload(1000);
-    onProgress?.(`Testing resilient JSON fuzz hydration (${fuzzCount.toLocaleString()} cycles)...`, 0.99);
+    onProgress?.(
+      `Testing resilient JSON fuzz hydration (${fuzzCount.toLocaleString()} cycles)...`,
+      0.99,
+    );
     const fuzzPayloads = [
-      JSON.stringify({ nested: { title: 'Document 🏢', val: 42, tags: ['sync', 'offline'] } }),
+      JSON.stringify({
+        nested: { title: 'Document 🏢', val: 42, tags: ['sync', 'offline'] },
+      }),
       '{"corrupted": [1, 2, 3, {"unclosed": true',
       'plain-non-json-string',
       '{"nullValue": null, "boolean": false, "empty": {}}',
@@ -533,7 +606,9 @@ export async function runSQLiteBenchmark(
         const safeTable = escapeIdentifier(tableName);
         const pk = client?.getPrimaryKey?.() ?? 'id';
         const safePk = escapeIdentifier(pk);
-        const pkRows = await db.execute(`SELECT ${safePk} AS pk FROM ${safeTable} LIMIT 200`);
+        const pkRows = await db.execute(
+          `SELECT ${safePk} AS pk FROM ${safeTable} LIMIT 200`,
+        );
         const ids: string[] = pkRows.map((r: any) => String(r.pk));
 
         const scanMs = await timeMedian(async () => {
@@ -572,8 +647,12 @@ export async function runSQLiteBenchmark(
   } finally {
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
-    await db.execute('DROP TABLE IF EXISTS "_sync_bench_outbox"').catch(() => {});
-    await db.execute('DELETE FROM "sync_outbox" WHERE "tableName" LIKE ?', ['_sync%']).catch(() => {});
+    await db
+      .execute('DROP TABLE IF EXISTS "_sync_bench_outbox"')
+      .catch(() => {});
+    await db
+      .execute('DELETE FROM "sync_outbox" WHERE "tableName" LIKE ?', ['_sync%'])
+      .catch(() => {});
   }
 
   return list;
@@ -583,7 +662,12 @@ export async function runSQLiteBenchmark(
  * Pure package-driven, full-height Performance Benchmark Modal.
  * Opens full-height with zero screen flickering or dynamic jumping.
  */
-export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: BenchmarkModalProps) {
+export function BenchmarkModal({
+  client,
+  visible,
+  onDismiss,
+  theme = 'auto',
+}: BenchmarkModalProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [step, setStep] = useState('Idle');
   const [progress, setProgress] = useState(0);
@@ -593,7 +677,7 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
   const systemColorScheme = RN?.useColorScheme ? RN.useColorScheme() : null;
   const currentTheme = React.useMemo(
     () => resolveSyncTheme(theme, systemColorScheme),
-    [theme, systemColorScheme]
+    [theme, systemColorScheme],
   );
 
   const startBenchmark = async () => {
@@ -602,10 +686,13 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
     setProgress(0);
     setResults([]);
     try {
-      const benchResults = await runSQLiteBenchmark(client, (currentStep, pct) => {
-        setStep(currentStep);
-        setProgress(pct);
-      });
+      const benchResults = await runSQLiteBenchmark(
+        client,
+        (currentStep, pct) => {
+          setStep(currentStep);
+          setProgress(pct);
+        },
+      );
       setResults(benchResults);
     } catch (err: any) {
       setStep(`Failed: ${err.message || err}`);
@@ -625,7 +712,7 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
       '| Benchmark | Category | Operations | Duration | Throughput |',
       '| :--- | :--- | :--- | :--- | :--- |',
       ...results.map(
-        r =>
+        (r) =>
           `| ${r.name} | ${r.category} | ${r.operations.toLocaleString()} ops | ${r.durationMs} ms | ${r.opsPerSec.toLocaleString()} ops/s |`,
       ),
     ].join('\n');
@@ -651,10 +738,19 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
 
   // React Native renderer (Full-height modal)
   if (RN && RN.View) {
-    const { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Platform, StatusBar } = RN;
+    const {
+      View,
+      Text,
+      TouchableOpacity,
+      ScrollView,
+      Modal,
+      ActivityIndicator,
+      Platform,
+      StatusBar,
+    } = RN;
     const SafeComp = RNSafeArea?.SafeAreaView || RN.SafeAreaView || View;
     const isAndroid = Platform?.OS === 'android';
-    const statusBarHeight = isAndroid ? (StatusBar?.currentHeight || 24) : 0;
+    const statusBarHeight = isAndroid ? StatusBar?.currentHeight || 24 : 0;
 
     return (
       <Modal
@@ -672,36 +768,86 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
           <View
             style={[
               styles.topBar,
-              { backgroundColor: currentTheme.surface, borderBottomColor: currentTheme.border },
-              !RNSafeArea?.SafeAreaView && isAndroid && { paddingTop: statusBarHeight + 10 },
+              {
+                backgroundColor: currentTheme.surface,
+                borderBottomColor: currentTheme.border,
+              },
+              !RNSafeArea?.SafeAreaView &&
+                isAndroid && { paddingTop: statusBarHeight + 10 },
             ]}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.topBarTitle, { color: currentTheme.text }]}>⚡ SQLite Benchmark</Text>
-              <Text style={[styles.topBarSub, { color: currentTheme.textMuted }]}>Inbuilt local-lite throughput & ACID test suite</Text>
+              <Text style={[styles.topBarTitle, { color: currentTheme.text }]}>
+                ⚡ SQLite Benchmark
+              </Text>
+              <Text
+                style={[styles.topBarSub, { color: currentTheme.textMuted }]}
+              >
+                Inbuilt local-lite throughput & ACID test suite
+              </Text>
             </View>
             <TouchableOpacity
               onPress={onDismiss}
-              style={[styles.closeCircle, { backgroundColor: currentTheme.actionBg }]}
+              style={[
+                styles.closeCircle,
+                { backgroundColor: currentTheme.actionBg },
+              ]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.closeCircleText, { color: currentTheme.actionText }]}>✕</Text>
+              <Text
+                style={[
+                  styles.closeCircleText,
+                  { color: currentTheme.actionText },
+                ]}
+              >
+                ✕
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Progress Section (fixed height to prevent flickering) */}
-          <View style={[styles.progressSection, { backgroundColor: currentTheme.surface, borderBottomColor: currentTheme.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 22 }}>
+          <View
+            style={[
+              styles.progressSection,
+              {
+                backgroundColor: currentTheme.surface,
+                borderBottomColor: currentTheme.border,
+              },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                minHeight: 22,
+              }}
+            >
               {isRunning && <ActivityIndicator size="small" color="#8B5CF6" />}
               <Text style={styles.stepText} numberOfLines={1}>
-                {isRunning ? step : results.length > 0 ? 'Benchmark complete!' : 'Ready to test'}
+                {isRunning
+                  ? step
+                  : results.length > 0
+                    ? 'Benchmark complete!'
+                    : 'Ready to test'}
               </Text>
             </View>
-            <View style={[styles.progressTrack, { backgroundColor: currentTheme.border }]}>
+            <View
+              style={[
+                styles.progressTrack,
+                { backgroundColor: currentTheme.border },
+              ]}
+            >
               <View
                 style={[
                   styles.progressFill,
-                  { width: isRunning ? `${Math.round(progress * 100)}%` : results.length > 0 ? '100%' : '0%' },
+                  {
+                    width: isRunning
+                      ? `${Math.round(progress * 100)}%`
+                      : results.length > 0
+                        ? '100%'
+                        : '0%',
+                  },
                 ]}
               />
             </View>
@@ -716,16 +862,24 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
             {results.length === 0 && !isRunning && (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyIcon}>⚡</Text>
-                <Text style={[styles.emptyTitle, { color: currentTheme.text }]}>Run Real-Time Inbuilt Tests</Text>
-                <Text style={[styles.emptyText, { color: currentTheme.textMuted }]}>
-                  Executes ACID transactions, constraint rollbacks, bulk UPSERTs, point lookups, and heavy payload I/O in an isolated temporary table.
+                <Text style={[styles.emptyTitle, { color: currentTheme.text }]}>
+                  Run Real-Time Inbuilt Tests
+                </Text>
+                <Text
+                  style={[styles.emptyText, { color: currentTheme.textMuted }]}
+                >
+                  Executes ACID transactions, constraint rollbacks, bulk
+                  UPSERTs, point lookups, and heavy payload I/O in an isolated
+                  temporary table.
                 </Text>
                 <TouchableOpacity
                   onPress={startBenchmark}
                   style={styles.primaryActionBtn}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.primaryActionBtnText}>Start Benchmark</Text>
+                  <Text style={styles.primaryActionBtnText}>
+                    Start Benchmark
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -733,32 +887,93 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
             {results.map((r, idx) => {
               const rating =
                 r.opsPerSec > 5000
-                  ? { label: 'Blazing 🚀', color: '#10B981', bg: currentTheme.isDark ? '#064E3B' : '#D1FAE5' }
+                  ? {
+                      label: 'Blazing 🚀',
+                      color: '#10B981',
+                      bg: currentTheme.isDark ? '#064E3B' : '#D1FAE5',
+                    }
                   : r.opsPerSec > 500
-                    ? { label: 'Fast ⚡', color: '#8B5CF6', bg: currentTheme.isDark ? '#4C1D95' : '#EDE9FE' }
-                    : { label: 'Normal 👍', color: currentTheme.textMuted, bg: currentTheme.border };
+                    ? {
+                        label: 'Fast ⚡',
+                        color: '#8B5CF6',
+                        bg: currentTheme.isDark ? '#4C1D95' : '#EDE9FE',
+                      }
+                    : {
+                        label: 'Normal 👍',
+                        color: currentTheme.textMuted,
+                        bg: currentTheme.border,
+                      };
 
               return (
-                <View key={idx} style={[styles.card, { backgroundColor: currentTheme.card, borderColor: currentTheme.border }]}>
+                <View
+                  key={idx}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: currentTheme.card,
+                      borderColor: currentTheme.border,
+                    },
+                  ]}
+                >
                   <View style={styles.cardHeader}>
-                    <Text style={[styles.cardTitle, { color: currentTheme.text }]}>{r.name}</Text>
-                    <View style={[styles.badge, { backgroundColor: rating.bg }]}>
+                    <Text
+                      style={[styles.cardTitle, { color: currentTheme.text }]}
+                    >
+                      {r.name}
+                    </Text>
+                    <View
+                      style={[styles.badge, { backgroundColor: rating.bg }]}
+                    >
                       <Text style={[styles.badgeText, { color: rating.color }]}>
                         {rating.label}
                       </Text>
                     </View>
                   </View>
-                  <Text style={[styles.cardDesc, { color: currentTheme.textMuted }]}>{r.description}</Text>
+                  <Text
+                    style={[styles.cardDesc, { color: currentTheme.textMuted }]}
+                  >
+                    {r.description}
+                  </Text>
                   {r.note && (
-                    <Text style={[styles.cardDesc, { color: currentTheme.textMuted }]}>{r.note}</Text>
+                    <Text
+                      style={[
+                        styles.cardDesc,
+                        { color: currentTheme.textMuted },
+                      ]}
+                    >
+                      {r.note}
+                    </Text>
                   )}
-                  <View style={[styles.cardMetrics, { borderTopColor: currentTheme.border }]}>
+                  <View
+                    style={[
+                      styles.cardMetrics,
+                      { borderTopColor: currentTheme.border },
+                    ]}
+                  >
                     <View>
-                      <Text style={[styles.metricLabel, { color: currentTheme.textMuted }]}>Duration</Text>
-                      <Text style={[styles.metricVal, { color: currentTheme.text }]}>{r.durationMs} ms</Text>
+                      <Text
+                        style={[
+                          styles.metricLabel,
+                          { color: currentTheme.textMuted },
+                        ]}
+                      >
+                        Duration
+                      </Text>
+                      <Text
+                        style={[styles.metricVal, { color: currentTheme.text }]}
+                      >
+                        {r.durationMs} ms
+                      </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.metricLabel, { color: currentTheme.textMuted }]}>Throughput</Text>
+                      <Text
+                        style={[
+                          styles.metricLabel,
+                          { color: currentTheme.textMuted },
+                        ]}
+                      >
+                        Throughput
+                      </Text>
                       <Text style={[styles.metricVal, { color: '#8B5CF6' }]}>
                         {r.opsPerSec.toLocaleString()} ops/s
                       </Text>
@@ -773,7 +988,10 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
           <View
             style={[
               styles.bottomBar,
-              { backgroundColor: currentTheme.surface, borderTopColor: currentTheme.border },
+              {
+                backgroundColor: currentTheme.surface,
+                borderTopColor: currentTheme.border,
+              },
               !RNSafeArea?.SafeAreaView && isAndroid && { paddingBottom: 32 },
             ]}
           >
@@ -787,17 +1005,29 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
               activeOpacity={0.8}
             >
               <Text style={styles.footerBtnText}>
-                {isRunning ? 'Running Benchmark...' : results.length > 0 ? 'Re-run Benchmark' : 'Run Benchmark'}
+                {isRunning
+                  ? 'Running Benchmark...'
+                  : results.length > 0
+                    ? 'Re-run Benchmark'
+                    : 'Run Benchmark'}
               </Text>
             </TouchableOpacity>
 
             {results.length > 0 && (
               <TouchableOpacity
                 onPress={copyReport}
-                style={[styles.footerBtn, { backgroundColor: currentTheme.actionBg, flex: 0.8 }]}
+                style={[
+                  styles.footerBtn,
+                  { backgroundColor: currentTheme.actionBg, flex: 0.8 },
+                ]}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.footerBtnText, { color: currentTheme.actionText }]}>
+                <Text
+                  style={[
+                    styles.footerBtnText,
+                    { color: currentTheme.actionText },
+                  ]}
+                >
                   {copied ? '✓ Copied' : 'Copy Report'}
                 </Text>
               </TouchableOpacity>
@@ -833,8 +1063,19 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: currentTheme.text }}>⚡ SQLite Benchmark</h2>
-          <span style={{ fontSize: 12, color: currentTheme.textMuted }}>Inbuilt local-lite throughput & ACID test suite</span>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 18,
+              fontWeight: 700,
+              color: currentTheme.text,
+            }}
+          >
+            ⚡ SQLite Benchmark
+          </h2>
+          <span style={{ fontSize: 12, color: currentTheme.textMuted }}>
+            Inbuilt local-lite throughput & ACID test suite
+          </span>
         </div>
         <button
           onClick={onDismiss}
@@ -853,12 +1094,32 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
         </button>
       </div>
 
-      <div style={{ padding: '12px 24px', borderBottom: `1px solid ${currentTheme.border}`, backgroundColor: currentTheme.surface }}>
-        <div style={{ fontSize: 12, color: '#A78BFA', marginBottom: 6 }}>{isRunning ? step : 'Ready'}</div>
-        <div style={{ width: '100%', height: 6, backgroundColor: currentTheme.border, borderRadius: 3, overflow: 'hidden' }}>
+      <div
+        style={{
+          padding: '12px 24px',
+          borderBottom: `1px solid ${currentTheme.border}`,
+          backgroundColor: currentTheme.surface,
+        }}
+      >
+        <div style={{ fontSize: 12, color: '#A78BFA', marginBottom: 6 }}>
+          {isRunning ? step : 'Ready'}
+        </div>
+        <div
+          style={{
+            width: '100%',
+            height: 6,
+            backgroundColor: currentTheme.border,
+            borderRadius: 3,
+            overflow: 'hidden',
+          }}
+        >
           <div
             style={{
-              width: isRunning ? `${Math.round(progress * 100)}%` : results.length > 0 ? '100%' : '0%',
+              width: isRunning
+                ? `${Math.round(progress * 100)}%`
+                : results.length > 0
+                  ? '100%'
+                  : '0%',
               height: '100%',
               backgroundColor: '#8B5CF6',
               transition: 'width 0.2s',
@@ -867,13 +1128,39 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 12, backgroundColor: currentTheme.bg }}>
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          backgroundColor: currentTheme.bg,
+        }}
+      >
         {results.length === 0 && !isRunning && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: currentTheme.textMuted }}>
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '60px 20px',
+              color: currentTheme.textMuted,
+            }}
+          >
             <div style={{ fontSize: 48, marginBottom: 16 }}>⚡</div>
-            <h3 style={{ color: currentTheme.text, margin: '0 0 8px 0' }}>Run Inbuilt Performance Benchmark</h3>
-            <p style={{ maxWidth: 460, margin: '0 auto 20px auto', fontSize: 13, color: currentTheme.textMuted }}>
-              Tests ACID transactions, constraint rollbacks, bulk UPSERTs, point lookups, and heavy payload I/O directly against your database.
+            <h3 style={{ color: currentTheme.text, margin: '0 0 8px 0' }}>
+              Run Inbuilt Performance Benchmark
+            </h3>
+            <p
+              style={{
+                maxWidth: 460,
+                margin: '0 auto 20px auto',
+                fontSize: 13,
+                color: currentTheme.textMuted,
+              }}
+            >
+              Tests ACID transactions, constraint rollbacks, bulk UPSERTs, point
+              lookups, and heavy payload I/O directly against your database.
             </p>
             <button
               onClick={startBenchmark}
@@ -902,15 +1189,57 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
               padding: 16,
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: currentTheme.text }}>{r.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#8B5CF6', backgroundColor: currentTheme.isDark ? '#8B5CF625' : '#EDE9FE', padding: '2px 8px', borderRadius: 10 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 6,
+              }}
+            >
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: 14,
+                  color: currentTheme.text,
+                }}
+              >
+                {r.name}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#8B5CF6',
+                  backgroundColor: currentTheme.isDark
+                    ? '#8B5CF625'
+                    : '#EDE9FE',
+                  padding: '2px 8px',
+                  borderRadius: 10,
+                }}
+              >
                 {r.opsPerSec.toLocaleString()} ops/s
               </span>
             </div>
-            <div style={{ fontSize: 12, color: currentTheme.textMuted, marginBottom: 10 }}>{r.description}</div>
+            <div
+              style={{
+                fontSize: 12,
+                color: currentTheme.textMuted,
+                marginBottom: 10,
+              }}
+            >
+              {r.description}
+            </div>
             {r.note && (
-              <div style={{ fontSize: 11, color: currentTheme.textMuted, marginBottom: 10 }}>{r.note}</div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: currentTheme.textMuted,
+                  marginBottom: 10,
+                }}
+              >
+                {r.note}
+              </div>
             )}
             <div style={{ fontSize: 11, color: currentTheme.textMuted }}>
               {r.operations.toLocaleString()} ops in {r.durationMs}ms
@@ -919,7 +1248,15 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
         ))}
       </div>
 
-      <div style={{ padding: '16px 24px', borderTop: `1px solid ${currentTheme.border}`, backgroundColor: currentTheme.surface, display: 'flex', gap: 12 }}>
+      <div
+        style={{
+          padding: '16px 24px',
+          borderTop: `1px solid ${currentTheme.border}`,
+          backgroundColor: currentTheme.surface,
+          display: 'flex',
+          gap: 12,
+        }}
+      >
         <button
           onClick={startBenchmark}
           disabled={isRunning}
@@ -934,7 +1271,11 @@ export function BenchmarkModal({ client, visible, onDismiss, theme = 'auto' }: B
             cursor: 'pointer',
           }}
         >
-          {isRunning ? 'Running Benchmark...' : results.length > 0 ? 'Re-run Benchmark' : 'Run Benchmark'}
+          {isRunning
+            ? 'Running Benchmark...'
+            : results.length > 0
+              ? 'Re-run Benchmark'
+              : 'Run Benchmark'}
         </button>
         {results.length > 0 && (
           <button

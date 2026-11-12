@@ -71,7 +71,7 @@ describe('SyncWorker & Conflict Resolution', () => {
       'note-1',
       'UPDATE',
       { content: 'Local Offline Edit' },
-      { customTimestamp: baseTime + 2000 }
+      { customTimestamp: baseTime + 2000 },
     );
     await db.execute('INSERT INTO notes (id, content) VALUES (?, ?)', [
       'note-1',
@@ -148,7 +148,10 @@ describe('SyncWorker & Conflict Resolution', () => {
     expect(client.syncWorker.isBackgroundPaused).toBe(true);
 
     // Mutations while paused stay in outbox without pushing
-    await client.insert('notes', { id: 'paused-note', content: 'While backgrounded' });
+    await client.insert('notes', {
+      id: 'paused-note',
+      content: 'While backgrounded',
+    });
     await new Promise((resolve) => setTimeout(resolve, 80));
 
     let outbox = db.getAll('sync_outbox');

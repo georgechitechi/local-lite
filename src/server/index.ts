@@ -19,7 +19,9 @@ export type ApiMiddleware<TConfig = unknown> = (
   next: () => Promise<Response>,
 ) => Response | Promise<Response>;
 
-export type ApiEndpoint<TConfig = unknown> = Partial<Record<ApiMethod, ApiHandler<TConfig>>>;
+export type ApiEndpoint<TConfig = unknown> = Partial<
+  Record<ApiMethod, ApiHandler<TConfig>>
+>;
 
 export interface ServerConfig<TConfig = unknown> {
   /** Server-only services and provider configuration passed to endpoint handlers. */
@@ -32,14 +34,20 @@ export interface ServerConfig<TConfig = unknown> {
   onError?: (error: unknown, context: ApiRequestContext<TConfig>) => void;
 }
 
-export type GeneratedApiHandlers = Record<string, Partial<Record<ApiMethod, (request: Request) => Promise<Response>>>>;
+export type GeneratedApiHandlers = Record<
+  string,
+  Partial<Record<ApiMethod, (request: Request) => Promise<Response>>>
+>;
 
 function normalizePath(path: string): string {
   const normalized = `/${path.split('/').filter(Boolean).join('/')}`;
   return normalized === '/' ? normalized : normalized.replace(/\/$/, '');
 }
 
-function matchPath(pattern: string, pathname: string): Record<string, string> | null {
+function matchPath(
+  pattern: string,
+  pathname: string,
+): Record<string, string> | null {
   const patternSegments = normalizePath(pattern).split('/').filter(Boolean);
   const pathSegments = normalizePath(pathname).split('/').filter(Boolean);
   if (patternSegments.length !== pathSegments.length) return null;
@@ -69,11 +77,18 @@ function methodNotAllowed(methods: ApiMethod[]): Response {
 }
 
 /** Define and validate an app's server/API configuration. */
-export function defineServerConfig<TConfig>(config: ServerConfig<TConfig>): ServerConfig<TConfig> {
+export function defineServerConfig<TConfig>(
+  config: ServerConfig<TConfig>,
+): ServerConfig<TConfig> {
   for (const [path, endpoint] of Object.entries(config.endpoints)) {
-    if (!path.startsWith('/')) throw new TypeError(`API endpoint path must start with '/': ${path}`);
-    if (!Object.values(endpoint).some(handler => typeof handler === 'function')) {
-      throw new TypeError(`API endpoint '${path}' must define at least one method handler.`);
+    if (!path.startsWith('/'))
+      throw new TypeError(`API endpoint path must start with '/': ${path}`);
+    if (
+      !Object.values(endpoint).some((handler) => typeof handler === 'function')
+    ) {
+      throw new TypeError(
+        `API endpoint '${path}' must define at least one method handler.`,
+      );
     }
   }
   return config;
@@ -85,10 +100,12 @@ export function defineServerConfig<TConfig>(config: ServerConfig<TConfig>): Serv
  * custom servers can use `fetch()` as a single dispatcher.
  */
 export function createServer<TConfig>(config: ServerConfig<TConfig>) {
-  const definitions = Object.entries(config.endpoints).map(([path, endpoint]) => ({
-    path: normalizePath(path),
-    endpoint,
-  }));
+  const definitions = Object.entries(config.endpoints).map(
+    ([path, endpoint]) => ({
+      path: normalizePath(path),
+      endpoint,
+    }),
+  );
 
   const run = async (
     request: Request,
@@ -112,7 +129,8 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
     const stack = config.middleware ?? [];
     let index = -1;
     const dispatch = async (position: number): Promise<Response> => {
-      if (position <= index) throw new Error('API middleware called next() more than once.');
+      if (position <= index)
+        throw new Error('API middleware called next() more than once.');
       index = position;
       const middleware = stack[position];
       if (!middleware) return await handler(context);
@@ -135,7 +153,8 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
   for (const { path, endpoint } of definitions) {
     handlers[path] = {};
     for (const method of Object.keys(endpoint) as ApiMethod[]) {
-      handlers[path][method] = (request: Request) => run(request, path, endpoint);
+      handlers[path][method] = (request: Request) =>
+        run(request, path, endpoint);
     }
   }
 
@@ -143,11 +162,14 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
     handlers,
     handler(path: string, method: ApiMethod) {
       const normalized = normalizePath(path);
-      const definition = definitions.find(item => item.path === normalized);
+      const definition = definitions.find((item) => item.path === normalized);
       if (!definition || !definition.endpoint[method]) {
-        throw new Error(`No ${method} API handler is configured for '${normalized}'.`);
+        throw new Error(
+          `No ${method} API handler is configured for '${normalized}'.`,
+        );
       }
-      return (request: Request) => run(request, definition.path, definition.endpoint);
+      return (request: Request) =>
+        run(request, definition.path, definition.endpoint);
     },
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
@@ -161,8 +183,10 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
       }
       if (pathMatched) {
         const allowed = definitions
-          .filter(definition => matchPath(definition.path, url.pathname))
-          .flatMap(definition => Object.keys(definition.endpoint) as ApiMethod[]);
+          .filter((definition) => matchPath(definition.path, url.pathname))
+          .flatMap(
+            (definition) => Object.keys(definition.endpoint) as ApiMethod[],
+          );
         return methodNotAllowed([...new Set(allowed)]);
       }
       return Response.json({ error: 'Not Found' }, { status: 404 });

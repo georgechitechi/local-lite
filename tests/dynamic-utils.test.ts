@@ -21,7 +21,9 @@ describe('Dynamic Utilities', () => {
 
   describe('safeDynamicImport', () => {
     it('returns undefined gracefully for non-existent packages', async () => {
-      const result = await safeDynamicImport('non_existent_package_foo_bar_999');
+      const result = await safeDynamicImport(
+        'non_existent_package_foo_bar_999',
+      );
       expect(result).toBeUndefined();
     });
 
@@ -36,4 +38,3 @@ describe('Dynamic Utilities', () => {
     });
   });
 });
-

@@ -23,7 +23,10 @@ export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
 export { SelfHostedRemoteAdapter } from '../adapters/remote/self-hosted.js';
-export { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from '../adapters/remote/demo.js';
+export {
+  MemoryDemoRemoteAdapter,
+  NoopRemoteAdapter,
+} from '../adapters/remote/demo.js';
 export type { RemoteDBAdapter } from '../adapters/remote/index.js';
 
 /**
@@ -36,9 +39,13 @@ export function defineSyncConfig(config: LocalLiteConfig): LocalLiteConfig {
 /**
  * Factory that instantiates, wires up, and initializes a LocalFirstClient from a LocalLiteConfig.
  */
-export async function createSyncClient(config: LocalLiteConfig): Promise<LocalFirstClient> {
+export async function createSyncClient(
+  config: LocalLiteConfig,
+): Promise<LocalFirstClient> {
   if ('migrations' in config) {
-    throw new TypeError('The migrations option has been removed. Use schemaMigrations instead.');
+    throw new TypeError(
+      'The migrations option has been removed. Use schemaMigrations instead.',
+    );
   }
 
   // 1. Resolve Local Database Adapter

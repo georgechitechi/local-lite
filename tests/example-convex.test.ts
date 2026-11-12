@@ -13,33 +13,52 @@ function database() {
     query(table: string) {
       const predicates: ((row: any) => boolean)[] = [];
       const range = {
-        eq(key: string, value: any) { predicates.push(row => row[key] === value); return range; },
-        gt(key: string, value: number) { predicates.push(row => row[key] > value); return range; },
+        eq(key: string, value: any) {
+          predicates.push((row) => row[key] === value);
+          return range;
+        },
+        gt(key: string, value: number) {
+          predicates.push((row) => row[key] > value);
+          return range;
+        },
       };
       const query = {
-        withIndex(_name: string, build: (range: any) => void) { build(range); return query; },
-        async collect() { return rows(table).filter(row => predicates.every(predicate => predicate(row))); },
-        async take(count: number) { return (await query.collect()).slice(0, count); },
-        async first() { return (await query.collect())[0] ?? null; },
+        withIndex(_name: string, build: (range: any) => void) {
+          build(range);
+          return query;
+        },
+        async collect() {
+          return rows(table).filter((row) =>
+            predicates.every((predicate) => predicate(row)),
+          );
+        },
+        async take(count: number) {
+          return (await query.collect()).slice(0, count);
+        },
+        async first() {
+          return (await query.collect())[0] ?? null;
+        },
       };
       return query;
     },
-    async insert(table: string, value: any) { rows(table).push({ ...value, _id: String(++nextId) }); },
+    async insert(table: string, value: any) {
+      rows(table).push({ ...value, _id: String(++nextId) });
+    },
     async replace(id: string, value: any) {
       for (const entries of tables.values()) {
-        const index = entries.findIndex(row => row._id === id);
+        const index = entries.findIndex((row) => row._id === id);
         if (index >= 0) entries[index] = { ...value, _id: id };
       }
     },
     async delete(id: string) {
       for (const entries of tables.values()) {
-        const index = entries.findIndex(row => row._id === id);
+        const index = entries.findIndex((row) => row._id === id);
         if (index >= 0) entries.splice(index, 1);
       }
     },
     async patch(id: string, value: any) {
       for (const entries of tables.values()) {
-        const row = entries.find(row => row._id === id);
+        const row = entries.find((row) => row._id === id);
         if (row) Object.assign(row, value);
       }
     },
@@ -47,16 +66,29 @@ function database() {
 }
 
 // Root-only installs do not install the example's optional backend dependencies.
-describe.skipIf(!existsSync(new URL('../example/node_modules/convex/package.json', import.meta.url)))('example Convex sync protocol', () => {
+describe.skipIf(
+  !existsSync(
+    new URL('../example/node_modules/convex/package.json', import.meta.url),
+  ),
+)('example Convex sync protocol', () => {
   it('merges updates, ignores retries and stale writes, and delivers offline deletions', async () => {
     const { pullDeltas, pushBatch } = await import('../example/convex/sync');
     const ctx = { db: database() };
-    const push = (operations: any[]) => (pushBatch as any)._handler(ctx, { operations });
-    const pull = (sinceTimestamp = 0) => (pullDeltas as any)._handler(ctx, {
-      sinceTimestamp, tables: ['properties'],
-    });
-    const op = { id: 'a', tableName: 'properties', rowId: 'p1', operation: 'INSERT',
-      payload: { name: 'Home', rent: 100 }, timestamp: 10 };
+    const push = (operations: any[]) =>
+      (pushBatch as any)._handler(ctx, { operations });
+    const pull = (sinceTimestamp = 0) =>
+      (pullDeltas as any)._handler(ctx, {
+        sinceTimestamp,
+        tables: ['properties'],
+      });
+    const op = {
+      id: 'a',
+      tableName: 'properties',
+      rowId: 'p1',
+      operation: 'INSERT',
+      payload: { name: 'Home', rent: 100 },
+      timestamp: 10,
+    };
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
     try {
       await push([op]);
@@ -67,17 +99,44 @@ describe.skipIf(!existsSync(new URL('../example/node_modules/convex/package.json
       expect(await ctx.db.query('rentalRows').collect()).toEqual([]);
       await push([op]);
       expect((await pull(first.timestamp)).changes).toEqual([]);
-      await push([{ ...op, id: 'b', operation: 'UPDATE', payload: { rent: 200 }, timestamp: 20 }]);
+      await push([
+        {
+          ...op,
+          id: 'b',
+          operation: 'UPDATE',
+          payload: { rent: 200 },
+          timestamp: 20,
+        },
+      ]);
       const second = await pull(first.timestamp);
       expect(second.timestamp).toBeGreaterThan(first.timestamp);
-      expect(second.changes[0].payload).toEqual({ id: 'p1', name: 'Home', rent: 200, deleted: false });
+      expect(second.changes[0].payload).toEqual({
+        id: 'p1',
+        name: 'Home',
+        rent: 200,
+        deleted: false,
+      });
       await push([{ ...op, id: 'stale', timestamp: 15 }]);
       expect((await pull(second.timestamp)).changes).toEqual([]);
-      await push([{ ...op, id: 'delete', operation: 'DELETE', payload: null, timestamp: 30 }]);
+      await push([
+        {
+          ...op,
+          id: 'delete',
+          operation: 'DELETE',
+          payload: null,
+          timestamp: 30,
+        },
+      ]);
       expect((await pull(second.timestamp)).changes).toEqual([
-        expect.objectContaining({ rowId: 'p1', operation: 'DELETE', payload: null }),
+        expect.objectContaining({
+          rowId: 'p1',
+          operation: 'DELETE',
+          payload: null,
+        }),
       ]);
       expect((await pull()).changes[0].operation).toBe('DELETE');
-    } finally { now.mockRestore(); }
+    } finally {
+      now.mockRestore();
+    }
   });
 });

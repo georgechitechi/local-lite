@@ -22,7 +22,7 @@ export class BlobStorageManager {
 
   constructor(
     private db: DBExecutable,
-    options: BlobStorageManagerOptions = {}
+    options: BlobStorageManagerOptions = {},
   ) {
     this.driver = options.driver ?? new MemoryFileDriver();
     this.uploader = options.uploader;
@@ -50,7 +50,7 @@ export class BlobStorageManager {
   async save(
     key: string,
     data: Uint8Array | string,
-    options: SaveBlobOptions = {}
+    options: SaveBlobOptions = {},
   ): Promise<BlobRecord> {
     const bytes = typeof data === 'string' ? utf8ToBytes(data) : data;
     const hash = bytesToHex(sha256(bytes));
@@ -83,11 +83,22 @@ export class BlobStorageManager {
       if (isOnline) {
         // Fire and update status
         try {
-          await BlobStore.updateStatus(this.db, this.tableName, id, 'UPLOADING');
+          await BlobStore.updateStatus(
+            this.db,
+            this.tableName,
+            id,
+            'UPLOADING',
+          );
           const res = await this.uploader.upload(record, bytes);
           record.status = 'UPLOADED';
           record.remoteUrl = res.remoteUrl;
-          await BlobStore.updateStatus(this.db, this.tableName, id, 'UPLOADED', res.remoteUrl);
+          await BlobStore.updateStatus(
+            this.db,
+            this.tableName,
+            id,
+            'UPLOADED',
+            res.remoteUrl,
+          );
         } catch {
           record.status = 'FAILED';
           await BlobStore.updateStatus(this.db, this.tableName, id, 'FAILED');
@@ -101,7 +112,9 @@ export class BlobStorageManager {
   /**
    * Retrieves blob record and raw binary data.
    */
-  async get(key: string): Promise<{ record: BlobRecord; data: Uint8Array } | null> {
+  async get(
+    key: string,
+  ): Promise<{ record: BlobRecord; data: Uint8Array } | null> {
     const record = await BlobStore.getByKey(this.db, this.tableName, key);
     if (!record) return null;
 
@@ -139,7 +152,11 @@ export class BlobStorageManager {
     await this.driver.delete(key);
     await BlobStore.deleteByKey(this.db, this.tableName, key);
 
-    if (this.deleteRemoteOnDelete && this.uploader && typeof this.uploader.delete === 'function') {
+    if (
+      this.deleteRemoteOnDelete &&
+      this.uploader &&
+      typeof this.uploader.delete === 'function'
+    ) {
       try {
         await this.uploader.delete(key);
       } catch {}
@@ -182,7 +199,7 @@ export class BlobStorageManager {
   async saveFromUri(
     key: string,
     sourceUri: string,
-    options: SaveBlobOptions = {}
+    options: SaveBlobOptions = {},
   ): Promise<BlobRecord> {
     let localPath: string;
     let size = 0;
@@ -229,11 +246,22 @@ export class BlobStorageManager {
             bytes = await this.driver.read(key);
           }
           if (bytes) {
-            await BlobStore.updateStatus(this.db, this.tableName, id, 'UPLOADING');
+            await BlobStore.updateStatus(
+              this.db,
+              this.tableName,
+              id,
+              'UPLOADING',
+            );
             const res = await this.uploader.upload(record, bytes);
             record.status = 'UPLOADED';
             record.remoteUrl = res.remoteUrl;
-            await BlobStore.updateStatus(this.db, this.tableName, id, 'UPLOADED', res.remoteUrl);
+            await BlobStore.updateStatus(
+              this.db,
+              this.tableName,
+              id,
+              'UPLOADED',
+              res.remoteUrl,
+            );
           }
         } catch {
           record.status = 'FAILED';
@@ -252,7 +280,7 @@ export class BlobStorageManager {
   async download(
     key: string,
     remoteUrl: string,
-    options: SaveBlobOptions = {}
+    options: SaveBlobOptions = {},
   ): Promise<BlobRecord> {
     let localPath: string;
     let size = 0;
@@ -266,7 +294,9 @@ export class BlobStorageManager {
     } else {
       const res = await fetch(remoteUrl);
       if (!res.ok) {
-        throw new Error(`Failed to download blob from "${remoteUrl}": ${res.statusText}`);
+        throw new Error(
+          `Failed to download blob from "${remoteUrl}": ${res.statusText}`,
+        );
       }
       const ab = await res.arrayBuffer();
       const bytes = new Uint8Array(ab);
@@ -326,12 +356,28 @@ export class BlobStorageManager {
           continue;
         }
 
-        await BlobStore.updateStatus(this.db, this.tableName, item.id, 'UPLOADING');
+        await BlobStore.updateStatus(
+          this.db,
+          this.tableName,
+          item.id,
+          'UPLOADING',
+        );
         const res = await this.uploader.upload(item, data);
-        await BlobStore.updateStatus(this.db, this.tableName, item.id, 'UPLOADED', res.remoteUrl);
+        await BlobStore.updateStatus(
+          this.db,
+          this.tableName,
+          item.id,
+          'UPLOADED',
+          res.remoteUrl,
+        );
         uploaded++;
       } catch {
-        await BlobStore.updateStatus(this.db, this.tableName, item.id, 'FAILED');
+        await BlobStore.updateStatus(
+          this.db,
+          this.tableName,
+          item.id,
+          'FAILED',
+        );
         failed++;
       }
     }

@@ -8,8 +8,12 @@ export interface UseSessionResult<TUser = any> {
   isAuthenticated: boolean;
   isOffline: boolean;
   loading: boolean;
-  createSession: (options: CreateSessionOptions<TUser>) => Promise<SessionRecord<TUser>>;
-  updateUser: (partialUser: Partial<TUser>) => Promise<SessionRecord<TUser> | null>;
+  createSession: (
+    options: CreateSessionOptions<TUser>,
+  ) => Promise<SessionRecord<TUser>>;
+  updateUser: (
+    partialUser: Partial<TUser>,
+  ) => Promise<SessionRecord<TUser> | null>;
   updateTokens: (tokens: {
     token?: string | null;
     refreshToken?: string | null;
@@ -27,7 +31,7 @@ export interface UseSessionResult<TUser = any> {
  * const { user, isAuthenticated, isOffline, signOut } = useSession(client);
  */
 export function useSession<TUser = any>(
-  client: LocalFirstClient | null | undefined
+  client: LocalFirstClient | null | undefined,
 ): UseSessionResult<TUser> {
   const [session, setSession] = useState<SessionRecord<TUser> | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -108,7 +112,7 @@ export function useSession<TUser = any>(
       setSession(res);
       return res;
     },
-    [client]
+    [client],
   );
 
   const updateUser = useCallback(
@@ -118,7 +122,7 @@ export function useSession<TUser = any>(
       setSession(res);
       return res;
     },
-    [client]
+    [client],
   );
 
   const updateTokens = useCallback(
@@ -131,7 +135,7 @@ export function useSession<TUser = any>(
       await client.session.updateTokens(tokens);
       await loadSession();
     },
-    [client, loadSession]
+    [client, loadSession],
   );
 
   const signOut = useCallback(async () => {

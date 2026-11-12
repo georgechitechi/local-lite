@@ -1,7 +1,11 @@
 import { ScheduleType } from './types.js';
 
 export function parseScheduleToIntervalMs(schedule: ScheduleType): number {
-  if (typeof schedule === 'object' && schedule !== null && 'intervalMs' in schedule) {
+  if (
+    typeof schedule === 'object' &&
+    schedule !== null &&
+    'intervalMs' in schedule
+  ) {
     return Math.max(1000, Number(schedule.intervalMs) || 60000);
   }
 
@@ -16,7 +20,9 @@ export function parseScheduleToIntervalMs(schedule: ScheduleType): number {
   if (str === 'weekly') return 7 * 24 * 60 * 60 * 1000;
 
   // 'every X seconds/minutes/hours/days'
-  const match = str.match(/^every\s+(\d+)\s*(s|sec|seconds?|m|min|minutes?|h|hours?|d|days?)$/i);
+  const match = str.match(
+    /^every\s+(\d+)\s*(s|sec|seconds?|m|min|minutes?|h|hours?|d|days?)$/i,
+  );
   if (match) {
     const val = parseInt(match[1], 10);
     const unit = match[2].toLowerCase();
@@ -54,7 +60,10 @@ export function parseScheduleToIntervalMs(schedule: ScheduleType): number {
 /**
  * Calculates next run timestamp given schedule and last run (or current) timestamp.
  */
-export function calculateNextRun(schedule: ScheduleType, fromTimestamp: number = Date.now()): number {
+export function calculateNextRun(
+  schedule: ScheduleType,
+  fromTimestamp: number = Date.now(),
+): number {
   const interval = parseScheduleToIntervalMs(schedule);
   return fromTimestamp + interval;
 }

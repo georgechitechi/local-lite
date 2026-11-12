@@ -136,8 +136,12 @@ describe('createFieldMergeResolver', () => {
   });
 
   it('handles delete-wins and update-wins policies', () => {
-    const deleteWinsResolver = createFieldMergeResolver({ deleteHandling: 'delete-wins' });
-    const updateWinsResolver = createFieldMergeResolver({ deleteHandling: 'update-wins' });
+    const deleteWinsResolver = createFieldMergeResolver({
+      deleteHandling: 'delete-wins',
+    });
+    const updateWinsResolver = createFieldMergeResolver({
+      deleteHandling: 'update-wins',
+    });
 
     // Remote deleted, local updated
     const remoteDelContext: ConflictContext = {

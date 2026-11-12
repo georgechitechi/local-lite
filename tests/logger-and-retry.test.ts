@@ -3,7 +3,6 @@ import {
   SyncLogger,
   formatSupabaseError,
   formatFirestoreError,
-  formatConvexError,
 } from '../src/utils/logger.js';
 import { SyncWorker } from '../src/core/sync-worker.js';
 import { EventEmitter } from '../src/reactive/event-emitter.js';
@@ -14,9 +13,13 @@ describe('Logger & Error Formatting', () => {
   it('translates Supabase RLS 42501 error into friendly message', () => {
     const error = {
       code: '42501',
-      message: 'new row violates row-level security policy for table "properties"',
+      message:
+        'new row violates row-level security policy for table "properties"',
     };
-    const formatted = formatSupabaseError(error, { table: 'properties', operation: 'INSERT' });
+    const formatted = formatSupabaseError(error, {
+      table: 'properties',
+      operation: 'INSERT',
+    });
     expect(formatted).toContain('RLS Permission Denied');
     expect(formatted).toContain('Row-Level Security blocked this mutation');
     expect(formatted).toContain('"properties"');

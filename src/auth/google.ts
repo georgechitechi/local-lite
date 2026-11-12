@@ -7,9 +7,11 @@ import {
   type GoogleDriveBackupClientOptions,
 } from '../backups/cloud-storage.js';
 
-export const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+export const GOOGLE_AUTHORIZATION_ENDPOINT =
+  'https://accounts.google.com/o/oauth2/v2/auth';
 export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-export const GOOGLE_USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v3/userinfo';
+export const GOOGLE_USERINFO_ENDPOINT =
+  'https://www.googleapis.com/oauth2/v3/userinfo';
 export const DEFAULT_GOOGLE_AUTH_SCOPES = ['openid', 'email', 'profile'];
 
 export interface GoogleUser extends AuthUser {
@@ -69,7 +71,8 @@ export interface GoogleAuthClientOptions {
 }
 
 function secureRandomBytes(length: number): Uint8Array {
-  const crypto = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
+  const crypto =
+    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
   if (!crypto?.getRandomValues) {
     const fallback = new Uint8Array(length);
     for (let i = 0; i < length; i++) {
@@ -89,9 +92,11 @@ function base64UrlEncode(bytes: Uint8Array): string {
     const second = bytes[index + 1];
     const third = bytes[index + 2];
     result += alphabet[first >> 2];
-    result += alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
+    result +=
+      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
     if (second !== undefined) {
-      result += alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
+      result +=
+        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
     }
     if (third !== undefined) result += alphabet[third & 63];
   }
@@ -104,7 +109,8 @@ function validateTokens(value: unknown): value is GoogleAuthTokens {
   return (
     typeof tokens.accessToken === 'string' &&
     typeof tokens.expiresAt === 'number' &&
-    (tokens.refreshToken === undefined || typeof tokens.refreshToken === 'string') &&
+    (tokens.refreshToken === undefined ||
+      typeof tokens.refreshToken === 'string') &&
     (tokens.idToken === undefined || typeof tokens.idToken === 'string')
   );
 }
@@ -124,14 +130,14 @@ export function createInMemoryGoogleTokenStore(): GoogleAuthTokenStore {
   let storedUser: GoogleUser | null = null;
   return {
     getTokens: async () => storedTokens,
-    setTokens: async tokens => {
+    setTokens: async (tokens) => {
       storedTokens = tokens;
     },
     removeTokens: async () => {
       storedTokens = null;
     },
     getUser: async () => storedUser,
-    setUser: async user => {
+    setUser: async (user) => {
       storedUser = user;
     },
   };
@@ -148,13 +154,13 @@ export function createGoogleAuthTokenStore(
       const raw = await storage.getItem(tokensKey);
       return validateTokens(raw) ? raw : null;
     },
-    setTokens: tokens => storage.setItem(tokensKey, tokens),
+    setTokens: (tokens) => storage.setItem(tokensKey, tokens),
     removeTokens: () => storage.removeItem(tokensKey),
     getUser: async () => {
       const raw = await storage.getItem(userKey);
       return validateUser(raw) ? raw : null;
     },
-    setUser: async user => {
+    setUser: async (user) => {
       if (user) {
         await storage.setItem(userKey, user);
       } else {
@@ -239,16 +245,19 @@ export class GoogleAuthClient {
     const verifierBytes = randomBytes(32);
     const stateBytes = randomBytes(32);
     if (verifierBytes.length !== 32 || stateBytes.length !== 32) {
-      throw new Error('The randomBytes provider returned an invalid number of bytes.');
+      throw new Error(
+        'The randomBytes provider returned an invalid number of bytes.',
+      );
     }
 
     const codeVerifier = base64UrlEncode(verifierBytes);
     const codeChallenge = base64UrlEncode(sha256(utf8ToBytes(codeVerifier)));
     const state = base64UrlEncode(stateBytes);
 
-    const scopes = this.options.scopes && this.options.scopes.length > 0
-      ? this.options.scopes
-      : DEFAULT_GOOGLE_AUTH_SCOPES;
+    const scopes =
+      this.options.scopes && this.options.scopes.length > 0
+        ? this.options.scopes
+        : DEFAULT_GOOGLE_AUTH_SCOPES;
 
     const authorizationParams = new URLSearchParams({
       client_id: this.options.clientId,
@@ -273,7 +282,9 @@ export class GoogleAuthClient {
     }
 
     if (authorization.state !== state) {
-      throw new Error('Google OAuth state validation failed. Please try connecting again.');
+      throw new Error(
+        'Google OAuth state validation failed. Please try connecting again.',
+      );
     }
 
     if (!authorization.code) {
@@ -377,7 +388,9 @@ export class GoogleAuthClient {
     }
 
     if (!tokens.refreshToken) {
-      throw new Error('Your Google sign-in session expired. Please sign in again.');
+      throw new Error(
+        'Your Google sign-in session expired. Please sign in again.',
+      );
     }
 
     const response = await this.fetcher(GOOGLE_TOKEN_ENDPOINT, {
@@ -396,7 +409,9 @@ export class GoogleAuthClient {
     }
 
     if (!payload.access_token) {
-      throw new Error('Google OAuth token refresh did not return an access token.');
+      throw new Error(
+        'Google OAuth token refresh did not return an access token.',
+      );
     }
 
     const updatedTokens: GoogleAuthTokens = {
@@ -425,7 +440,10 @@ export class GoogleAuthClient {
     const email = raw.email ? String(raw.email).trim().toLowerCase() : '';
     const emailVerified = Boolean(raw.email_verified ?? true);
     const sub = String(raw.sub || raw.id || 'google_user');
-    const id = resolveUnifiedUserId({ id: sub, email, emailVerified }, 'google');
+    const id = resolveUnifiedUserId(
+      { id: sub, email, emailVerified },
+      'google',
+    );
     const name = raw.name || raw.email || 'Google User';
     const avatarUrl = raw.picture || null;
 
@@ -455,7 +473,9 @@ export class GoogleAuthClient {
     );
   }
 
-  createDriveBackupClient(options: Partial<GoogleDriveBackupClientOptions> = {}): GoogleDriveBackupClient {
+  createDriveBackupClient(
+    options: Partial<GoogleDriveBackupClientOptions> = {},
+  ): GoogleDriveBackupClient {
     return new GoogleDriveBackupClient({
       authClient: this,
       fetch: this.fetcher,

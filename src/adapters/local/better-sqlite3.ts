@@ -63,7 +63,9 @@ export class BetterSQLite3Adapter implements LocalDBAdapter {
     return await next;
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     const run = async (): Promise<T> => {
       // Explicit transaction control reusing prepared statements
       this.getStatement('BEGIN IMMEDIATE').run();

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   resolveUnifiedUserId,
   createUnifiedAuthUser,
-  DEFAULT_UNIFIED_EMAIL_NAMESPACE,
   UnifiedAuthManager,
   SessionManager,
   GoogleAuthClient,
@@ -17,15 +16,15 @@ describe('User Identity Unification (local-lite/auth)', () => {
     it('generates identical canonical userId across Google, GitHub, and Microsoft for the same verified email', () => {
       const googleId = resolveUnifiedUserId(
         { id: 'google_sub_1092830192', email, emailVerified: true },
-        'google'
+        'google',
       );
       const githubId = resolveUnifiedUserId(
         { id: 4829104, email, emailVerified: true },
-        'github'
+        'github',
       );
       const msId = resolveUnifiedUserId(
         { id: 'ms-guid-839210-abcdef', email, emailVerified: true },
-        'microsoft'
+        'microsoft',
       );
 
       expect(googleId).toBeDefined();
@@ -36,11 +35,11 @@ describe('User Identity Unification (local-lite/auth)', () => {
     it('normalizes email case and whitespace', () => {
       const id1 = resolveUnifiedUserId(
         { id: '1', email: '  GeorgeChitechi@Gmail.COM  ', emailVerified: true },
-        'google'
+        'google',
       );
       const id2 = resolveUnifiedUserId(
         { id: '2', email: 'georgechitechi@gmail.com', emailVerified: true },
-        'github'
+        'github',
       );
 
       expect(id1).toBe(id2);
@@ -49,11 +48,11 @@ describe('User Identity Unification (local-lite/auth)', () => {
     it('falls back to provider-scoped deterministic ID when email is unverified or missing', () => {
       const unverifiedGoogle = resolveUnifiedUserId(
         { id: 'user_123', email: 'unverified@test.com', emailVerified: false },
-        'google'
+        'google',
       );
       const unverifiedGithub = resolveUnifiedUserId(
         { id: 'user_123', email: 'unverified@test.com', emailVerified: false },
-        'github'
+        'github',
       );
 
       expect(unverifiedGoogle).not.toBe(unverifiedGithub);
@@ -102,7 +101,10 @@ describe('User Identity Unification (local-lite/auth)', () => {
     });
 
     it('links sessions under the same canonical userId in SQLite without creating duplicate records', async () => {
-      const canonicalId = resolveUnifiedUserId({ id: '1', email, emailVerified: true }, 'google');
+      const canonicalId = resolveUnifiedUserId(
+        { id: '1', email, emailVerified: true },
+        'google',
+      );
 
       // 1. First sign-in via Google
       const s1 = await sessionManager.createSession({
@@ -158,7 +160,10 @@ describe('User Identity Unification (local-lite/auth)', () => {
         },
         getValidAccessToken: async () => 'mock_google_token',
         isSignedIn: async () => googleSignedIn,
-        getUser: async () => (googleSignedIn ? { id: 'sub_123', email, emailVerified: true, name: 'George' } : null),
+        getUser: async () =>
+          googleSignedIn
+            ? { id: 'sub_123', email, emailVerified: true, name: 'George' }
+            : null,
         signOut: async () => {
           googleSignedIn = false;
         },
@@ -172,7 +177,8 @@ describe('User Identity Unification (local-lite/auth)', () => {
         },
         getValidAccessToken: async () => 'mock_github_token',
         isSignedIn: async () => githubSignedIn,
-        getUser: async () => (githubSignedIn ? { id: 'gh_456', email, name: 'George' } : null),
+        getUser: async () =>
+          githubSignedIn ? { id: 'gh_456', email, name: 'George' } : null,
         signOut: async () => {
           githubSignedIn = false;
         },
@@ -186,7 +192,7 @@ describe('User Identity Unification (local-lite/auth)', () => {
       });
 
       let notifiedUser: any = null;
-      authManager.onAuthStateChange(u => {
+      authManager.onAuthStateChange((u) => {
         notifiedUser = u;
       });
 
@@ -212,22 +218,22 @@ describe('User Identity Unification (local-lite/auth)', () => {
       const authManager = new UnifiedAuthManager({ sessionManager });
 
       await expect(authManager.signIn('google')).rejects.toThrow(
-        'GoogleAuthClient is not configured on UnifiedAuthManager.'
+        'GoogleAuthClient is not configured on UnifiedAuthManager.',
       );
       await expect(authManager.signIn('github')).rejects.toThrow(
-        'GitHubAuthClient is not configured on UnifiedAuthManager.'
+        'GitHubAuthClient is not configured on UnifiedAuthManager.',
       );
       await expect(authManager.signIn('microsoft')).rejects.toThrow(
-        'MicrosoftAuthClient is not configured on UnifiedAuthManager.'
+        'MicrosoftAuthClient is not configured on UnifiedAuthManager.',
       );
       await expect(authManager.signIn('apple')).rejects.toThrow(
-        'AppleAuthClient is not configured on UnifiedAuthManager.'
+        'AppleAuthClient is not configured on UnifiedAuthManager.',
       );
       await expect(authManager.signIn('local')).rejects.toThrow(
-        'LocalAuthEngine is not configured on UnifiedAuthManager.'
+        'LocalAuthEngine is not configured on UnifiedAuthManager.',
       );
       await expect(authManager.signIn('unknown' as any)).rejects.toThrow(
-        'Unsupported auth provider: unknown'
+        'Unsupported auth provider: unknown',
       );
     });
 

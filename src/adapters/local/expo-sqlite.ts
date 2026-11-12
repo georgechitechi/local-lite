@@ -32,7 +32,10 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
 
     const run = async (): Promise<any[]> => {
       // Parameterless DDL statements bypass statement preparation
-      if ((!params || params.length === 0) && typeof this.db.execAsync === 'function') {
+      if (
+        (!params || params.length === 0) &&
+        typeof this.db.execAsync === 'function'
+      ) {
         await this.db.execAsync(trimmed);
         return [];
       }
@@ -51,7 +54,9 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
     return await next;
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     const run = async (): Promise<T> => {
       let result!: T;
       await this.db.withTransactionAsync(async () => {
@@ -61,7 +66,10 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
             if (READ_QUERY_REGEX.test(trimmed)) {
               return this.db.getAllAsync(trimmed, p);
             }
-            if ((!p || p.length === 0) && typeof this.db.execAsync === 'function') {
+            if (
+              (!p || p.length === 0) &&
+              typeof this.db.execAsync === 'function'
+            ) {
               await this.db.execAsync(trimmed);
               return [];
             }

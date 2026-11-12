@@ -2,7 +2,11 @@ import { useEffect, useState, useCallback } from 'react';
 import type { GoogleAuthClient, GoogleUser } from '../auth/google.js';
 import type { MicrosoftAuthClient, MicrosoftUser } from '../auth/microsoft.js';
 import type { GitHubAuthClient, GitHubUser } from '../auth/github.js';
-import type { AppleAuthClient, AppleUser, AppleNativeCredential } from '../auth/apple.js';
+import type {
+  AppleAuthClient,
+  AppleUser,
+  AppleNativeCredential,
+} from '../auth/apple.js';
 import type {
   LocalAuthEngine,
   LocalUser,
@@ -44,20 +48,20 @@ export function useGoogleAuth(
 
     client
       .getUser()
-      .then(currentUser => {
+      .then((currentUser) => {
         if (isMounted) {
           setUser(currentUser);
           setLoading(false);
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (isMounted) {
           setError(err instanceof Error ? err : new Error(String(err)));
           setLoading(false);
         }
       });
 
-    const unsubscribe = client.onAuthStateChange(updatedUser => {
+    const unsubscribe = client.onAuthStateChange((updatedUser) => {
       if (isMounted) {
         setUser(updatedUser);
       }
@@ -152,20 +156,20 @@ export function useMicrosoftAuth(
 
     client
       .getUser()
-      .then(currentUser => {
+      .then((currentUser) => {
         if (isMounted) {
           setUser(currentUser);
           setLoading(false);
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (isMounted) {
           setError(err instanceof Error ? err : new Error(String(err)));
           setLoading(false);
         }
       });
 
-    const unsubscribe = client.onAuthStateChange(updatedUser => {
+    const unsubscribe = client.onAuthStateChange((updatedUser) => {
       if (isMounted) {
         setUser(updatedUser);
       }
@@ -260,20 +264,20 @@ export function useGitHubAuth(
 
     client
       .getUser()
-      .then(currentUser => {
+      .then((currentUser) => {
         if (isMounted) {
           setUser(currentUser);
           setLoading(false);
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (isMounted) {
           setError(err instanceof Error ? err : new Error(String(err)));
           setLoading(false);
         }
       });
 
-    const unsubscribe = client.onAuthStateChange(updatedUser => {
+    const unsubscribe = client.onAuthStateChange((updatedUser) => {
       if (isMounted) {
         setUser(updatedUser);
       }
@@ -345,7 +349,9 @@ export interface UseAppleAuthResult {
   isSignedIn: boolean;
   loading: boolean;
   error: Error | null;
-  signIn: (nativeCredential?: AppleNativeCredential) => Promise<AppleUser | null>;
+  signIn: (
+    nativeCredential?: AppleNativeCredential,
+  ) => Promise<AppleUser | null>;
   signOut: () => Promise<void>;
   refetchUser: () => Promise<AppleUser | null>;
 }
@@ -368,20 +374,20 @@ export function useAppleAuth(
 
     client
       .getUser()
-      .then(currentUser => {
+      .then((currentUser) => {
         if (isMounted) {
           setUser(currentUser);
           setLoading(false);
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (isMounted) {
           setError(err instanceof Error ? err : new Error(String(err)));
           setLoading(false);
         }
       });
 
-    const unsubscribe = client.onAuthStateChange(updatedUser => {
+    const unsubscribe = client.onAuthStateChange((updatedUser) => {
       if (isMounted) {
         setUser(updatedUser);
       }
@@ -410,7 +416,7 @@ export function useAppleAuth(
         setLoading(false);
       }
     },
-    [client]
+    [client],
   );
 
   const signOut = useCallback(async () => {
@@ -460,9 +466,11 @@ export interface UseLocalAuthResult<TMetadata = any> {
   signIn: (
     identifier: string,
     password: string,
-    options?: Omit<SignInOptions, 'identifier' | 'password'>
+    options?: Omit<SignInOptions, 'identifier' | 'password'>,
   ) => Promise<SignInResult<TMetadata>>;
-  signUp: (options: SignUpOptions<TMetadata>) => Promise<SignInResult<TMetadata>>;
+  signUp: (
+    options: SignUpOptions<TMetadata>,
+  ) => Promise<SignInResult<TMetadata>>;
   signOut: () => Promise<void>;
   refetchUser: () => Promise<LocalUser<TMetadata> | null>;
 }
@@ -475,10 +483,12 @@ export interface UseLocalAuthResult<TMetadata = any> {
  * const { user, isSignedIn, signIn, signUp, signOut } = useLocalAuth(client.auth);
  */
 export function useLocalAuth<TMetadata = any>(
-  engine: LocalAuthEngine | null | undefined
+  engine: LocalAuthEngine | null | undefined,
 ): UseLocalAuthResult<TMetadata> {
   const [user, setUser] = useState<LocalUser<TMetadata> | null>(null);
-  const [session, setSession] = useState<SessionRecord<LocalUser<TMetadata>> | null>(null);
+  const [session, setSession] = useState<SessionRecord<
+    LocalUser<TMetadata>
+  > | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -491,7 +501,8 @@ export function useLocalAuth<TMetadata = any>(
     }
     try {
       const sessionMgr = engine.getSessionManager();
-      const currentSession = await sessionMgr.getActiveSession<LocalUser<TMetadata>>();
+      const currentSession =
+        await sessionMgr.getActiveSession<LocalUser<TMetadata>>();
       setSession(currentSession);
       const currentUser = await engine.getCurrentUser<TMetadata>();
       setUser(currentUser);
@@ -520,7 +531,7 @@ export function useLocalAuth<TMetadata = any>(
     async (
       identifier: string,
       password: string,
-      options?: Omit<SignInOptions, 'identifier' | 'password'>
+      options?: Omit<SignInOptions, 'identifier' | 'password'>,
     ) => {
       if (!engine) throw new Error('LocalAuthEngine is not initialized.');
       setError(null);
@@ -542,7 +553,7 @@ export function useLocalAuth<TMetadata = any>(
         setLoading(false);
       }
     },
-    [engine]
+    [engine],
   );
 
   const signUp = useCallback(
@@ -563,7 +574,7 @@ export function useLocalAuth<TMetadata = any>(
         setLoading(false);
       }
     },
-    [engine]
+    [engine],
   );
 
   const signOut = useCallback(async () => {

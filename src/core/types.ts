@@ -41,7 +41,8 @@ export interface DeltaChanges {
   changes: DeltaChange[];
 }
 
-export type ConflictResolution = 'apply-remote' | 'keep-local' | { mergePayload: Record<string, any> };
+export type ConflictResolution =
+  'apply-remote' | 'keep-local' | { mergePayload: Record<string, any> };
 
 export interface ConflictContext {
   tableName: string;
@@ -51,15 +52,18 @@ export interface ConflictContext {
   localRow?: Record<string, any> | null;
 }
 
-export type ConflictResolver = (context: ConflictContext) => ConflictResolution | Promise<ConflictResolution>;
-export type ConflictStrategy = 'last-write-wins' | 'server-wins' | 'client-wins' | 'field-merge';
+export type ConflictResolver = (
+  context: ConflictContext,
+) => ConflictResolution | Promise<ConflictResolution>;
+export type ConflictStrategy =
+  'last-write-wins' | 'server-wins' | 'client-wins' | 'field-merge';
 
 export type FieldMergeWinner = 'remote' | 'local' | 'newer' | 'max' | 'min';
 
 export type FieldMergeCustomResolver = (
   localVal: any,
   remoteVal: any,
-  context: ConflictContext
+  context: ConflictContext,
 ) => any;
 
 export type FieldMergeRule = FieldMergeWinner | FieldMergeCustomResolver;
@@ -147,16 +151,18 @@ export interface ComparisonOperator<T = any> {
 }
 
 export type FieldFilter<T = any> =
-  | T
-  | ComparisonOperator<T>
-  | ((value: T) => boolean);
+  T | ComparisonOperator<T> | ((value: T) => boolean);
 
 export type WhereFilter =
   | Record<string, FieldFilter>
   | ((row: Record<string, any>) => boolean)
   | {
-      $or?: (Record<string, FieldFilter> | ((row: Record<string, any>) => boolean))[];
-      $and?: (Record<string, FieldFilter> | ((row: Record<string, any>) => boolean))[];
+      $or?: (
+        Record<string, FieldFilter> | ((row: Record<string, any>) => boolean)
+      )[];
+      $and?: (
+        Record<string, FieldFilter> | ((row: Record<string, any>) => boolean)
+      )[];
       [key: string]: any;
     };
 

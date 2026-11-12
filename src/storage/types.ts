@@ -44,7 +44,10 @@ export interface RemoteStorageUploadResult {
 }
 
 export interface RemoteStorageUploader {
-  upload(blob: BlobRecord, data: Uint8Array): Promise<RemoteStorageUploadResult>;
+  upload(
+    blob: BlobRecord,
+    data: Uint8Array,
+  ): Promise<RemoteStorageUploadResult>;
   getDownloadUrl?(keyOrPath: string): Promise<string> | string;
   delete?(keyOrPath: string): Promise<void>;
 }

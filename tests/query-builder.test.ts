@@ -37,9 +37,27 @@ describe('QueryBuilder & Native Relational Operations', () => {
     ]);
 
     await client.insertMany('contracts', [
-      { id: 'c1', house_id: 'h1', tenant_id: 't1', rent_amount: 15000, status: 'ACTIVE' },
-      { id: 'c2', house_id: 'h2', tenant_id: 't2', rent_amount: 20000, status: 'ACTIVE' },
-      { id: 'c3', house_id: 'h3', tenant_id: null, rent_amount: 25000, status: 'TERMINATED' },
+      {
+        id: 'c1',
+        house_id: 'h1',
+        tenant_id: 't1',
+        rent_amount: 15000,
+        status: 'ACTIVE',
+      },
+      {
+        id: 'c2',
+        house_id: 'h2',
+        tenant_id: 't2',
+        rent_amount: 20000,
+        status: 'ACTIVE',
+      },
+      {
+        id: 'c3',
+        house_id: 'h3',
+        tenant_id: null,
+        rent_amount: 25000,
+        status: 'TERMINATED',
+      },
     ]);
 
     await client.insertMany('receipts', [
@@ -117,7 +135,10 @@ describe('QueryBuilder & Native Relational Operations', () => {
   });
 
   it('first() returns single row directly', async () => {
-    const firstHouse = await client.from('houses').where({ house_number: '102' }).first();
+    const firstHouse = await client
+      .from('houses')
+      .where({ house_number: '102' })
+      .first();
     expect(firstHouse?.id).toBe('h2');
     expect(firstHouse?.rent).toBe(20000);
   });

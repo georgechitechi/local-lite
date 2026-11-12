@@ -32,7 +32,11 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
 
   if (singletonModules[moduleName]) {
-    return context.resolveRequest(context, singletonModules[moduleName], platform);
+    return context.resolveRequest(
+      context,
+      singletonModules[moduleName],
+      platform,
+    );
   }
 
   // On native platforms (android / ios), ensure singleton react-native
@@ -40,7 +44,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return context.resolveRequest(
       context,
       path.resolve(projectRoot, 'node_modules/react-native'),
-      platform
+      platform,
     );
   }
 
@@ -48,4 +52,3 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 };
 
 module.exports = config;
-

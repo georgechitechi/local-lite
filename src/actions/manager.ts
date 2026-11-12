@@ -34,7 +34,7 @@ export class ActionManager {
     db: LocalDBAdapter,
     events: EventEmitter,
     isOnline: () => Promise<boolean>,
-    options: ActionManagerOptions = {}
+    options: ActionManagerOptions = {},
   ) {
     this.db = db;
     this.events = events;
@@ -80,7 +80,7 @@ export class ActionManager {
    * Enqueues an asynchronous action with offline durability and idempotency checks.
    */
   async enqueue<TPayload = any, TResult = any>(
-    opts: EnqueueActionOptions<TPayload>
+    opts: EnqueueActionOptions<TPayload>,
   ): Promise<ActionRecord<TPayload, TResult>> {
     if (!opts.action || typeof opts.action !== 'string') {
       throw new Error('Action name is required and must be a string');
@@ -95,7 +95,9 @@ export class ActionManager {
         const res = validator.safeParse(payload);
         if (!res.success) {
           const errDetail = res.error?.message || JSON.stringify(res.error);
-          throw new Error(`Schema validation failed for action '${opts.action}': ${errDetail}`);
+          throw new Error(
+            `Schema validation failed for action '${opts.action}': ${errDetail}`,
+          );
         }
         payload = res.data ?? payload;
       } else if (typeof validator.parse === 'function') {
@@ -103,7 +105,9 @@ export class ActionManager {
       } else if (typeof validator === 'function') {
         const res = await validator(payload);
         if (res === false) {
-          throw new Error(`Schema validation failed for action '${opts.action}'`);
+          throw new Error(
+            `Schema validation failed for action '${opts.action}'`,
+          );
         }
         if (typeof res === 'object' && res !== null) {
           payload = res;
@@ -113,7 +117,11 @@ export class ActionManager {
 
     // 1. Idempotency check: if key already exists, return existing record
     if (opts.idempotencyKey) {
-      const existing = await ActionStore.findByIdempotencyKey(this.db, this.tableName, opts.idempotencyKey);
+      const existing = await ActionStore.findByIdempotencyKey(
+        this.db,
+        this.tableName,
+        opts.idempotencyKey,
+      );
       if (existing) {
         return existing as ActionRecord<TPayload, TResult>;
       }
@@ -158,8 +166,11 @@ export class ActionManager {
   /**
    * Convenience helper to enqueue a transactional email with offline resilience.
    */
-  async sendEmail(options: SendEmailOptions): Promise<ActionRecord<EmailPayload, any>> {
-    const { idempotencyKey, ttlMs, expiresAt, maxRetries, ...emailPayload } = options;
+  async sendEmail(
+    options: SendEmailOptions,
+  ): Promise<ActionRecord<EmailPayload, any>> {
+    const { idempotencyKey, ttlMs, expiresAt, maxRetries, ...emailPayload } =
+      options;
 
     if (!emailPayload.to) {
       throw new Error("Email 'to' recipient is required");
@@ -182,7 +193,7 @@ export class ActionManager {
    * Registers a type-safe action definition with optional runtime schema validation.
    */
   defineAction<TPayload = any, TResult = any>(
-    definition: ActionDefinition<TPayload, TResult>
+    definition: ActionDefinition<TPayload, TResult>,
   ): () => void {
     if (!definition.name) {
       throw new Error('Action definition name is required');
@@ -204,7 +215,7 @@ export class ActionManager {
    */
   registerHandler<TPayload = any, TResult = any>(
     action: string,
-    handler: ActionHandler<TPayload, TResult>
+    handler: ActionHandler<TPayload, TResult>,
   ): () => void {
     this.handlers.set(action, handler);
     return () => {
@@ -219,7 +230,7 @@ export class ActionManager {
    */
   registerEmailHandler(handler: EmailHandler): () => void {
     return this.registerHandler<EmailPayload>('send_email', (record, context) =>
-      handler(record.payload, record, context)
+      handler(record.payload, record, context),
     );
   }
 
@@ -249,7 +260,9 @@ export class ActionManager {
     const { max, windowMs } = this.options.rateLimit;
     while (true) {
       const now = Date.now();
-      this.rateLimitTimestamps = this.rateLimitTimestamps.filter((t) => now - t < windowMs);
+      this.rateLimitTimestamps = this.rateLimitTimestamps.filter(
+        (t) => now - t < windowMs,
+      );
       if (this.rateLimitTimestamps.length < max) {
         this.rateLimitTimestamps.push(now);
         return;
@@ -263,14 +276,19 @@ export class ActionManager {
   private async processAction(
     action: ActionRecord,
     context: ActionHandlerContext,
-    result: FlushActionsResult
+    result: FlushActionsResult,
   ): Promise<void> {
     result.processed++;
     const now = Date.now();
 
     // 1. Check TTL expiration
     if (action.expiresAt && action.expiresAt <= now) {
-      await ActionStore.updateStatus(this.db, this.tableName, action.id, 'EXPIRED');
+      await ActionStore.updateStatus(
+        this.db,
+        this.tableName,
+        action.id,
+        'EXPIRED',
+      );
       const expiredRecord = { ...action, status: 'EXPIRED' as const };
       result.expired++;
       this.events.emit('action:expired', expiredRecord);
@@ -286,8 +304,16 @@ export class ActionManager {
     }
 
     // 3. Mark EXECUTING
-    await ActionStore.updateStatus(this.db, this.tableName, action.id, 'EXECUTING');
-    this.events.emit('action:executing', { ...action, status: 'EXECUTING' as const });
+    await ActionStore.updateStatus(
+      this.db,
+      this.tableName,
+      action.id,
+      'EXECUTING',
+    );
+    this.events.emit('action:executing', {
+      ...action,
+      status: 'EXECUTING' as const,
+    });
 
     // 4. Rate-limiting throttle
     await this.waitForRateLimit();
@@ -296,10 +322,16 @@ export class ActionManager {
     try {
       const res = await handler(action, context);
       const executedAt = Date.now();
-      await ActionStore.updateStatus(this.db, this.tableName, action.id, 'COMPLETED', {
-        executedAt,
-        result: res ?? null,
-      });
+      await ActionStore.updateStatus(
+        this.db,
+        this.tableName,
+        action.id,
+        'COMPLETED',
+        {
+          executedAt,
+          result: res ?? null,
+        },
+      );
       result.completed++;
       this.events.emit('action:completed', {
         ...action,
@@ -313,10 +345,16 @@ export class ActionManager {
       const newStatus = isFinalFailure ? 'FAILED' : 'PENDING';
       const errorMsg = err instanceof Error ? err.message : String(err);
 
-      await ActionStore.updateStatus(this.db, this.tableName, action.id, newStatus, {
-        retryCount: nextRetry,
-        lastError: errorMsg,
-      });
+      await ActionStore.updateStatus(
+        this.db,
+        this.tableName,
+        action.id,
+        newStatus,
+        {
+          retryCount: nextRetry,
+          lastError: errorMsg,
+        },
+      );
 
       if (isFinalFailure) {
         result.failed++;
@@ -355,7 +393,11 @@ export class ActionManager {
           break;
         }
 
-        const pending = await ActionStore.getPending(this.db, this.tableName, 50);
+        const pending = await ActionStore.getPending(
+          this.db,
+          this.tableName,
+          50,
+        );
         if (pending.length === 0) {
           break;
         }
@@ -381,12 +423,13 @@ export class ActionManager {
                   await this.processAction(item, context, result);
                 }
               }
-            }
+            },
           );
           await Promise.all(workers);
         }
       } while (this.flushRerunRequested);
-    } finally {}
+    } finally {
+    }
 
     return result;
   }

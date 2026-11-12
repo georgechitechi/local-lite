@@ -33,13 +33,15 @@ describe('SQLite benchmark workload', () => {
     });
     await client.initialize();
     if (appRows > 0) {
-      await db.execute(`CREATE TABLE ${tableName} (id TEXT PRIMARY KEY, title TEXT)`);
+      await db.execute(
+        `CREATE TABLE ${tableName} (id TEXT PRIMARY KEY, title TEXT)`,
+      );
       await db.transaction(async (tx) => {
         for (let i = 0; i < appRows; i++) {
-          await tx.execute(`INSERT INTO ${tableName} (id, title) VALUES (?, ?)`, [
-            `app-${i}`,
-            `Real app record ${i}`,
-          ]);
+          await tx.execute(
+            `INSERT INTO ${tableName} (id, title) VALUES (?, ?)`,
+            [`app-${i}`, `Real app record ${i}`],
+          );
         }
       });
     }

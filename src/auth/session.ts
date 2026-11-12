@@ -54,7 +54,8 @@ export interface SessionManagerOptions {
 export function mapSessionRow<TUser = any>(r: any): SessionRecord<TUser> {
   let userData: TUser;
   try {
-    userData = typeof r.user_data === 'string' ? JSON.parse(r.user_data) : r.user_data;
+    userData =
+      typeof r.user_data === 'string' ? JSON.parse(r.user_data) : r.user_data;
   } catch {
     userData = r.user_data as TUser;
   }
@@ -62,7 +63,8 @@ export function mapSessionRow<TUser = any>(r: any): SessionRecord<TUser> {
   let metadata: Record<string, any> | null = null;
   if (r.metadata) {
     try {
-      metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
+      metadata =
+        typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
     } catch {
       metadata = null;
     }
@@ -78,7 +80,8 @@ export function mapSessionRow<TUser = any>(r: any): SessionRecord<TUser> {
     createdAt: Number(r.created_at || 0),
     lastActiveAt: Number(r.last_active_at || 0),
     expiresAt: r.expires_at != null ? Number(r.expires_at) : null,
-    offlineAccessUntil: r.offline_access_until != null ? Number(r.offline_access_until) : null,
+    offlineAccessUntil:
+      r.offline_access_until != null ? Number(r.offline_access_until) : null,
     metadata,
     isActive: r.is_active === 1 || r.is_active === '1' || r.is_active === true,
   };
@@ -95,13 +98,14 @@ export class SessionManager {
   constructor(
     private db: DBExecutable,
     private events?: EventEmitter,
-    options: SessionManagerOptions = {}
+    options: SessionManagerOptions = {},
   ) {
     this.tableName = options.tableName ?? DEFAULT_SESSIONS_TABLE;
     this.sqlTableName = quoteIdentifier(this.tableName);
     this.sqlUserIndexName = quoteIdentifier(`idx_${this.tableName}_user`);
     this.sqlActiveIndexName = quoteIdentifier(`idx_${this.tableName}_active`);
-    this.defaultOfflineDurationMs = options.defaultOfflineDurationMs ?? DEFAULT_OFFLINE_DURATION_MS;
+    this.defaultOfflineDurationMs =
+      options.defaultOfflineDurationMs ?? DEFAULT_OFFLINE_DURATION_MS;
     this.network = options.network;
   }
 
@@ -123,26 +127,28 @@ export class SessionManager {
         offline_access_until INTEGER,
         metadata TEXT,
         is_active INTEGER NOT NULL DEFAULT 1
-      );`
+      );`,
     );
 
     await this.db.execute(
-      `CREATE INDEX IF NOT EXISTS ${this.sqlUserIndexName} ON ${this.sqlTableName} (user_id);`
+      `CREATE INDEX IF NOT EXISTS ${this.sqlUserIndexName} ON ${this.sqlTableName} (user_id);`,
     );
     await this.db.execute(
-      `CREATE INDEX IF NOT EXISTS ${this.sqlActiveIndexName} ON ${this.sqlTableName} (is_active);`
+      `CREATE INDEX IF NOT EXISTS ${this.sqlActiveIndexName} ON ${this.sqlTableName} (is_active);`,
     );
   }
 
   /**
    * Creates or updates a user session, persisting it to local SQLite so it remains available offline.
    */
-  async createSession<TUser = any>(options: CreateSessionOptions<TUser>): Promise<SessionRecord<TUser>> {
+  async createSession<TUser = any>(
+    options: CreateSessionOptions<TUser>,
+  ): Promise<SessionRecord<TUser>> {
     let id = options.id;
     if (!id) {
       const existing = await this.db.execute(
         `SELECT id FROM ${this.sqlTableName} WHERE user_id = ? LIMIT 1;`,
-        [options.userId]
+        [options.userId],
       );
       if (existing && existing.length > 0) {
         id = String(existing[0].id);
@@ -163,11 +169,16 @@ export class SessionManager {
 
     const setActive = options.setActive !== false;
     const userDataStr = JSON.stringify(options.user ?? {});
-    const metadataStr = options.metadata ? JSON.stringify(options.metadata) : null;
+    const metadataStr = options.metadata
+      ? JSON.stringify(options.metadata)
+      : null;
 
     if (setActive) {
       // Deactivate other sessions
-      await this.db.execute(`UPDATE ${this.sqlTableName} SET is_active = ?;`, [0]);
+      await this.db.execute(
+        `UPDATE ${this.sqlTableName} SET is_active = ?;`,
+        [0],
+      );
     }
 
     const sql = `
@@ -227,7 +238,7 @@ export class SessionManager {
   async getActiveSession<TUser = any>(): Promise<SessionRecord<TUser> | null> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlTableName} WHERE is_active = ? LIMIT 1;`,
-      [1]
+      [1],
     );
 
     if (!rows || rows.length === 0) {
@@ -238,7 +249,10 @@ export class SessionManager {
     const now = Date.now();
 
     // Check if offline access grace period has expired
-    if (session.offlineAccessUntil != null && now > session.offlineAccessUntil) {
+    if (
+      session.offlineAccessUntil != null &&
+      now > session.offlineAccessUntil
+    ) {
       await this.clearSession();
       return null;
     }
@@ -267,10 +281,12 @@ export class SessionManager {
   /**
    * Retrieves a session record by its canonical userId.
    */
-  async getSessionByUserId<TUser = any>(userId: string): Promise<SessionRecord<TUser> | null> {
+  async getSessionByUserId<TUser = any>(
+    userId: string,
+  ): Promise<SessionRecord<TUser> | null> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlTableName} WHERE user_id = ? LIMIT 1;`,
-      [userId]
+      [userId],
     );
     if (!rows || rows.length === 0) return null;
     return mapSessionRow<TUser>(rows[0]);
@@ -284,12 +300,12 @@ export class SessionManager {
     if (sessionId) {
       await this.db.execute(
         `UPDATE ${this.sqlTableName} SET last_active_at = ? WHERE id = ?;`,
-        [now, sessionId]
+        [now, sessionId],
       );
     } else {
       await this.db.execute(
         `UPDATE ${this.sqlTableName} SET last_active_at = ? WHERE is_active = ?;`,
-        [now, 1]
+        [now, 1],
       );
     }
   }
@@ -297,7 +313,9 @@ export class SessionManager {
   /**
    * Partially updates the active user's profile data in SQLite.
    */
-  async updateUser<TUser = any>(partialUser: Partial<TUser>): Promise<SessionRecord<TUser> | null> {
+  async updateUser<TUser = any>(
+    partialUser: Partial<TUser>,
+  ): Promise<SessionRecord<TUser> | null> {
     const session = await this.getActiveSession<TUser>();
     if (!session) return null;
 
@@ -311,7 +329,7 @@ export class SessionManager {
 
     await this.db.execute(
       `UPDATE ${this.sqlTableName} SET user_data = ?, last_active_at = ? WHERE id = ?;`,
-      [userDataStr, now, session.id]
+      [userDataStr, now, session.id],
     );
 
     session.user = updatedUser;
@@ -333,13 +351,17 @@ export class SessionManager {
     if (!session) return;
 
     const token = tokens.token !== undefined ? tokens.token : session.token;
-    const refreshToken = tokens.refreshToken !== undefined ? tokens.refreshToken : session.refreshToken;
-    const expiresAt = tokens.expiresAt !== undefined ? tokens.expiresAt : session.expiresAt;
+    const refreshToken =
+      tokens.refreshToken !== undefined
+        ? tokens.refreshToken
+        : session.refreshToken;
+    const expiresAt =
+      tokens.expiresAt !== undefined ? tokens.expiresAt : session.expiresAt;
     const now = Date.now();
 
     await this.db.execute(
       `UPDATE ${this.sqlTableName} SET token = ?, refresh_token = ?, expires_at = ?, last_active_at = ? WHERE id = ?;`,
-      [token, refreshToken, expiresAt, now, session.id]
+      [token, refreshToken, expiresAt, now, session.id],
     );
 
     session.token = token;
@@ -353,7 +375,10 @@ export class SessionManager {
    * Signs out the active user session.
    */
   async clearSession(): Promise<void> {
-    await this.db.execute(`UPDATE ${this.sqlTableName} SET is_active = ? WHERE is_active = ?;`, [0, 1]);
+    await this.db.execute(
+      `UPDATE ${this.sqlTableName} SET is_active = ? WHERE is_active = ?;`,
+      [0, 1],
+    );
     this.events?.emit(this.tableName, { operation: 'CLEAR_SESSION' });
   }
 
@@ -370,7 +395,7 @@ export class SessionManager {
    */
   async listSessions<TUser = any>(): Promise<SessionRecord<TUser>[]> {
     const rows = await this.db.execute(
-      `SELECT * FROM ${this.sqlTableName} ORDER BY last_active_at DESC;`
+      `SELECT * FROM ${this.sqlTableName} ORDER BY last_active_at DESC;`,
     );
     return (rows || []).map((r) => mapSessionRow<TUser>(r));
   }
@@ -378,10 +403,12 @@ export class SessionManager {
   /**
    * Switches the active session to a different account (e.g., multi-account or organization switching offline).
    */
-  async switchSession<TUser = any>(sessionIdOrUserId: string): Promise<SessionRecord<TUser> | null> {
+  async switchSession<TUser = any>(
+    sessionIdOrUserId: string,
+  ): Promise<SessionRecord<TUser> | null> {
     const rows = await this.db.execute(
       `SELECT * FROM ${this.sqlTableName} WHERE id = ? OR user_id = ? LIMIT 1;`,
-      [sessionIdOrUserId, sessionIdOrUserId]
+      [sessionIdOrUserId, sessionIdOrUserId],
     );
 
     if (!rows || rows.length === 0) {
@@ -389,16 +416,22 @@ export class SessionManager {
     }
 
     const targetSession = mapSessionRow<TUser>(rows[0]);
-    await this.db.execute(`UPDATE ${this.sqlTableName} SET is_active = ?;`, [0]);
+    await this.db.execute(
+      `UPDATE ${this.sqlTableName} SET is_active = ?;`,
+      [0],
+    );
     await this.db.execute(
       `UPDATE ${this.sqlTableName} SET is_active = ?, last_active_at = ? WHERE id = ?;`,
-      [1, Date.now(), targetSession.id]
+      [1, Date.now(), targetSession.id],
     );
 
     targetSession.isActive = true;
     targetSession.lastActiveAt = Date.now();
 
-    this.events?.emit(this.tableName, { operation: 'SWITCH_SESSION', session: targetSession });
+    this.events?.emit(this.tableName, {
+      operation: 'SWITCH_SESSION',
+      session: targetSession,
+    });
     return targetSession;
   }
 }

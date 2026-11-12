@@ -6,7 +6,6 @@ import { MockDB } from './helpers/mock-db.js';
 import {
   generateApiKey,
   verifyApiKeyFormat,
-  hashApiKey,
   verifyApiKey,
   createSignedToken,
   verifySignedToken,
@@ -45,8 +44,15 @@ describe('API Key Generator & Verification', () => {
     const keyData = generateApiKey({ prefix: 'client' });
 
     expect(verifyApiKey(keyData.key, keyData.keyHash)).toBe(true);
-    expect(verifyApiKey(keyData.key, '0000000000000000000000000000000000000000000000000000000000000000')).toBe(false);
-    expect(verifyApiKey('client_invalid_checksum', keyData.keyHash)).toBe(false);
+    expect(
+      verifyApiKey(
+        keyData.key,
+        '0000000000000000000000000000000000000000000000000000000000000000',
+      ),
+    ).toBe(false);
+    expect(verifyApiKey('client_invalid_checksum', keyData.keyHash)).toBe(
+      false,
+    );
   });
 });
 
@@ -116,7 +122,9 @@ describe('Signed Tokens & Renewal (HMAC-SHA256)', () => {
     const check = verifySignedToken<{ tenantId: string }>(renewed, secret);
     expect(check.valid).toBe(true);
     expect(check.payload?.tenantId).toBe('tenant_99');
-    expect(check.expiresAt).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    expect(check.expiresAt).toBeGreaterThan(
+      Date.now() + 6 * 24 * 60 * 60 * 1000,
+    );
   });
 });
 
@@ -203,8 +211,14 @@ describe('ApiKeyManager Local SQLite Store (client.keys)', () => {
   });
 
   it('lists and prunes API keys', async () => {
-    const { record: r1 } = await client.keys.create({ name: 'Key 1', prefix: 'app' });
-    const { record: r2 } = await client.keys.create({ name: 'Key 2', prefix: 'app' });
+    const { record: r1 } = await client.keys.create({
+      name: 'Key 1',
+      prefix: 'app',
+    });
+    const { record: r2 } = await client.keys.create({
+      name: 'Key 2',
+      prefix: 'app',
+    });
 
     const all = await client.keys.list();
     expect(all.length).toBeGreaterThanOrEqual(2);
