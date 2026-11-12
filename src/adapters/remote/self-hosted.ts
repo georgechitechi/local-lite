@@ -1,4 +1,8 @@
-import { RemoteDBAdapter } from './index.js';
+import {
+  RemoteDBAdapter,
+  RemoteBackupArchive,
+  RemoteAutomationJob,
+} from './index.js';
 import { DeltaChanges, PushResult, SyncOperation } from '../../core/types.js';
 
 export interface SelfHostedRemoteAdapterOptions {
@@ -185,6 +189,15 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       'contracts/termination': '/contracts/termination',
       'tenant-self-service': '/tenant-self-service',
       'email': '/email',
+      'backups/create': '/backups/create',
+      'backups/list': '/backups',
+      'crons/toggle': '/crons/toggle',
+      'crons/daily': '/crons/daily',
+      'business-access/invite': '/business-access/invite',
+      'business-access/accept': '/business-access/accept',
+      'business-access/reject': '/business-access/reject',
+      'business-access/update': '/business-access/update',
+      'business-access/revoke': '/business-access/revoke',
     };
     const normalized = functionName
       .replace(/^functions\//, '')
@@ -193,7 +206,28 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       .replace('payments:initiateDaraja', 'payments/stk')
       .replace('tenantSelfService:createSelfServiceLink', 'tenant-self-service')
       .replace('email:send', 'email')
+      .replace('convexBackups:listMyBackups', 'backups/list')
+      .replace('convexBackups:createBackup', 'backups/create')
+      .replace('automations:listMine', 'crons')
+      .replace('automations:setEnabled', 'crons/toggle')
       .replace(':', '/');
+
+    if (normalized === 'backups/list' || normalized === 'crons') {
+      const isBackups = normalized === 'backups/list';
+      const endpoint = isBackups ? '/backups' : '/crons';
+      const fullUrl = `${this.url}${endpoint}`;
+      const response = await this.fetchFn(fullUrl, {
+        method: 'GET',
+        headers: this.getRequestHeaders(),
+      });
+      if (!response.ok) {
+        const errText = await response.text().catch(() => response.statusText);
+        throw new Error(`Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`);
+      }
+      const data = await response.json();
+      return (isBackups ? data.archives || [] : data.automations || []) as unknown as T;
+    }
+
     const endpoint = actionEndpoints[normalized] || `/${normalized}`;
     const fullUrl = `${this.url}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
     const response = await this.fetchFn(fullUrl, {
@@ -210,5 +244,82 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       return (await response.json()) as T;
     }
     return (await response.text()) as unknown as T;
+  }
+
+  /**
+   * Queries a remote function or view across self-hosted endpoints.
+   */
+  async queryRemote<T = any>(queryName: string, args: Record<string, any> = {}): Promise<T> {
+    if (queryName.includes('listMyBackups') || queryName.includes('listBackups')) {
+      return (await this.listBackups()) as unknown as T;
+    }
+    if (queryName.includes('listMine') || queryName.includes('listAutomations')) {
+      return (await this.listAutomations()) as unknown as T;
+    }
+    return this.call<T>(queryName, args);
+  }
+
+  /**
+   * Lists cloud backup archives stored on self-hosted backend.
+   */
+  async listBackups(): Promise<RemoteBackupArchive[]> {
+    const fullUrl = `${this.url}/backups`;
+    const response = await this.fetchFn(fullUrl, {
+      method: 'GET',
+      headers: this.getRequestHeaders(),
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      throw new Error(`Self-hosted listBackups failed (${response.status}): ${errText}`);
+    }
+    const data = await response.json();
+    return (data.archives || []) as RemoteBackupArchive[];
+  }
+
+  /**
+   * Gets a direct download URL for a file stored on self-hosted backend.
+   */
+  async getDownloadUrl(fileIdOrKey: string): Promise<string | null> {
+    if (!fileIdOrKey) return null;
+    return `${this.url}/backups/download/${encodeURIComponent(fileIdOrKey)}`;
+  }
+
+  /**
+   * Lists automated cron jobs configured on self-hosted backend.
+   */
+  async listAutomations(): Promise<RemoteAutomationJob[]> {
+    const fullUrl = `${this.url}/crons`;
+    const response = await this.fetchFn(fullUrl, {
+      method: 'GET',
+      headers: this.getRequestHeaders(),
+    });
+    if (!response.ok) {
+      return [
+        {
+          id: 'daily_contract_reminders',
+          name: 'Daily Contract Reminders',
+          description: 'Automated contract expiration notifications and renewal checks',
+          enabled: true,
+        },
+      ];
+    }
+    const data = await response.json();
+    return (data.automations || []) as RemoteAutomationJob[];
+  }
+
+  /**
+   * Enables or disables an automated cron job on self-hosted backend.
+   */
+  async setAutomationEnabled(jobId: string, enabled: boolean): Promise<void> {
+    const fullUrl = `${this.url}/crons/toggle`;
+    const response = await this.fetchFn(fullUrl, {
+      method: 'POST',
+      headers: this.getRequestHeaders(),
+      body: JSON.stringify({ jobId, enabled }),
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      throw new Error(`Self-hosted setAutomationEnabled failed (${response.status}): ${errText}`);
+    }
   }
 }
