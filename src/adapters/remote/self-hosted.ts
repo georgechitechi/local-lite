@@ -225,7 +225,7 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
         throw new Error(`Self-hosted function call "${functionName}" failed (${response.status}): ${errText}`);
       }
       const data = await response.json();
-      return (isBackups ? data.archives || [] : data.automations || []) as unknown as T;
+      return (isBackups ? data.archives || data.backups || [] : data.automations || []) as unknown as T;
     }
 
     const endpoint = actionEndpoints[normalized] || `/${normalized}`;
@@ -273,7 +273,7 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       throw new Error(`Self-hosted listBackups failed (${response.status}): ${errText}`);
     }
     const data = await response.json();
-    return (data.archives || []) as RemoteBackupArchive[];
+    return (data.archives || data.backups || []) as RemoteBackupArchive[];
   }
 
   /**
