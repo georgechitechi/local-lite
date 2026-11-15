@@ -114,7 +114,7 @@ export const syncConfig = defineSyncConfig({
   touchUpdatedAt: true,
 
   // 6. Zero-backend local SQLite authentication
-  localAuth: {
+  auth: {
     minPasswordLength: 8,
     maxFailedAttempts: 5,
     lockoutDurationMs: 15 * 60 * 1000, // 15 minutes

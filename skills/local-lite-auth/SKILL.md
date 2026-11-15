@@ -35,7 +35,7 @@ import { defineSyncConfig } from 'local-lite/config';
 export const syncConfig = defineSyncConfig({
   database: () => SQLite.openDatabaseAsync('app.db'),
   tables: ['tasks'],
-  localAuth: {
+  auth: {
     // Optional table names (defaults: '_local_users', '_local_user_tokens')
     usersTable: '_local_users',
     tokensTable: '_local_user_tokens',

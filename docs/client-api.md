@@ -302,8 +302,6 @@ export const client = new LocalFirstClient({
     patients: ['allergies', 'emergency_contacts', 'metadata'],
     milestones: ['measurements'],
   },
-  // Or automatically hydrate any column containing valid JSON object/array strings
-  autoHydrateJSON: true,
 });
 
 // Write normal JavaScript objects:

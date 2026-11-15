@@ -24,6 +24,8 @@ import { defineSyncConfig, createSyncClient } from 'local-lite/config';
 | `autoStart` | `boolean` | `true` | Start automatic sync after initialization. Set false to queue writes and push/pull manually. |
 | `autoInitialize` | `boolean` | `true` | Automatically creates internal outbox tables and initializes the client on startup. |
 | `localAuth` | `LocalAuthEngineOptions` | Not set | Configures zero-backend SQLite authentication engine (`client.auth`), PBKDF2 cryptography, lockout, and password reset tokens. |
+| `auth` | `LocalAuthEngineOptions` | Not set | Configures zero-backend SQLite authentication engine (`client.auth`), PBKDF2 cryptography, lockout, and password reset tokens. |
+| `requestTimeoutMs` | `number` | `30000` | Timeout in milliseconds for remote push/pull requests (`0` to disable). |
 
 ### Relationship delete behavior
 

@@ -243,6 +243,25 @@ export const apiServer = createServer(
     },
   })
 );
+```
+
+For persistent SQLite-backed server sync storage out of the box, use `SQLiteServerSyncStorage`:
+
+```ts
+import { DatabaseSync } from 'node:sqlite';
+import { NodeSQLiteAdapter } from 'local-lite/node-sqlite';
+import { createSyncEndpoint, SQLiteServerSyncStorage } from 'local-lite/server';
+
+const storage = new SQLiteServerSyncStorage(
+  new NodeSQLiteAdapter(new DatabaseSync('sync-server.db')),
+  { maxChangeLogEntries: 10000 }, // default: 10000
+);
+
+export const syncEndpoint = createSyncEndpoint({
+  storage,
+  secret: process.env.SYNC_SECRET_TOKEN,
+});
+```
 
 // Export route handlers for Expo Router or Next.js App Router
 export const POST = apiServer.handler('/api/sync', 'POST');
