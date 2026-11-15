@@ -1,4 +1,3 @@
-import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import {
   RemoteAutomationJob,
   RemoteBackupArchive,
@@ -95,7 +94,7 @@ export interface SupabaseAdapterOptions {
   fetchLimit?: number;
 }
 
-export type AnySupabaseClient = SupabaseClient<any, any, any> | any;
+export type AnySupabaseClient = any;
 
 export type SupabaseClientResolver =
   | AnySupabaseClient
@@ -115,7 +114,10 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   private pushRpcName?: string;
   private schema: string;
   private channelName: string;
-  private activeChannel?: RealtimeChannel;
+  private activeChannel?: {
+    unsubscribe?: () => Promise<any> | any;
+    [key: string]: any;
+  };
   private fetchLimit: number;
   public logger: SyncLogger;
 

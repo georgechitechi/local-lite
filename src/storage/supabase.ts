@@ -1,9 +1,15 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   BlobRecord,
   RemoteStorageUploader,
   RemoteStorageUploadResult,
 } from './types.js';
+
+export interface SupabaseStorageClientLike {
+  storage?: {
+    from: (bucket: string) => any;
+  };
+  from?: (bucket: string) => any;
+}
 
 export interface SupabaseStorageUploaderOptions {
   /**
@@ -54,7 +60,7 @@ export interface SupabaseStorageUploaderInstance extends RemoteStorageUploader {
  * Creates a RemoteStorageUploader that syncs binary files to Supabase Storage buckets.
  */
 export function createSupabaseStorageUploader(
-  supabase: SupabaseClient | any,
+  supabase: SupabaseStorageClientLike | any,
   options: SupabaseStorageUploaderOptions,
 ): SupabaseStorageUploaderInstance {
   const bucketName = options.bucket;

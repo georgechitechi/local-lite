@@ -213,7 +213,6 @@
     }
   },
   "devDependencies": {
-    "@supabase/supabase-js": "^2.119.0",
     "@types/node": "^26.6.6",
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
