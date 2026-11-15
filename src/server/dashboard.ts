@@ -283,6 +283,26 @@ export function createDashboardHandler(
   };
 
   return async (request: Request): Promise<Response> => {
+    const origin = request.headers.get('origin');
+    const applyCors = (response: Response): Response => {
+      if (!origin) return response;
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', origin);
+      headers.set('Access-Control-Allow-Credentials', 'true');
+      headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+      headers.set('Vary', 'Origin');
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    };
+
+    if (request.method === 'OPTIONS') {
+      return applyCors(new Response(null, { status: 204 }));
+    }
+
     const startedAt = performance.now();
     const url = new URL(request.url);
     let pathname = url.pathname;
@@ -1855,7 +1875,7 @@ export function createDashboardHandler(
     if (!loggedThisRequest && pathname.startsWith('/api/')) {
       recordLog(request.method, pathname, res.status, startedAt);
     }
-    return res;
+    return applyCors(res);
   };
 }
 

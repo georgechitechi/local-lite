@@ -50,6 +50,9 @@ export function App() {
   const [authUsername, setAuthUsername] = useState('');
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authApiBase, setAuthApiBase] = useState(
+    () => localStorage.getItem('local_lite_api_base') || '',
+  );
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(
@@ -210,6 +213,7 @@ export function App() {
 
   const checkAuthStatus = useCallback(async () => {
     try {
+      setAuthError(null);
       const res = await apiRequest<{
         requireAuth: boolean;
         authenticated: boolean;
@@ -223,8 +227,11 @@ export function App() {
         userCount: res.userCount,
         user: res.user,
       });
-    } catch {
+    } catch (err: any) {
       setAuthState((prev) => ({ ...prev, checking: false, authenticated: false }));
+      setAuthError(
+        `${err?.message || 'Unable to reach dashboard API'}. Check Server URL below (e.g. http://127.0.0.1:4312) and ensure the server is running the latest build.`,
+      );
     }
   }, []);
 
@@ -327,6 +334,7 @@ export function App() {
     setAuthError(null);
     setAuthBusy(true);
     try {
+      localStorage.setItem('local_lite_api_base', authApiBase.trim());
       const isSetup = authState.userCount === 0;
       const endpoint = isSetup ? '/api/dashboard-auth/setup' : '/api/dashboard-auth/login';
       const payload = isSetup
@@ -447,6 +455,28 @@ export function App() {
               value={authPassword}
               onChange={(e) => setAuthPassword(e.target.value)}
             />
+          </div>
+          <div className="field-row">
+            <label>Server URL (optional)</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                className="input"
+                style={{ flex: 1 }}
+                placeholder="http://127.0.0.1:4312 (blank = Vite proxy)"
+                value={authApiBase}
+                onChange={(e) => setAuthApiBase(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  localStorage.setItem('local_lite_api_base', authApiBase.trim());
+                  void checkAuthStatus();
+                }}
+              >
+                Connect
+              </button>
+            </div>
           </div>
           <button
             className="btn primary"
