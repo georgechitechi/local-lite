@@ -90,7 +90,6 @@ export interface LocalFirstClientConfig {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
   requestTimeoutMs?: number;
-  maxRetries?: number;
   retry?: number | RetryConfig;
   logger?: SyncLogger | CustomLogger | boolean;
   logLevel?: LogLevel;
@@ -101,7 +100,6 @@ export interface LocalFirstClientConfig {
   autoStart?: boolean;
   coalesceOutbox?: boolean;
   jsonColumns?: Record<string, string[]>;
-  autoHydrateJSON?: boolean;
   syncScope?:
     | Record<string, any>
     | (() => Record<string, any> | Promise<Record<string, any>>);
@@ -121,7 +119,6 @@ export interface LocalFirstClientConfig {
   storage?: BlobStorageManagerOptions;
   scheduler?: JobSchedulerOptions;
   session?: SessionManagerOptions;
-  localAuth?: LocalAuthEngineOptions;
   auth?: LocalAuthEngineOptions;
 }
 
@@ -670,13 +667,6 @@ export class TransactionalClient {
     return this.from<T>(tableName).applyOptions(options).execute();
   }
 
-  /**
-   * Alias for findMany().
-   */
-  async find<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    return this.findMany<T>(tableName, options);
-  }
-
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     return (await this.tx.execute(sql, params)) as T[];
   }
@@ -701,7 +691,6 @@ export class LocalFirstClient {
   public tables: string[];
   public relationships: RelationshipDefinition[];
   public jsonColumns: Record<string, string[]>;
-  public autoHydrateJSON: boolean;
   /** Local column stamped on INSERT/UPDATE writes, or null when disabled. */
   public touchColumn: string | null;
   public readonly maintenance: DatabaseMaintenance;
@@ -719,11 +708,6 @@ export class LocalFirstClient {
   private initialization?: Promise<void>;
 
   constructor(config: LocalFirstClientConfig) {
-    if ('migrations' in config) {
-      throw new TypeError(
-        'The migrations option has been removed. Use schemaMigrations instead.',
-      );
-    }
     this.db = config.local;
     this.remote = config.remote;
     this.events = new EventEmitter();
@@ -777,7 +761,6 @@ export class LocalFirstClient {
     );
     this.autoStart = config.autoStart ?? true;
     this.jsonColumns = config.jsonColumns ?? {};
-    this.autoHydrateJSON = config.autoHydrateJSON ?? false;
     const touch = config.touchUpdatedAt ?? true;
     this.touchColumn =
       touch === false
@@ -837,7 +820,7 @@ export class LocalFirstClient {
       this.db,
       this.session,
       this.events,
-      config.auth || config.localAuth,
+      config.auth,
     );
 
     this.actions = new ActionManager(
@@ -857,7 +840,6 @@ export class LocalFirstClient {
       pushIntervalMs: config.pushIntervalMs,
       pullIntervalMs: config.pullIntervalMs,
       requestTimeoutMs: config.requestTimeoutMs,
-      maxRetries: config.maxRetries,
       retry: config.retry,
       logger: config.logger,
       logLevel: config.logLevel,
@@ -984,27 +966,6 @@ export class LocalFirstClient {
               target[col] = parsed;
             } catch {
               // keep string if not valid JSON
-            }
-          }
-        }
-      }
-      return (copy ?? row) as T;
-    }
-    if (this.autoHydrateJSON) {
-      let copy: Record<string, any> | null = null;
-      for (const [key, val] of Object.entries(row)) {
-        if (typeof val === 'string') {
-          const trimmed = val.trim();
-          if (
-            (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))
-          ) {
-            try {
-              const parsed = JSON.parse(trimmed);
-              const target = (copy ??= { ...row } as Record<string, any>);
-              target[key] = parsed;
-            } catch {
-              // keep string
             }
           }
         }
@@ -1729,13 +1690,6 @@ export class LocalFirstClient {
       return applyQueryOptions<T>(rows, options);
     }
     return this.from<T>(tableName).applyOptions(options).execute();
-  }
-
-  /**
-   * Alias for findMany().
-   */
-  async find<T = any>(tableName: string, options?: QueryOptions): Promise<T[]> {
-    return this.findMany<T>(tableName, options);
   }
 
   /**

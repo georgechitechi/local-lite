@@ -121,7 +121,7 @@ describe('Customizable Retries & Backoff', () => {
     const events = new EventEmitter();
 
     const worker = new SyncWorker(db, remote, events, {
-      maxRetries: -1,
+      retry: -1,
     });
 
     expect(worker.retryConfig.maxRetries).toBe(-1);

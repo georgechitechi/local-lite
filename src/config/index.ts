@@ -23,10 +23,6 @@ export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
 export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
 export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
 export { SelfHostedRemoteAdapter } from '../adapters/remote/self-hosted.js';
-export {
-  MemoryDemoRemoteAdapter,
-  NoopRemoteAdapter,
-} from '../adapters/remote/demo.js';
 export type { RemoteDBAdapter } from '../adapters/remote/index.js';
 
 /**
@@ -42,12 +38,6 @@ export function defineSyncConfig(config: LocalLiteConfig): LocalLiteConfig {
 export async function createSyncClient(
   config: LocalLiteConfig,
 ): Promise<LocalFirstClient> {
-  if ('migrations' in config) {
-    throw new TypeError(
-      'The migrations option has been removed. Use schemaMigrations instead.',
-    );
-  }
-
   // 1. Resolve Local Database Adapter
   const localAdapter = await resolveLocalAdapter(config);
 
@@ -69,7 +59,6 @@ export async function createSyncClient(
     pushIntervalMs: config.pushIntervalMs ?? 5000,
     pullIntervalMs: config.pullIntervalMs ?? 10000,
     requestTimeoutMs: config.requestTimeoutMs,
-    maxRetries: config.maxRetries ?? 5,
     retry: config.retry,
     logger: config.logger,
     logLevel: config.logLevel,
@@ -79,11 +68,10 @@ export async function createSyncClient(
     schemaMigrations: config.schemaMigrations,
     autoStart: config.autoStart,
     jsonColumns: config.jsonColumns,
-    autoHydrateJSON: config.autoHydrateJSON,
     syncScope: config.syncScope,
     autoPauseOnBackground: config.autoPauseOnBackground,
     touchUpdatedAt: config.touchUpdatedAt,
-    auth: config.auth ?? config.localAuth,
+    auth: config.auth,
   });
 
   // 5. Execute Migrations & Auto-initialize

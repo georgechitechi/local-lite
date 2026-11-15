@@ -273,12 +273,7 @@ export interface LocalLiteConfig {
   autoPauseOnBackground?: boolean;
 
   /**
-   * Maximum retry attempts for failed push items. Default: 5
-   */
-  maxRetries?: number;
-
-  /**
-   * Advanced retry configuration with exponential backoff and custom retry predicates.
+   * Retry configuration (number of retries or detailed RetryConfig).
    */
   retry?: number | RetryConfig;
 
@@ -316,11 +311,6 @@ export interface LocalLiteConfig {
   jsonColumns?: Record<string, string[]>;
 
   /**
-   * Automatically detect and hydrate stringified JSON objects and arrays across all columns.
-   */
-  autoHydrateJSON?: boolean;
-
-  /**
    * Scoped synchronization filter (e.g. { org_id: '...' } or dynamic resolver callback).
    */
   syncScope?:
@@ -340,7 +330,6 @@ export interface LocalLiteConfig {
    * Options for the fully local, zero-backend authentication engine (`client.auth`).
    */
   auth?: LocalAuthEngineOptions;
-  localAuth?: LocalAuthEngineOptions;
   /**
    * Direct email delivery configuration (Nodemailer SMTP, Resend, SendGrid, Postmark, or custom HTTP).
    * When set, `local-lite` handles all offline-queued emails directly without needing Convex,

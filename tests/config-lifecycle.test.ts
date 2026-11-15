@@ -15,16 +15,6 @@ afterEach(() => {
 });
 
 describe('explicit configuration and initialization', () => {
-  it('rejects the removed repeat-on-initialize migrations option', async () => {
-    await expect(
-      createSyncClient({
-        database: new MockDB(),
-        remote: new MemoryDemoRemoteAdapter(0),
-        migrations: ['CREATE TABLE notes (id TEXT PRIMARY KEY)'],
-      } as any),
-    ).rejects.toThrow('The migrations option has been removed');
-  });
-
   it('requires a backend unless a temporary demo is explicitly selected', async () => {
     await expect(resolveRemoteAdapter({})).rejects.toThrow(
       'No remote adapter configured',

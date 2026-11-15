@@ -40,13 +40,15 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
         return [];
       }
 
-      // Modern Expo SQLite (SDK 51+): runAsync is optimized for writes without dummy row allocation
+      // Expo SQLite (SDK 54+): runAsync is required for parameterized writes
       if (typeof this.db.runAsync === 'function') {
         const res = await this.db.runAsync(trimmed, params);
         return [res];
       }
 
-      return this.db.getAllAsync(trimmed, params);
+      throw new Error(
+        'ExpoSQLiteAdapter requires Expo SQLite SDK 54+ with runAsync() support.',
+      );
     };
 
     const next = this.writeQueue.then(run, run);
@@ -77,7 +79,9 @@ export class ExpoSQLiteAdapter implements LocalDBAdapter {
               const res = await this.db.runAsync(trimmed, p);
               return [res];
             }
-            return this.db.getAllAsync(trimmed, p);
+            throw new Error(
+              'ExpoSQLiteAdapter requires Expo SQLite SDK 54+ with runAsync() support.',
+            );
           },
         };
         result = await action(txWrapper);

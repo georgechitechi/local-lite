@@ -1,6 +1,6 @@
 # Breaking Changes and AI Code-Review Guide
 
-This guide records breaking changes introduced in `local-lite` 0.0.30 and gives
+This guide records breaking changes introduced in `local-lite` (2.0.0 and 0.0.30) and gives
 an actionable checklist for reviewing an application or repository update.
 Use it when upgrading to this version or when asking an AI assistant to check
 whether dependent code needs changes.
@@ -21,6 +21,39 @@ This guide ships with the package at
 `node_modules/local-lite/skills/local-lite-upgrade/SKILL.md` (setup and custom
 adapter skills live beside it); copy the folders
 into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
+
+## Changes in 2.0.0
+
+### 1. Removed configuration & query aliases
+
+The following redundant aliases have been removed in favor of a single canonical API:
+
+| Removed API | Replacement |
+| :--- | :--- |
+| `localAuth` config option | Use `auth` in `LocalFirstClientConfig` / `LocalLiteConfig` |
+| `maxRetries` top-level config option | Use `retry: number \| RetryConfig` (e.g. `retry: 5` or `retry: { maxRetries: 5 }`) |
+| `client.find()` / `tx.find()` | Use `client.findMany()` / `tx.findMany()` |
+| Unprefixed query operators (`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`, `contains`, `startsWith`, `endsWith`, `null`) | Use `$`-prefixed operators (`$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$contains`, `$startsWith`, `$endsWith`, `$null`) |
+| `autoHydrateJSON` config option | Use explicit `jsonColumns: { tableName: ['col1', 'col2'] }` |
+| `MemoryDemoRemoteAdapter` / `NoopRemoteAdapter` re-exports in `local-lite/config` | Import from `local-lite` or `local-lite/core` |
+| Legacy `migrations` error guard | Removed; use `schemaMigrations` |
+
+### 2. Expo SQLite SDK 54+ `runAsync` required for writes
+
+`ExpoSQLiteAdapter` no longer falls back to `getAllAsync` for write statements. The injected Expo SQLite database must provide `runAsync()` (standard in Expo SDK 54+ / `expo-sqlite >= 58.0.0`).
+
+### 3. Hardened defaults & behavioral changes
+
+- **Remote request timeout (`requestTimeoutMs: 30000`)**: `SyncWorker` now aborts/times out `pushChanges()` and `fetchChanges()` after `30000` ms by default (`requestTimeoutMs: 0` disables it). `RemoteDBAdapter` implementations may accept an optional `{ signal?: AbortSignal }` argument.
+- **SQL `LIKE` wildcard escaping**: `$contains`, `$startsWith`, and `$endsWith` now escape literal `%`, `_`, and `\` using `LIKE ? ESCAPE '\'`.
+- **Server changelog retention (`maxChangeLogEntries: 10000`)**: Both `MemoryServerSyncStorage` and `SQLiteServerSyncStorage` retain the latest `10000` changelog entries by default (`Infinity` or `0` disables compaction on `SQLiteServerSyncStorage`).
+
+**Review checklist (2.0.0)**
+
+- Search for `localAuth`, `autoHydrateJSON`, and top-level `maxRetries` in `sync.config.ts` / `LocalFirstClient` calls.
+- Search for `.find(` on `client` or `tx` instances and replace with `.findMany(`.
+- Search `where:` objects for unprefixed operator keys (`eq`, `gt`, `in`, `contains`, etc.) and prefix them with `$`.
+- Confirm any `expo-sqlite` mock or instance in tests implements `runAsync()`.
 
 ## Changes in 0.0.30
 

@@ -428,7 +428,7 @@ describe('LocalAuthEngine - Fully Local SQLite Auth Engine', () => {
         network: new DefaultNetworkStatusProvider(false),
         autoStart: false,
         logger: false,
-        localAuth: {
+        auth: {
           iterations: 5000,
         },
       });

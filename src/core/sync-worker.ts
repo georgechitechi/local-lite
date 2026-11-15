@@ -63,7 +63,6 @@ function getScopeCursorKey(scope?: Record<string, any>): string {
 export interface SyncWorkerOptions {
   pushIntervalMs?: number;
   pullIntervalMs?: number;
-  maxRetries?: number;
   retry?: number | RetryConfig;
   logger?: SyncLogger | CustomLogger | boolean;
   logLevel?: LogLevel;
@@ -173,7 +172,7 @@ export class SyncWorker {
       };
     } else if (typeof r === 'object' && r !== null) {
       this.retryConfig = {
-        maxRetries: r.maxRetries ?? options.maxRetries ?? 5,
+        maxRetries: r.maxRetries ?? 5,
         initialDelayMs: r.initialDelayMs ?? 1000,
         backoffMultiplier: r.backoffMultiplier ?? 1.5,
         maxDelayMs: r.maxDelayMs ?? 30000,
@@ -182,7 +181,7 @@ export class SyncWorker {
       };
     } else {
       this.retryConfig = {
-        maxRetries: options.maxRetries ?? 5,
+        maxRetries: 5,
         initialDelayMs: 1000,
         backoffMultiplier: 1.5,
         maxDelayMs: 30000,

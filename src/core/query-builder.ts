@@ -97,70 +97,55 @@ function compileComparison(
     const ops = val as any;
     const subClauses: string[] = [];
 
-    const eqVal = ops.$eq !== undefined ? ops.$eq : ops.eq;
-    if (eqVal !== undefined) {
+    if (ops.$eq !== undefined) {
       subClauses.push(`${safeCol} = ?`);
-      params.push(typeof eqVal === 'boolean' ? (eqVal ? 1 : 0) : eqVal);
+      params.push(typeof ops.$eq === 'boolean' ? (ops.$eq ? 1 : 0) : ops.$eq);
     }
-    const neVal = ops.$ne !== undefined ? ops.$ne : ops.ne;
-    if (neVal !== undefined) {
+    if (ops.$ne !== undefined) {
       subClauses.push(`${safeCol} != ?`);
-      params.push(typeof neVal === 'boolean' ? (neVal ? 1 : 0) : neVal);
+      params.push(typeof ops.$ne === 'boolean' ? (ops.$ne ? 1 : 0) : ops.$ne);
     }
-    const gtVal = ops.$gt !== undefined ? ops.$gt : ops.gt;
-    if (gtVal !== undefined) {
+    if (ops.$gt !== undefined) {
       subClauses.push(`${safeCol} > ?`);
-      params.push(gtVal);
+      params.push(ops.$gt);
     }
-    const gteVal = ops.$gte !== undefined ? ops.$gte : ops.gte;
-    if (gteVal !== undefined) {
+    if (ops.$gte !== undefined) {
       subClauses.push(`${safeCol} >= ?`);
-      params.push(gteVal);
+      params.push(ops.$gte);
     }
-    const ltVal = ops.$lt !== undefined ? ops.$lt : ops.lt;
-    if (ltVal !== undefined) {
+    if (ops.$lt !== undefined) {
       subClauses.push(`${safeCol} < ?`);
-      params.push(ltVal);
+      params.push(ops.$lt);
     }
-    const lteVal = ops.$lte !== undefined ? ops.$lte : ops.lte;
-    if (lteVal !== undefined) {
+    if (ops.$lte !== undefined) {
       subClauses.push(`${safeCol} <= ?`);
-      params.push(lteVal);
+      params.push(ops.$lte);
     }
-    const inVal = ops.$in !== undefined ? ops.$in : ops.in;
-    if (Array.isArray(inVal) && inVal.length > 0) {
-      const placeholders = inVal.map(() => '?').join(', ');
+    if (Array.isArray(ops.$in) && ops.$in.length > 0) {
+      const placeholders = ops.$in.map(() => '?').join(', ');
       subClauses.push(`${safeCol} IN (${placeholders})`);
-      params.push(...inVal);
+      params.push(...ops.$in);
     }
-    const ninVal = ops.$nin !== undefined ? ops.$nin : ops.nin;
-    if (Array.isArray(ninVal) && ninVal.length > 0) {
-      const placeholders = ninVal.map(() => '?').join(', ');
+    if (Array.isArray(ops.$nin) && ops.$nin.length > 0) {
+      const placeholders = ops.$nin.map(() => '?').join(', ');
       subClauses.push(`${safeCol} NOT IN (${placeholders})`);
-      params.push(...ninVal);
+      params.push(...ops.$nin);
     }
-    const containsVal =
-      ops.$contains !== undefined ? ops.$contains : ops.contains;
-    if (containsVal !== undefined) {
+    if (ops.$contains !== undefined) {
       subClauses.push(`${safeCol} LIKE ? ESCAPE '\\'`);
-      params.push(`%${escapeLikePattern(containsVal)}%`);
+      params.push(`%${escapeLikePattern(ops.$contains)}%`);
     }
-    const startsWithVal =
-      ops.$startsWith !== undefined ? ops.$startsWith : ops.startsWith;
-    if (startsWithVal !== undefined) {
+    if (ops.$startsWith !== undefined) {
       subClauses.push(`${safeCol} LIKE ? ESCAPE '\\'`);
-      params.push(`${escapeLikePattern(startsWithVal)}%`);
+      params.push(`${escapeLikePattern(ops.$startsWith)}%`);
     }
-    const endsWithVal =
-      ops.$endsWith !== undefined ? ops.$endsWith : ops.endsWith;
-    if (endsWithVal !== undefined) {
+    if (ops.$endsWith !== undefined) {
       subClauses.push(`${safeCol} LIKE ? ESCAPE '\\'`);
-      params.push(`%${escapeLikePattern(endsWithVal)}`);
+      params.push(`%${escapeLikePattern(ops.$endsWith)}`);
     }
-    const nullVal = ops.$null !== undefined ? ops.$null : ops.null;
-    if (nullVal !== undefined) {
+    if (ops.$null !== undefined) {
       subClauses.push(
-        nullVal ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`,
+        ops.$null ? `${safeCol} IS NULL` : `${safeCol} IS NOT NULL`,
       );
     }
 

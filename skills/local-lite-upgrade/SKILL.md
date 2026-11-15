@@ -1,15 +1,41 @@
 ---
 name: local-lite-upgrade
-description: Review a codebase that uses the local-lite npm package for code that must change after a local-lite upgrade. Use when upgrading local-lite, migrating from legacy options, fixing bundler errors in Metro/Web, or updating authentication and adapters.
+description: Review a codebase that uses the local-lite npm package for code that must change after a local-lite upgrade. Use when upgrading local-lite, migrating from legacy options or aliases, fixing bundler errors in Metro/Web, or updating authentication, queries, and adapters.
 ---
 
 # local-lite upgrade review
 
 Checklist and automated review instructions for upgrading apps to the latest version of `local-lite`.
 
-## 1. Upgrade Checklist
+## 1. Upgrade Checklist (2.0.0 & Legacy Migrations)
 
 Search the codebase for each affected pattern and apply the migration:
+
+### Removed Configuration Aliases (`localAuth`, `maxRetries`, `autoHydrateJSON`)
+* **Old**: `createSyncClient({ localAuth: ..., maxRetries: 5, autoHydrateJSON: true })`
+* **New**: `createSyncClient({ auth: ..., retry: 5, jsonColumns: { todos: ['meta'] } })`
+* **Action**:
+  - Replace `localAuth` with `auth`.
+  - Replace top-level `maxRetries` on `LocalFirstClient` / `defineSyncConfig` / `SyncWorker` with `retry: number | RetryConfig`.
+  - Replace `autoHydrateJSON: true` with explicit `jsonColumns` per table.
+
+### Query Method & Operator Aliases (`find`, unprefixed operators)
+* **Old**: `client.find('todos', { where: { count: { gt: 5 } } })`
+* **New**: `client.findMany('todos', { where: { count: { $gt: 5 } } })`
+* **Action**:
+  - Replace `client.find()` / `tx.find()` with `findMany()`.
+  - Prefix all `QueryOptions.where` operators with `$` (`$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$contains`, `$startsWith`, `$endsWith`, `$null`).
+  - Note: `$contains`, `$startsWith`, and `$endsWith` now escape literal `%` and `_` characters (`LIKE ? ESCAPE '\'`).
+
+### Demo Adapter Imports in `local-lite/config`
+* **Old**: `import { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from 'local-lite/config'`
+* **New**: `import { MemoryDemoRemoteAdapter, NoopRemoteAdapter } from 'local-lite'` (or `'local-lite/core'`)
+
+### Hardened Defaults & Server Storage
+* **Remote Timeouts**: `SyncWorker` defaults to `requestTimeoutMs: 30000` (with `AbortSignal` forwarded to `SelfHostedRemoteAdapter`). Set `requestTimeoutMs: 0` to disable.
+* **Persistent Self-Hosted Server**: Prefer `SQLiteServerSyncStorage` from `local-lite/server` over `MemoryServerSyncStorage` in production; both default to `maxChangeLogEntries: 10000`.
+* **Expo SQLite**: `ExpoSQLiteAdapter` requires Expo SDK 51+ (`runAsync()` / `execAsync()`).
+* **Expo SQLite**: `ExpoSQLiteAdapter` requires Expo SDK 54+ (`runAsync()` / `execAsync()`).
 
 ### Schema Migrations (`schemaMigrations` vs `migrations`)
 * **Old**: `createSyncClient({ migrations: [ ... ] })`
@@ -40,15 +66,12 @@ Search the codebase for each affected pattern and apply the migration:
 * **New**: `import { ... } from 'local-lite/email'`
 * **Action**: Update imports to the unified email module supporting Nodemailer, Resend, SendGrid, Postmark, and Dev Mailbox.
 
-### Self-Hosted Sync
-* **Old**: Requiring Supabase or Convex for multi-client synchronization.
-* **New**: Use `defineSyncConfig({ server: { url: 'https://api.yourdomain.com/sync', token: '...' } })` with turnkey `createSyncEndpoint()` from `local-lite/server`.
-
 ---
 
 ## 2. Review Workflow
 
-1. Scan `sync.config.ts` (or client creation files) for deprecated options (`migrations`, legacy adapters).
-2. Verify all synced tables contain `id TEXT PRIMARY KEY` and `updated_at INTEGER NOT NULL`.
+1. Scan `sync.config.ts` and `LocalFirstClient` instantiations for removed options (`localAuth`, `maxRetries`, `autoHydrateJSON`, `migrations`).
+2. Scan `find(` calls and `where:` objects for unprefixed operators (`eq`, `gt`, `in`, `contains`, etc.).
 3. Verify `schemaMigrations` versions are strictly sequential integers starting from 1.
-4. Report each match with file path and line number alongside minimal migration code.
+4. Check `expo-sqlite` mocks/instances provide `runAsync()` for parameterized writes.
+5. Report each match with file path and line number alongside minimal migration code.
