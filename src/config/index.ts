@@ -68,6 +68,7 @@ export async function createSyncClient(
     conflictResolver: config.conflictResolver ?? 'last-write-wins',
     pushIntervalMs: config.pushIntervalMs ?? 5000,
     pullIntervalMs: config.pullIntervalMs ?? 10000,
+    requestTimeoutMs: config.requestTimeoutMs,
     maxRetries: config.maxRetries ?? 5,
     retry: config.retry,
     logger: config.logger,

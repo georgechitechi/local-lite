@@ -206,7 +206,7 @@ export class SQLiteServerSyncStorage implements ServerSyncStorage {
     private db: LocalDBAdapter,
     options: SQLiteServerSyncStorageOptions = {},
   ) {
-    this.maxChangeLogEntries = options.maxChangeLogEntries;
+    this.maxChangeLogEntries = options.maxChangeLogEntries ?? 10000;
   }
 
   private async ensureSchema(): Promise<void> {

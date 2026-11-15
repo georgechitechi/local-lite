@@ -261,6 +261,11 @@ export interface LocalLiteConfig {
   pullIntervalMs?: number;
 
   /**
+   * Timeout in milliseconds for remote push/pull requests (0 to disable). Default: 30000
+   */
+  requestTimeoutMs?: number;
+
+  /**
    * Automatically pause recurring sync timers and listeners when the app is backgrounded
    * (React Native AppState or Web Page Visibility API), and resume when foregrounded.
    * Default: true
