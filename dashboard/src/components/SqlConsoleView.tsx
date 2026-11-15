@@ -183,6 +183,27 @@ export const SqlConsoleView: React.FC<SqlConsoleViewProps> = ({
                 </div>
               )}
             </div>
+            {result.columns.includes('detail') && result.columns.includes('notused') && result.rows.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {result.rows.map((r, idx) => {
+                  const detail = String(r.detail ?? '');
+                  const isScan = /\bSCAN\b/i.test(detail) && !/\bUSING\s+(?:COVERING\s+)?INDEX\b/i.test(detail);
+                  return (
+                    <span
+                      key={idx}
+                      className="badge"
+                      style={{
+                        borderColor: isScan ? 'var(--red)' : 'var(--green)',
+                        color: isScan ? 'var(--red)' : 'var(--green)',
+                      }}
+                    >
+                      {isScan ? '⚠ Full Scan: ' : '✓ '}
+                      {detail}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             <div className="grid-wrap">
               <table>
                 <thead>

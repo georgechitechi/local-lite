@@ -399,6 +399,16 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     const ftsSearchBody = await ftsSearchRes.json();
     expect(ftsSearchBody.rows.length).toBeGreaterThanOrEqual(1);
 
+    // 4b. FTS5 auto-sync trigger on subsequent INSERT
+    await db.execute(
+      `INSERT INTO books (id, title, author_id) VALUES ('b_trig', 'Quantum Computing Primer', 'a1');`,
+    );
+    const ftsTrigRes = await handler(
+      new Request('http://local.test/api/search?table=books&q=Quantum'),
+    );
+    const ftsTrigBody = await ftsTrigRes.json();
+    expect(ftsTrigBody.rows.length).toBe(1);
+
     // 5. Encrypted backup & restore
     const exportRes = await handler(
       new Request('http://local.test/api/backups/export', {
@@ -448,6 +458,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     expect(logsRes.status).toBe(200);
     const logsBody = await logsRes.json();
     expect(logsBody.logs.length).toBeGreaterThan(0);
+    expect(logsBody.logs.some((l: any) => l.path === '/api/tables')).toBe(true);
 
     const clearLogsRes = await handler(
       new Request('http://local.test/api/logs', { method: 'DELETE' }),

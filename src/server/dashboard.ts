@@ -220,13 +220,16 @@ export function createDashboardHandler(
       return errorResponse('Unauthorized.', 401);
     }
 
+    let loggedThisRequest = false;
     const reply = (res: Response, detail?: string) => {
       if (pathname.startsWith('/api/')) {
+        loggedThisRequest = true;
         recordLog(request.method, pathname, res.status, startedAt, detail);
       }
       return res;
     };
 
+    const res = await (async (): Promise<Response> => {
     try {
       if (
         request.method === 'GET' &&
@@ -1479,9 +1482,36 @@ export function createDashboardHandler(
         const ftsName = `_fts_${tableName}`;
         const quotedFts = escapeIdentifier(ftsName);
         const colList = requestedCols.map((c) => escapeIdentifier(c)).join(', ');
+        const newColList = requestedCols.map((c) => `new.${escapeIdentifier(c)}`).join(', ');
         await db.execute(`DROP TABLE IF EXISTS ${quotedFts};`);
         await db.execute(`CREATE VIRTUAL TABLE ${quotedFts} USING fts5(${colList});`);
-        await db.execute(`INSERT INTO ${quotedFts}(${colList}) SELECT ${colList} FROM ${quotedSource};`);
+        await db.execute(
+          `INSERT INTO ${quotedFts}(rowid, ${colList}) SELECT rowid, ${colList} FROM ${quotedSource};`,
+        );
+
+        const aiTrig = escapeIdentifier(`_fts_${tableName}_ai`);
+        const auTrig = escapeIdentifier(`_fts_${tableName}_au`);
+        const adTrig = escapeIdentifier(`_fts_${tableName}_ad`);
+        await db.execute(`DROP TRIGGER IF EXISTS ${aiTrig};`);
+        await db.execute(`DROP TRIGGER IF EXISTS ${auTrig};`);
+        await db.execute(`DROP TRIGGER IF EXISTS ${adTrig};`);
+        await db.execute(
+          `CREATE TRIGGER ${aiTrig} AFTER INSERT ON ${quotedSource} BEGIN
+            INSERT INTO ${quotedFts}(rowid, ${colList}) VALUES (new.rowid, ${newColList});
+          END;`,
+        );
+        await db.execute(
+          `CREATE TRIGGER ${adTrig} AFTER DELETE ON ${quotedSource} BEGIN
+            DELETE FROM ${quotedFts} WHERE rowid = old.rowid;
+          END;`,
+        );
+        await db.execute(
+          `CREATE TRIGGER ${auTrig} AFTER UPDATE ON ${quotedSource} BEGIN
+            DELETE FROM ${quotedFts} WHERE rowid = old.rowid;
+            INSERT INTO ${quotedFts}(rowid, ${colList}) VALUES (new.rowid, ${newColList});
+          END;`,
+        );
+
         const cnt = (await db.execute(`SELECT COUNT(*) AS count FROM ${quotedFts};`)) ?? [];
         return reply(
           jsonResponse(
@@ -1588,25 +1618,45 @@ export function createDashboardHandler(
         }
         let restoredTables = 0;
         let restoredRows = 0;
-        for (const [tableName, tableEntry] of Object.entries(snapshot.tables)) {
-          if (tableEntry.sql) {
-            const createSql = tableEntry.sql.replace(/^CREATE\s+TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ');
-            await db.execute(createSql);
+        const fkRes = (await db.execute(`PRAGMA foreign_keys;`)) ?? [];
+        const prevFk = Number(fkRes[0]?.foreign_keys ?? 0) === 1;
+        if (prevFk) {
+          await db.execute(`PRAGMA foreign_keys = OFF;`);
+        }
+        await db.execute(`BEGIN IMMEDIATE;`);
+        try {
+          for (const [tableName, tableEntry] of Object.entries(snapshot.tables)) {
+            if (tableEntry.sql) {
+              const createSql = tableEntry.sql.replace(/^CREATE\s+TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ');
+              await db.execute(createSql);
+            }
+            const quoted = escapeIdentifier(tableName);
+            await db.execute(`DELETE FROM ${quoted};`);
+            for (const row of tableEntry.rows ?? []) {
+              const keys = Object.keys(row);
+              if (keys.length === 0) continue;
+              const colsSql = keys.map((k) => escapeIdentifier(k)).join(', ');
+              const placeholders = keys.map(() => '?').join(', ');
+              await db.execute(
+                `INSERT INTO ${quoted} (${colsSql}) VALUES (${placeholders});`,
+                keys.map((k) => row[k]),
+              );
+              restoredRows++;
+            }
+            restoredTables++;
           }
-          const quoted = escapeIdentifier(tableName);
-          await db.execute(`DELETE FROM ${quoted};`);
-          for (const row of tableEntry.rows ?? []) {
-            const keys = Object.keys(row);
-            if (keys.length === 0) continue;
-            const colsSql = keys.map((k) => escapeIdentifier(k)).join(', ');
-            const placeholders = keys.map(() => '?').join(', ');
-            await db.execute(
-              `INSERT INTO ${quoted} (${colsSql}) VALUES (${placeholders});`,
-              keys.map((k) => row[k]),
-            );
-            restoredRows++;
+          await db.execute(`COMMIT;`);
+        } catch (restoreErr) {
+          try {
+            await db.execute(`ROLLBACK;`);
+          } catch {
+            // ignore rollback error
           }
-          restoredTables++;
+          throw restoreErr;
+        } finally {
+          if (prevFk) {
+            await db.execute(`PRAGMA foreign_keys = ON;`);
+          }
         }
         return reply(
           jsonResponse({ ok: true, restoredTables, restoredRows }),
@@ -1618,6 +1668,12 @@ export function createDashboardHandler(
     } catch (err: any) {
       return reply(errorResponse(err?.message ?? 'Internal server error.', 500), err?.message);
     }
+    })();
+
+    if (!loggedThisRequest && pathname.startsWith('/api/')) {
+      recordLog(request.method, pathname, res.status, startedAt);
+    }
+    return res;
   };
 }
 

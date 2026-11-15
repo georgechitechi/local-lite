@@ -17,6 +17,14 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
   onError,
 }) => {
   const [viewMode, setViewMode] = useState<'cards' | 'er'>('cards');
+  const [erOffsets, setErOffsets] = useState<Record<string, { x: number; y: number }>>({});
+  const [draggingNode, setDraggingNode] = useState<{
+    name: string;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
   const [diffModal, setDiffModal] = useState<{
     open: boolean;
     targetSql: string;
@@ -275,13 +283,25 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
             visible.forEach((t, idx) => {
               const r = Math.floor(idx / colsPerRow);
               const c = idx % colsPerRow;
-              const yOffset = rowHeights.slice(0, r).reduce((sum, h) => sum + h + nodeGapY, 24);
-              const xOffset = 24 + c * (nodeWidth + nodeGapX);
+              const baseY = rowHeights.slice(0, r).reduce((sum, h) => sum + h + nodeGapY, 24);
+              const baseX = 24 + c * (nodeWidth + nodeGapX);
+              const custom = erOffsets[t.name];
               const h = nodeHeaderH + Math.max(1, t.columns.length) * rowH + 14;
-              positions.set(t.name, { x: xOffset, y: yOffset, w: nodeWidth, h });
+              positions.set(t.name, {
+                x: Math.max(8, custom ? custom.x : baseX),
+                y: Math.max(8, custom ? custom.y : baseY),
+                w: nodeWidth,
+                h,
+              });
             });
-            const totalW = Math.max(600, colsPerRow * (nodeWidth + nodeGapX) + 24);
-            const totalH = Math.max(320, rowHeights.reduce((sum, h) => sum + h + nodeGapY, 24) + 24);
+            let maxRight = colsPerRow * (nodeWidth + nodeGapX) + 24;
+            let maxBottom = rowHeights.reduce((sum, h) => sum + h + nodeGapY, 24) + 24;
+            positions.forEach((p) => {
+              maxRight = Math.max(maxRight, p.x + p.w + 32);
+              maxBottom = Math.max(maxBottom, p.y + p.h + 32);
+            });
+            const totalW = Math.max(600, maxRight);
+            const totalH = Math.max(320, maxBottom);
             const edges: { fromTable: string; toTable: string; fromCol: string; toCol: string }[] = [];
             visible.forEach((t) => {
               (t.foreignKeys ?? []).forEach((fk) => {
@@ -291,10 +311,34 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
               });
             });
             return (
-              <div className="card" style={{ overflow: 'auto', padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, color: 'var(--muted)' }}>
-                  <span>Entity-Relationship Diagram ({visible.length} tables, {edges.length} foreign keys)</span>
-                  <span>PK = Primary Key • FK = Foreign Key</span>
+              <div
+                className="card"
+                style={{ overflow: 'auto', padding: 12, userSelect: draggingNode ? 'none' : 'auto' }}
+                onMouseMove={(e) => {
+                  if (!draggingNode) return;
+                  const dx = e.clientX - draggingNode.startX;
+                  const dy = e.clientY - draggingNode.startY;
+                  setErOffsets((prev) => ({
+                    ...prev,
+                    [draggingNode.name]: {
+                      x: Math.max(8, draggingNode.origX + dx),
+                      y: Math.max(8, draggingNode.origY + dy),
+                    },
+                  }));
+                }}
+                onMouseUp={() => setDraggingNode(null)}
+                onMouseLeave={() => setDraggingNode(null)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12, color: 'var(--muted)' }}>
+                  <span>Entity-Relationship Diagram ({visible.length} tables, {edges.length} foreign keys) • Drag headers to arrange</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span>PK = Primary Key • FK = Foreign Key</span>
+                    {Object.keys(erOffsets).length > 0 && (
+                      <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setErOffsets({})}>
+                        Reset Layout
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div style={{ position: 'relative', width: totalW, height: totalH }}>
                   <svg
@@ -311,15 +355,34 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
                       const src = positions.get(edge.fromTable);
                       const dst = positions.get(edge.toTable);
                       if (!src || !dst) return null;
-                      const x1 = src.x + src.w;
-                      const y1 = src.y + 30;
-                      const x2 = dst.x;
-                      const y2 = dst.y + 30;
-                      const mx = (x1 + x2) / 2;
+                      const srcCx = src.x + src.w / 2;
+                      const srcCy = src.y + src.h / 2;
+                      const dstCx = dst.x + dst.w / 2;
+                      const dstCy = dst.y + dst.h / 2;
+                      const dx = dstCx - srcCx;
+                      const dy = dstCy - srcCy;
+                      let x1: number, y1: number, x2: number, y2: number, d: string;
+                      if (Math.abs(dx) >= Math.abs(dy)) {
+                        const goRight = dx >= 0;
+                        x1 = goRight ? src.x + src.w : src.x;
+                        y1 = src.y + 30;
+                        x2 = goRight ? dst.x : dst.x + dst.w;
+                        y2 = dst.y + 30;
+                        const mx = (x1 + x2) / 2;
+                        d = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+                      } else {
+                        const goDown = dy >= 0;
+                        x1 = srcCx;
+                        y1 = goDown ? src.y + src.h : src.y;
+                        x2 = dstCx;
+                        y2 = goDown ? dst.y : dst.y + dst.h;
+                        const my = (y1 + y2) / 2;
+                        d = `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`;
+                      }
                       return (
                         <g key={idx}>
                           <path
-                            d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                            d={d}
                             fill="none"
                             stroke="var(--accent)"
                             strokeWidth="1.75"
@@ -347,6 +410,15 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
                         }}
                       >
                         <div
+                          onMouseDown={(e) =>
+                            setDraggingNode({
+                              name: t.name,
+                              startX: e.clientX,
+                              startY: e.clientY,
+                              origX: pos.x,
+                              origY: pos.y,
+                            })
+                          }
                           style={{
                             padding: '8px 10px',
                             borderBottom: '1px solid var(--border)',
@@ -354,6 +426,7 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
                             justifyContent: 'space-between',
                             alignItems: 'center',
                             background: 'var(--bg-elevated, rgba(255,255,255,0.03))',
+                            cursor: 'grab',
                           }}
                         >
                           <strong style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{t.name}</strong>
