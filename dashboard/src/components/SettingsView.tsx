@@ -665,78 +665,143 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </pre>
               )}
             </div>
-          </div>
-        )}
 
-        <div className="card" style={{ marginTop: 14 }}>
-          <div className="label" style={{ marginBottom: 10 }}>
-            Encrypted Backup &amp; Restore (AES-256-GCM)
-          </div>
-          <div className="kv-list">
-            <div className="kv-row">
-              <div>
-                <strong>Export Encrypted Snapshot</strong>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-                  Download an AES-256-GCM encrypted <code>.localbackup</code> file of all tables and rows.
+            <div className="card">
+              <div className="label" style={{ marginBottom: 10 }}>
+                Encrypted Backup &amp; Restore (AES-256-GCM)
+              </div>
+              <div className="setting-row">
+                <div className="setting-label">
+                  <strong>Export Encrypted Snapshot</strong>
+                  <span>Download AES-256-GCM .localbackup</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder="Passphrase (min 4)"
+                    value={backupPassphrase}
+                    onChange={(e) => setBackupPassphrase(e.target.value)}
+                    style={{ width: 150 }}
+                  />
+                  <button
+                    className="btn primary"
+                    disabled={backupBusy || backupPassphrase.length < 4}
+                    onClick={() => void exportEncryptedBackup()}
+                  >
+                    {backupBusy ? 'Working...' : 'Export'}
+                  </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="Passphrase (min 4 chars)"
-                  value={backupPassphrase}
-                  onChange={(e) => setBackupPassphrase(e.target.value)}
-                  style={{ width: 190 }}
-                />
+
+              <div className="setting-row">
+                <div className="setting-label">
+                  <strong>Restore Encrypted Backup</strong>
+                  <span>Select .localbackup with passphrase</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder="Passphrase"
+                    value={restorePassphrase}
+                    onChange={(e) => setRestorePassphrase(e.target.value)}
+                    style={{ width: 150 }}
+                    disabled={readOnly}
+                  />
+                  <label
+                    className="btn"
+                    style={{
+                      cursor: readOnly || backupBusy || !restorePassphrase ? 'not-allowed' : 'pointer',
+                      opacity: readOnly || backupBusy || !restorePassphrase ? 0.45 : 1,
+                    }}
+                  >
+                    Restore
+                    <input
+                      type="file"
+                      accept=".localbackup"
+                      disabled={readOnly || backupBusy || !restorePassphrase}
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        if (f) void restoreEncryptedBackup(f);
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="label" style={{ marginBottom: 10 }}>
+                Diagnostics &amp; Preferences
+              </div>
+              <div className="setting-row">
+                <div className="setting-label">
+                  <strong>Live Telemetry Logs</strong>
+                  <span>Clear in-memory API &amp; SQL log buffer</span>
+                </div>
                 <button
-                  className="btn primary"
-                  disabled={backupBusy || backupPassphrase.length < 4}
-                  onClick={() => void exportEncryptedBackup()}
+                  className="btn"
+                  onClick={async () => {
+                    try {
+                      onError(null);
+                      await apiRequest('/api/logs', { method: 'DELETE' });
+                      setStatusMsg('Telemetry logs cleared.');
+                    } catch (err: any) {
+                      onError(err.message);
+                    }
+                  }}
                 >
-                  {backupBusy ? 'Working...' : 'Export .localbackup'}
+                  Clear Logs
                 </button>
               </div>
-            </div>
-
-            <div className="kv-row">
-              <div>
-                <strong>Restore from Encrypted Backup</strong>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-                  Enter passphrase and select a <code>.localbackup</code> file to restore tables and rows.
+              <div className="setting-row">
+                <div className="setting-label">
+                  <strong>Full SQL Schema</strong>
+                  <span>Download SQLite DDL for all tables</span>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="Backup passphrase"
-                  value={restorePassphrase}
-                  onChange={(e) => setRestorePassphrase(e.target.value)}
-                  style={{ width: 190 }}
-                  disabled={readOnly}
-                />
-                <label
-                  className={`btn${readOnly || backupBusy || !restorePassphrase ? ' disabled' : ''}`}
-                  style={{ cursor: readOnly || backupBusy || !restorePassphrase ? 'not-allowed' : 'pointer', opacity: readOnly || backupBusy || !restorePassphrase ? 0.5 : 1 }}
+                <a
+                  className="btn"
+                  href={buildApiUrl('/api/schema/sql?dialect=sqlite&includeSystem=0&download=1')}
+                  download
                 >
-                  Restore File
-                  <input
-                    type="file"
-                    accept=".localbackup"
-                    disabled={readOnly || backupBusy || !restorePassphrase}
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      e.target.value = '';
-                      if (f) void restoreEncryptedBackup(f);
-                    }}
-                  />
-                </label>
+                  Download .sql
+                </a>
+              </div>
+              <div className="setting-row">
+                <div className="setting-label">
+                  <strong>Local UI Storage</strong>
+                  <span>Reset SQL history &amp; connection overrides</span>
+                </div>
+                <button
+                  className="btn danger"
+                  onClick={() => {
+                    localStorage.removeItem('local_lite_sql_history');
+                    localStorage.removeItem('local_lite_api_base');
+                    localStorage.removeItem('local_lite_auth_token');
+                    setApiBaseInput('');
+                    setTokenInput('');
+                    setStatusMsg('Local dashboard preferences reset.');
+                    onRefresh();
+                  }}
+                >
+                  Reset UI
+                </button>
+              </div>
+              <div className="setting-row">
+                <div className="setting-label">
+                  <strong>Shortcuts</strong>
+                  <span>Quick navigation &amp; query execution</span>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+                  Ctrl+K • Ctrl+Enter
+                </span>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {kvModal.open && (
