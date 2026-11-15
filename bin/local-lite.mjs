@@ -19,10 +19,12 @@ const targets = {
 const usage = `Usage:
   local-lite install-skills [--target copilot|claude|antigravity|cursor|agent] [--dir <path>] [--force]
   local-lite db:generate --schema <path> [--tables <path>] [--out <dir>] [--name <name>] [--dialect mysql|postgres|sqlite] [--server-schema <path>] [--dry-run]
+  local-lite dashboard [--db <path>] [--port <number>] [--host <host>] [--readonly] [--token <secret>] [--title <title>]
 
 Commands:
   install-skills  Copy bundled AI skills into your project.
-  db:generate     Generate incremental SQL migrations from a schema dictionary.`;
+  db:generate     Generate incremental SQL migrations from a schema dictionary.
+  dashboard       Launch the local-lite web dashboard for a SQLite database.`;
 
 function parseSkillsArgs(argv) {
   const options = { target: 'copilot', dir: undefined, force: false };
@@ -172,12 +174,130 @@ async function runDbGen(options) {
   }
 }
 
+function parseDashboardArgs(argv) {
+  const options = {
+    db: ':memory:',
+    port: 4321,
+    host: '127.0.0.1',
+    readOnly: false,
+    token: undefined,
+    title: undefined,
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--readonly') options.readOnly = true;
+    else if (arg === '--db') options.db = argv[++i];
+    else if (arg === '--port') options.port = Number(argv[++i]);
+    else if (arg === '--host') options.host = argv[++i];
+    else if (arg === '--token') options.token = argv[++i];
+    else if (arg === '--title') options.title = argv[++i];
+    else if (arg !== '--') throw new Error(`Unknown option: ${arg}`);
+  }
+  if (!options.db) throw new Error('--db <path> cannot be empty.');
+  if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
+    throw new Error('--port must be a valid TCP port (0-65535).');
+  }
+  return options;
+}
+
+async function openDashboardDbAdapter(dbPath) {
+  const resolved = dbPath === ':memory:' ? ':memory:' : path.resolve(process.cwd(), dbPath);
+  try {
+    const nodeSqlite = await import('node:sqlite');
+    const mod = await import(
+      pathToFileURL(path.resolve(__dirname, '..', 'dist', 'adapters', 'local', 'node-sqlite.js')).href
+    );
+    const NodeSQLiteAdapter = mod.NodeSQLiteAdapter ?? mod.default?.NodeSQLiteAdapter;
+    const db = new nodeSqlite.DatabaseSync(resolved);
+    return { adapter: new NodeSQLiteAdapter(db), label: resolved, close: () => db.close() };
+  } catch {
+    // Fallback to better-sqlite3 if node:sqlite is unavailable
+  }
+
+  const requireFromCwd = createRequire(path.join(process.cwd(), 'package.json'));
+  try {
+    const BetterSqlite3 = requireFromCwd('better-sqlite3');
+    const mod = await import(
+      pathToFileURL(path.resolve(__dirname, '..', 'dist', 'adapters', 'local', 'better-sqlite3.js')).href
+    );
+    const BetterSQLite3Adapter = mod.BetterSQLite3Adapter ?? mod.default?.BetterSQLite3Adapter;
+    const db = new BetterSqlite3(resolved);
+    return { adapter: new BetterSQLite3Adapter(db), label: resolved, close: () => db.close() };
+  } catch {
+    throw new Error(
+      'No SQLite driver available. Run on Node 22+ (node:sqlite) or install "better-sqlite3".',
+    );
+  }
+}
+
+async function runDashboard(options) {
+  const http = await import('node:http');
+  const dashboardMod = await import(
+    pathToFileURL(path.resolve(__dirname, '..', 'dist', 'server', 'dashboard.js')).href
+  );
+  const createDashboardHandler =
+    dashboardMod.createDashboardHandler ?? dashboardMod.default?.createDashboardHandler;
+  if (typeof createDashboardHandler !== 'function') {
+    throw new Error(
+      'Dashboard module not built. Run "npm run build" first.',
+    );
+  }
+  const { adapter, label, close } = await openDashboardDbAdapter(options.db);
+  const handler = createDashboardHandler(adapter, {
+    title: options.title ?? `local-lite (${path.basename(label)})`,
+    readOnly: options.readOnly,
+    authToken: options.token,
+  });
+
+  const server = http.createServer(async (req, res) => {
+    try {
+      const origin = `http://${req.headers.host || `${options.host}:${options.port}`}`;
+      const url = new URL(req.url || '/', origin);
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const body = chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+      const webReq = new Request(url.toString(), {
+        method: req.method,
+        headers: req.headers,
+        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
+      });
+      const webRes = await handler(webReq);
+      res.statusCode = webRes.status;
+      webRes.headers.forEach((value, key) => res.setHeader(key, value));
+      const buf = Buffer.from(await webRes.arrayBuffer());
+      res.end(buf);
+    } catch (err) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal error' }));
+    }
+  });
+
+  await new Promise((resolve) => server.listen(options.port, options.host, resolve));
+  const address = server.address();
+  const actualPort = typeof address === 'object' && address ? address.port : options.port;
+  const tokenSuffix = options.token ? `?token=${encodeURIComponent(options.token)}` : '';
+  console.log(`local-lite dashboard running at http://${options.host}:${actualPort}/${tokenSuffix}`);
+  console.log(`Database: ${label} (${options.readOnly ? 'read-only' : 'read/write'})`);
+
+  const shutdown = () => {
+    server.close(() => {
+      try { close(); } catch {}
+      process.exit(0);
+    });
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 try {
   if (command === 'install-skills') {
     await installSkills(parseSkillsArgs(rest));
   } else if (command === 'db:generate') {
     await runDbGen(parseDbGenArgs(rest));
+  } else if (command === 'dashboard') {
+    await runDashboard(parseDashboardArgs(rest));
   } else {
     console.log(usage);
     process.exitCode = command && command !== '--help' && command !== '-h' ? 1 : 0;
