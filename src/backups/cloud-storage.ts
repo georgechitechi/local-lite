@@ -1,6 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import type {
+  BackupAccessTokenProvider,
   BackupStorage,
   CloudBackupClient,
   CreateDatabaseBackupOptions,
@@ -12,6 +13,16 @@ import type {
   RestoreEncryptedBackupOptions,
 } from './encryption.js';
 import type { GoogleAuthClient } from '../auth/google.js';
+import {
+  base64UrlEncode,
+  requireSecureRandomBytes as secureRandomBytes,
+} from '../utils/crypto.js';
+import {
+  parseOAuthTokenResponse,
+  throwOAuthError,
+} from '../utils/oauth.js';
+
+export type { BackupAccessTokenProvider };
 
 export interface CloudBackupFile {
   id: string;
@@ -19,8 +30,6 @@ export interface CloudBackupFile {
   modifiedAt?: string;
   size?: number;
 }
-
-export type BackupAccessTokenProvider = () => Promise<string>;
 
 const GOOGLE_API = 'https://www.googleapis.com/drive/v3';
 const GOOGLE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
@@ -71,34 +80,6 @@ export interface GoogleDriveBackupClientOptions {
   fetch?: typeof fetch;
 }
 
-function secureRandomBytes(length: number): Uint8Array {
-  const crypto = globalThis.crypto;
-  if (!crypto?.getRandomValues) {
-    throw new Error('Secure random number generation is unavailable.');
-  }
-  return crypto.getRandomValues(new Uint8Array(length));
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  const alphabet =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-  let result = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
-    result += alphabet[first >> 2];
-    result +=
-      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
-    if (second !== undefined) {
-      result +=
-        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
-    }
-    if (third !== undefined) result += alphabet[third & 63];
-  }
-  return result;
-}
-
 function validateGoogleTokens(value: unknown): value is GoogleDriveTokens {
   if (!value || typeof value !== 'object') return false;
   const tokens = value as Partial<GoogleDriveTokens>;
@@ -144,17 +125,7 @@ async function parseTokenResponse(response: Response): Promise<{
   error?: string;
   error_description?: string;
 }> {
-  try {
-    return (await response.json()) as {
-      access_token?: string;
-      refresh_token?: string;
-      expires_in?: number;
-      error?: string;
-      error_description?: string;
-    };
-  } catch {
-    throw new Error(`Google OAuth request failed (${response.status}).`);
-  }
+  return parseOAuthTokenResponse(response, 'Google');
 }
 
 function createStoredTokens(
@@ -179,11 +150,7 @@ function throwTokenError(
   payload: { error?: string; error_description?: string },
   status: number,
 ): never {
-  throw new Error(
-    payload.error_description ||
-      payload.error ||
-      `Google OAuth request failed (${status}).`,
-  );
+  return throwOAuthError(payload, status, 'Google');
 }
 
 async function parseApiError(response: Response): Promise<Error> {

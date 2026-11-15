@@ -1,4 +1,5 @@
 import { LocalDBAdapter, LocalTransaction } from './index.js';
+import { isReadQuery } from '../../utils/sql.js';
 
 export interface NodeSqliteStatement {
   all(...params: any[]): any[];
@@ -10,15 +11,6 @@ export interface NodeSqliteDatabaseSync {
   prepare(sql: string): NodeSqliteStatement;
   exec(sql: string): void;
   close?(): void;
-}
-
-const READ_QUERY_REGEX = /^(?:SELECT|WITH|EXPLAIN)\b/i;
-const READ_ONLY_PRAGMA_REGEX = /^PRAGMA\b/i;
-const MUTATING_PRAGMA_REGEX = /=|wal_checkpoint|shrink_memory|optimize/i;
-
-function isReadQuery(sql: string): boolean {
-  if (READ_QUERY_REGEX.test(sql)) return true;
-  return READ_ONLY_PRAGMA_REGEX.test(sql) && !MUTATING_PRAGMA_REGEX.test(sql);
 }
 
 /**

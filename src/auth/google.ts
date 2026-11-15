@@ -2,6 +2,16 @@ import { resolveUnifiedUserId, type AuthUser } from './identity.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
+  base64UrlEncode,
+  getRandomBytes as secureRandomBytes,
+} from '../utils/crypto.js';
+import {
+  createInMemoryOAuthTokenStore,
+  createOAuthTokenStore,
+  parseOAuthTokenResponse,
+  throwOAuthError as throwProviderOAuthError,
+} from '../utils/oauth.js';
+import {
   GoogleDriveBackupStorage,
   GoogleDriveBackupClient,
   type GoogleDriveBackupClientOptions,
@@ -70,39 +80,6 @@ export interface GoogleAuthClientOptions {
   accessType?: 'offline' | 'online';
 }
 
-function secureRandomBytes(length: number): Uint8Array {
-  const crypto =
-    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-  if (!crypto?.getRandomValues) {
-    const fallback = new Uint8Array(length);
-    for (let i = 0; i < length; i++) {
-      fallback[i] = Math.floor(Math.random() * 256);
-    }
-    return fallback;
-  }
-  return crypto.getRandomValues(new Uint8Array(length));
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  const alphabet =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-  let result = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
-    result += alphabet[first >> 2];
-    result +=
-      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
-    if (second !== undefined) {
-      result +=
-        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
-    }
-    if (third !== undefined) result += alphabet[third & 63];
-  }
-  return result;
-}
-
 function validateTokens(value: unknown): value is GoogleAuthTokens {
   if (!value || typeof value !== 'object') return false;
   const tokens = value as Partial<GoogleAuthTokens>;
@@ -126,48 +103,14 @@ function validateUser(value: unknown): value is GoogleUser {
 }
 
 export function createInMemoryGoogleTokenStore(): GoogleAuthTokenStore {
-  let storedTokens: GoogleAuthTokens | null = null;
-  let storedUser: GoogleUser | null = null;
-  return {
-    getTokens: async () => storedTokens,
-    setTokens: async (tokens) => {
-      storedTokens = tokens;
-    },
-    removeTokens: async () => {
-      storedTokens = null;
-    },
-    getUser: async () => storedUser,
-    setUser: async (user) => {
-      storedUser = user;
-    },
-  };
+  return createInMemoryOAuthTokenStore<GoogleAuthTokens, GoogleUser>();
 }
 
 export function createGoogleAuthTokenStore(
   storage: GoogleAuthKeyValueStorage,
   prefix = 'local-lite-google-auth',
 ): GoogleAuthTokenStore {
-  const tokensKey = `${prefix}-tokens`;
-  const userKey = `${prefix}-user`;
-  return {
-    getTokens: async () => {
-      const raw = await storage.getItem(tokensKey);
-      return validateTokens(raw) ? raw : null;
-    },
-    setTokens: (tokens) => storage.setItem(tokensKey, tokens),
-    removeTokens: () => storage.removeItem(tokensKey),
-    getUser: async () => {
-      const raw = await storage.getItem(userKey);
-      return validateUser(raw) ? raw : null;
-    },
-    setUser: async (user) => {
-      if (user) {
-        await storage.setItem(userKey, user);
-      } else {
-        await storage.removeItem(userKey);
-      }
-    },
-  };
+  return createOAuthTokenStore(storage, prefix, validateTokens, validateUser);
 }
 
 async function parseTokenResponse(response: Response): Promise<{
@@ -180,22 +123,14 @@ async function parseTokenResponse(response: Response): Promise<{
   error?: string;
   error_description?: string;
 }> {
-  try {
-    return (await response.json()) as any;
-  } catch {
-    throw new Error(`Google OAuth request failed (${response.status}).`);
-  }
+  return parseOAuthTokenResponse(response, 'Google');
 }
 
 function throwOAuthError(
   payload: { error?: string; error_description?: string },
   status: number,
 ): never {
-  throw new Error(
-    payload.error_description ||
-      payload.error ||
-      `Google OAuth request failed (${status}).`,
-  );
+  return throwProviderOAuthError(payload, status, 'Google');
 }
 
 export class GoogleAuthClient {

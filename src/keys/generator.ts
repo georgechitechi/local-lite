@@ -1,40 +1,12 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
+import { getRandomBytes } from '../utils/crypto.js';
 import { GenerateApiKeyOptions, GeneratedApiKey } from './types.js';
+
+export { getRandomBytes };
 
 const BASE62_ALPHABET =
   '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
-/**
- * Generates cryptographically secure random bytes across Web, Expo/React Native, and Node.js.
- */
-export function getRandomBytes(length: number): Uint8Array {
-  const cryptoObj =
-    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-  if (cryptoObj?.getRandomValues) {
-    try {
-      return cryptoObj.getRandomValues(new Uint8Array(length));
-    } catch {
-      // Fallback below
-    }
-  }
-  try {
-    // Dynamic fallback for Node.js environments without globalThis.crypto
-    const nodeCrypto = (globalThis as any).process?.versions?.node
-      ? (globalThis as any).require('node:crypto')
-      : null;
-    if (nodeCrypto?.randomBytes) {
-      return new Uint8Array(nodeCrypto.randomBytes(length));
-    }
-  } catch {
-    // Fallback ignored
-  }
-  const fallback = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    fallback[i] = Math.floor(Math.random() * 256);
-  }
-  return fallback;
-}
 
 /**
  * Encodes raw bytes into a base62 string.

@@ -1,5 +1,6 @@
 import { RemoteDBAdapter } from './index.js';
 import { safeDynamicImport, safeDynamicRequire } from '../../utils/dynamic.js';
+import { extractDocumentId } from '../../utils/sql.js';
 import {
   DeltaChange,
   DeltaChanges,
@@ -84,11 +85,7 @@ function extractTimestamp(val: any): number {
 }
 
 function getRowId(data: any, primaryKey: string, documentId?: unknown): string {
-  const id = data?.[primaryKey] ?? documentId ?? data?.id;
-  if (id === undefined || id === null || String(id).length === 0) {
-    throw new Error('Firestore change is missing its document ID.');
-  }
-  return String(id);
+  return extractDocumentId(data, primaryKey, documentId, 'Firestore');
 }
 
 export class FirestoreRemoteAdapter implements RemoteDBAdapter {

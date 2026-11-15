@@ -1,6 +1,7 @@
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
+import { requireSecureRandomBytes } from '../utils/crypto.js';
 import type { BackupDatabase, BackupStorage } from './index.js';
 
 const MAGIC_HEADER = new Uint8Array([0x4c, 0x4c, 0x45, 0x4e, 0x43, 0x31]); // "LLENC1"
@@ -19,13 +20,10 @@ export interface RestoreEncryptedBackupOptions {
 }
 
 function getRandomBytes(length: number): Uint8Array {
-  const crypto = globalThis.crypto;
-  if (!crypto?.getRandomValues) {
-    throw new Error(
-      'Secure random generation is unavailable for backup encryption.',
-    );
-  }
-  return crypto.getRandomValues(new Uint8Array(length));
+  return requireSecureRandomBytes(
+    length,
+    'Secure random generation is unavailable for backup encryption.',
+  );
 }
 
 const ITERATIONS_LENGTH = 4;

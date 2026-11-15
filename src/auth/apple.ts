@@ -1,4 +1,12 @@
 import { resolveUnifiedUserId, type AuthUser } from './identity.js';
+import {
+  base64UrlEncode,
+  getRandomBytes as secureRandomBytes,
+} from '../utils/crypto.js';
+import {
+  createInMemoryOAuthTokenStore,
+  createOAuthTokenStore,
+} from '../utils/oauth.js';
 export const APPLE_AUTHORIZATION_ENDPOINT =
   'https://appleid.apple.com/auth/authorize';
 export const APPLE_TOKEN_ENDPOINT = 'https://appleid.apple.com/auth/token';
@@ -78,39 +86,6 @@ export interface AppleAuthClientOptions {
   fetch?: typeof fetch;
 }
 
-function secureRandomBytes(length: number): Uint8Array {
-  const crypto =
-    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-  if (!crypto?.getRandomValues) {
-    const fallback = new Uint8Array(length);
-    for (let i = 0; i < length; i++) {
-      fallback[i] = Math.floor(Math.random() * 256);
-    }
-    return fallback;
-  }
-  return crypto.getRandomValues(new Uint8Array(length));
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  const alphabet =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-  let result = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
-    result += alphabet[first >> 2];
-    result +=
-      alphabet[((first & 3) << 4) | (second === undefined ? 0 : second >> 4)];
-    if (second !== undefined) {
-      result +=
-        alphabet[((second & 15) << 2) | (third === undefined ? 0 : third >> 6)];
-    }
-    if (third !== undefined) result += alphabet[third & 63];
-  }
-  return result;
-}
-
 function parseJwtClaims(jwt: string): Record<string, any> {
   try {
     const parts = jwt.split('.');
@@ -142,48 +117,14 @@ function validateUser(value: unknown): value is AppleUser {
 }
 
 export function createInMemoryAppleTokenStore(): AppleAuthTokenStore {
-  let storedTokens: AppleAuthTokens | null = null;
-  let storedUser: AppleUser | null = null;
-  return {
-    getTokens: async () => storedTokens,
-    setTokens: async (tokens) => {
-      storedTokens = tokens;
-    },
-    removeTokens: async () => {
-      storedTokens = null;
-    },
-    getUser: async () => storedUser,
-    setUser: async (user) => {
-      storedUser = user;
-    },
-  };
+  return createInMemoryOAuthTokenStore<AppleAuthTokens, AppleUser>();
 }
 
 export function createAppleAuthTokenStore(
   storage: AppleAuthKeyValueStorage,
   prefix = 'local-lite-apple-auth',
 ): AppleAuthTokenStore {
-  const tokensKey = `${prefix}-tokens`;
-  const userKey = `${prefix}-user`;
-  return {
-    getTokens: async () => {
-      const raw = await storage.getItem(tokensKey);
-      return validateTokens(raw) ? raw : null;
-    },
-    setTokens: (tokens) => storage.setItem(tokensKey, tokens),
-    removeTokens: () => storage.removeItem(tokensKey),
-    getUser: async () => {
-      const raw = await storage.getItem(userKey);
-      return validateUser(raw) ? raw : null;
-    },
-    setUser: async (user) => {
-      if (user) {
-        await storage.setItem(userKey, user);
-      } else {
-        await storage.removeItem(userKey);
-      }
-    },
-  };
+  return createOAuthTokenStore(storage, prefix, validateTokens, validateUser);
 }
 
 export class AppleAuthClient {

@@ -1,6 +1,7 @@
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { utf8ToBytes } from '@noble/hashes/utils.js';
+import { base64UrlEncode } from '../utils/crypto.js';
 import { generateUUID } from '../utils/uuid.js';
 import { timingSafeEqual } from './generator.js';
 import {
@@ -9,36 +10,14 @@ import {
   VerifySignedTokenResult,
 } from './types.js';
 
+export { base64UrlEncode };
+
 const B64URL_ALPHABET =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 const B64URL_LOOKUP = new Uint8Array(256);
 for (let i = 0; i < B64URL_ALPHABET.length; i++) {
   B64URL_LOOKUP[B64URL_ALPHABET.charCodeAt(i)] = i;
-}
-
-export function base64UrlEncode(bytes: Uint8Array): string {
-  let result = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const first = bytes[i];
-    const second = bytes[i + 1];
-    const third = bytes[i + 2];
-    result += B64URL_ALPHABET[first >> 2];
-    result +=
-      B64URL_ALPHABET[
-        ((first & 3) << 4) | (second === undefined ? 0 : second >> 4)
-      ];
-    if (second !== undefined) {
-      result +=
-        B64URL_ALPHABET[
-          ((second & 15) << 2) | (third === undefined ? 0 : third >> 6)
-        ];
-    }
-    if (third !== undefined) {
-      result += B64URL_ALPHABET[third & 63];
-    }
-  }
-  return result;
 }
 
 export function base64UrlDecode(str: string): Uint8Array {

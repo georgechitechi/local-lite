@@ -19,3 +19,31 @@ export function isInternalTable(tableName: string): boolean {
   if (lower === 'schema_migrations') return true;
   return false;
 }
+
+const READ_QUERY_REGEX = /^(?:SELECT|WITH|EXPLAIN)\b/i;
+const READ_ONLY_PRAGMA_REGEX = /^PRAGMA\b/i;
+const MUTATING_PRAGMA_REGEX = /=|wal_checkpoint|shrink_memory|optimize/i;
+
+/**
+ * Determines whether a SQLite statement is a read-only query (SELECT/WITH/EXPLAIN or non-mutating PRAGMA).
+ */
+export function isReadQuery(sql: string): boolean {
+  if (READ_QUERY_REGEX.test(sql)) return true;
+  return READ_ONLY_PRAGMA_REGEX.test(sql) && !MUTATING_PRAGMA_REGEX.test(sql);
+}
+
+/**
+ * Extracts a required document/row ID from a record using primaryKey, an optional fallback ID, or `id`.
+ */
+export function extractDocumentId(
+  row: any,
+  primaryKey: string,
+  fallbackId?: unknown,
+  providerLabel = 'Remote',
+): string {
+  const id = row?.[primaryKey] ?? fallbackId ?? row?.id;
+  if (id === undefined || id === null || String(id).length === 0) {
+    throw new Error(`${providerLabel} change is missing its document ID.`);
+  }
+  return String(id);
+}

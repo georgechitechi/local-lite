@@ -3,6 +3,7 @@ import {
   RemoteBackupArchive,
   RemoteDBAdapter,
 } from './index.js';
+import { extractDocumentId } from '../../utils/sql.js';
 import {
   DeltaChange,
   DeltaChanges,
@@ -37,11 +38,7 @@ function getRowTimestamp(value: unknown, fallback?: unknown): number {
 }
 
 function getRowId(row: any, primaryKey: string): string {
-  const id = row?.[primaryKey] ?? row?._id ?? row?.id;
-  if (id === undefined || id === null || String(id).length === 0) {
-    throw new Error('Convex change is missing its document ID.');
-  }
-  return String(id);
+  return extractDocumentId(row, primaryKey, row?._id, 'Convex');
 }
 
 export interface ConvexRemoteAdapterOptions {
