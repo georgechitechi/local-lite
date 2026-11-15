@@ -1,3 +1,7 @@
+import { sha256 } from '@noble/hashes/sha2.js';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
+import { base64UrlEncode, requireSecureRandomBytes } from './crypto.js';
+
 export interface OAuthKeyValueStorage {
   getItem(key: string): Promise<unknown>;
   setItem(key: string, value: unknown): Promise<void>;
@@ -87,4 +91,29 @@ export function throwOAuthError(
       payload.error ||
       `${providerLabel} OAuth request failed (${status}).`,
   );
+}
+
+export interface PkceChallengePair {
+  codeVerifier: string;
+  codeChallenge: string;
+  state: string;
+}
+
+/**
+ * Generates a PKCE S256 verifier/challenge pair and an OAuth state token using a CSPRNG.
+ */
+export function createPkceChallengePair(
+  randomBytes: (length: number) => Uint8Array = requireSecureRandomBytes,
+): PkceChallengePair {
+  const verifierBytes = randomBytes(32);
+  const stateBytes = randomBytes(32);
+  if (verifierBytes.length !== 32 || stateBytes.length !== 32) {
+    throw new Error(
+      'The randomBytes provider returned an invalid number of bytes.',
+    );
+  }
+  const codeVerifier = base64UrlEncode(verifierBytes);
+  const codeChallenge = base64UrlEncode(sha256(utf8ToBytes(codeVerifier)));
+  const state = base64UrlEncode(stateBytes);
+  return { codeVerifier, codeChallenge, state };
 }

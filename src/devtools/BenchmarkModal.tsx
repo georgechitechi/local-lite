@@ -2,20 +2,7 @@ import React, { useState } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
 import { escapeIdentifier } from '../utils/sql.js';
-
-let RN: any;
-try {
-  RN = require('react-native');
-} catch {
-  // Web / DOM environment
-}
-
-let RNSafeArea: any;
-try {
-  RNSafeArea = require('react-native-safe-area-context');
-} catch {
-  // Web / DOM environment or not installed
-}
+import { RN, RNSafeArea, devtoolsBaseRNStyles } from './shared.js';
 
 const now = (): number =>
   typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -1302,29 +1289,21 @@ const styles =
   RN && RN.StyleSheet
     ? RN.StyleSheet.create({
         fullScreenSafe: {
-          flex: 1,
-          height: '100%',
+          ...devtoolsBaseRNStyles.fullScreenSafe,
           backgroundColor: '#111827',
         },
         topBar: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 18,
-          paddingVertical: 14,
+          ...devtoolsBaseRNStyles.topBar,
           backgroundColor: '#1F2937',
-          borderBottomWidth: 1,
           borderBottomColor: '#374151',
         },
         topBarTitle: {
+          ...devtoolsBaseRNStyles.topBarTitle,
           color: '#F9FAFB',
-          fontSize: 17,
-          fontWeight: '700',
         },
         topBarSub: {
+          ...devtoolsBaseRNStyles.topBarSub,
           color: '#9CA3AF',
-          fontSize: 11,
-          marginTop: 2,
         },
         closeCircle: {
           width: 32,

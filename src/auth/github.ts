@@ -1,7 +1,7 @@
 import { resolveUnifiedUserId, type AuthUser } from './identity.js';
 import {
   base64UrlEncode,
-  getRandomBytes as secureRandomBytes,
+  requireSecureRandomBytes as secureRandomBytes,
 } from '../utils/crypto.js';
 import {
   createInMemoryOAuthTokenStore,

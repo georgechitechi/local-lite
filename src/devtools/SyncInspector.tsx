@@ -3,20 +3,7 @@ import { LocalFirstClient } from '../core/client.js';
 import { useSyncStatus } from '../react/status.js';
 import { BenchmarkModal } from './BenchmarkModal.js';
 import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
-
-let RN: any;
-try {
-  RN = require('react-native');
-} catch {
-  // Web / DOM environment
-}
-
-let RNSafeArea: any;
-try {
-  RNSafeArea = require('react-native-safe-area-context');
-} catch {
-  // Web / DOM environment or not installed
-}
+import { RN, RNSafeArea, devtoolsBaseRNStyles } from './shared.js';
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
@@ -1266,26 +1253,7 @@ export function SyncInspector({
 const rnStyles =
   RN && RN.StyleSheet
     ? RN.StyleSheet.create({
-        fullScreenSafe: {
-          flex: 1,
-          height: '100%',
-        },
-        topBar: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 18,
-          paddingVertical: 14,
-          borderBottomWidth: 1,
-        },
-        topBarTitle: {
-          fontSize: 17,
-          fontWeight: '700',
-        },
-        topBarSub: {
-          fontSize: 11,
-          marginTop: 2,
-        },
+        ...devtoolsBaseRNStyles,
         statusBadge: {
           paddingHorizontal: 8,
           paddingVertical: 3,

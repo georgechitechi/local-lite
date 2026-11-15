@@ -1,5 +1,3 @@
-import { sha256 } from '@noble/hashes/sha2.js';
-import { utf8ToBytes } from '@noble/hashes/utils.js';
 import type {
   BackupAccessTokenProvider,
   BackupStorage,
@@ -14,10 +12,7 @@ import type {
 } from './encryption.js';
 import type { GoogleAuthClient } from '../auth/google.js';
 import {
-  base64UrlEncode,
-  requireSecureRandomBytes as secureRandomBytes,
-} from '../utils/crypto.js';
-import {
+  createPkceChallengePair,
   parseOAuthTokenResponse,
   throwOAuthError,
 } from '../utils/oauth.js';
@@ -379,18 +374,9 @@ export class GoogleDriveBackupClient implements CloudBackupClient {
       return connected;
     }
 
-    const randomBytes = this.options.randomBytes ?? secureRandomBytes;
-    const verifierBytes = randomBytes(32);
-    const stateBytes = randomBytes(32);
-    if (verifierBytes.length !== 32 || stateBytes.length !== 32) {
-      throw new Error(
-        'The randomBytes provider returned an invalid number of bytes.',
-      );
-    }
-
-    const codeVerifier = base64UrlEncode(verifierBytes);
-    const codeChallenge = base64UrlEncode(sha256(utf8ToBytes(codeVerifier)));
-    const state = base64UrlEncode(stateBytes);
+    const { codeVerifier, codeChallenge, state } = createPkceChallengePair(
+      this.options.randomBytes,
+    );
     const authorizationParams = new URLSearchParams({
       client_id: this.options.clientId!,
       redirect_uri: this.options.redirectUri!,
