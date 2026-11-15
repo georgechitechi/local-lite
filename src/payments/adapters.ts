@@ -15,6 +15,40 @@ function toBase64(value: string): string {
   throw new Error('No base64 encoder available in this runtime.');
 }
 
+function timingSafeEqualHex(a: string, b: string): boolean {
+  const left = a.trim().toLowerCase();
+  const right = b.trim().toLowerCase();
+  if (!left || left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+async function hmacHex(
+  algorithm: 'SHA-256' | 'SHA-512',
+  secret: string,
+  payload: string,
+): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error('Web Crypto subtle API is required for webhook verification.');
+  }
+  const encoder = new TextEncoder();
+  const key = await subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: algorithm },
+    false,
+    ['sign'],
+  );
+  const sig = await subtle.sign('HMAC', key, encoder.encode(payload));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export function formatKenyanPhone(phone: string | number): string {
   if (!phone) return '';
   const cleaned = String(phone).replace(/[^\d]/g, '');
@@ -318,11 +352,64 @@ export function createPaystackAdapter(
         raw: data,
       };
     },
+    async verifyWebhook(request: Request, context?: { rawBody?: string }): Promise<PaymentWebhookResult> {
+      const signature = request.headers.get('x-paystack-signature') || '';
+      const rawBody = context?.rawBody ?? (await request.text());
+      if (!signature || !rawBody) {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Missing Paystack signature or payload.',
+        };
+      }
+      const expected = await hmacHex('SHA-512', options.secretKey, rawBody);
+      if (!timingSafeEqualHex(signature, expected)) {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Invalid Paystack webhook signature.',
+        };
+      }
+      const event: any = JSON.parse(rawBody);
+      const data = event?.data || {};
+      const eventName = String(event?.event || '');
+      if (eventName === 'charge.success') {
+        return {
+          verified: true,
+          actionId: data.reference,
+          providerRef: data.reference,
+          receiptNumber: String(data.id || data.reference || ''),
+          amount:
+            typeof data.amount === 'number' ? data.amount / 100 : undefined,
+          currency: data.currency ? String(data.currency).toUpperCase() : undefined,
+          status: 'completed',
+          rawPayload: event,
+        };
+      }
+      if (eventName === 'charge.failed') {
+        return {
+          verified: true,
+          actionId: data.reference,
+          providerRef: data.reference,
+          status: 'failed',
+          error: String(data.gateway_response || 'Paystack charge failed.'),
+          rawPayload: event,
+        };
+      }
+      return {
+        verified: true,
+        actionId: data.reference,
+        providerRef: data.reference,
+        status: 'pending',
+        rawPayload: event,
+      };
+    },
   };
 }
 
 export interface StripeCheckoutAdapterOptions {
   secretKey: string;
+  webhookSecret?: string;
   supportedCurrencies?: string[] | '*';
   supportedCountries?: string[] | '*';
   fetch?: typeof fetch;
@@ -385,6 +472,96 @@ export function createStripeCheckoutAdapter(
         providerRef: data.id,
         checkoutUrl: data.url,
         raw: data,
+      };
+    },
+    async verifyWebhook(request: Request, context?: { rawBody?: string }): Promise<PaymentWebhookResult> {
+      if (!options.webhookSecret) {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Stripe webhookSecret is not configured.',
+        };
+      }
+      const header = request.headers.get('stripe-signature') || '';
+      const rawBody = context?.rawBody ?? (await request.text());
+      const parts = Object.fromEntries(
+        header.split(',').map((part) => {
+          const [k, v] = part.split('=');
+          return [k?.trim(), v?.trim()];
+        }),
+      );
+      const timestamp = parts.t;
+      const v1 = parts.v1;
+      if (!timestamp || !v1 || !rawBody) {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Missing Stripe signature or payload.',
+        };
+      }
+      const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+      if (!Number.isFinite(ageSeconds) || ageSeconds > 300) {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Stripe webhook timestamp is outside tolerance.',
+        };
+      }
+      const expected = await hmacHex(
+        'SHA-256',
+        options.webhookSecret,
+        `${timestamp}.${rawBody}`,
+      );
+      if (!timingSafeEqualHex(v1, expected)) {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Invalid Stripe webhook signature.',
+        };
+      }
+
+      const event: any = JSON.parse(rawBody);
+      const session = event?.data?.object || {};
+      const eventType = String(event?.type || '');
+      if (
+        eventType === 'checkout.session.completed' ||
+        eventType === 'checkout.session.async_payment_succeeded'
+      ) {
+        return {
+          verified: true,
+          actionId: session.client_reference_id,
+          providerRef: session.id,
+          receiptNumber: String(session.payment_intent || session.id || ''),
+          amount:
+            typeof session.amount_total === 'number'
+              ? session.amount_total / 100
+              : undefined,
+          currency: session.currency
+            ? String(session.currency).toUpperCase()
+            : undefined,
+          status: 'completed',
+          rawPayload: event,
+        };
+      }
+      if (
+        eventType === 'checkout.session.expired' ||
+        eventType === 'checkout.session.async_payment_failed'
+      ) {
+        return {
+          verified: true,
+          actionId: session.client_reference_id,
+          providerRef: session.id,
+          status: 'failed',
+          error: 'Stripe checkout failed or expired.',
+          rawPayload: event,
+        };
+      }
+      return {
+        verified: true,
+        actionId: session.client_reference_id,
+        providerRef: session.id,
+        status: 'pending',
+        rawPayload: event,
       };
     },
   };

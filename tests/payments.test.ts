@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDarajaAdapter,
@@ -284,5 +285,82 @@ describe('local-lite/payments', () => {
     );
     expect(okCb.status).toBe(200);
     expect(completed).toEqual(['act_999:OK12345']);
+  });
+
+  it('verifies Stripe and Paystack signed webhooks', async () => {
+    const stripeSecret = 'whsec_test_123';
+    const stripe = createStripeCheckoutAdapter({
+      secretKey: 'sk_test',
+      webhookSecret: stripeSecret,
+    });
+
+    const stripePayload = JSON.stringify({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_webhook',
+          client_reference_id: 'act_stripe_wh',
+          payment_intent: 'pi_12345',
+          amount_total: 4950,
+          currency: 'usd',
+        },
+      },
+    });
+    const ts = Math.floor(Date.now() / 1000);
+    const stripeSig = crypto
+      .createHmac('sha256', stripeSecret)
+      .update(`${ts}.${stripePayload}`)
+      .digest('hex');
+
+    const stripeWh = await stripe.verifyWebhook!(
+      new Request('https://api.example.com/payments/callback?provider=stripe', {
+        method: 'POST',
+        headers: { 'stripe-signature': `t=${ts},v1=${stripeSig}` },
+        body: stripePayload,
+      }),
+    );
+    expect(stripeWh.verified).toBe(true);
+    expect(stripeWh.status).toBe('completed');
+    expect(stripeWh.amount).toBe(49.5);
+    expect(stripeWh.currency).toBe('USD');
+    expect(stripeWh.actionId).toBe('act_stripe_wh');
+
+    const badStripeWh = await stripe.verifyWebhook!(
+      new Request('https://api.example.com/payments/callback?provider=stripe', {
+        method: 'POST',
+        headers: { 'stripe-signature': `t=${ts},v1=deadbeef` },
+        body: stripePayload,
+      }),
+    );
+    expect(badStripeWh.verified).toBe(false);
+
+    const paystackKey = 'sk_test_paystack';
+    const paystack = createPaystackAdapter({ secretKey: paystackKey });
+    const paystackPayload = JSON.stringify({
+      event: 'charge.success',
+      data: {
+        id: 987654,
+        reference: 'act_ps_wh',
+        amount: 250000,
+        currency: 'NGN',
+      },
+    });
+    const psSig = crypto
+      .createHmac('sha512', paystackKey)
+      .update(paystackPayload)
+      .digest('hex');
+
+    const psWh = await paystack.verifyWebhook!(
+      new Request('https://api.example.com/payments/callback?provider=paystack', {
+        method: 'POST',
+        headers: { 'x-paystack-signature': psSig },
+        body: paystackPayload,
+      }),
+    );
+    expect(psWh.verified).toBe(true);
+    expect(psWh.status).toBe('completed');
+    expect(psWh.amount).toBe(2500);
+    expect(psWh.currency).toBe('NGN');
+    expect(psWh.actionId).toBe('act_ps_wh');
   });
 });
