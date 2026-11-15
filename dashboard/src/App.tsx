@@ -73,6 +73,21 @@ export function App() {
     ],
   });
 
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    table: TableSummary;
+  } | null>(null);
+
+  const [editTableModal, setEditTableModal] = useState<{
+    table: TableSummary;
+    newName: string;
+    colName: string;
+    colType: string;
+    colNotNull: boolean;
+    colDefault: string;
+  } | null>(null);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('local_lite_theme', theme);
@@ -170,6 +185,20 @@ export function App() {
     const id = window.setInterval(refreshActiveView, pollMs);
     return () => window.clearInterval(id);
   }, [pollMs, refreshActiveView]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contextMenu]);
 
   const handleCreateTable = async () => {
     try {
@@ -320,6 +349,10 @@ export function App() {
                     setFilterCol('');
                     setFilterVal('');
                     if (view !== 'data' && view !== 'schema') setView('data');
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, table: t });
                   }}
                 >
                   <span className="name">{t.name}</span>
@@ -564,6 +597,290 @@ export function App() {
               <button className="btn primary" onClick={handleCreateTable}>
                 Create Table
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item"
+            disabled={readOnly || contextMenu.table.internal}
+            onClick={() => {
+              const t = contextMenu.table;
+              setContextMenu(null);
+              setEditTableModal({
+                table: t,
+                newName: t.name,
+                colName: '',
+                colType: 'TEXT',
+                colNotNull: false,
+                colDefault: '',
+              });
+            }}
+          >
+            <span>Edit Table &amp; Columns</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              const t = contextMenu.table;
+              setContextMenu(null);
+              setSelectedTable(t.name);
+              setView('schema');
+            }}
+          >
+            <span>View Schema</span>
+          </button>
+          <div className="context-menu-sep" />
+          <button
+            className="context-menu-item danger"
+            disabled={readOnly || contextMenu.table.internal}
+            onClick={async () => {
+              const t = contextMenu.table;
+              setContextMenu(null);
+              if (!window.confirm(`Delete ALL rows from "${t.name}"?`)) return;
+              try {
+                setError(null);
+                await apiRequest(`/api/tables/${encodeURIComponent(t.name)}/clear`, {
+                  method: 'POST',
+                });
+                await refreshActiveView();
+              } catch (err: any) {
+                setError(err.message);
+              }
+            }}
+          >
+            <span>Clear Rows</span>
+          </button>
+          <button
+            className="context-menu-item danger"
+            disabled={readOnly || contextMenu.table.internal}
+            onClick={async () => {
+              const t = contextMenu.table;
+              setContextMenu(null);
+              if (!window.confirm(`DROP table "${t.name}" permanently?`)) return;
+              try {
+                setError(null);
+                await apiRequest(`/api/tables/${encodeURIComponent(t.name)}`, {
+                  method: 'DELETE',
+                });
+                if (selectedTable === t.name) setSelectedTable(null);
+                await refreshActiveView();
+              } catch (err: any) {
+                setError(err.message);
+              }
+            }}
+          >
+            <span>Drop Table</span>
+          </button>
+        </div>
+      )}
+
+      {editTableModal && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setEditTableModal(null)}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <strong>Edit Table: {editTableModal.table.name}</strong>
+              <button
+                className="btn"
+                onClick={() => setEditTableModal(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="field-row">
+              <label>Rename Table</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  className="input"
+                  value={editTableModal.newName}
+                  onChange={(e) =>
+                    setEditTableModal((prev) =>
+                      prev ? { ...prev, newName: e.target.value } : null,
+                    )
+                  }
+                />
+                <button
+                  className="btn primary"
+                  onClick={async () => {
+                    try {
+                      setError(null);
+                      const nextName = editTableModal.newName.trim();
+                      await apiRequest(
+                        `/api/tables/${encodeURIComponent(editTableModal.table.name)}`,
+                        {
+                          method: 'PATCH',
+                          body: JSON.stringify({ newName: nextName }),
+                        },
+                      );
+                      if (selectedTable === editTableModal.table.name) {
+                        setSelectedTable(nextName);
+                      }
+                      setEditTableModal(null);
+                      await refreshActiveView();
+                    } catch (err: any) {
+                      setError(err.message);
+                    }
+                  }}
+                >
+                  Rename
+                </button>
+              </div>
+            </div>
+
+            <div className="field-row" style={{ marginTop: 14 }}>
+              <label>Columns ({editTableModal.table.columns.length})</label>
+              <div className="grid-wrap" style={{ maxHeight: 180, marginBottom: 10 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Flags</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editTableModal.table.columns.map((c) => (
+                      <tr key={c.name}>
+                        <td>{c.name}</td>
+                        <td>{c.type || 'ANY'}</td>
+                        <td>
+                          {c.pk > 0 && <span className="badge pk">PK</span>}{' '}
+                          {c.notnull > 0 && <span className="badge">NN</span>}
+                        </td>
+                        <td>
+                          <button
+                            className="btn danger"
+                            disabled={c.pk > 0}
+                            onClick={async () => {
+                              if (!window.confirm(`Drop column "${c.name}"?`)) return;
+                              try {
+                                setError(null);
+                                await apiRequest(
+                                  `/api/tables/${encodeURIComponent(editTableModal.table.name)}`,
+                                  {
+                                    method: 'PATCH',
+                                    body: JSON.stringify({ dropColumn: c.name }),
+                                  },
+                                );
+                                setEditTableModal(null);
+                                await refreshActiveView();
+                              } catch (err: any) {
+                                setError(err.message);
+                              }
+                            }}
+                          >
+                            Drop
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="field-row">
+              <label>Add Column</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  className="input"
+                  style={{ flex: 1, minWidth: 120 }}
+                  placeholder="column_name"
+                  value={editTableModal.colName}
+                  onChange={(e) =>
+                    setEditTableModal((prev) =>
+                      prev ? { ...prev, colName: e.target.value } : null,
+                    )
+                  }
+                />
+                <select
+                  className="input"
+                  style={{ width: 110 }}
+                  value={editTableModal.colType}
+                  onChange={(e) =>
+                    setEditTableModal((prev) =>
+                      prev ? { ...prev, colType: e.target.value } : null,
+                    )
+                  }
+                >
+                  {['TEXT', 'INTEGER', 'REAL', 'BLOB', 'NUMERIC'].map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  style={{ width: 110 }}
+                  placeholder="default..."
+                  value={editTableModal.colDefault}
+                  onChange={(e) =>
+                    setEditTableModal((prev) =>
+                      prev ? { ...prev, colDefault: e.target.value } : null,
+                    )
+                  }
+                />
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: 'auto' }}
+                    checked={editTableModal.colNotNull}
+                    onChange={(e) =>
+                      setEditTableModal((prev) =>
+                        prev ? { ...prev, colNotNull: e.target.checked } : null,
+                      )
+                    }
+                  />
+                  NN
+                </label>
+                <button
+                  className="btn primary"
+                  onClick={async () => {
+                    try {
+                      setError(null);
+                      await apiRequest(
+                        `/api/tables/${encodeURIComponent(editTableModal.table.name)}`,
+                        {
+                          method: 'PATCH',
+                          body: JSON.stringify({
+                            addColumn: {
+                              name: editTableModal.colName.trim(),
+                              type: editTableModal.colType,
+                              notnull: editTableModal.colNotNull,
+                              defaultValue: editTableModal.colDefault,
+                            },
+                          }),
+                        },
+                      );
+                      setEditTableModal(null);
+                      await refreshActiveView();
+                    } catch (err: any) {
+                      setError(err.message);
+                    }
+                  }}
+                >
+                  + Add
+                </button>
+              </div>
             </div>
           </div>
         </div>

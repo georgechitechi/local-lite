@@ -508,6 +508,51 @@ textarea.sql {
   width: 100%;
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 185px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.context-menu-item.danger {
+  color: var(--red);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.context-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 pre {
   margin: 0;
   white-space: pre-wrap;

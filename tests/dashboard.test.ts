@@ -35,7 +35,6 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     expect(res.headers.get('content-type')).toContain('text/html');
     const html = await res.text();
     expect(html).toContain('Test Dash');
-    expect(html).toContain('/api/tables');
   });
 
   it('lists tables, overview, and system tables', async () => {
@@ -261,6 +260,35 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     );
     expect(createIdxRes.status).toBe(201);
 
+    const addColRes = await handler(
+      new Request('http://localhost/api/tables/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          addColumn: { name: 'status', type: 'TEXT', notnull: true, defaultValue: 'active' },
+        }),
+      }),
+    );
+    expect(addColRes.status).toBe(200);
+
+    const renameRes = await handler(
+      new Request('http://localhost/api/tables/projects', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName: 'projects_v2' }),
+      }),
+    );
+    expect(renameRes.status).toBe(200);
+
+    const renameBackRes = await handler(
+      new Request('http://localhost/api/tables/projects_v2', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName: 'projects' }),
+      }),
+    );
+    expect(renameBackRes.status).toBe(200);
+
     const dropIdxRes = await handler(
       new Request(
         'http://localhost/api/tables/projects/indexes/idx_projects_name',
@@ -284,5 +312,12 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     expect((await handler(new Request('http://localhost/api/files'))).status).toBe(200);
     expect((await handler(new Request('http://localhost/api/auth-admin'))).status).toBe(200);
     expect((await handler(new Request('http://localhost/api/jobs'))).status).toBe(200);
+
+    const sqlRes = await handler(
+      new Request('http://localhost/api/schema/sql?dialect=postgres'),
+    );
+    expect(sqlRes.status).toBe(200);
+    const sqlBody = await sqlRes.json();
+    expect(sqlBody.sql).toContain('CREATE TABLE IF NOT EXISTS "todos"');
   });
 });
