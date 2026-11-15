@@ -39,6 +39,7 @@ export interface DeltaChange {
 export interface DeltaChanges {
   timestamp: number;
   changes: DeltaChange[];
+  hasMore?: boolean;
 }
 
 export type ConflictResolution =

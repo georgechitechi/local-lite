@@ -36,6 +36,33 @@ const PUSH_BATCH_SIZE = 50;
 /** Maximum incoming delta changes applied in a single database transaction. */
 const DELTA_CHUNK_SIZE = 250;
 
+/** Default timeout in milliseconds for remote push/pull requests. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+
+/** Safety cap on consecutive paginated pull pages per cycle. */
+const MAX_PULL_PAGES = 100;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return promise;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function stableScopeValue(value: any): any {
   if (Array.isArray(value)) return value.map(stableScopeValue);
   if (value && typeof value === 'object') {
@@ -71,6 +98,8 @@ export interface SyncWorkerOptions {
     | Record<string, any>
     | (() => Record<string, any> | Promise<Record<string, any>>);
   autoPauseOnBackground?: boolean;
+  /** Timeout in ms for remote push/pull calls (0 to disable). Default: 30000 */
+  requestTimeoutMs?: number;
 }
 
 export class SyncWorker {
@@ -90,6 +119,7 @@ export class SyncWorker {
 
   private pushIntervalMs: number;
   private pullIntervalMs: number;
+  private requestTimeoutMs: number;
   private maxRetries: number;
   private autoPauseOnBackground: boolean;
   private isPaused = false;
@@ -144,6 +174,8 @@ export class SyncWorker {
     this.schemaManager = options.schemaManager;
     this.pushIntervalMs = options.pushIntervalMs ?? 5000;
     this.pullIntervalMs = options.pullIntervalMs ?? 10000;
+    this.requestTimeoutMs =
+      options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.syncScope = options.syncScope;
     this.autoPauseOnBackground = options.autoPauseOnBackground ?? true;
 
@@ -541,7 +573,11 @@ export class SyncWorker {
       // Mark records as PROCESSING
       await OutboxStore.markProcessing(this.db, recordIds);
 
-      const pushRes = await this.remote.pushChanges(operations);
+      const pushRes = await withTimeout(
+        this.remote.pushChanges(operations),
+        this.requestTimeoutMs,
+        `Remote push timed out after ${this.requestTimeoutMs}ms`,
+      );
       const durationMs = Date.now() - startTime;
       this.lastPushDurationMs = durationMs;
       this.lastPushTimestamp = Date.now();
@@ -723,30 +759,44 @@ export class SyncWorker {
           : this.syncScope;
       const cursorKey = getScopeCursorKey(scope);
       await this.loadCursor(cursorKey);
-      const sinceTimestamp = this.lastPulledTimestamp;
-      const deltas =
-        scope !== undefined
-          ? await this.remote.fetchChanges(sinceTimestamp, scope)
-          : await this.remote.fetchChanges(sinceTimestamp);
+
+      let totalChangesInCycle = 0;
+      for (let page = 0; page < MAX_PULL_PAGES; page++) {
+        if (this.isPaused) break;
+        const sinceTimestamp = this.lastPulledTimestamp;
+        const deltas = await withTimeout(
+          scope !== undefined
+            ? this.remote.fetchChanges(sinceTimestamp, scope)
+            : this.remote.fetchChanges(sinceTimestamp),
+          this.requestTimeoutMs,
+          `Remote pull timed out after ${this.requestTimeoutMs}ms`,
+        );
+
+        const pageCount = deltas?.changes?.length || 0;
+        totalChangesInCycle += pageCount;
+        if (deltas) {
+          this.totalPulledDeltas += pageCount;
+          await this.applyDeltasLocally(deltas, { cursorKey });
+        }
+
+        const hasMore = Boolean(deltas?.hasMore);
+        if (!hasMore || pageCount === 0) {
+          break;
+        }
+        // Prevent infinite loop if a buggy adapter returns hasMore without advancing timestamp
+        if (deltas?.timestamp !== undefined && deltas.timestamp <= sinceTimestamp) {
+          break;
+        }
+      }
+
       const durationMs = Date.now() - startTime;
       this.lastPullDurationMs = durationMs;
       this.lastPullTimestamp = Date.now();
       this.lastPullError = null;
 
-      const changesCount = deltas?.changes?.length || 0;
-      if (deltas) {
-        this.totalPulledDeltas += changesCount;
-        await this.applyDeltasLocally(deltas, { cursorKey });
-        if (deltas.timestamp && deltas.timestamp > sinceTimestamp) {
-          if (cursorKey === this.lastSyncedAtKey)
-            this.lastPulledTimestamp = deltas.timestamp;
-          await MetaStore.setLastSyncedAt(this.db, deltas.timestamp, cursorKey);
-        }
-      }
-
       const pullEvent: PullEvent = {
         success: true,
-        changesCount,
+        changesCount: totalChangesInCycle,
         durationMs,
         timestamp: this.lastPulledTimestamp,
         error: null,
@@ -827,8 +877,11 @@ export class SyncWorker {
       const queuedEvents: Array<{ event: string; data: any }> = [];
 
       await this.db.transaction(async (tx) => {
-        // Pre-fetch active pending outbox records in 1 query for this chunk to eliminate N+1 bridge roundtrips
-        const pendingOutboxMap = await OutboxStore.getActivePendingMap(tx);
+        // Pre-fetch active pending outbox records for this chunk's rows in 1 query to eliminate N+1 bridge roundtrips
+        const pendingOutboxMap = await OutboxStore.getActivePendingMap(
+          tx,
+          chunk.map((c) => c.rowId),
+        );
 
         for (const change of chunk) {
           const outboxKey = `${change.tableName}:${change.rowId}`;
@@ -975,7 +1028,16 @@ export class SyncWorker {
     this.cursorLoaded = true;
   }
 
-  /** Clears a stale push error after an explicit sync stop/reconfiguration. */
+  /**
+   * Waits for any in-flight delta ingestion queue to drain.
+   */
+  async flush(): Promise<void> {
+    await this.deltaQueue;
+  }
+
+  /**
+   * Clears a stale push error after an explicit sync stop/reconfiguration.
+   */
   clearPushError(): void {
     this.lastPushError = null;
     this.emitStatus();

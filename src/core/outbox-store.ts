@@ -10,6 +10,17 @@ export interface OutboxDeleteClause {
   payloadIn?: Record<string, OutboxFilterValue[]>;
 }
 
+const SQLITE_IN_CHUNK_SIZE = 500;
+
+function chunkArray<T>(items: T[], size: number = SQLITE_IN_CHUNK_SIZE): T[][] {
+  if (items.length <= size) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 /**
  * Maps a raw sync_outbox row into an OutboxRecord.
  */
@@ -133,10 +144,10 @@ export class OutboxStore {
     const query = isInfinite
       ? `SELECT * FROM sync_outbox 
          WHERE status = 'PENDING' OR status = 'FAILED' 
-         ORDER BY timestamp ASC LIMIT ?`
+         ORDER BY timestamp ASC, rowid ASC LIMIT ?`
       : `SELECT * FROM sync_outbox 
          WHERE status = 'PENDING' OR (status = 'FAILED' AND retry_count < ?) 
-         ORDER BY timestamp ASC LIMIT ?`;
+         ORDER BY timestamp ASC, rowid ASC LIMIT ?`;
     const params = isInfinite ? [limit] : [maxRetries, limit];
 
     const rows = await db.execute(query, params);
@@ -172,13 +183,30 @@ export class OutboxStore {
    */
   static async getActivePendingMap(
     tx: LocalTransaction,
+    rowIds?: string[],
   ): Promise<Map<string, OutboxRecord>> {
     const map = new Map<string, OutboxRecord>();
+    if (rowIds && rowIds.length === 0) return map;
     try {
-      const rows = await tx.execute(
-        `SELECT * FROM sync_outbox WHERE status != 'FAILED' ORDER BY timestamp DESC`,
-      );
-      if (!rows || rows.length === 0) return map;
+      const rows: any[] = [];
+      if (rowIds && rowIds.length > 0) {
+        const uniqueRowIds = Array.from(new Set(rowIds));
+        for (const chunk of chunkArray(uniqueRowIds)) {
+          const placeholders = chunk.map(() => '?').join(',');
+          const chunkRows = await tx.execute(
+            `SELECT * FROM sync_outbox WHERE status != 'FAILED' AND row_id IN (${placeholders}) ORDER BY timestamp DESC`,
+            chunk,
+          );
+          if (chunkRows?.length) rows.push(...chunkRows);
+        }
+        rows.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+      } else {
+        const allRows = await tx.execute(
+          `SELECT * FROM sync_outbox WHERE status != 'FAILED' ORDER BY timestamp DESC`,
+        );
+        if (allRows?.length) rows.push(...allRows);
+      }
+      if (rows.length === 0) return map;
 
       for (const r of rows) {
         const record = mapOutboxRow(r);
@@ -202,11 +230,13 @@ export class OutboxStore {
     ids: string[],
   ): Promise<void> {
     if (ids.length === 0) return;
-    const placeholders = ids.map(() => '?').join(',');
-    await db.execute(
-      `UPDATE sync_outbox SET status = 'PROCESSING' WHERE id IN (${placeholders})`,
-      ids,
-    );
+    for (const chunk of chunkArray(ids)) {
+      const placeholders = chunk.map(() => '?').join(',');
+      await db.execute(
+        `UPDATE sync_outbox SET status = 'PROCESSING' WHERE id IN (${placeholders})`,
+        chunk,
+      );
+    }
   }
 
   /**
@@ -231,11 +261,13 @@ export class OutboxStore {
     ids: string[],
   ): Promise<void> {
     if (ids.length === 0) return;
-    const placeholders = ids.map(() => '?').join(',');
-    await db.execute(
-      `DELETE FROM sync_outbox WHERE id IN (${placeholders})`,
-      ids,
-    );
+    for (const chunk of chunkArray(ids)) {
+      const placeholders = chunk.map(() => '?').join(',');
+      await db.execute(
+        `DELETE FROM sync_outbox WHERE id IN (${placeholders})`,
+        chunk,
+      );
+    }
   }
 
   /** Deletes outbox records matching one or more safe, parameterized clauses. */
@@ -335,15 +367,17 @@ export class OutboxStore {
     errorMessage: string,
   ): Promise<void> {
     if (ids.length === 0) return;
-    const placeholders = ids.map(() => '?').join(',');
-    await db.execute(
-      `UPDATE sync_outbox 
-       SET status = 'FAILED', 
-           retry_count = retry_count + 1, 
-           last_error = ? 
-       WHERE id IN (${placeholders})`,
-      [errorMessage, ...ids],
-    );
+    for (const chunk of chunkArray(ids)) {
+      const placeholders = chunk.map(() => '?').join(',');
+      await db.execute(
+        `UPDATE sync_outbox 
+         SET status = 'FAILED', 
+             retry_count = retry_count + 1, 
+             last_error = ? 
+         WHERE id IN (${placeholders})`,
+        [errorMessage, ...chunk],
+      );
+    }
   }
 
   /**
@@ -391,13 +425,15 @@ export class OutboxStore {
   ): Promise<number> {
     try {
       if (ids && ids.length > 0) {
-        const placeholders = ids.map(() => '?').join(',');
-        await db.execute(
-          `UPDATE sync_outbox 
-           SET status = 'PENDING', retry_count = 0, last_error = NULL 
-           WHERE status = 'FAILED' AND id IN (${placeholders})`,
-          ids,
-        );
+        for (const chunk of chunkArray(ids)) {
+          const placeholders = chunk.map(() => '?').join(',');
+          await db.execute(
+            `UPDATE sync_outbox 
+             SET status = 'PENDING', retry_count = 0, last_error = NULL 
+             WHERE status = 'FAILED' AND id IN (${placeholders})`,
+            chunk,
+          );
+        }
         return ids.length;
       } else {
         const rows = await db.execute(
@@ -427,11 +463,13 @@ export class OutboxStore {
   ): Promise<number> {
     try {
       if (ids && ids.length > 0) {
-        const placeholders = ids.map(() => '?').join(',');
-        await db.execute(
-          `DELETE FROM sync_outbox WHERE status = 'FAILED' AND id IN (${placeholders})`,
-          ids,
-        );
+        for (const chunk of chunkArray(ids)) {
+          const placeholders = chunk.map(() => '?').join(',');
+          await db.execute(
+            `DELETE FROM sync_outbox WHERE status = 'FAILED' AND id IN (${placeholders})`,
+            chunk,
+          );
+        }
         return ids.length;
       } else {
         const rows = await db.execute(

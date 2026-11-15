@@ -12,6 +12,15 @@ export interface NodeSqliteDatabaseSync {
   close?(): void;
 }
 
+const READ_QUERY_REGEX = /^(?:SELECT|WITH|EXPLAIN)\b/i;
+const READ_ONLY_PRAGMA_REGEX = /^PRAGMA\b/i;
+const MUTATING_PRAGMA_REGEX = /=|wal_checkpoint|shrink_memory|optimize/i;
+
+function isReadQuery(sql: string): boolean {
+  if (READ_QUERY_REGEX.test(sql)) return true;
+  return READ_ONLY_PRAGMA_REGEX.test(sql) && !MUTATING_PRAGMA_REGEX.test(sql);
+}
+
 /**
  * Adapter for Node.js 22+ built-in `node:sqlite` (DatabaseSync).
  * Provides zero-dependency, native SQLite on modern Node.js runtimes.
@@ -42,10 +51,9 @@ export class NodeSQLiteAdapter implements LocalDBAdapter {
 
   async execute(query: string, params: any[] = []): Promise<any[]> {
     const trimmed = query.trim();
-    const isReader = /^SELECT|^PRAGMA/i.test(trimmed);
 
     // Fast-path: Readers execute directly and synchronously without queuing delay
-    if (isReader) {
+    if (isReadQuery(trimmed)) {
       const stmt = this.getStatement(trimmed);
       return stmt.all(...params);
     }
@@ -71,7 +79,7 @@ export class NodeSQLiteAdapter implements LocalDBAdapter {
           execute: async (q, p = []) => {
             const trimmed = q.trim();
             const stmt = this.getStatement(trimmed);
-            if (/^SELECT|^PRAGMA/i.test(trimmed)) {
+            if (isReadQuery(trimmed)) {
               return stmt.all(...p);
             }
             return [stmt.run(...p)];

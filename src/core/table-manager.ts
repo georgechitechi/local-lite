@@ -107,23 +107,32 @@ export class TableManager {
     // and direct UPDATE when updating an existing row so omitted NOT NULL columns do not fail.
     const updateKeys = keys.filter((k) => k !== primaryKey);
     if (operation === 'UPDATE' && updateKeys.length > 0) {
-      const existing = await TableManager.fetchRow(
-        tx,
-        tableName,
-        rowId,
-        primaryKey,
-        options,
+      const setClause = updateKeys
+        .map((k) => `${escapeIdentifier(k)} = ?`)
+        .join(', ');
+      const setValues = [...updateKeys.map((k) => rowData[k]), rowId];
+      const res = await tx.execute(
+        `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`,
+        setValues,
       );
-      if (existing) {
-        const setClause = updateKeys
-          .map((k) => `${escapeIdentifier(k)} = ?`)
-          .join(', ');
-        const setValues = [...updateKeys.map((k) => rowData[k]), rowId];
-        await tx.execute(
-          `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`,
-          setValues,
+      const meta = res?.[0];
+      const changes =
+        typeof meta?.changes === 'number'
+          ? meta.changes
+          : typeof meta?.rowsAffected === 'number'
+            ? meta.rowsAffected
+            : undefined;
+      if (changes !== undefined) {
+        if (changes > 0) return;
+      } else {
+        const existing = await TableManager.fetchRow(
+          tx,
+          tableName,
+          rowId,
+          primaryKey,
+          options,
         );
-        return;
+        if (existing) return;
       }
     }
 

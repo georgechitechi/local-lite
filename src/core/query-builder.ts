@@ -69,6 +69,10 @@ export interface AggregateResult {
 // Module-scoped SQL compilation helpers (defined once, reused on every query)
 // ---------------------------------------------------------------------------
 
+function escapeLikePattern(value: unknown): string {
+  return String(value).replace(/[\\%_]/g, '\\$&');
+}
+
 /**
  * Compiles a single column comparison value into one or more SQL fragments.
  * Supports null, boolean, scalar, and operator-object forms ($eq, $gt, $in, …).
@@ -138,20 +142,20 @@ function compileComparison(
     const containsVal =
       ops.$contains !== undefined ? ops.$contains : ops.contains;
     if (containsVal !== undefined) {
-      subClauses.push(`${safeCol} LIKE ?`);
-      params.push(`%${containsVal}%`);
+      subClauses.push(`${safeCol} LIKE ? ESCAPE '\\'`);
+      params.push(`%${escapeLikePattern(containsVal)}%`);
     }
     const startsWithVal =
       ops.$startsWith !== undefined ? ops.$startsWith : ops.startsWith;
     if (startsWithVal !== undefined) {
-      subClauses.push(`${safeCol} LIKE ?`);
-      params.push(`${startsWithVal}%`);
+      subClauses.push(`${safeCol} LIKE ? ESCAPE '\\'`);
+      params.push(`${escapeLikePattern(startsWithVal)}%`);
     }
     const endsWithVal =
       ops.$endsWith !== undefined ? ops.$endsWith : ops.endsWith;
     if (endsWithVal !== undefined) {
-      subClauses.push(`${safeCol} LIKE ?`);
-      params.push(`%${endsWithVal}`);
+      subClauses.push(`${safeCol} LIKE ? ESCAPE '\\'`);
+      params.push(`%${escapeLikePattern(endsWithVal)}`);
     }
     const nullVal = ops.$null !== undefined ? ops.$null : ops.null;
     if (nullVal !== undefined) {

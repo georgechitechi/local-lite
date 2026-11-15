@@ -89,6 +89,7 @@ export interface LocalFirstClientConfig {
   primaryKey?: string;
   pushIntervalMs?: number;
   pullIntervalMs?: number;
+  requestTimeoutMs?: number;
   maxRetries?: number;
   retry?: number | RetryConfig;
   logger?: SyncLogger | CustomLogger | boolean;
@@ -229,14 +230,22 @@ async function executeFindByIds<T>(
   if (!ids || ids.length === 0) return [];
   const safeTable = escapeIdentifier(tableName);
   const safePk = escapeIdentifier(primaryKey);
-  const placeholders = ids.map(() => '?').join(', ');
+  const CHUNK_SIZE = 500;
   try {
-    const rows = await db.execute(
-      `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
-      ids,
-    );
-    if (!rows || rows.length === 0) return [];
-    const hydrated = rows.map((r) => hydrateRow(tableName, r));
+    const allRows: any[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const placeholders = chunk.map(() => '?').join(', ');
+      const rows = await db.execute(
+        `SELECT * FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
+        chunk,
+      );
+      if (rows && rows.length > 0) {
+        allRows.push(...rows);
+      }
+    }
+    if (allRows.length === 0) return [];
+    const hydrated = allRows.map((r) => hydrateRow(tableName, r));
     return !includeDeleted
       ? hydrated.filter((r) => !isDeletedRecord(r))
       : hydrated;
@@ -288,6 +297,13 @@ export class TransactionalClient {
       (relationship) => relationship.references === tableName,
     );
 
+    // Check restrict/noAction relationships first to fail fast before mutating any child rows.
+    const resolvedChildren: Array<{
+      relationship: RelationshipDefinition;
+      childIds: string[];
+    }> = [];
+
+    const pk = this.parent.getPrimaryKey();
     for (const relationship of relationships) {
       const relatedRows = await this.findMany<Record<string, any>>(
         relationship.table,
@@ -304,27 +320,37 @@ export class TransactionalClient {
         );
       }
 
+      const childIds = relatedRows
+        .map((r) => r[pk])
+        .filter((id) => id !== undefined && id !== null)
+        .map((id) => String(id));
+      if (childIds.length > 0) {
+        resolvedChildren.push({ relationship, childIds });
+      }
+    }
+
+    for (const { relationship, childIds } of resolvedChildren) {
+      const action = relationship.onDelete ?? 'noAction';
       if (action === 'setNull') {
-        for (const row of relatedRows) {
-          const childId = row[this.parent.getPrimaryKey()];
-          if (childId !== undefined && childId !== null) {
-            await this.update(
-              relationship.table,
-              String(childId),
-              { [relationship.foreignKey]: null },
-              options,
-            );
-          }
-        }
+        await this.batchSetNull(
+          relationship.table,
+          relationship.foreignKey,
+          childIds,
+          options,
+        );
         continue;
       }
 
-      for (const row of relatedRows) {
-        const childId = row[this.parent.getPrimaryKey()];
-        if (childId !== undefined && childId !== null) {
+      const hasDownstream = this.parent.relationships.some(
+        (rel) => rel.references === relationship.table,
+      );
+      if (!hasDownstream) {
+        await this.batchDeleteRows(relationship.table, childIds, options);
+      } else {
+        for (const childId of childIds) {
           await this.deleteRelated(
             relationship.table,
-            String(childId),
+            childId,
             visited,
             options,
           );
@@ -333,6 +359,145 @@ export class TransactionalClient {
     }
 
     await this.applyMutation(tableName, rowId, 'DELETE', null, options);
+  }
+
+  private async batchSetNull(
+    tableName: string,
+    foreignKey: string,
+    rowIds: string[],
+    options: MutateOptions = {},
+  ): Promise<void> {
+    if (rowIds.length === 0) return;
+    const pk = options.primaryKey ?? this.parent.getPrimaryKey();
+    const timestamp = options.customTimestamp ?? Date.now();
+    const mutOpts = this.parent.localMutationOptions(timestamp);
+    const safeTable = escapeIdentifier(tableName);
+    const safePk = escapeIdentifier(pk);
+    const safeFk = escapeIdentifier(foreignKey);
+
+    let setClause = `${safeFk} = NULL`;
+    const setParams: any[] = [];
+    if (
+      mutOpts.touchColumn &&
+      (mutOpts.autoSchema ||
+        (await this.parent.schemaManager.tableHasColumn(
+          this.tx,
+          tableName,
+          mutOpts.touchColumn,
+        )))
+    ) {
+      setClause += `, ${escapeIdentifier(mutOpts.touchColumn)} = ?`;
+      setParams.push(mutOpts.touchValue);
+    }
+
+    for (let i = 0; i < rowIds.length; i += 500) {
+      const chunk = rowIds.slice(i, i + 500);
+      const placeholders = chunk.map(() => '?').join(', ');
+      await this.tx.execute(
+        `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} IN (${placeholders})`,
+        [...setParams, ...chunk],
+      );
+    }
+
+    const payload = { [foreignKey]: null };
+    if (!options.skipOutbox) {
+      if (!this.parent.coalesceOutbox) {
+        const ops = rowIds.map((id) => ({
+          id: generateUUID(),
+          tableName,
+          rowId: id,
+          operation: 'UPDATE' as SyncOp,
+          payload,
+          timestamp,
+        }));
+        await OutboxStore.insertRecords(this.tx, ops);
+        for (const op of ops) this.queuedOutboxIds.push(op.id);
+      } else {
+        const pendingMap = await OutboxStore.getActivePendingMap(
+          this.tx,
+          rowIds,
+        );
+        for (const id of rowIds) {
+          const outboxId = await this.parent.recordOutboxMutation(
+            this.tx,
+            tableName,
+            id,
+            'UPDATE',
+            payload,
+            timestamp,
+            pendingMap,
+          );
+          if (outboxId) this.queuedOutboxIds.push(outboxId);
+        }
+      }
+    }
+
+    for (const id of rowIds) {
+      this.queuedTableEvents.push({
+        tableName,
+        event: { operation: 'UPDATE', rowId: id, payload, source: 'local' },
+      });
+    }
+  }
+
+  private async batchDeleteRows(
+    tableName: string,
+    rowIds: string[],
+    options: MutateOptions = {},
+  ): Promise<void> {
+    if (rowIds.length === 0) return;
+    const pk = options.primaryKey ?? this.parent.getPrimaryKey();
+    const timestamp = options.customTimestamp ?? Date.now();
+    const safeTable = escapeIdentifier(tableName);
+    const safePk = escapeIdentifier(pk);
+
+    for (let i = 0; i < rowIds.length; i += 500) {
+      const chunk = rowIds.slice(i, i + 500);
+      const placeholders = chunk.map(() => '?').join(', ');
+      await this.tx.execute(
+        `DELETE FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
+        chunk,
+      );
+    }
+
+    if (!options.skipOutbox) {
+      if (!this.parent.coalesceOutbox) {
+        const ops = rowIds.map((id) => ({
+          id: generateUUID(),
+          tableName,
+          rowId: id,
+          operation: 'DELETE' as SyncOp,
+          payload: null,
+          timestamp,
+        }));
+        await OutboxStore.insertRecords(this.tx, ops);
+        for (const op of ops) this.queuedOutboxIds.push(op.id);
+      } else {
+        const pendingMap = await OutboxStore.getActivePendingMap(
+          this.tx,
+          rowIds,
+        );
+        for (const id of rowIds) {
+          const outboxId = await this.parent.recordOutboxMutation(
+            this.tx,
+            tableName,
+            id,
+            'DELETE',
+            null,
+            timestamp,
+            pendingMap,
+          );
+          if (outboxId) this.queuedOutboxIds.push(outboxId);
+        }
+      }
+    }
+
+    for (const id of rowIds) {
+      this.queuedTableEvents.push({
+        tableName,
+        event: { operation: 'DELETE', rowId: id, payload: null, source: 'local' },
+      });
+    }
   }
 
   private async applyMutation(
@@ -465,10 +630,13 @@ export class TransactionalClient {
     tableName: string,
     options?: QueryOptions,
   ): Promise<T[]> {
-    if (
-      !this.parent.db.supportsSqlPushdown ||
-      shouldUseClientSideQuery(options)
-    ) {
+    const fnFallback = shouldUseClientSideQuery(options);
+    if (!this.parent.db.supportsSqlPushdown || fnFallback) {
+      if (fnFallback) {
+        this.parent.syncWorker.logger.warn(
+          `findMany('${tableName}') uses a function predicate; falling back to full-table load in JS memory.`,
+        );
+      }
       const rows = await this.from<T>(tableName).execute();
       return applyQueryOptions<T>(rows, options);
     }
@@ -661,6 +829,7 @@ export class LocalFirstClient {
       primaryKey: this.primaryKey,
       pushIntervalMs: config.pushIntervalMs,
       pullIntervalMs: config.pullIntervalMs,
+      requestTimeoutMs: config.requestTimeoutMs,
       maxRetries: config.maxRetries,
       retry: config.retry,
       logger: config.logger,
@@ -773,27 +942,30 @@ export class LocalFirstClient {
     if (!row || typeof row !== 'object') return row;
     const cols = this.jsonColumns[tableName];
     if (cols && cols.length > 0) {
-      const copy = { ...row };
+      let copy: Record<string, any> | null = null;
       for (const col of cols) {
-        if (typeof copy[col] === 'string') {
-          const val = copy[col].trim();
+        const raw = row[col];
+        if (typeof raw === 'string') {
+          const val = raw.trim();
           if (
             (val.startsWith('{') && val.endsWith('}')) ||
             (val.startsWith('[') && val.endsWith(']'))
           ) {
             try {
-              copy[col] = JSON.parse(val);
+              const parsed = JSON.parse(val);
+              const target = (copy ??= { ...row } as Record<string, any>);
+              target[col] = parsed;
             } catch {
               // keep string if not valid JSON
             }
           }
         }
       }
-      return copy as T;
+      return (copy ?? row) as T;
     }
     if (this.autoHydrateJSON) {
-      const copy = { ...row };
-      for (const [key, val] of Object.entries(copy)) {
+      let copy: Record<string, any> | null = null;
+      for (const [key, val] of Object.entries(row)) {
         if (typeof val === 'string') {
           const trimmed = val.trim();
           if (
@@ -801,14 +973,16 @@ export class LocalFirstClient {
             (trimmed.startsWith('[') && trimmed.endsWith(']'))
           ) {
             try {
-              copy[key] = JSON.parse(trimmed);
+              const parsed = JSON.parse(trimmed);
+              const target = (copy ??= { ...row } as Record<string, any>);
+              target[key] = parsed;
             } catch {
               // keep string
             }
           }
         }
       }
-      return copy as T;
+      return (copy ?? row) as T;
     }
     return row as T;
   }
@@ -1517,7 +1691,13 @@ export class LocalFirstClient {
     tableName: string,
     options?: QueryOptions,
   ): Promise<T[]> {
-    if (!this.db.supportsSqlPushdown || shouldUseClientSideQuery(options)) {
+    const fnFallback = shouldUseClientSideQuery(options);
+    if (!this.db.supportsSqlPushdown || fnFallback) {
+      if (fnFallback) {
+        this.syncWorker.logger.warn(
+          `findMany('${tableName}') uses a function predicate; falling back to full-table load in JS memory.`,
+        );
+      }
       const rows = await this.from<T>(tableName).execute();
       return applyQueryOptions<T>(rows, options);
     }
@@ -1752,6 +1932,7 @@ export class LocalFirstClient {
    */
   async close(): Promise<void> {
     this.stop();
+    await this.syncWorker.flush().catch(() => {});
     if (typeof (this.remote as any).destroy === 'function') {
       (this.remote as any).destroy();
     }

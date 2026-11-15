@@ -52,6 +52,11 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
   private tables = new Map<string, Map<string, ServerSyncRecord>>();
   private changeLog: ServerSyncRecord[] = [];
   private monotonicCursor = 0;
+  private maxChangeLogEntries: number;
+
+  constructor(options: { maxChangeLogEntries?: number } = {}) {
+    this.maxChangeLogEntries = options.maxChangeLogEntries ?? 10000;
+  }
 
   async applyOperations(
     operations: SyncOperation[],
@@ -101,6 +106,17 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
       this.changeLog.push(record);
       applied += 1;
       successfulIds.push(op.id);
+    }
+
+    if (
+      Number.isFinite(this.maxChangeLogEntries) &&
+      this.maxChangeLogEntries > 0 &&
+      this.changeLog.length > this.maxChangeLogEntries
+    ) {
+      this.changeLog.splice(
+        0,
+        this.changeLog.length - this.maxChangeLogEntries,
+      );
     }
 
     return { applied, successfulIds, serverTime, cursor: this.monotonicCursor };
