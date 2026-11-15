@@ -5,14 +5,26 @@ import {
   SettingsResponse,
   TableSummary,
 } from './api';
+import { AuthAdminData, AuthAdminView } from './components/AuthAdminView';
 import { DataView } from './components/DataView';
+import { FilesView } from './components/FilesView';
+import { JobsData, JobsView } from './components/JobsView';
 import { OverviewView } from './components/OverviewView';
 import { SchemaView } from './components/SchemaView';
 import { SettingsView } from './components/SettingsView';
 import { SqlConsoleView } from './components/SqlConsoleView';
 import { SyncSystemView } from './components/SyncSystemView';
 
-type ViewTab = 'data' | 'schema' | 'sql' | 'sync' | 'overview' | 'settings';
+type ViewTab =
+  | 'data'
+  | 'schema'
+  | 'files'
+  | 'jobs'
+  | 'auth'
+  | 'sql'
+  | 'sync'
+  | 'overview'
+  | 'settings';
 
 export function App() {
   const [view, setView] = useState<ViewTab>('data');
@@ -40,7 +52,26 @@ export function App() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [system, setSystem] = useState<Record<string, any[] | null> | null>(null);
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
+  const [filesData, setFilesData] = useState<{
+    exists: boolean;
+    files: any[];
+  } | null>(null);
+  const [jobsData, setJobsData] = useState<JobsData | null>(null);
+  const [authData, setAuthData] = useState<AuthAdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [newTableModal, setNewTableModal] = useState<{
+    open: boolean;
+    name: string;
+    columns: Array<{ name: string; type: string; pk: boolean; notnull: boolean }>;
+  }>({
+    open: false,
+    name: '',
+    columns: [
+      { name: 'id', type: 'TEXT', pk: true, notnull: true },
+      { name: 'title', type: 'TEXT', pk: false, notnull: true },
+    ],
+  });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -89,6 +120,15 @@ export function App() {
         }
       } else if (view === 'schema') {
         await loadTables();
+      } else if (view === 'files') {
+        const f = await apiRequest<{ exists: boolean; files: any[] }>('/api/files');
+        setFilesData(f);
+      } else if (view === 'jobs') {
+        const j = await apiRequest<JobsData>('/api/jobs');
+        setJobsData(j);
+      } else if (view === 'auth') {
+        const a = await apiRequest<AuthAdminData>('/api/auth-admin');
+        setAuthData(a);
       } else if (view === 'overview') {
         const o = await apiRequest<OverviewResponse>('/api/overview');
         setOverview(o);
@@ -131,6 +171,33 @@ export function App() {
     return () => window.clearInterval(id);
   }, [pollMs, refreshActiveView]);
 
+  const handleCreateTable = async () => {
+    try {
+      setError(null);
+      await apiRequest('/api/tables', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newTableModal.name.trim(),
+          columns: newTableModal.columns,
+        }),
+      });
+      const created = newTableModal.name.trim();
+      setNewTableModal({
+        open: false,
+        name: '',
+        columns: [
+          { name: 'id', type: 'TEXT', pk: true, notnull: true },
+          { name: 'title', type: 'TEXT', pk: false, notnull: true },
+        ],
+      });
+      setSelectedTable(created);
+      setView('data');
+      await refreshActiveView();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const visibleTables = tables.filter(
     (t) =>
       (showSystem || !t.internal) &&
@@ -150,9 +217,7 @@ export function App() {
           <span className={`badge ${readOnly ? 'ro' : 'ok'}`}>
             {readOnly ? 'Read-Only' : 'Read / Write'}
           </span>
-          <span className="badge">
-            SQLite {overview?.sqliteVersion || ''}
-          </span>
+          <span className="badge">SQLite {overview?.sqliteVersion || ''}</span>
         </div>
         <div className="top-actions">
           <select
@@ -178,6 +243,9 @@ export function App() {
               [
                 ['data', 'Data'],
                 ['schema', 'Schema & Indexes'],
+                ['files', 'File Storage'],
+                ['jobs', 'Schedules & Actions'],
+                ['auth', 'Auth & API Keys'],
                 ['sql', 'SQL Console'],
                 ['sync', 'Sync & System'],
                 ['overview', 'Overview'],
@@ -196,22 +264,35 @@ export function App() {
 
           <div className="tables-header">
             <span>Tables</span>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                textTransform: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={showSystem}
-                onChange={(e) => setShowSystem(e.target.checked)}
-              />{' '}
-              sys
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {!readOnly && (
+                <button
+                  className="btn"
+                  style={{ padding: '2px 6px', fontSize: 11 }}
+                  onClick={() =>
+                    setNewTableModal((prev) => ({ ...prev, open: true }))
+                  }
+                >
+                  + New
+                </button>
+              )}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  textTransform: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showSystem}
+                  onChange={(e) => setShowSystem(e.target.checked)}
+                />{' '}
+                sys
+              </label>
+            </div>
           </div>
           <div className="table-filter-wrap">
             <input
@@ -296,7 +377,37 @@ export function App() {
             />
           )}
           {view === 'schema' && (
-            <SchemaView tables={tables} showSystem={showSystem} />
+            <SchemaView
+              tables={tables}
+              showSystem={showSystem}
+              readOnly={readOnly}
+              onRefresh={refreshActiveView}
+              onError={setError}
+            />
+          )}
+          {view === 'files' && (
+            <FilesView
+              filesData={filesData}
+              readOnly={readOnly}
+              onRefresh={refreshActiveView}
+              onError={setError}
+            />
+          )}
+          {view === 'jobs' && (
+            <JobsView
+              jobsData={jobsData}
+              readOnly={readOnly}
+              onRefresh={refreshActiveView}
+              onError={setError}
+            />
+          )}
+          {view === 'auth' && (
+            <AuthAdminView
+              authData={authData}
+              readOnly={readOnly}
+              onRefresh={refreshActiveView}
+              onError={setError}
+            />
           )}
           {view === 'sql' && (
             <SqlConsoleView selectedTable={selectedTable} onError={setError} />
@@ -319,6 +430,144 @@ export function App() {
           )}
         </main>
       </div>
+
+      {newTableModal.open && (
+        <div
+          className="modal-backdrop"
+          onClick={() =>
+            setNewTableModal((prev) => ({ ...prev, open: false }))
+          }
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <strong>Create New Table</strong>
+              <button
+                className="btn"
+                onClick={() =>
+                  setNewTableModal((prev) => ({ ...prev, open: false }))
+                }
+              >
+                Close
+              </button>
+            </div>
+            <div className="field-row">
+              <label>Table Name</label>
+              <input
+                className="input"
+                placeholder="e.g. projects"
+                value={newTableModal.name}
+                onChange={(e) =>
+                  setNewTableModal((prev) => ({ ...prev, name: e.target.value }))
+                }
+              />
+            </div>
+            <div className="field-row">
+              <label>Columns</label>
+              {newTableModal.columns.map((col, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    marginBottom: 6,
+                    alignItems: 'center',
+                  }}
+                >
+                  <input
+                    className="input"
+                    placeholder="name"
+                    value={col.name}
+                    onChange={(e) => {
+                      const next = [...newTableModal.columns];
+                      next[idx] = { ...col, name: e.target.value };
+                      setNewTableModal((prev) => ({ ...prev, columns: next }));
+                    }}
+                  />
+                  <select
+                    className="input"
+                    style={{ width: 120 }}
+                    value={col.type}
+                    onChange={(e) => {
+                      const next = [...newTableModal.columns];
+                      next[idx] = { ...col, type: e.target.value };
+                      setNewTableModal((prev) => ({ ...prev, columns: next }));
+                    }}
+                  >
+                    {['TEXT', 'INTEGER', 'REAL', 'BLOB', 'NUMERIC'].map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 3, margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: 'auto' }}
+                      checked={col.pk}
+                      onChange={(e) => {
+                        const next = [...newTableModal.columns];
+                        next[idx] = { ...col, pk: e.target.checked };
+                        setNewTableModal((prev) => ({ ...prev, columns: next }));
+                      }}
+                    />
+                    PK
+                  </label>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 3, margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: 'auto' }}
+                      checked={col.notnull}
+                      onChange={(e) => {
+                        const next = [...newTableModal.columns];
+                        next[idx] = { ...col, notnull: e.target.checked };
+                        setNewTableModal((prev) => ({ ...prev, columns: next }));
+                      }}
+                    />
+                    NN
+                  </label>
+                  <button
+                    className="btn danger"
+                    onClick={() =>
+                      setNewTableModal((prev) => ({
+                        ...prev,
+                        columns: prev.columns.filter((_, i) => i !== idx),
+                      }))
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                className="btn"
+                onClick={() =>
+                  setNewTableModal((prev) => ({
+                    ...prev,
+                    columns: [
+                      ...prev.columns,
+                      { name: '', type: 'TEXT', pk: false, notnull: false },
+                    ],
+                  }))
+                }
+              >
+                + Add Column
+              </button>
+            </div>
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn primary" onClick={handleCreateTable}>
+                Create Table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

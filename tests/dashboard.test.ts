@@ -214,4 +214,75 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     const exported = await exportRes.json();
     expect(exported.tables.todos).toHaveLength(2);
   });
+
+  it('supports table DDL, JSON import, indexes, files, auth-admin, and jobs endpoints', async () => {
+    const handler = createDashboardHandler(db);
+
+    const createTableRes = await handler(
+      new Request('http://localhost/api/tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'projects',
+          columns: [
+            { name: 'id', type: 'TEXT', pk: true, notnull: true },
+            { name: 'name', type: 'TEXT', pk: false, notnull: true },
+          ],
+        }),
+      }),
+    );
+    expect(createTableRes.status).toBe(201);
+
+    const importRes = await handler(
+      new Request('http://localhost/api/tables/projects/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { id: 'p1', name: 'Alpha' },
+            { id: 'p2', name: 'Beta' },
+          ],
+        }),
+      }),
+    );
+    expect(importRes.status).toBe(200);
+    expect((await importRes.json()).imported).toBe(2);
+
+    const createIdxRes = await handler(
+      new Request('http://localhost/api/tables/projects/indexes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'idx_projects_name',
+          columns: ['name'],
+          unique: true,
+        }),
+      }),
+    );
+    expect(createIdxRes.status).toBe(201);
+
+    const dropIdxRes = await handler(
+      new Request(
+        'http://localhost/api/tables/projects/indexes/idx_projects_name',
+        { method: 'DELETE' },
+      ),
+    );
+    expect(dropIdxRes.status).toBe(200);
+
+    const clearRes = await handler(
+      new Request('http://localhost/api/tables/projects/clear', {
+        method: 'POST',
+      }),
+    );
+    expect(clearRes.status).toBe(200);
+
+    const dropRes = await handler(
+      new Request('http://localhost/api/tables/projects', { method: 'DELETE' }),
+    );
+    expect(dropRes.status).toBe(200);
+
+    expect((await handler(new Request('http://localhost/api/files'))).status).toBe(200);
+    expect((await handler(new Request('http://localhost/api/auth-admin'))).status).toBe(200);
+    expect((await handler(new Request('http://localhost/api/jobs'))).status).toBe(200);
+  });
 });

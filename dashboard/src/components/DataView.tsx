@@ -43,6 +43,8 @@ export const DataView: React.FC<DataViewProps> = ({
   onError,
 }) => {
   const [inspectRow, setInspectRow] = useState<any | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('[\n  \n]');
   const [editorState, setEditorState] = useState<{
     open: boolean;
     existing: any | null;
@@ -133,6 +135,48 @@ export const DataView: React.FC<DataViewProps> = ({
     }
   };
 
+  const handleImport = async () => {
+    try {
+      onError(null);
+      const parsed = JSON.parse(importText);
+      const rowsArr = Array.isArray(parsed) ? parsed : [parsed];
+      await apiRequest(`/api/tables/${encodeURIComponent(tableMeta.name)}/import`, {
+        method: 'POST',
+        body: JSON.stringify({ rows: rowsArr }),
+      });
+      setImportOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    }
+  };
+
+  const handleClearTable = async () => {
+    if (!window.confirm(`Delete ALL rows from "${tableMeta.name}"?`)) return;
+    try {
+      onError(null);
+      await apiRequest(`/api/tables/${encodeURIComponent(tableMeta.name)}/clear`, {
+        method: 'POST',
+      });
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    }
+  };
+
+  const handleDropTable = async () => {
+    if (!window.confirm(`DROP table "${tableMeta.name}" permanently?`)) return;
+    try {
+      onError(null);
+      await apiRequest(`/api/tables/${encodeURIComponent(tableMeta.name)}`, {
+        method: 'DELETE',
+      });
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    }
+  };
+
   const formatCell = (v: unknown) => {
     if (v === null || v === undefined) {
       return <span style={{ color: 'var(--muted)' }}>NULL</span>;
@@ -173,7 +217,14 @@ export const DataView: React.FC<DataViewProps> = ({
             onChange={(e) => onFilterValChange(e.target.value)}
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn"
+            disabled={readOnly}
+            onClick={() => setImportOpen(true)}
+          >
+            Import JSON
+          </button>
           <a
             className="btn"
             href={buildApiUrl(
@@ -192,6 +243,24 @@ export const DataView: React.FC<DataViewProps> = ({
           >
             JSON
           </a>
+          {!tableMeta.internal && (
+            <>
+              <button
+                className="btn danger"
+                disabled={readOnly}
+                onClick={handleClearTable}
+              >
+                Clear
+              </button>
+              <button
+                className="btn danger"
+                disabled={readOnly}
+                onClick={handleDropTable}
+              >
+                Drop
+              </button>
+            </>
+          )}
           <button
             className="btn primary"
             disabled={readOnly}
@@ -307,6 +376,37 @@ export const DataView: React.FC<DataViewProps> = ({
               </button>
             </div>
             <pre>{JSON.stringify(inspectRow, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+
+      {importOpen && (
+        <div className="modal-backdrop" onClick={() => setImportOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <strong>Import JSON Rows into {tableMeta.name}</strong>
+              <button className="btn" onClick={() => setImportOpen(false)}>
+                Close
+              </button>
+            </div>
+            <textarea
+              className="sql"
+              style={{ minHeight: 180 }}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn primary" onClick={handleImport}>
+                Import Rows
+              </button>
+            </div>
           </div>
         </div>
       )}

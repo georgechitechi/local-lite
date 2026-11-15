@@ -860,6 +860,137 @@ export function createDashboardHandler(
         }
       }
 
+      if (request.method === 'GET' && pathname === '/api/files') {
+        const blobs = await readRowsIfTableExists(db, '_local_blobs', 500);
+        return jsonResponse({ exists: blobs !== null, files: blobs ?? [] });
+      }
+
+      const fileDeleteMatch = pathname.match(/^\/api\/files\/([^/]+)$/);
+      if (fileDeleteMatch && request.method === 'DELETE') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const fileId = decodeURIComponent(fileDeleteMatch[1]);
+        const exists = await db.execute(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_local_blobs';`,
+        );
+        if (exists?.length) {
+          await db.execute(`DELETE FROM _local_blobs WHERE id = ?;`, [fileId]);
+        }
+        return jsonResponse({ ok: true });
+      }
+
+      if (pathname === '/api/auth-admin') {
+        if (request.method === 'GET') {
+          const [users, sessions, apiKeys] = await Promise.all([
+            readRowsIfTableExists(db, '_local_users', 500),
+            readRowsIfTableExists(db, '_local_sessions', 500),
+            readRowsIfTableExists(db, '_local_api_keys', 500),
+          ]);
+          return jsonResponse({ users, sessions, apiKeys });
+        }
+
+        if (request.method === 'POST') {
+          if (readOnly) {
+            return errorResponse('Dashboard is running in read-only mode.', 403);
+          }
+          const body = (await request.json().catch(() => null)) as {
+            action?: string;
+            id?: string;
+          } | null;
+          const action = String(body?.action ?? '');
+          const id = String(body?.id ?? '');
+          if (!id) return errorResponse('id is required.', 400);
+
+          if (action === 'revoke_session') {
+            await db.execute(`DELETE FROM _local_sessions WHERE id = ?;`, [id]);
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'unlock_user') {
+            await db.execute(
+              `UPDATE _local_users SET failed_attempts = 0, locked_until = NULL WHERE id = ?;`,
+              [id],
+            );
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'revoke_api_key') {
+            await db.execute(
+              `UPDATE _local_api_keys SET revoked_at = ? WHERE id = ?;`,
+              [Date.now(), id],
+            ).catch(async () => {
+              await db.execute(`DELETE FROM _local_api_keys WHERE id = ?;`, [id]);
+            });
+            return jsonResponse({ ok: true });
+          }
+          return errorResponse(`Unsupported auth action "${action}".`, 400);
+        }
+      }
+
+      if (pathname === '/api/jobs') {
+        if (request.method === 'GET') {
+          const [actions, scheduledJobs, jobRuns, outbox] = await Promise.all([
+            readRowsIfTableExists(db, '_local_actions', 500),
+            readRowsIfTableExists(db, '_local_scheduled_jobs', 200),
+            readRowsIfTableExists(db, '_local_job_runs', 200),
+            readRowsIfTableExists(db, 'sync_outbox', 500),
+          ]);
+          return jsonResponse({ actions, scheduledJobs, jobRuns, outbox });
+        }
+
+        if (request.method === 'POST') {
+          if (readOnly) {
+            return errorResponse('Dashboard is running in read-only mode.', 403);
+          }
+          const body = (await request.json().catch(() => null)) as {
+            action?: string;
+            id?: string;
+            enabled?: boolean;
+          } | null;
+          const action = String(body?.action ?? '');
+          const id = String(body?.id ?? '');
+
+          if (action === 'retry_action' && id) {
+            await db.execute(
+              `UPDATE _local_actions SET status = 'pending', attempts = 0, last_error = NULL WHERE id = ?;`,
+              [id],
+            );
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'delete_action' && id) {
+            await db.execute(`DELETE FROM _local_actions WHERE id = ?;`, [id]);
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'clear_completed_actions') {
+            const exists = await db.execute(
+              `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_local_actions';`,
+            );
+            if (exists?.length) {
+              await db.execute(`DELETE FROM _local_actions WHERE status = 'completed';`);
+            }
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'retry_outbox' && id) {
+            await db.execute(
+              `UPDATE sync_outbox SET status = 'pending', retry_count = 0, last_error = NULL WHERE id = ?;`,
+              [id],
+            );
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'toggle_job' && id) {
+            await db.execute(
+              `UPDATE _local_scheduled_jobs SET enabled = ? WHERE id = ?;`,
+              [body?.enabled ? 1 : 0, id],
+            );
+            return jsonResponse({ ok: true });
+          }
+          if (action === 'delete_job' && id) {
+            await db.execute(`DELETE FROM _local_scheduled_jobs WHERE id = ?;`, [id]);
+            return jsonResponse({ ok: true });
+          }
+          return errorResponse(`Unsupported job action "${action}".`, 400);
+        }
+      }
+
       return errorResponse('Not found.', 404);
     } catch (err: any) {
       return errorResponse(err?.message ?? 'Internal server error.', 500);

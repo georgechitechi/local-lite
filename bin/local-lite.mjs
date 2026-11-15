@@ -19,7 +19,7 @@ const targets = {
 const usage = `Usage:
   local-lite install-skills [--target copilot|claude|antigravity|cursor|agent] [--dir <path>] [--force]
   local-lite db:generate --schema <path> [--tables <path>] [--out <dir>] [--name <name>] [--dialect mysql|postgres|sqlite] [--server-schema <path>] [--dry-run]
-  local-lite dashboard [--db <path>] [--port <number>] [--host <host>] [--readonly] [--token <secret>] [--title <title>]
+  local-lite dashboard [--db <path>] [--port <number>] [--ui-port <number>] [--host <host>] [--readonly] [--token <secret>] [--title <title>] [--no-open] [--no-vite]
 
 Commands:
   install-skills  Copy bundled AI skills into your project.
@@ -178,16 +178,22 @@ function parseDashboardArgs(argv) {
   const options = {
     db: ':memory:',
     port: 4321,
+    uiPort: 5173,
     host: '127.0.0.1',
     readOnly: false,
     token: undefined,
     title: undefined,
+    open: true,
+    noVite: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--readonly') options.readOnly = true;
+    else if (arg === '--no-open') options.open = false;
+    else if (arg === '--no-vite') options.noVite = true;
     else if (arg === '--db') options.db = argv[++i];
     else if (arg === '--port') options.port = Number(argv[++i]);
+    else if (arg === '--ui-port') options.uiPort = Number(argv[++i]);
     else if (arg === '--host') options.host = argv[++i];
     else if (arg === '--token') options.token = argv[++i];
     else if (arg === '--title') options.title = argv[++i];
@@ -196,6 +202,9 @@ function parseDashboardArgs(argv) {
   if (!options.db) throw new Error('--db <path> cannot be empty.');
   if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
     throw new Error('--port must be a valid TCP port (0-65535).');
+  }
+  if (!Number.isInteger(options.uiPort) || options.uiPort < 0 || options.uiPort > 65535) {
+    throw new Error('--ui-port must be a valid TCP port (0-65535).');
   }
   return options;
 }
@@ -276,11 +285,45 @@ async function runDashboard(options) {
   await new Promise((resolve) => server.listen(options.port, options.host, resolve));
   const address = server.address();
   const actualPort = typeof address === 'object' && address ? address.port : options.port;
+  const apiOrigin = `http://${options.host}:${actualPort}`;
   const tokenSuffix = options.token ? `?token=${encodeURIComponent(options.token)}` : '';
-  console.log(`local-lite dashboard running at http://${options.host}:${actualPort}/${tokenSuffix}`);
+  console.log(`local-lite API server running at ${apiOrigin}/${tokenSuffix}`);
   console.log(`Database: ${label} (${options.readOnly ? 'read-only' : 'read/write'})`);
 
+  let viteProc = null;
+  const dashboardDir = path.resolve(__dirname, '..', 'dashboard');
+  const viteBin = path.join(dashboardDir, 'node_modules', 'vite', 'bin', 'vite.js');
+  if (!options.noVite) {
+    const { existsSync } = await import('node:fs');
+    if (existsSync(viteBin)) {
+      const { spawn } = await import('node:child_process');
+      const viteArgs = [
+        viteBin,
+        '--host',
+        options.host,
+        '--port',
+        String(options.uiPort),
+      ];
+      if (options.open) {
+        viteArgs.push('--open', tokenSuffix || '/');
+      }
+      viteProc = spawn(process.execPath, viteArgs, {
+        cwd: dashboardDir,
+        env: {
+          ...process.env,
+          LOCAL_LITE_API_TARGET: apiOrigin,
+        },
+        stdio: 'inherit',
+      });
+    } else {
+      console.log('Vite dashboard dependencies not installed; serving built-in fallback UI.');
+    }
+  }
+
   const shutdown = () => {
+    if (viteProc && !viteProc.killed) {
+      try { viteProc.kill(); } catch {}
+    }
     server.close(() => {
       try { close(); } catch {}
       process.exit(0);
