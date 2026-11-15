@@ -4,7 +4,7 @@
 * [⚙️ Configuration](configuration.md)
 * [⚠️ Breaking Changes](breaking-changes.md)
 * [💻 Client API & Query Builder](client-api.md)
-* [⚡ Fast Key-Value & Preferences](kv.md)
+* [⚡ Fast Key-Value & Preferences](kv-store.md)
 * [🔍 Full-Text Search (FTS5)](search.md)
 * [📁 Offline Media & Blob Storage](storage.md)
 * [⏰ Offline Job Scheduler & Cron](scheduler.md)

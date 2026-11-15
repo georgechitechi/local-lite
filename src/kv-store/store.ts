@@ -1,9 +1,9 @@
 import { DBExecutable } from '../core/schema-manager.js';
-import { KVRecord } from './types.js';
+import { KVStoreRecord } from './types.js';
 
-export const DEFAULT_KV_TABLE = '_local_kv';
+export const DEFAULT_KV_STORE_TABLE = '_local_kv_store';
 
-export function mapKVRow(r: any): KVRecord {
+export function mapKVStoreRow(r: any): KVStoreRecord {
   let val = r.value;
   const type = r.type;
 
@@ -32,7 +32,7 @@ export function mapKVRow(r: any): KVRecord {
 export class KVStore {
   static async ensureSchema(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
   ): Promise<void> {
     await db.execute(
       `CREATE TABLE IF NOT EXISTS ${tableName} (
@@ -52,7 +52,7 @@ export class KVStore {
 
   static async set(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
     key: string,
     valueStr: string,
     type: string,
@@ -73,20 +73,20 @@ export class KVStore {
 
   static async get(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
     key: string,
-  ): Promise<KVRecord | null> {
+  ): Promise<KVStoreRecord | null> {
     const rows = await db.execute(
       `SELECT * FROM ${tableName} WHERE key = ? LIMIT 1;`,
       [key],
     );
     if (!rows || rows.length === 0) return null;
-    return mapKVRow(rows[0]);
+    return mapKVStoreRow(rows[0]);
   }
 
   static async delete(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
     key: string,
   ): Promise<boolean> {
     await db.execute(`DELETE FROM ${tableName} WHERE key = ?;`, [key]);
@@ -95,7 +95,7 @@ export class KVStore {
 
   static async listKeys(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
     prefix?: string,
   ): Promise<string[]> {
     let rows: any[];
@@ -118,14 +118,14 @@ export class KVStore {
 
   static async clear(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
   ): Promise<void> {
     await db.execute(`DELETE FROM ${tableName};`);
   }
 
   static async pruneExpired(
     db: DBExecutable,
-    tableName: string = DEFAULT_KV_TABLE,
+    tableName: string = DEFAULT_KV_STORE_TABLE,
   ): Promise<number> {
     const now = Date.now();
     await db.execute(

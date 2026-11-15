@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 
 /**
- * Reactive React hook for client.kv key-value preferences.
+ * Reactive React hook for client.kvStore key-value preferences.
  * Automatically re-renders whenever the key is updated or deleted.
  *
  * Example:
- * const [theme, setTheme, loading] = useKV(client, 'theme', 'light');
+ * const [theme, setTheme, loading] = useKVStore(client, 'theme', 'light');
  */
-export function useKV<T = any>(
+export function useKVStore<T = any>(
   client: LocalFirstClient | null | undefined,
   key: string,
   defaultValue?: T,
@@ -27,7 +27,7 @@ export function useKV<T = any>(
 
     const load = async () => {
       try {
-        const val = await client.kv.get<T>(key, defaultValue);
+        const val = await client.kvStore.get<T>(key, defaultValue);
         if (isMounted) {
           setValueState(val);
           setLoading(false);
@@ -39,7 +39,7 @@ export function useKV<T = any>(
 
     load();
 
-    const unsubscribe = client.events.on('_local_kv', (e: any) => {
+    const unsubscribe = client.events.on('_local_kv_store', (e: any) => {
       if (!e || e.key === key || !e.key) {
         load();
       }
@@ -51,14 +51,14 @@ export function useKV<T = any>(
     };
   }, [client, key, defaultValue]);
 
-  const setKVValue = useCallback(
+  const setKVStoreValue = useCallback(
     async (newValue: T) => {
       if (!client) return;
-      await client.kv.set(key, newValue);
+      await client.kvStore.set(key, newValue);
       setValueState(newValue);
     },
     [client, key],
   );
 
-  return [value, setKVValue, loading];
+  return [value, setKVStoreValue, loading];
 }

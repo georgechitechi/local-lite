@@ -101,7 +101,7 @@ The package ships [Agent Skills](./skills) that AI coding assistants can load:
 * `local-lite-backups`: Cloud backups (OneDrive, Google Drive), AES-256-GCM database encryption, and restore.
 * `local-lite-schema`: Declarative cascading deletions (`onDelete`), append-only migrations, and FTS5 search.
 * `local-lite-storage`: Blob and file management, ExpoFileDriver, and cloud storage bucket sync.
-* `local-lite-react`: Reactive hooks (`useLiveQuery`, `useSyncStatus`, `useLocalAuth`, `useKV`), and 0ms optimistic writes.
+* `local-lite-react`: Reactive hooks (`useLiveQuery`, `useSyncStatus`, `useLocalAuth`, `useKVStore`), and 0ms optimistic writes.
 * `local-lite-offline-actions`: Queued mutation outbox, encrypted secret preferences, and background scheduler.
 * `local-lite-custom-adapter`: Implementing custom REST, GraphQL, or WebSocket remote database adapters.
 * `local-lite-upgrade`: Migration checklist and breaking change reviews across version upgrades.
@@ -135,7 +135,7 @@ This recovers sync state; it does not repair corrupt SQLite files or cancel hung
 * **🔑 Google Sign-In Out of the Box:** Secure, zero-backend Google OAuth 2.0 (PKCE) authentication with automatic token refresh, user profile retrieval, persistent session storage, and `useGoogleAuth()` hook.
 * **📨 Action Outbox & Direct Email:** Enqueue transactional emails offline with 0ms local latency. Send directly via Nodemailer SMTP, Resend, SendGrid, Postmark, or Dev Mailbox. Full support for React Email JSX, auto-hydrating mobile `file://` attachments, rate limiting, and type-safe contracts (`defineAction`).
 * **🌐 Turnkey Server Endpoints (`local-lite/server`):** Mount self-hosted sync (`createSyncEndpoint`) and secure email relay (`createEmailEndpoint`) endpoints in 1 line of code for Next.js, Express, Fastify, or Node http.
-* **⚡ Fast Key-Value & Encrypted Preferences (`client.kv`):** Typed storage, TTL expiration, and AES-256-GCM zero-knowledge secret protection.
+* **⚡ Fast Key-Value & Encrypted Preferences (`client.kvStore`):** Typed storage, TTL expiration, and AES-256-GCM zero-knowledge secret protection.
 * **🔍 Instant Full-Text Search (`client.search`):** SQLite FTS5 indexer with prefix matching, BM25 rank scoring, and highlighting.
 * **📁 Offline Media & Blob Storage (`client.storage`):** Decoupled binary attachments, SHA-256 verification, and cloud sync queue (S3/Supabase/Firebase).
 * **⏰ Offline Job Scheduler & Background Cron (`client.scheduler`):** Persistent background task runner supporting human schedules and 5-field cron.

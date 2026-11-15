@@ -3,14 +3,14 @@ import { EventEmitter } from '../reactive/event-emitter.js';
 import { decryptBackupData, encryptBackupData } from '../backups/encryption.js';
 import { base64UrlEncode, base64UrlDecode } from '../keys/signed-token.js';
 import {
-  KVRecord,
-  KVSetOptions,
-  KVSetSecretOptions,
+  KVStoreRecord,
+  KVStoreSetOptions,
+  KVStoreSetSecretOptions,
   KVStoreOptions,
 } from './types.js';
-import { DEFAULT_KV_TABLE, KVStore } from './store.js';
+import { DEFAULT_KV_STORE_TABLE, KVStore } from './store.js';
 
-export class KVManager {
+export class KVStoreManager {
   private tableName: string;
   private events?: EventEmitter;
 
@@ -29,7 +29,7 @@ export class KVManager {
     } else if (eventsOrOptions) {
       opts = eventsOrOptions as KVStoreOptions;
     }
-    this.tableName = opts.tableName ?? DEFAULT_KV_TABLE;
+    this.tableName = opts.tableName ?? DEFAULT_KV_STORE_TABLE;
   }
 
   async initialize(): Promise<void> {
@@ -43,7 +43,7 @@ export class KVManager {
   async set(
     key: string,
     value: any,
-    options: KVSetOptions = {},
+    options: KVStoreSetOptions = {},
   ): Promise<void> {
     const now = Date.now();
     const expiresAt =
@@ -99,9 +99,9 @@ export class KVManager {
   }
 
   /**
-   * Retrieves the full KVRecord metadata for a key.
+   * Retrieves the full KVStoreRecord metadata for a key.
    */
-  async getRecord(key: string): Promise<KVRecord | null> {
+  async getRecord(key: string): Promise<KVStoreRecord | null> {
     const record = await KVStore.get(this.db, this.tableName, key);
     if (!record) return null;
 
@@ -151,7 +151,7 @@ export class KVManager {
   async setSecret(
     key: string,
     secretValue: any,
-    options: KVSetSecretOptions,
+    options: KVStoreSetSecretOptions,
   ): Promise<void> {
     if (!options.passphrase) {
       throw new Error('Passphrase is required to store encrypted secret.');

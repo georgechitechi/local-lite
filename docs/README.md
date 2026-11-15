@@ -22,11 +22,11 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
    - Fluent `QueryBuilder` (`from`, `select`, `join`, `where`, `groupBy`, `orderBy`)
    - Native SQL aggregations (`count`, `sum`, `avg`, `aggregate`)
    - Telemetry & outbox management (`getMetrics`, `retryFailedMutations`, `clearFailedMutations`)
-5. **[Fast Key-Value & Encrypted Preferences](./kv.md)**
-   - Typed storage for strings, numbers, booleans, and JSON objects (`client.kv`)
+5. **[Fast Key-Value & Encrypted Preferences](./kv-store.md)**
+   - Typed storage for strings, numbers, booleans, and JSON objects (`client.kvStore`)
    - TTL expiration with lazy cleanup and batch pruning
    - Zero-Knowledge client-side encrypted secrets (AES-256-GCM + PBKDF2)
-   - Reactive `useKV()` React hook
+   - Reactive `useKVStore()` React hook
 6. **[Instant Full-Text Search](./search.md)**
    - Native SQLite FTS5 engine integration (`client.search`)
    - Prefix matching, BM25 ranking, and highlighted `<mark>` snippets
@@ -58,7 +58,7 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
     - `useLiveQueries()`: Parallel multi-table queries with single atomic commit
     - `useLiveRow()`: Targeted single-record live query with row-level invalidation
     - `useLiveInfiniteQuery()`: Paginated infinite scrolling live query
-    - `useKV()`: Reactive state binding for key-value preferences
+    - `useKVStore()`: Reactive state binding for key-value preferences
     - `useSearch()`: Debounced instant full-text search hook
     - `useMutations()`: Null-safe memoized mutation helper methods
     - `useSyncStatus()`: Real-time sync engine & outbox queue inspector

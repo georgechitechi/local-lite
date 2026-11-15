@@ -1,6 +1,6 @@
 ---
 name: local-lite-react
-description: Master reactive patterns, hooks, live queries, and optimistic state in React and React Native with local-lite. Use when writing useLiveQuery, useSyncStatus, useLocalAuth, useKV, useSearch, useQueryBuilder, or optimizing component re-renders.
+description: Master reactive patterns, hooks, live queries, and optimistic state in React and React Native with local-lite. Use when writing useLiveQuery, useSyncStatus, useLocalAuth, useKVStore, useSearch, useQueryBuilder, or optimizing component re-renders.
 ---
 
 # local-lite React & React Native Integration
@@ -16,8 +16,8 @@ Comprehensive guide to building reactive, offline-first user interfaces using `l
 | `useLiveQuery(client, sql, params, deps)` | Reactive SQLite query. Auto-re-runs whenever relevant tables mutate. |
 | `useSyncStatus(client)` | Tracks online/offline status, sync worker state, and outbox changes. |
 | `useLocalAuth(client.auth)` | Manages zero-backend SQLite authentication, user profiles, and sessions. |
-| `useKV(client.kv, key, default)` | Reactive key-value store for preferences and application state. |
-| `useEncryptedKV(client.kv, key, pass)` | End-to-end encrypted secret preferences with AES-256-GCM. |
+| `useKVStore(client, key, default)` | Reactive key-value store for preferences and application state. |
+| `useEncryptedKV(client.kvStore, key, pass)` | End-to-end encrypted secret preferences with AES-256-GCM. |
 | `useSearch(client, ftsTable, query)` | Real-time full-text search powered by SQLite FTS5. |
 | `useQueryBuilder(client, table, filter)` | Declarative MongoDB-style query filters. |
 | `useCloudBackup(backupClient, db)` | Cloud backups (OneDrive / Google Drive) with live progress. |
@@ -93,17 +93,17 @@ async function addTodo(client: LocalFirstClient, title: string, projectId: strin
 
 ---
 
-## 4. Reactive Preferences & Encrypted KV
+## 4. Reactive Preferences & Encrypted KV Store
 
 ```tsx
-import { useKV, useEncryptedKV } from 'local-lite/react';
+import { useKVStore, useEncryptedKV } from 'local-lite/react';
 
 export function SettingsScreen({ client }) {
   // 1. Plain reactive setting
-  const [theme, setTheme] = useKV<'light' | 'dark'>(client?.kv, 'app_theme', 'light');
+  const [theme, setTheme] = useKVStore<'light' | 'dark'>(client, 'app_theme', 'light');
 
   // 2. Encrypted setting (AES-256-GCM)
-  const [apiKey, setApiKey] = useEncryptedKV(client?.kv, 'openai_key', 'UserPassphrase!');
+  const [apiKey, setApiKey] = useEncryptedKV(client?.kvStore, 'openai_key', 'UserPassphrase!');
 
   return (
     <View>

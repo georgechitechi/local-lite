@@ -450,10 +450,10 @@ export function createDashboardHandler(
       }
 
       if (request.method === 'GET' && pathname === '/api/system') {
-        const [outbox, kv, scheduler, actions, users, sessions, migrations] =
+        const [outbox, kvStore, scheduler, actions, users, sessions, migrations] =
           await Promise.all([
             readRowsIfTableExists(db, 'sync_outbox', 200),
-            readRowsIfTableExists(db, '_local_kv', 200),
+            readRowsIfTableExists(db, '_local_kv_store', 200),
             readRowsIfTableExists(db, '_local_scheduler', 100),
             readRowsIfTableExists(db, '_local_actions', 100),
             readRowsIfTableExists(db, '_local_users', 100),
@@ -462,7 +462,7 @@ export function createDashboardHandler(
           ]);
         return jsonResponse({
           outbox,
-          kv,
+          kvStore,
           scheduler,
           actions,
           users,
@@ -1111,7 +1111,7 @@ function renderDashboardHtml(
         const sys = state.system || {};
         const sections = [
           ['Sync Outbox (sync_outbox)', sys.outbox],
-          ['KV Store (_local_kv)', sys.kv],
+          ['KV Store (_local_kv_store)', sys.kvStore],
           ['Scheduler (_local_scheduler)', sys.scheduler],
           ['Actions (_local_actions)', sys.actions],
           ['Local Users (_local_users)', sys.users],

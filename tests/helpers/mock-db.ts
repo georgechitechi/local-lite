@@ -41,29 +41,29 @@ export class MockDB implements LocalDBAdapter {
       return [];
     }
 
-    // KV: keys listing (SELECT key FROM _local_kv WHERE expires_at IS NULL OR expires_at > ?)
+    // KVStore: keys listing (SELECT key FROM _local_kv_store WHERE expires_at IS NULL OR expires_at > ?)
     if (
-      lowerQ.includes('from _local_kv') &&
+      lowerQ.includes('from _local_kv_store') &&
       lowerQ.includes('expires_at is null or expires_at > ?')
     ) {
       const now = Number(params[0] || Date.now());
-      const rows = Array.from(this.getTable('_local_kv').values());
+      const rows = Array.from(this.getTable('_local_kv_store').values());
       const active = rows.filter(
         (r) => r.expires_at == null || Number(r.expires_at) > now,
       );
       return active.map((r) => ({ key: r.key }));
     }
 
-    // KV: prune expired (DELETE FROM _local_kv WHERE expires_at IS NOT NULL AND expires_at <= ?)
+    // KVStore: prune expired (DELETE FROM _local_kv_store WHERE expires_at IS NOT NULL AND expires_at <= ?)
     if (
       lowerQ.includes(
-        'delete from _local_kv where expires_at is not null and expires_at <= ?',
+        'delete from _local_kv_store where expires_at is not null and expires_at <= ?',
       )
     ) {
       const now = Number(params[0] || Date.now());
-      for (const [k, row] of this.getTable('_local_kv').entries()) {
+      for (const [k, row] of this.getTable('_local_kv_store').entries()) {
         if (row.expires_at != null && Number(row.expires_at) <= now) {
-          this.getTable('_local_kv').delete(k);
+          this.getTable('_local_kv_store').delete(k);
         }
       }
       return [];

@@ -17,10 +17,10 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
       `INSERT INTO todos (id, title, done) VALUES ('1', 'Write docs', 0), ('2', 'Ship dashboard', 1);`,
     );
     await db.execute(
-      `CREATE TABLE _local_kv (key TEXT PRIMARY KEY, value TEXT);`,
+      `CREATE TABLE _local_kv_store (key TEXT PRIMARY KEY, value TEXT);`,
     );
     await db.execute(
-      `INSERT INTO _local_kv (key, value) VALUES ('theme', '"dark"');`,
+      `INSERT INTO _local_kv_store (key, value) VALUES ('theme', '"dark"');`,
     );
   });
 
@@ -53,13 +53,13 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     const tablesRes = await handler(new Request('http://localhost/api/tables'));
     const tablesBody = await tablesRes.json();
     expect(tablesBody.tables.map((t: any) => t.name)).toEqual([
-      '_local_kv',
+      '_local_kv_store',
       'todos',
     ]);
 
     const sysRes = await handler(new Request('http://localhost/api/system'));
     const sysBody = await sysRes.json();
-    expect(sysBody.kv).toHaveLength(1);
+    expect(sysBody.kvStore).toHaveLength(1);
     expect(sysBody.outbox).toBeNull();
   });
 

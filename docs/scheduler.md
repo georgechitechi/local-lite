@@ -23,7 +23,7 @@ await client.scheduler.register({
   schedule: 'daily',
   handler: async (job) => {
     await client.maintenance.vacuum();
-    await client.kv.pruneExpired();
+    await client.kvStore.pruneExpired();
   },
 });
 

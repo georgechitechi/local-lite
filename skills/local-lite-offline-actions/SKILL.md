@@ -1,9 +1,9 @@
 ---
 name: local-lite-offline-actions
-description: Queue offline actions, schedule background jobs, store key-value preferences, and track sync telemetry in local-lite. Use when using client.actions, client.scheduler, client.kv, client.getMetrics(), or handling offline mutation retries.
+description: Queue offline actions, schedule background jobs, store key-value preferences, and track sync telemetry in local-lite. Use when using client.actions, client.scheduler, client.kvStore, client.getMetrics(), or handling offline mutation retries.
 ---
 
-# local-lite Offline Actions, KV & Scheduler
+# local-lite Offline Actions, KV Store & Scheduler
 
 Guide for executing queued actions, running background jobs, persisting key-value pairs, and inspecting sync telemetry with `local-lite`.
 
@@ -95,20 +95,20 @@ client.actions.registerEmailHandler(
 
 ---
 
-## 2. Key-Value Store & Secret Preferences (`client.kv`)
+## 2. Key-Value Store & Secret Preferences (`client.kvStore`)
 
-`client.kv` provides lightweight key-value storage directly within SQLite with optional TTL expiration and AES-256-GCM encryption.
+`client.kvStore` provides lightweight key-value storage directly within SQLite with optional TTL expiration and AES-256-GCM encryption.
 
-### Basic KV Usage
+### Basic KV Store Usage
 ```typescript
 // Store with optional TTL (expires in 24 hours)
-await client.kv.set('last_viewed_tab', 'dashboard', { ttlMs: 24 * 60 * 60 * 1000 });
+await client.kvStore.set('last_viewed_tab', 'dashboard', { ttlMs: 24 * 60 * 60 * 1000 });
 
-// Read value (returns null if expired or missing)
-const tab = await client.kv.get('last_viewed_tab');
+// Read value (returns undefined if expired or missing)
+const tab = await client.kvStore.get('last_viewed_tab');
 
 // Delete value
-await client.kv.delete('last_viewed_tab');
+await client.kvStore.delete('last_viewed_tab');
 ```
 
 ### Encrypted Secrets (AES-256-GCM)
@@ -116,10 +116,10 @@ Store sensitive API tokens or user secrets securely:
 
 ```typescript
 // Encrypt and persist
-await client.kv.setSecret('api_token', 'sk-live-secret-token-12345', 'PassphraseOrHardwareKey');
+await client.kvStore.setSecret('api_token', 'sk-live-secret-token-12345', { passphrase: 'PassphraseOrHardwareKey' });
 
 // Decrypt
-const token = await client.kv.getSecret('api_token', 'PassphraseOrHardwareKey');
+const token = await client.kvStore.getSecret('api_token', 'PassphraseOrHardwareKey');
 ```
 
 ---

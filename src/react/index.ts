@@ -896,6 +896,6 @@ export * from './status.js';
 export * from './theme.js';
 export * from './auth.js';
 export * from './backups.js';
-export * from './kv.js';
+export * from './kv-store.js';
 export * from './search.js';
 export * from './session.js';

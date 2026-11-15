@@ -58,7 +58,7 @@ import {
 } from '../backups/index.js';
 import { ActionManager, type ActionManagerOptions } from '../actions/index.js';
 import { ApiKeyManager, type ApiKeyManagerOptions } from '../keys/index.js';
-import { KVManager, type KVStoreOptions } from '../kv/index.js';
+import { KVStoreManager, type KVStoreOptions } from '../kv-store/index.js';
 import { SearchManager } from '../search/index.js';
 import {
   BlobStorageManager,
@@ -115,7 +115,7 @@ export interface LocalFirstClientConfig {
   touchUpdatedAt?: boolean | string;
   actions?: ActionManagerOptions;
   keys?: ApiKeyManagerOptions;
-  kv?: KVStoreOptions;
+  kvStore?: KVStoreOptions;
   storage?: BlobStorageManagerOptions;
   scheduler?: JobSchedulerOptions;
   session?: SessionManagerOptions;
@@ -696,7 +696,7 @@ export class LocalFirstClient {
   public readonly maintenance: DatabaseMaintenance;
   public readonly actions: ActionManager;
   public readonly keys: ApiKeyManager;
-  public readonly kv: KVManager;
+  public readonly kvStore: KVStoreManager;
   public readonly search: SearchManager;
   public readonly storage: BlobStorageManager;
   public readonly scheduler: JobScheduler;
@@ -772,7 +772,7 @@ export class LocalFirstClient {
     this.schemaManager = new SchemaManager();
     this.maintenance = new DatabaseMaintenance(this.db, () => [
       ...this.tables,
-      '_local_kv',
+      '_local_kv_store',
       '_local_blobs',
       '_local_scheduled_jobs',
       '_local_job_runs',
@@ -785,7 +785,7 @@ export class LocalFirstClient {
 
     const actionNetwork = config.actions?.network ?? config.network;
     this.keys = new ApiKeyManager(this.db, config.keys);
-    this.kv = new KVManager(this.db, this.events, config.kv);
+    this.kvStore = new KVStoreManager(this.db, this.events, config.kvStore);
     this.search = new SearchManager(this.db, this.events, (table, id) =>
       this.findById(table, id),
     );
@@ -1093,7 +1093,7 @@ export class LocalFirstClient {
     await OutboxStore.resetStaleProcessing(this.db);
     await this.actions.initialize();
     await this.keys.initialize();
-    await this.kv.initialize();
+    await this.kvStore.initialize();
     await this.storage.initialize();
     await this.scheduler.initialize();
     await this.session.initialize();
@@ -1932,7 +1932,7 @@ export class LocalFirstClient {
     this.stop();
 
     const internalTables = [
-      '_local_kv',
+      '_local_kv_store',
       '_local_blobs',
       '_local_scheduled_jobs',
       '_local_job_runs',

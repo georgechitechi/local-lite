@@ -131,10 +131,10 @@
       "import": "./dist/keys/index.js",
       "default": "./dist/keys/index.js"
     },
-    "./kv": {
-      "types": "./dist/kv/index.d.ts",
-      "import": "./dist/kv/index.js",
-      "default": "./dist/kv/index.js"
+    "./kv-store": {
+      "types": "./dist/kv-store/index.d.ts",
+      "import": "./dist/kv-store/index.js",
+      "default": "./dist/kv-store/index.js"
     },
     "./search": {
       "types": "./dist/search/index.d.ts",

@@ -1,4 +1,4 @@
-export interface KVSetOptions {
+export interface KVStoreSetOptions {
   /**
    * Time-to-live in milliseconds from current time.
    */
@@ -10,14 +10,14 @@ export interface KVSetOptions {
   expiresAt?: number;
 }
 
-export interface KVSetSecretOptions extends KVSetOptions {
+export interface KVStoreSetSecretOptions extends KVStoreSetOptions {
   /**
    * Passphrase used to encrypt the value using AES-256-GCM.
    */
   passphrase: string;
 }
 
-export interface KVRecord<T = any> {
+export interface KVStoreRecord<T = any> {
   key: string;
   value: T;
   type: 'string' | 'number' | 'boolean' | 'json' | 'encrypted';

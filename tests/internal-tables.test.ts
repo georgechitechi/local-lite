@@ -14,7 +14,7 @@ describe('Internal Tables Filtering', () => {
     expect(isInternalTable('_fts_houses')).toBe(true);
     expect(isInternalTable('_fts_houses_content')).toBe(true);
     expect(isInternalTable('_fts_houses_config')).toBe(true);
-    expect(isInternalTable('_local_kv')).toBe(true);
+    expect(isInternalTable('_local_kv_store')).toBe(true);
     expect(isInternalTable('_local_sessions')).toBe(true);
     expect(isInternalTable('sync_outbox')).toBe(true);
     expect(isInternalTable('sync_meta')).toBe(true);
