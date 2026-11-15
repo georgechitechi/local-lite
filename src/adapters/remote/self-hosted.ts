@@ -147,14 +147,16 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     }
 
     const data = await response.json();
-    this.lastPollCursor = Math.max(
-      this.lastPollCursor,
-      data.cursor ?? sinceTimestamp,
-    );
+    const nextCursor =
+      typeof data.cursor === 'number' ? data.cursor : sinceTimestamp;
+    this.lastPollCursor = Math.max(this.lastPollCursor, nextCursor);
     const deltas: DeltaChanges = data.changes ?? {
-      timestamp: Date.now(),
+      timestamp: nextCursor,
       changes: [],
     };
+    if (typeof data.cursor === 'number') {
+      deltas.timestamp = data.cursor;
+    }
     if (data.hasMore !== undefined && deltas.hasMore === undefined) {
       deltas.hasMore = Boolean(data.hasMore);
     }

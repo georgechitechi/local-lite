@@ -153,7 +153,11 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
       const key = `${entry.tableName}:${entry.rowId}`;
       latestMap.set(key, entry);
       if (entry.cursor > maxCursor) maxCursor = entry.cursor;
-      if (entry.timestamp > maxCursor) maxCursor = entry.timestamp;
+      // Only fall back to wall-clock timestamp if the client's cursor is ahead of
+      // this in-memory instance (e.g. after a server restart).
+      if (since > this.monotonicCursor && entry.timestamp > maxCursor) {
+        maxCursor = entry.timestamp;
+      }
     }
 
     const deltaList: DeltaChange[] = Array.from(latestMap.values()).map(
