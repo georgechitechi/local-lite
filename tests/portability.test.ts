@@ -25,6 +25,7 @@ describe('Universal Data Portability (JSON & CSV)', () => {
       remote: new MemoryDemoRemoteAdapter(0),
       network: new DefaultNetworkStatusProvider(false),
       autoSchema: true,
+      jsonColumns: { notes: ['tags'] },
       tables: ['contacts', 'notes'],
       autoStart: false,
       logger: false,
