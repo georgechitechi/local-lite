@@ -125,8 +125,63 @@ export const SqlConsoleView: React.FC<SqlConsoleViewProps> = ({
 
         {result ? (
           <div>
-            <div style={{ marginBottom: 8, color: 'var(--muted)' }}>
-              {result.rows.length} row(s) • {result.durationMs} ms
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+                color: 'var(--muted)',
+              }}
+            >
+              <span>
+                {result.rows.length} row(s) • {result.durationMs} ms
+              </span>
+              {result.rows.length > 0 && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      const escCsv = (v: unknown) => {
+                        if (v == null) return '';
+                        const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                      };
+                      const csv = [
+                        result.columns.map(escCsv).join(','),
+                        ...result.rows.map((r) =>
+                          result.columns.map((c) => escCsv(r[c])).join(','),
+                        ),
+                      ].join('\r\n');
+                      const blob = new Blob([csv], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'query-results.csv';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Export CSV
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(result.rows, null, 2)], {
+                        type: 'application/json',
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'query-results.json';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Export JSON
+                  </button>
+                </div>
+              )}
             </div>
             <div className="grid-wrap">
               <table>

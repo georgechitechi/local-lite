@@ -20,11 +20,13 @@ const usage = `Usage:
   local-lite install-skills [--target copilot|claude|antigravity|cursor|agent] [--dir <path>] [--force]
   local-lite db:generate --schema <path> [--tables <path>] [--out <dir>] [--name <name>] [--dialect mysql|postgres|sqlite] [--server-schema <path>] [--dry-run]
   local-lite dashboard [--db <path>] [--port <number>] [--ui-port <number>] [--host <host>] [--readonly] [--token <secret>] [--title <title>] [--no-open] [--no-vite]
+  local-lite dev [--db <path>] [--port <number>] [--ui-port <number>] [--host <host>] [--readonly] [--token <secret>] [--title <title>] [--repo <owner/repo>] [--force] [--no-open]
 
 Commands:
   install-skills  Copy bundled AI skills into your project.
   db:generate     Generate incremental SQL migrations from a schema dictionary.
-  dashboard       Launch the local-lite web dashboard for a SQLite database.`;
+  dashboard       Launch the local-lite web dashboard for a SQLite database.
+  dev             Pull the Vite dashboard from GitHub into ./dashboard, install deps, and serve it.`;
 
 function parseSkillsArgs(argv) {
   const options = { target: 'copilot', dir: undefined, force: false };
@@ -185,12 +187,16 @@ function parseDashboardArgs(argv) {
     title: undefined,
     open: true,
     noVite: false,
+    repo: 'georgechitechi/local-lite',
+    force: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--readonly') options.readOnly = true;
     else if (arg === '--no-open') options.open = false;
     else if (arg === '--no-vite') options.noVite = true;
+    else if (arg === '--force') options.force = true;
+    else if (arg === '--repo') options.repo = argv[++i];
     else if (arg === '--db') options.db = argv[++i];
     else if (arg === '--port') options.port = Number(argv[++i]);
     else if (arg === '--ui-port') options.uiPort = Number(argv[++i]);
@@ -291,10 +297,14 @@ async function runDashboard(options) {
   console.log(`Database: ${label} (${options.readOnly ? 'read-only' : 'read/write'})`);
 
   let viteProc = null;
-  const dashboardDir = path.resolve(__dirname, '..', 'dashboard');
+  const { existsSync } = await import('node:fs');
+  const pkgDashboardDir = path.resolve(__dirname, '..', 'dashboard');
+  const cwdDashboardDir = path.resolve(process.cwd(), 'dashboard');
+  const dashboardDir =
+    options.dashboardDir ??
+    (existsSync(path.join(pkgDashboardDir, 'package.json')) ? pkgDashboardDir : cwdDashboardDir);
   const viteBin = path.join(dashboardDir, 'node_modules', 'vite', 'bin', 'vite.js');
   if (!options.noVite) {
-    const { existsSync } = await import('node:fs');
     if (existsSync(viteBin)) {
       const { spawn } = await import('node:child_process');
       const viteArgs = [
@@ -333,6 +343,44 @@ async function runDashboard(options) {
   process.on('SIGTERM', shutdown);
 }
 
+async function runDev(options) {
+  const { existsSync } = await import('node:fs');
+  const { spawnSync } = await import('node:child_process');
+  const targetDir = path.resolve(process.cwd(), 'dashboard');
+  const pkgJsonPath = path.join(targetDir, 'package.json');
+  const viteBin = path.join(targetDir, 'node_modules', 'vite', 'bin', 'vite.js');
+
+  if (!existsSync(pkgJsonPath) || options.force) {
+    console.log(`Pulling dashboard from ${options.repo}/dashboard into ./dashboard...`);
+    const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const degitArgs = ['--yes', 'degit', `${options.repo}/dashboard`, 'dashboard'];
+    if (options.force) degitArgs.push('--force');
+    const pullRes = spawnSync(npxCmd, degitArgs, {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    });
+    if (pullRes.error || pullRes.status !== 0) {
+      throw new Error(`Failed to pull dashboard from ${options.repo}/dashboard.`);
+    }
+  }
+
+  if (!existsSync(viteBin)) {
+    console.log('Installing dashboard dependencies...');
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const installRes = spawnSync(npmCmd, ['--prefix', 'dashboard', 'install'], {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    });
+    if (installRes.error || installRes.status !== 0) {
+      throw new Error('Failed to install dashboard dependencies.');
+    }
+  }
+
+  await runDashboard({ ...options, dashboardDir: targetDir });
+}
+
 const [command, ...rest] = process.argv.slice(2);
 try {
   if (command === 'install-skills') {
@@ -341,6 +389,8 @@ try {
     await runDbGen(parseDbGenArgs(rest));
   } else if (command === 'dashboard') {
     await runDashboard(parseDashboardArgs(rest));
+  } else if (command === 'dev') {
+    await runDev(parseDashboardArgs(rest));
   } else {
     console.log(usage);
     process.exitCode = command && command !== '--help' && command !== '-h' ? 1 : 0;

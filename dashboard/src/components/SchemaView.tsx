@@ -27,7 +27,7 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
   const [sqlModal, setSqlModal] = useState<{
     open: boolean;
     tableName: string | null;
-    dialect: 'sqlite' | 'postgres' | 'mysql';
+    dialect: 'sqlite' | 'postgres' | 'mysql' | 'typescript';
     includeSystem: boolean;
     sql: string;
     loading: boolean;
@@ -46,10 +46,41 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
 
   const loadGeneratedSql = useCallback(
     async (
-      dialect: 'sqlite' | 'postgres' | 'mysql',
+      dialect: 'sqlite' | 'postgres' | 'mysql' | 'typescript',
       includeSystem: boolean,
       tableName: string | null,
     ) => {
+      if (dialect === 'typescript') {
+        const selected = tables.filter((t) => {
+          if (tableName && t.name !== tableName) return false;
+          if (!tableName && !includeSystem && t.internal) return false;
+          return true;
+        });
+        const toPascal = (s: string) =>
+          s
+            .replace(/(^|[_-])([a-zA-Z0-9])/g, (_, __, ch) => ch.toUpperCase())
+            .replace(/[^a-zA-Z0-9]/g, '');
+        const toTsType = (raw: string) => {
+          const u = (raw || 'TEXT').toUpperCase();
+          if (u.includes('INT') || u.includes('REAL') || u.includes('FLOA') || u.includes('DOUB') || u.includes('NUM')) return 'number';
+          if (u.includes('BOOL')) return 'boolean';
+          if (u.includes('BLOB')) return 'Uint8Array';
+          return 'string';
+        };
+        const tsCode = selected
+          .map((t) => {
+            const fields = t.columns
+              .map((c) => {
+                const nullable = c.notnull === 0 && c.pk === 0 ? ' | null' : '';
+                return `  ${c.name}: ${toTsType(c.type)}${nullable};`;
+              })
+              .join('\n');
+            return `export interface ${toPascal(t.name)} {\n${fields}\n}`;
+          })
+          .join('\n\n');
+        setSqlModal((prev) => ({ ...prev, sql: tsCode, loading: false, copied: false }));
+        return;
+      }
       setSqlModal((prev) => ({ ...prev, loading: true, copied: false }));
       try {
         const q = new URLSearchParams({
@@ -66,7 +97,7 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
         setSqlModal((prev) => ({ ...prev, loading: false }));
       }
     },
-    [onError],
+    [onError, tables],
   );
 
   useEffect(() => {
@@ -148,7 +179,11 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
           <strong>Schema &amp; Indexes</strong>
           <span className="badge">{visible.length} tables</span>
         </div>
-        <button className="btn primary" onClick={() => openSqlModal(null)}>
+        <button
+          className="btn primary"
+          disabled={visible.length === 0}
+          onClick={() => openSqlModal(null)}
+        >
           Generate SQL Schema
         </button>
       </div>
@@ -313,13 +348,14 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
                   onChange={(e) =>
                     setSqlModal((prev) => ({
                       ...prev,
-                      dialect: e.target.value as 'sqlite' | 'postgres' | 'mysql',
+                      dialect: e.target.value as 'sqlite' | 'postgres' | 'mysql' | 'typescript',
                     }))
                   }
                 >
                   <option value="sqlite">SQLite</option>
                   <option value="postgres">PostgreSQL</option>
                   <option value="mysql">MySQL</option>
+                  <option value="typescript">TypeScript</option>
                 </select>
                 {!sqlModal.tableName && (
                   <label
@@ -361,13 +397,31 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
                 >
                   {sqlModal.copied ? 'Copied!' : 'Copy SQL'}
                 </button>
-                <a
-                  className="btn primary"
-                  href={buildApiUrl(`/api/schema/sql?${downloadQuery.toString()}`)}
-                  download
-                >
-                  Download .sql
-                </a>
+                {sqlModal.dialect === 'typescript' ? (
+                  <button
+                    className="btn primary"
+                    disabled={!sqlModal.sql}
+                    onClick={() => {
+                      const blob = new Blob([sqlModal.sql], { type: 'text/typescript' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'schema.ts';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download .ts
+                  </button>
+                ) : (
+                  <a
+                    className="btn primary"
+                    href={buildApiUrl(`/api/schema/sql?${downloadQuery.toString()}`)}
+                    download
+                  >
+                    Download .sql
+                  </a>
+                )}
               </div>
             </div>
 

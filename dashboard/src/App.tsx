@@ -6,6 +6,7 @@ import {
   TableSummary,
 } from './api';
 import { AuthAdminData, AuthAdminView } from './components/AuthAdminView';
+import { CommandItem, CommandPalette } from './components/CommandPalette';
 import { DataView } from './components/DataView';
 import { FilesView } from './components/FilesView';
 import { JobsData, JobsView } from './components/JobsView';
@@ -59,6 +60,16 @@ export function App() {
   const [jobsData, setJobsData] = useState<JobsData | null>(null);
   const [authData, setAuthData] = useState<AuthAdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
+
+  const notify = useCallback((text: string) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, text }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2400);
+  }, []);
 
   const [newTableModal, setNewTableModal] = useState<{
     open: boolean;
@@ -187,6 +198,17 @@ export function App() {
   }, [pollMs, refreshActiveView]);
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
     if (!contextMenu) return;
     const close = () => setContextMenu(null);
     const onKey = (e: KeyboardEvent) => {
@@ -249,6 +271,14 @@ export function App() {
           <span className="badge">SQLite {overview?.sqliteVersion || ''}</span>
         </div>
         <div className="top-actions">
+          <button
+            className="btn"
+            onClick={() => setCmdOpen(true)}
+            title="Command Palette (Ctrl+K / Cmd+K)"
+            style={{ color: 'var(--muted)' }}
+          >
+            ⌘K
+          </button>
           <select
             className="input"
             value={pollMs}
@@ -278,7 +308,6 @@ export function App() {
                 ['sql', 'SQL Console'],
                 ['sync', 'Sync & System'],
                 ['overview', 'Overview'],
-                ['settings', 'Settings'],
               ] as [ViewTab, string][]
             ).map(([id, label]) => (
               <button
@@ -361,6 +390,15 @@ export function App() {
               ))
             )}
           </div>
+
+          <div className="nav-footer">
+            <button
+              className={`nav-btn ${view === 'settings' ? 'active' : ''}`}
+              onClick={() => setView('settings')}
+            >
+              <span>Settings</span>
+            </button>
+          </div>
         </aside>
 
         <main className="main">
@@ -405,8 +443,14 @@ export function App() {
                 setOffset(0);
               }}
               onPageChange={setOffset}
+              onLimitChange={(nextLimit) => {
+                setLimit(nextLimit);
+                setOffset(0);
+                localStorage.setItem('local_lite_limit', String(nextLimit));
+              }}
               onRefresh={refreshActiveView}
               onError={setError}
+              onNotify={notify}
             />
           )}
           {view === 'schema' && (
@@ -883,6 +927,62 @@ export function App() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      <CommandPalette
+        open={cmdOpen}
+        tables={tables}
+        commands={
+          [
+            { id: 'v:data', label: 'Data Explorer', group: 'View', action: () => setView('data') },
+            { id: 'v:schema', label: 'Schema & Indexes', group: 'View', action: () => setView('schema') },
+            { id: 'v:files', label: 'File Storage', group: 'View', action: () => setView('files') },
+            { id: 'v:jobs', label: 'Schedules & Actions', group: 'View', action: () => setView('jobs') },
+            { id: 'v:auth', label: 'Auth & API Keys', group: 'View', action: () => setView('auth') },
+            { id: 'v:sql', label: 'SQL Console', group: 'View', action: () => setView('sql') },
+            { id: 'v:sync', label: 'Sync & System', group: 'View', action: () => setView('sync') },
+            { id: 'v:overview', label: 'Overview', group: 'View', action: () => setView('overview') },
+            { id: 'v:settings', label: 'Settings', group: 'View', action: () => setView('settings') },
+            {
+              id: 'a:theme',
+              label: `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Theme`,
+              group: 'Action',
+              action: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
+            },
+            {
+              id: 'a:refresh',
+              label: 'Refresh Active View',
+              group: 'Action',
+              action: () => refreshActiveView(),
+            },
+            ...(!readOnly
+              ? [
+                  {
+                    id: 'a:new-table',
+                    label: 'Create New Table',
+                    group: 'Action',
+                    action: () => setNewTableModal((prev) => ({ ...prev, open: true })),
+                  },
+                ]
+              : []),
+          ] satisfies CommandItem[]
+        }
+        onSelectTable={(name) => {
+          setSelectedTable(name);
+          setOffset(0);
+          setView('data');
+        }}
+        onClose={() => setCmdOpen(false)}
+      />
+
+      {toasts.length > 0 && (
+        <div className="toast-stack">
+          {toasts.map((t) => (
+            <div key={t.id} className="toast">
+              {t.text}
+            </div>
+          ))}
         </div>
       )}
     </div>

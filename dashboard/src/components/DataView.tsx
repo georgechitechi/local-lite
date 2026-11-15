@@ -18,8 +18,10 @@ interface DataViewProps {
   onFilterValChange: (v: string) => void;
   onSortChange: (col: string) => void;
   onPageChange: (nextOffset: number) => void;
+  onLimitChange: (nextLimit: number) => void;
   onRefresh: () => void;
   onError: (msg: string | null) => void;
+  onNotify: (msg: string) => void;
 }
 
 export const DataView: React.FC<DataViewProps> = ({
@@ -39,12 +41,20 @@ export const DataView: React.FC<DataViewProps> = ({
   onFilterValChange,
   onSortChange,
   onPageChange,
+  onLimitChange,
   onRefresh,
   onError,
+  onNotify,
 }) => {
   const [inspectRow, setInspectRow] = useState<any | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('[\n  \n]');
+  const [selectedRowIdxs, setSelectedRowIdxs] = useState<number[]>([]);
+  const [inlineEdit, setInlineEdit] = useState<{
+    rowIdx: number;
+    col: string;
+    value: string;
+  } | null>(null);
   const [editorState, setEditorState] = useState<{
     open: boolean;
     existing: any | null;
@@ -129,6 +139,64 @@ export const DataView: React.FC<DataViewProps> = ({
         method: 'DELETE',
         body: JSON.stringify({ key }),
       });
+      onNotify('Row deleted');
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRowIdxs.length === 0 || pkCols.length === 0) return;
+    if (!window.confirm(`Delete ${selectedRowIdxs.length} selected row(s)?`)) return;
+    try {
+      onError(null);
+      for (const idx of selectedRowIdxs) {
+        const row = rows[idx];
+        if (!row) continue;
+        const key: Record<string, any> = {};
+        pkCols.forEach((pk) => {
+          key[pk] = row[pk];
+        });
+        await apiRequest(`/api/tables/${encodeURIComponent(tableMeta.name)}/rows`, {
+          method: 'DELETE',
+          body: JSON.stringify({ key }),
+        });
+      }
+      const count = selectedRowIdxs.length;
+      setSelectedRowIdxs([]);
+      onNotify(`Deleted ${count} row(s)`);
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    }
+  };
+
+  const commitInlineEdit = async () => {
+    if (!inlineEdit || pkCols.length === 0) {
+      setInlineEdit(null);
+      return;
+    }
+    const row = rows[inlineEdit.rowIdx];
+    if (!row) {
+      setInlineEdit(null);
+      return;
+    }
+    const key: Record<string, any> = {};
+    pkCols.forEach((pk) => {
+      key[pk] = row[pk];
+    });
+    try {
+      onError(null);
+      await apiRequest(`/api/tables/${encodeURIComponent(tableMeta.name)}/rows`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          key,
+          updates: { [inlineEdit.col]: inlineEdit.value === '' ? null : inlineEdit.value },
+        }),
+      });
+      setInlineEdit(null);
+      onNotify(`Updated ${inlineEdit.col}`);
       onRefresh();
     } catch (err: any) {
       onError(err.message);
@@ -218,6 +286,11 @@ export const DataView: React.FC<DataViewProps> = ({
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {selectedRowIdxs.length > 0 && !readOnly && pkCols.length > 0 && (
+            <button className="btn danger" onClick={handleBulkDelete}>
+              Delete Selected ({selectedRowIdxs.length})
+            </button>
+          )}
           <button
             className="btn"
             disabled={readOnly}
@@ -276,6 +349,19 @@ export const DataView: React.FC<DataViewProps> = ({
           <table>
             <thead>
               <tr>
+                {!readOnly && pkCols.length > 0 && (
+                  <th style={{ width: 32, cursor: 'default' }}>
+                    <input
+                      type="checkbox"
+                      checked={rows.length > 0 && selectedRowIdxs.length === rows.length}
+                      onChange={(e) =>
+                        setSelectedRowIdxs(
+                          e.target.checked ? rows.map((_, i) => i) : [],
+                        )
+                      }
+                    />
+                  </th>
+                )}
                 {cols.map((c) => (
                   <th key={c} onClick={() => onSortChange(c)}>
                     {c}
@@ -288,22 +374,83 @@ export const DataView: React.FC<DataViewProps> = ({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={cols.length + 1} className="empty">
+                  <td colSpan={cols.length + (!readOnly && pkCols.length > 0 ? 2 : 1)} className="empty">
                     No rows found
                   </td>
                 </tr>
               ) : (
                 rows.map((r, idx) => (
                   <tr key={idx}>
-                    {cols.map((c) => (
-                      <td
-                        key={c}
-                        onClick={() => setInspectRow(r)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {formatCell(r[c])}
+                    {!readOnly && pkCols.length > 0 && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedRowIdxs.includes(idx)}
+                          onChange={(e) =>
+                            setSelectedRowIdxs((prev) =>
+                              e.target.checked
+                                ? [...prev, idx]
+                                : prev.filter((x) => x !== idx),
+                            )
+                          }
+                        />
                       </td>
-                    ))}
+                    )}
+                    {cols.map((c) => {
+                      const isEditing =
+                        inlineEdit?.rowIdx === idx && inlineEdit?.col === c;
+                      const canInline = !readOnly && pkCols.length > 0 && !pkCols.includes(c);
+                      return (
+                        <td
+                          key={c}
+                          onClick={() => {
+                            if (!isEditing) setInspectRow(r);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            if (!canInline) return;
+                            const rawVal = r[c];
+                            setInlineEdit({
+                              rowIdx: idx,
+                              col: c,
+                              value:
+                                rawVal === null || rawVal === undefined
+                                  ? ''
+                                  : typeof rawVal === 'object'
+                                    ? JSON.stringify(rawVal)
+                                    : String(rawVal),
+                            });
+                          }}
+                          title={canInline ? 'Click to inspect • Double-click to edit' : 'Click to inspect'}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {isEditing ? (
+                            <input
+                              className="inline-cell-input"
+                              autoFocus
+                              value={inlineEdit.value}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) =>
+                                setInlineEdit((prev) =>
+                                  prev ? { ...prev, value: e.target.value } : null,
+                                )
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  commitInlineEdit();
+                                } else if (e.key === 'Escape') {
+                                  setInlineEdit(null);
+                                }
+                              }}
+                              onBlur={commitInlineEdit}
+                            />
+                          ) : (
+                            formatCell(r[c])
+                          )}
+                        </td>
+                      );
+                    })}
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button
                         className="btn"
@@ -340,7 +487,18 @@ export const DataView: React.FC<DataViewProps> = ({
           <span>
             Showing {start}–{end} of {total}
           </span>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <select
+              className="input"
+              value={limit}
+              onChange={(e) => onLimitChange(Number(e.target.value))}
+            >
+              {[25, 50, 100, 250].map((n) => (
+                <option key={n} value={n}>
+                  {n} / page
+                </option>
+              ))}
+            </select>
             <button
               className="btn"
               disabled={offset === 0}
