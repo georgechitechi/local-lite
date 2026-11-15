@@ -16,6 +16,16 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
   onRefresh,
   onError,
 }) => {
+  const [viewMode, setViewMode] = useState<'cards' | 'er'>('cards');
+  const [diffModal, setDiffModal] = useState<{
+    open: boolean;
+    targetSql: string;
+    sql: string;
+    changes: { type: string; table: string; detail: string }[];
+    loading: boolean;
+    copied: boolean;
+  }>({ open: false, targetSql: '', sql: '', changes: [], loading: false, copied: false });
+
   const [idxModal, setIdxModal] = useState<{
     open: boolean;
     table: TableSummary | null;
@@ -165,6 +175,40 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
     }
   };
 
+  const runMigrationDiff = async (targetSqlText: string) => {
+    setDiffModal((prev) => ({ ...prev, loading: true, copied: false }));
+    try {
+      const res = await apiRequest<{
+        sql: string;
+        changes: { type: string; table: string; detail: string }[];
+      }>('/api/schema/diff', {
+        method: 'POST',
+        body: JSON.stringify({ targetSql: targetSqlText }),
+      });
+      setDiffModal((prev) => ({
+        ...prev,
+        sql: res.sql || '',
+        changes: res.changes || [],
+        loading: false,
+      }));
+    } catch (err: any) {
+      setDiffModal((prev) => ({ ...prev, loading: false }));
+      onError(err.message);
+    }
+  };
+
+  const openDiffModal = () => {
+    setDiffModal({
+      open: true,
+      targetSql: '',
+      sql: '',
+      changes: [],
+      loading: true,
+      copied: false,
+    });
+    void runMigrationDiff('');
+  };
+
   const downloadQuery = new URLSearchParams({
     dialect: sqlModal.dialect,
     includeSystem: sqlModal.includeSystem ? '1' : '0',
@@ -178,16 +222,172 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <strong>Schema &amp; Indexes</strong>
           <span className="badge">{visible.length} tables</span>
+          <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', marginLeft: 8 }}>
+            <button
+              className={`btn${viewMode === 'cards' ? ' primary' : ''}`}
+              style={{ border: 0, borderRadius: 0 }}
+              onClick={() => setViewMode('cards')}
+            >
+              Cards
+            </button>
+            <button
+              className={`btn${viewMode === 'er' ? ' primary' : ''}`}
+              style={{ border: 0, borderRadius: 0 }}
+              onClick={() => setViewMode('er')}
+            >
+              ER Diagram
+            </button>
+          </div>
         </div>
-        <button
-          className="btn primary"
-          disabled={visible.length === 0}
-          onClick={() => openSqlModal(null)}
-        >
-          Generate SQL Schema
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className="btn"
+            disabled={visible.length === 0}
+            onClick={openDiffModal}
+          >
+            Migration Diff
+          </button>
+          <button
+            className="btn primary"
+            disabled={visible.length === 0}
+            onClick={() => openSqlModal(null)}
+          >
+            Generate SQL Schema
+          </button>
+        </div>
       </div>
       <div className="content">
+        {viewMode === 'er' ? (
+          (() => {
+            const colsPerRow = Math.max(1, Math.min(3, visible.length));
+            const nodeWidth = 260;
+            const nodeGapX = 70;
+            const nodeGapY = 50;
+            const nodeHeaderH = 38;
+            const rowH = 24;
+            const positions = new Map<string, { x: number; y: number; w: number; h: number }>();
+            const rowHeights: number[] = [];
+            visible.forEach((t, idx) => {
+              const r = Math.floor(idx / colsPerRow);
+              const h = nodeHeaderH + Math.max(1, t.columns.length) * rowH + 14;
+              rowHeights[r] = Math.max(rowHeights[r] || 0, h);
+            });
+            visible.forEach((t, idx) => {
+              const r = Math.floor(idx / colsPerRow);
+              const c = idx % colsPerRow;
+              const yOffset = rowHeights.slice(0, r).reduce((sum, h) => sum + h + nodeGapY, 24);
+              const xOffset = 24 + c * (nodeWidth + nodeGapX);
+              const h = nodeHeaderH + Math.max(1, t.columns.length) * rowH + 14;
+              positions.set(t.name, { x: xOffset, y: yOffset, w: nodeWidth, h });
+            });
+            const totalW = Math.max(600, colsPerRow * (nodeWidth + nodeGapX) + 24);
+            const totalH = Math.max(320, rowHeights.reduce((sum, h) => sum + h + nodeGapY, 24) + 24);
+            const edges: { fromTable: string; toTable: string; fromCol: string; toCol: string }[] = [];
+            visible.forEach((t) => {
+              (t.foreignKeys ?? []).forEach((fk) => {
+                if (positions.has(fk.table)) {
+                  edges.push({ fromTable: t.name, toTable: fk.table, fromCol: fk.from, toCol: fk.to });
+                }
+              });
+            });
+            return (
+              <div className="card" style={{ overflow: 'auto', padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, color: 'var(--muted)' }}>
+                  <span>Entity-Relationship Diagram ({visible.length} tables, {edges.length} foreign keys)</span>
+                  <span>PK = Primary Key • FK = Foreign Key</span>
+                </div>
+                <div style={{ position: 'relative', width: totalW, height: totalH }}>
+                  <svg
+                    width={totalW}
+                    height={totalH}
+                    style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+                  >
+                    <defs>
+                      <marker id="er-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                        <path d="M0,0 L8,4 L0,8 z" fill="var(--accent)" />
+                      </marker>
+                    </defs>
+                    {edges.map((edge, idx) => {
+                      const src = positions.get(edge.fromTable);
+                      const dst = positions.get(edge.toTable);
+                      if (!src || !dst) return null;
+                      const x1 = src.x + src.w;
+                      const y1 = src.y + 30;
+                      const x2 = dst.x;
+                      const y2 = dst.y + 30;
+                      const mx = (x1 + x2) / 2;
+                      return (
+                        <g key={idx}>
+                          <path
+                            d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                            fill="none"
+                            stroke="var(--accent)"
+                            strokeWidth="1.75"
+                            markerEnd="url(#er-arrow)"
+                            opacity="0.85"
+                          />
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  {visible.map((t) => {
+                    const pos = positions.get(t.name)!;
+                    const fkCols = new Set((t.foreignKeys ?? []).map((f) => f.from));
+                    return (
+                      <div
+                        key={t.name}
+                        className="card"
+                        style={{
+                          position: 'absolute',
+                          left: pos.x,
+                          top: pos.y,
+                          width: pos.w,
+                          padding: 0,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            padding: '8px 10px',
+                            borderBottom: '1px solid var(--border)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            background: 'var(--bg-elevated, rgba(255,255,255,0.03))',
+                          }}
+                        >
+                          <strong style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{t.name}</strong>
+                          <span className="badge">{t.rowCount}</span>
+                        </div>
+                        <div style={{ padding: '6px 10px' }}>
+                          {t.columns.map((c) => (
+                            <div
+                              key={c.name}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                height: rowH,
+                                fontSize: 12,
+                                fontFamily: 'var(--mono)',
+                              }}
+                            >
+                              <span>
+                                {c.pk > 0 ? '🔑 ' : fkCols.has(c.name) ? '🔗 ' : ''}
+                                {c.name}
+                              </span>
+                              <span style={{ color: 'var(--muted)', fontSize: 11 }}>{c.type || 'ANY'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()
+        ) : (
         <div className="schema-grid">
           {visible.map((t) => (
             <div key={t.name} className="card">
@@ -300,6 +500,7 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {sqlModal.open && (
@@ -533,6 +734,95 @@ export const SchemaView: React.FC<SchemaViewProps> = ({
             >
               <button className="btn primary" onClick={createIndex}>
                 Create Index
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {diffModal.open && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setDiffModal((prev) => ({ ...prev, open: false }))}
+        >
+          <div
+            className="modal"
+            style={{ width: 680, maxWidth: '94vw' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <strong>Migration &amp; Schema Diff Generator</strong>
+              <button
+                className="btn"
+                onClick={() => setDiffModal((prev) => ({ ...prev, open: false }))}
+              >
+                Close
+              </button>
+            </div>
+            <div className="field-row">
+              <label>Target Schema SQL (leave empty for baseline migration of live DB)</label>
+              <textarea
+                className="input"
+                rows={5}
+                style={{ fontFamily: 'var(--mono)', fontSize: 12 }}
+                placeholder="CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL, role TEXT);"
+                value={diffModal.targetSql}
+                onChange={(e) =>
+                  setDiffModal((prev) => ({ ...prev, targetSql: e.target.value }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {diffModal.changes.map((c, idx) => (
+                  <span key={idx} className="badge">
+                    {c.table}: {c.detail}
+                  </span>
+                ))}
+              </div>
+              <button
+                className="btn primary"
+                disabled={diffModal.loading}
+                onClick={() => void runMigrationDiff(diffModal.targetSql)}
+              >
+                {diffModal.loading ? 'Diffing...' : 'Compute Diff'}
+              </button>
+            </div>
+            <div className="field-row">
+              <label>Generated Migration SQL</label>
+              <textarea
+                className="input"
+                rows={9}
+                readOnly
+                style={{ fontFamily: 'var(--mono)', fontSize: 12 }}
+                value={diffModal.sql || '-- No schema differences detected'}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                className="btn"
+                disabled={!diffModal.sql}
+                onClick={() => {
+                  void navigator.clipboard.writeText(diffModal.sql);
+                  setDiffModal((prev) => ({ ...prev, copied: true }));
+                }}
+              >
+                {diffModal.copied ? 'Copied!' : 'Copy SQL'}
+              </button>
+              <button
+                className="btn primary"
+                disabled={!diffModal.sql}
+                onClick={() => {
+                  const blob = new Blob([diffModal.sql], { type: 'text/sql' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `migration-${Date.now()}.sql`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download .sql
               </button>
             </div>
           </div>

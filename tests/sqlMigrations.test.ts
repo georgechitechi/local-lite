@@ -6,7 +6,7 @@ import {
   buildSqlTargetSchema,
   generateSqlMigration,
   type SchemaDictionary,
-} from '../src/schema/index.js';
+} from '../src/schema/sqlMigrations.js';
 
 const tempDirs: string[] = [];
 

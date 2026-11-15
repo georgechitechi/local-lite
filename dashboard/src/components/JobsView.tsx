@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { apiRequest } from '../api';
 
 export interface JobsData {
@@ -21,6 +21,8 @@ export const JobsView: React.FC<JobsViewProps> = ({
   onRefresh,
   onError,
 }) => {
+  const [inspectOutbox, setInspectOutbox] = useState<any | null>(null);
+
   const runJobAction = async (payload: Record<string, any>) => {
     try {
       onError(null);
@@ -257,7 +259,13 @@ export const JobsView: React.FC<JobsViewProps> = ({
                         <span className="badge">{m.status || 'pending'}</span>
                       </td>
                       <td>{m.retry_count ?? 0}</td>
-                      <td>
+                      <td style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn"
+                          onClick={() => setInspectOutbox(m)}
+                        >
+                          Inspect
+                        </button>
                         <button
                           className="btn"
                           disabled={readOnly}
@@ -266,6 +274,15 @@ export const JobsView: React.FC<JobsViewProps> = ({
                           }
                         >
                           Retry
+                        </button>
+                        <button
+                          className="btn danger"
+                          disabled={readOnly}
+                          onClick={() =>
+                            runJobAction({ action: 'delete_outbox', id: m.id })
+                          }
+                        >
+                          Delete
                         </button>
                       </td>
                     </tr>
@@ -291,6 +308,103 @@ export const JobsView: React.FC<JobsViewProps> = ({
           </div>
         )}
       </div>
+
+      {inspectOutbox && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setInspectOutbox(null)}
+        >
+          <div
+            className="modal"
+            style={{ width: 680, maxWidth: '94vw' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <strong>
+                Outbox Mutation #{inspectOutbox.id} ({inspectOutbox.table_name} •{' '}
+                {inspectOutbox.operation})
+              </strong>
+              <button className="btn" onClick={() => setInspectOutbox(null)}>
+                Close
+              </button>
+            </div>
+            {inspectOutbox.last_error && (
+              <div
+                className="error-banner"
+                style={{ marginBottom: 10, fontFamily: 'var(--mono)', fontSize: 12 }}
+              >
+                Last Error: {String(inspectOutbox.last_error)}
+              </div>
+            )}
+            {(() => {
+              let parsed: any = inspectOutbox.payload;
+              if (typeof parsed === 'string') {
+                try {
+                  parsed = JSON.parse(parsed);
+                } catch {
+                  // leave as raw string
+                }
+              }
+              const hasDiff =
+                parsed &&
+                typeof parsed === 'object' &&
+                ('before' in parsed || 'after' in parsed || 'old' in parsed || 'new' in parsed);
+              if (hasDiff) {
+                const before = parsed.before ?? parsed.old ?? null;
+                const after = parsed.after ?? parsed.new ?? null;
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                    <div>
+                      <div className="label" style={{ marginBottom: 4 }}>Before</div>
+                      <pre style={{ maxHeight: 260, overflow: 'auto', margin: 0 }}>
+                        {JSON.stringify(before, null, 2)}
+                      </pre>
+                    </div>
+                    <div>
+                      <div className="label" style={{ marginBottom: 4 }}>After</div>
+                      <pre style={{ maxHeight: 260, overflow: 'auto', margin: 0 }}>
+                        {JSON.stringify(after, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div className="label" style={{ marginBottom: 4 }}>Payload</div>
+                  <pre style={{ maxHeight: 280, overflow: 'auto', margin: 0 }}>
+                    {typeof parsed === 'string' ? parsed : JSON.stringify(parsed ?? inspectOutbox, null, 2)}
+                  </pre>
+                </div>
+              );
+            })()}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                className="btn"
+                disabled={readOnly}
+                onClick={() => {
+                  const id = inspectOutbox.id;
+                  setInspectOutbox(null);
+                  void runJobAction({ action: 'retry_outbox', id });
+                }}
+              >
+                Retry Mutation
+              </button>
+              <button
+                className="btn danger"
+                disabled={readOnly}
+                onClick={() => {
+                  const id = inspectOutbox.id;
+                  setInspectOutbox(null);
+                  void runJobAction({ action: 'delete_outbox', id });
+                }}
+              >
+                Delete Mutation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

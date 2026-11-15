@@ -46,6 +46,11 @@
       "import": "./dist/schema/index.js",
       "default": "./dist/schema/index.js"
     },
+    "./schema/migrations": {
+      "types": "./dist/schema/sqlMigrations.d.ts",
+      "import": "./dist/schema/sqlMigrations.js",
+      "default": "./dist/schema/sqlMigrations.js"
+    },
     "./supabase": {
       "types": "./dist/adapters/remote/supabase.d.ts",
       "import": "./dist/adapters/remote/supabase.js",

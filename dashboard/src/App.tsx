@@ -10,8 +10,10 @@ import { CommandItem, CommandPalette } from './components/CommandPalette';
 import { DataView } from './components/DataView';
 import { FilesView } from './components/FilesView';
 import { JobsData, JobsView } from './components/JobsView';
+import { LogsView } from './components/LogsView';
 import { OverviewView } from './components/OverviewView';
 import { SchemaView } from './components/SchemaView';
+import { SearchView } from './components/SearchView';
 import { SettingsView } from './components/SettingsView';
 import { SqlConsoleView } from './components/SqlConsoleView';
 import { SyncSystemView } from './components/SyncSystemView';
@@ -19,8 +21,10 @@ import { SyncSystemView } from './components/SyncSystemView';
 type ViewTab =
   | 'data'
   | 'schema'
+  | 'search'
   | 'files'
   | 'jobs'
+  | 'logs'
   | 'auth'
   | 'sql'
   | 'sync'
@@ -302,8 +306,10 @@ export function App() {
               [
                 ['data', 'Data'],
                 ['schema', 'Schema & Indexes'],
+                ['search', 'FTS5 Search'],
                 ['files', 'File Storage'],
                 ['jobs', 'Schedules & Actions'],
+                ['logs', 'Logs'],
                 ['auth', 'Auth & API Keys'],
                 ['sql', 'SQL Console'],
                 ['sync', 'Sync & System'],
@@ -469,6 +475,16 @@ export function App() {
               onRefresh={refreshActiveView}
               onError={setError}
             />
+          )}
+          {view === 'search' && (
+            <SearchView
+              tables={tables}
+              readOnly={readOnly}
+              onNotify={notify}
+            />
+          )}
+          {view === 'logs' && (
+            <LogsView onNotify={notify} />
           )}
           {view === 'jobs' && (
             <JobsView
@@ -937,8 +953,10 @@ export function App() {
           [
             { id: 'v:data', label: 'Data Explorer', group: 'View', action: () => setView('data') },
             { id: 'v:schema', label: 'Schema & Indexes', group: 'View', action: () => setView('schema') },
+            { id: 'v:search', label: 'FTS5 Search', group: 'View', action: () => setView('search') },
             { id: 'v:files', label: 'File Storage', group: 'View', action: () => setView('files') },
             { id: 'v:jobs', label: 'Schedules & Actions', group: 'View', action: () => setView('jobs') },
+            { id: 'v:logs', label: 'Live Logs', group: 'View', action: () => setView('logs') },
             { id: 'v:auth', label: 'Auth & API Keys', group: 'View', action: () => setView('auth') },
             { id: 'v:sql', label: 'SQL Console', group: 'View', action: () => setView('sql') },
             { id: 'v:sync', label: 'Sync & System', group: 'View', action: () => setView('sync') },

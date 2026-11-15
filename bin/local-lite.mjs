@@ -130,7 +130,7 @@ async function installSkills(options) {
 
 async function runDbGen(options) {
   const { generateSqlMigration } = await import(
-    pathToFileURL(path.resolve(__dirname, '..', 'dist', 'schema', 'index.js')).href
+    pathToFileURL(path.resolve(__dirname, '..', 'dist', 'schema', 'sqlMigrations.js')).href
   );
   const schemaExports = await loadModuleExports(options.schema);
   const dictionary =

@@ -320,4 +320,138 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
     const sqlBody = await sqlRes.json();
     expect(sqlBody.sql).toContain('CREATE TABLE IF NOT EXISTS "todos"');
   });
+
+  it('supports logs, seeding, schema diff, FTS5 search, encrypted backups, and outbox delete', async () => {
+    raw.exec(`
+      CREATE TABLE authors (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+      CREATE TABLE books (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        author_id TEXT REFERENCES authors(id)
+      );
+      INSERT INTO authors (id, name) VALUES ('a1', 'Ada Lovelace');
+      INSERT INTO books (id, title, author_id) VALUES ('b1', 'Analytical Engine Notes', 'a1');
+      CREATE TABLE sync_outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT,
+        operation TEXT,
+        status TEXT,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        payload TEXT
+      );
+      INSERT INTO sync_outbox (table_name, operation, status, payload)
+      VALUES ('books', 'insert', 'failed', '{"after":{"id":"b1"}}');
+    `);
+    const handler = createDashboardHandler(db);
+
+    // 1. Foreign keys in /api/tables
+    const tablesRes = await handler(new Request('http://local.test/api/tables'));
+    expect(tablesRes.status).toBe(200);
+    const tablesBody = await tablesRes.json();
+    const booksMeta = tablesBody.tables.find((t: any) => t.name === 'books');
+    expect(booksMeta.foreignKeys).toEqual([
+      { table: 'authors', from: 'author_id', to: 'id' },
+    ]);
+
+    // 2. Seed sample rows
+    const seedRes = await handler(
+      new Request('http://local.test/api/tables/books/seed', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ count: 3 }),
+      }),
+    );
+    expect(seedRes.status).toBe(200);
+    const seedBody = await seedRes.json();
+    expect(seedBody.inserted).toBe(3);
+
+    // 3. Schema diff
+    const diffRes = await handler(
+      new Request('http://local.test/api/schema/diff', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          targetSql: 'CREATE TABLE books (id TEXT PRIMARY KEY, title TEXT NOT NULL, isbn TEXT);',
+        }),
+      }),
+    );
+    expect(diffRes.status).toBe(200);
+    const diffBody = await diffRes.json();
+    expect(diffBody.sql).toContain('ALTER TABLE "books" ADD COLUMN "isbn" TEXT;');
+
+    // 4. FTS5 index + search
+    const ftsCreateRes = await handler(
+      new Request('http://local.test/api/search/index', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ table: 'books' }),
+      }),
+    );
+    expect(ftsCreateRes.status).toBe(201);
+    const ftsListRes = await handler(new Request('http://local.test/api/search/indexes'));
+    const ftsListBody = await ftsListRes.json();
+    expect(ftsListBody.indexes.length).toBe(1);
+    const ftsSearchRes = await handler(
+      new Request('http://local.test/api/search?table=books&q=Analytical'),
+    );
+    expect(ftsSearchRes.status).toBe(200);
+    const ftsSearchBody = await ftsSearchRes.json();
+    expect(ftsSearchBody.rows.length).toBeGreaterThanOrEqual(1);
+
+    // 5. Encrypted backup & restore
+    const exportRes = await handler(
+      new Request('http://local.test/api/backups/export', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ passphrase: 'secret-passphrase' }),
+      }),
+    );
+    expect(exportRes.status).toBe(200);
+    const exportBody = await exportRes.json();
+    expect(exportBody.dataBase64).toBeTruthy();
+
+    await db.execute('DELETE FROM books;');
+    const restoreRes = await handler(
+      new Request('http://local.test/api/backups/restore', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          passphrase: 'secret-passphrase',
+          dataBase64: exportBody.dataBase64,
+        }),
+      }),
+    );
+    expect(restoreRes.status).toBe(200);
+    const restoreBody = await restoreRes.json();
+    expect(restoreBody.restoredRows).toBeGreaterThanOrEqual(4);
+
+    // 6. Outbox delete
+    const outboxDelRes = await handler(
+      new Request('http://local.test/api/jobs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_outbox', id: 1 }),
+      }),
+    );
+    expect(outboxDelRes.status).toBe(200);
+
+    // 7. Logs GET + DELETE (triggered by /api/query above or explicit /api/query)
+    await handler(
+      new Request('http://local.test/api/query', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sql: 'SELECT COUNT(*) AS cnt FROM books;' }),
+      }),
+    );
+    const logsRes = await handler(new Request('http://local.test/api/logs'));
+    expect(logsRes.status).toBe(200);
+    const logsBody = await logsRes.json();
+    expect(logsBody.logs.length).toBeGreaterThan(0);
+
+    const clearLogsRes = await handler(
+      new Request('http://local.test/api/logs', { method: 'DELETE' }),
+    );
+    expect(clearLogsRes.status).toBe(200);
+  });
 });

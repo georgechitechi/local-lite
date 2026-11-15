@@ -48,7 +48,9 @@ export const DataView: React.FC<DataViewProps> = ({
 }) => {
   const [inspectRow, setInspectRow] = useState<any | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [importFormat, setImportFormat] = useState<'json' | 'csv'>('json');
   const [importText, setImportText] = useState('[\n  \n]');
+  const [seeding, setSeeding] = useState(false);
   const [selectedRowIdxs, setSelectedRowIdxs] = useState<number[]>([]);
   const [inlineEdit, setInlineEdit] = useState<{
     rowIdx: number;
@@ -203,19 +205,89 @@ export const DataView: React.FC<DataViewProps> = ({
     }
   };
 
+  const parseCsvRows = (text: string): Record<string, string>[] => {
+    const lines: string[][] = [];
+    let row: string[] = [];
+    let cell = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"' && text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          cell += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(cell);
+        cell = '';
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell);
+        if (row.some((v) => v.length > 0)) lines.push(row);
+        row = [];
+        cell = '';
+      } else {
+        cell += ch;
+      }
+    }
+    row.push(cell);
+    if (row.some((v) => v.length > 0)) lines.push(row);
+    if (lines.length < 2) throw new Error('CSV must include a header row and at least one data row.');
+    const headers = lines[0].map((h) => h.trim());
+    return lines.slice(1).map((vals) => {
+      const obj: Record<string, string> = {};
+      headers.forEach((h, idx) => {
+        if (h) obj[h] = vals[idx] ?? '';
+      });
+      return obj;
+    });
+  };
+
   const handleImport = async () => {
     try {
       onError(null);
-      const parsed = JSON.parse(importText);
-      const rowsArr = Array.isArray(parsed) ? parsed : [parsed];
+      const rowsArr =
+        importFormat === 'csv'
+          ? parseCsvRows(importText)
+          : (() => {
+              const parsed = JSON.parse(importText);
+              return Array.isArray(parsed) ? parsed : [parsed];
+            })();
       await apiRequest(`/api/tables/${encodeURIComponent(tableMeta.name)}/import`, {
         method: 'POST',
         body: JSON.stringify({ rows: rowsArr }),
       });
       setImportOpen(false);
+      onNotify?.(`Imported ${rowsArr.length} row(s)`);
       onRefresh();
     } catch (err: any) {
       onError(err.message);
+    }
+  };
+
+  const handleSeedRows = async () => {
+    setSeeding(true);
+    try {
+      onError(null);
+      const res = await apiRequest<{ inserted: number }>(
+        `/api/tables/${encodeURIComponent(tableMeta.name)}/seed`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ count: 10 }),
+        },
+      );
+      onNotify?.(`Seeded ${res.inserted} sample rows`);
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -296,8 +368,18 @@ export const DataView: React.FC<DataViewProps> = ({
             disabled={readOnly}
             onClick={() => setImportOpen(true)}
           >
-            Import JSON
+            Import
           </button>
+          {!tableMeta.internal && (
+            <button
+              className="btn"
+              disabled={readOnly || seeding}
+              onClick={() => void handleSeedRows()}
+              title="Insert 10 generated sample rows"
+            >
+              {seeding ? 'Seeding...' : 'Seed 10'}
+            </button>
+          )}
           <a
             className="btn"
             href={buildApiUrl(
@@ -549,10 +631,53 @@ export const DataView: React.FC<DataViewProps> = ({
                 marginBottom: 12,
               }}
             >
-              <strong>Import JSON Rows into {tableMeta.name}</strong>
+              <strong>Import {importFormat.toUpperCase()} Rows into {tableMeta.name}</strong>
               <button className="btn" onClick={() => setImportOpen(false)}>
                 Close
               </button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+                <button
+                  className={`btn${importFormat === 'json' ? ' primary' : ''}`}
+                  style={{ border: 0, borderRadius: 0 }}
+                  onClick={() => {
+                    setImportFormat('json');
+                    if (importText.trim() === '' || !importText.trim().startsWith('[')) {
+                      setImportText('[\n  \n]');
+                    }
+                  }}
+                >
+                  JSON
+                </button>
+                <button
+                  className={`btn${importFormat === 'csv' ? ' primary' : ''}`}
+                  style={{ border: 0, borderRadius: 0 }}
+                  onClick={() => {
+                    setImportFormat('csv');
+                    if (importText.trim().startsWith('[')) {
+                      setImportText(tableMeta.columns.map((c) => c.name).join(',') + '\n');
+                    }
+                  }}
+                >
+                  CSV
+                </button>
+              </div>
+              <label className="btn" style={{ cursor: 'pointer' }}>
+                Load File
+                <input
+                  type="file"
+                  accept=".json,.csv,text/csv,application/json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.name.toLowerCase().endsWith('.csv')) setImportFormat('csv');
+                    else if (file.name.toLowerCase().endsWith('.json')) setImportFormat('json');
+                    void file.text().then((txt) => setImportText(txt));
+                  }}
+                />
+              </label>
             </div>
             <textarea
               className="sql"

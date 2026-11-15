@@ -1,4 +1,5 @@
 import type { LocalDBAdapter } from '../adapters/local/index.js';
+import { decryptBackupData, encryptBackupData } from '../backups/encryption.js';
 import { DEFAULT_KV_STORE_TABLE, KVStore } from '../kv-store/store.js';
 import { escapeIdentifier, isInternalTable, isReadQuery } from '../utils/sql.js';
 
@@ -28,12 +29,29 @@ interface TableIndexInfo {
   columns: string[];
 }
 
+interface TableForeignKeyInfo {
+  table: string;
+  from: string;
+  to: string;
+}
+
 interface TableSummary {
   name: string;
   internal: boolean;
   rowCount: number;
   columns: TableColumnInfo[];
   indexes: TableIndexInfo[];
+  foreignKeys: TableForeignKeyInfo[];
+}
+
+interface DashboardLogEntry {
+  id: number;
+  timestamp: number;
+  method: string;
+  path: string;
+  status: number;
+  durationMs: number;
+  detail?: string;
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -99,6 +117,17 @@ async function listTables(db: LocalDBAdapter): Promise<TableSummary[]> {
       });
     }
 
+    const fkRows = await db
+      .execute(`PRAGMA foreign_key_list(${quoted});`)
+      .catch(() => [] as any[]);
+    const foreignKeys: TableForeignKeyInfo[] = (fkRows ?? [])
+      .map((fk: any) => ({
+        table: String(fk.table ?? ''),
+        from: String(fk.from ?? ''),
+        to: String(fk.to ?? ''),
+      }))
+      .filter((fk) => fk.table && fk.from && fk.to);
+
     const rowCount = Number(countRows?.[0]?.cnt ?? 0);
     summaries.push({
       name,
@@ -106,6 +135,7 @@ async function listTables(db: LocalDBAdapter): Promise<TableSummary[]> {
       rowCount,
       columns,
       indexes,
+      foreignKeys,
     });
   }
   return summaries;
@@ -155,8 +185,30 @@ export function createDashboardHandler(
   const title = options.title ?? 'local-lite Dashboard';
   const readOnly = Boolean(options.readOnly);
   const basePath = (options.basePath ?? '').replace(/\/+$/, '');
+  const logs: DashboardLogEntry[] = [];
+  let nextLogId = 1;
+  const recordLog = (
+    method: string,
+    path: string,
+    status: number,
+    startedAt: number,
+    detail?: string,
+  ) => {
+    if (path === '/api/logs') return;
+    logs.unshift({
+      id: nextLogId++,
+      timestamp: Date.now(),
+      method,
+      path,
+      status,
+      durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      detail,
+    });
+    if (logs.length > 200) logs.length = 200;
+  };
 
   return async (request: Request): Promise<Response> => {
+    const startedAt = performance.now();
     const url = new URL(request.url);
     let pathname = url.pathname;
     if (basePath && pathname.startsWith(basePath)) {
@@ -164,8 +216,16 @@ export function createDashboardHandler(
     }
 
     if (!isAuthorized(request, url, options.authToken)) {
+      recordLog(request.method, pathname, 401, startedAt, 'Unauthorized');
       return errorResponse('Unauthorized.', 401);
     }
+
+    const reply = (res: Response, detail?: string) => {
+      if (pathname.startsWith('/api/')) {
+        recordLog(request.method, pathname, res.status, startedAt, detail);
+      }
+      return res;
+    };
 
     try {
       if (
@@ -733,12 +793,15 @@ export function createDashboardHandler(
           rows.length > 0 && typeof rows[0] === 'object' && rows[0] !== null
             ? Object.keys(rows[0])
             : [];
-        return jsonResponse({
-          columns,
-          rows,
-          rowsAffected: 0,
-          durationMs,
-        });
+        return reply(
+          jsonResponse({
+            columns,
+            rows,
+            rowsAffected: 0,
+            durationMs,
+          }),
+          sql.slice(0, 160),
+        );
       }
 
       if (request.method === 'GET' && pathname === '/api/system') {
@@ -1128,6 +1191,10 @@ export function createDashboardHandler(
             );
             return jsonResponse({ ok: true });
           }
+          if (action === 'delete_outbox' && id) {
+            await db.execute(`DELETE FROM sync_outbox WHERE id = ?;`, [id]);
+            return jsonResponse({ ok: true });
+          }
           if (action === 'toggle_job' && id) {
             await db.execute(
               `UPDATE _local_scheduled_jobs SET enabled = ? WHERE id = ?;`,
@@ -1143,9 +1210,413 @@ export function createDashboardHandler(
         }
       }
 
-      return errorResponse('Not found.', 404);
+      // ── Live Logs & Query Telemetry ────────────────────────────────────
+      if (pathname === '/api/logs') {
+        if (request.method === 'GET') {
+          const level = url.searchParams.get('level')?.trim() || '';
+          const search = url.searchParams.get('q')?.trim().toLowerCase() || '';
+          const filtered = logs.filter((entry) => {
+            if (level === 'error' && entry.status < 400) return false;
+            if (level === 'ok' && entry.status >= 400) return false;
+            if (search) {
+              const hay = `${entry.method} ${entry.path} ${entry.detail ?? ''}`.toLowerCase();
+              if (!hay.includes(search)) return false;
+            }
+            return true;
+          });
+          return jsonResponse({ logs: filtered });
+        }
+        if (request.method === 'DELETE') {
+          logs.length = 0;
+          return jsonResponse({ ok: true });
+        }
+      }
+
+      // ── Sample Row Seeder ──────────────────────────────────────────────
+      const seedMatch = pathname.match(/^\/api\/tables\/([^/]+)\/seed$/);
+      if (seedMatch && request.method === 'POST') {
+        if (readOnly) return reply(errorResponse('Dashboard is in read-only mode.', 403));
+        const tableName = decodeURIComponent(seedMatch[1]);
+        const quoted = escapeIdentifier(tableName);
+        const colRows = (await db.execute(`PRAGMA table_info(${quoted});`)) ?? [];
+        if (colRows.length === 0) {
+          return reply(errorResponse(`Table "${tableName}" not found.`, 404));
+        }
+        const body = (await request.json().catch(() => null)) as { count?: number } | null;
+        const count = Math.min(100, Math.max(1, Number(body?.count ?? 10) || 10));
+        const cols = colRows.map((r) => ({
+          name: String(r.name),
+          type: String(r.type ?? 'TEXT').toUpperCase(),
+          notnull: Boolean(r.notnull),
+          pk: Number(r.pk) > 0,
+        }));
+
+        const fkRows = (await db.execute(`PRAGMA foreign_key_list(${quoted});`)) ?? [];
+        const fkValues = new Map<string, unknown[]>();
+        for (const fk of fkRows) {
+          const fromCol = String(fk.from ?? '');
+          const refTable = String(fk.table ?? '');
+          const refCol = String(fk.to ?? '');
+          if (!fromCol || !refTable || !refCol) continue;
+          try {
+            const refRows =
+              (await db.execute(
+                `SELECT ${escapeIdentifier(refCol)} AS val FROM ${escapeIdentifier(refTable)} LIMIT 20;`,
+              )) ?? [];
+            fkValues.set(
+              fromCol.toLowerCase(),
+              refRows.map((r) => r.val),
+            );
+          } catch {
+            // ignore
+          }
+        }
+
+        const now = Date.now();
+        let inserted = 0;
+        for (let i = 0; i < count; i++) {
+          const insertCols: string[] = [];
+          const placeholders: string[] = [];
+          const params: unknown[] = [];
+          for (const col of cols) {
+            const lower = col.name.toLowerCase();
+            if (col.pk && col.type.includes('INT')) {
+              continue;
+            }
+            insertCols.push(escapeIdentifier(col.name));
+            placeholders.push('?');
+            const n = i + 1;
+            const suffix = `${now.toString(36)}_${n}`;
+            const fkCandidates = fkValues.get(lower);
+            if (fkCandidates !== undefined) {
+              params.push(
+                fkCandidates.length > 0
+                  ? fkCandidates[i % fkCandidates.length]
+                  : col.notnull
+                    ? `${tableName.slice(0, 4)}_${suffix}`
+                    : null,
+              );
+            } else if (col.pk || lower === 'id' || lower.endsWith('_id')) {
+              params.push(`${tableName.slice(0, 4)}_${suffix}`);
+            } else if (lower.includes('email')) {
+              params.push(`user${n}_${now.toString(36)}@example.com`);
+            } else if (lower.includes('name') || lower.includes('title')) {
+              params.push(`Sample ${col.name} ${n}`);
+            } else if (lower.includes('created') || lower.includes('updated') || lower.includes('date') || lower.includes('time')) {
+              params.push(col.type.includes('INT') ? now + i : new Date(now + i * 1000).toISOString());
+            } else if (lower.includes('active') || lower.includes('enabled') || lower.startsWith('is_') || col.type.includes('BOOL')) {
+              params.push(i % 2 === 0 ? 1 : 0);
+            } else if (col.type.includes('INT')) {
+              params.push(n * 10);
+            } else if (col.type.includes('REAL') || col.type.includes('FLOAT') || col.type.includes('NUM') || col.type.includes('DEC')) {
+              params.push(Number((n * 12.5).toFixed(2)));
+            } else {
+              params.push(`${col.name}_${n}`);
+            }
+          }
+          if (insertCols.length === 0) {
+            await db.execute(`INSERT INTO ${quoted} DEFAULT VALUES;`);
+          } else {
+            await db.execute(
+              `INSERT INTO ${quoted} (${insertCols.join(', ')}) VALUES (${placeholders.join(', ')});`,
+              params,
+            );
+          }
+          inserted++;
+        }
+        return reply(jsonResponse({ ok: true, inserted }), `Seeded ${inserted} rows into ${tableName}`);
+      }
+
+      // ── Migration & Schema Diff Generator ──────────────────────────────
+      if (pathname === '/api/schema/diff' && request.method === 'POST') {
+        const body = (await request.json().catch(() => null)) as {
+          targetSql?: string;
+          tables?: { name: string; columns: { name: string; type: string; notnull?: boolean; pk?: boolean; dflt_value?: string | null }[] }[];
+        } | null;
+        const targetSql = typeof body?.targetSql === 'string' ? body.targetSql : '';
+        const targetTablesInput = Array.isArray(body?.tables) ? body.tables : null;
+        const liveTables = (await listTables(db)).filter((t) => !isInternalTable(t.name));
+
+        interface TargetCol { name: string; type: string; notnull?: boolean; pk?: boolean; dflt_value?: string | null }
+        interface TargetTable { name: string; columns: TargetCol[] }
+
+        const parseTargetSql = (sqlText: string): TargetTable[] => {
+          const parsed: TargetTable[] = [];
+          const regex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`[]?([A-Za-z_][A-Za-z0-9_]*)["`\]]?\s*\(([\s\S]*?)\)\s*;/gi;
+          let match: RegExpExecArray | null;
+          while ((match = regex.exec(sqlText)) !== null) {
+            const tName = match[1];
+            const bodyStr = match[2];
+            const cols: TargetCol[] = [];
+            for (const rawLine of bodyStr.split(',')) {
+              const line = rawLine.trim();
+              if (!line || /^(PRIMARY\s+KEY|FOREIGN\s+KEY|UNIQUE|CHECK|CONSTRAINT)\b/i.test(line)) continue;
+              const colMatch = line.match(/^["`[]?([A-Za-z_][A-Za-z0-9_]*)["`\]]?\s+([A-Za-z0-9_()]+)?([\s\S]*)$/i);
+              if (!colMatch) continue;
+              const colName = colMatch[1];
+              const colType = (colMatch[2] || 'TEXT').toUpperCase();
+              const rest = (colMatch[3] || '').toUpperCase();
+              cols.push({
+                name: colName,
+                type: colType,
+                notnull: rest.includes('NOT NULL'),
+                pk: rest.includes('PRIMARY KEY'),
+              });
+            }
+            parsed.push({ name: tName, columns: cols });
+          }
+          return parsed;
+        };
+
+        const targetTables: TargetTable[] = targetTablesInput
+          ? targetTablesInput
+          : targetSql.trim()
+            ? parseTargetSql(targetSql)
+            : [];
+
+        const statements: string[] = [];
+        const summary: { type: string; table: string; detail: string }[] = [];
+
+        if (targetTables.length === 0) {
+          for (const t of liveTables) {
+            const colDefs = t.columns.map((c) => {
+              const parts = [escapeIdentifier(c.name), c.type || 'TEXT'];
+              if (c.pk) parts.push('PRIMARY KEY');
+              if (c.notnull && !c.pk) parts.push('NOT NULL');
+              if (c.dflt_value !== null && c.dflt_value !== undefined) parts.push(`DEFAULT ${c.dflt_value}`);
+              return `  ${parts.join(' ')}`;
+            });
+            statements.push(`CREATE TABLE IF NOT EXISTS ${escapeIdentifier(t.name)} (\n${colDefs.join(',\n')}\n);`);
+            summary.push({ type: 'baseline', table: t.name, detail: `${t.columns.length} columns` });
+          }
+        } else {
+          const liveMap = new Map(liveTables.map((t) => [t.name.toLowerCase(), t]));
+          const targetMap = new Map(targetTables.map((t) => [t.name.toLowerCase(), t]));
+
+          for (const target of targetTables) {
+            const live = liveMap.get(target.name.toLowerCase());
+            if (!live) {
+              const colDefs = target.columns.map((c) => {
+                const parts = [escapeIdentifier(c.name), c.type || 'TEXT'];
+                if (c.pk) parts.push('PRIMARY KEY');
+                if (c.notnull && !c.pk) parts.push('NOT NULL');
+                if (c.dflt_value !== null && c.dflt_value !== undefined) parts.push(`DEFAULT ${c.dflt_value}`);
+                return `  ${parts.join(' ')}`;
+              });
+              statements.push(`CREATE TABLE IF NOT EXISTS ${escapeIdentifier(target.name)} (\n${colDefs.join(',\n')}\n);`);
+              summary.push({ type: 'create_table', table: target.name, detail: `New table (${target.columns.length} columns)` });
+            } else {
+              const liveCols = new Set(live.columns.map((c) => c.name.toLowerCase()));
+              for (const tc of target.columns) {
+                if (!liveCols.has(tc.name.toLowerCase())) {
+                  const def = `${escapeIdentifier(tc.name)} ${tc.type || 'TEXT'}${tc.notnull ? " NOT NULL DEFAULT ''" : ''}`;
+                  statements.push(`ALTER TABLE ${escapeIdentifier(target.name)} ADD COLUMN ${def};`);
+                  summary.push({ type: 'add_column', table: target.name, detail: `Add column ${tc.name} (${tc.type || 'TEXT'})` });
+                }
+              }
+            }
+          }
+
+          for (const live of liveTables) {
+            if (!targetMap.has(live.name.toLowerCase())) {
+              statements.push(`-- Table "${live.name}" exists in DB but not in target schema`);
+              statements.push(`-- DROP TABLE IF EXISTS ${escapeIdentifier(live.name)};`);
+              summary.push({ type: 'extra_table', table: live.name, detail: 'Exists in DB only (commented DROP)' });
+            }
+          }
+        }
+
+        return reply(jsonResponse({
+          sql: statements.join('\n\n'),
+          changes: summary,
+        }));
+      }
+
+      // ── FTS5 Full-Text Search Explorer ─────────────────────────────────
+      if (pathname === '/api/search/indexes' && request.method === 'GET') {
+        const ftsRows = (await db.execute(
+          `SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name LIKE '_fts_%' AND sql LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name;`,
+        )) ?? [];
+        const indexes = [];
+        for (const row of ftsRows) {
+          const ftsName = String(row.name);
+          const sourceTable = ftsName.replace(/^_fts_/, '');
+          let count = 0;
+          try {
+            const cnt = (await db.execute(`SELECT COUNT(*) AS count FROM ${escapeIdentifier(ftsName)};`)) ?? [];
+            count = Number(cnt[0]?.count ?? 0);
+          } catch {
+            // ignore
+          }
+          indexes.push({
+            ftsTable: ftsName,
+            sourceTable,
+            rowCount: count,
+            sql: row.sql ? String(row.sql) : null,
+          });
+        }
+        return reply(jsonResponse({ indexes }));
+      }
+
+      if (pathname === '/api/search/index' && request.method === 'POST') {
+        if (readOnly) return reply(errorResponse('Dashboard is in read-only mode.', 403));
+        const body = (await request.json().catch(() => null)) as { table?: string; columns?: string[] } | null;
+        const tableName = typeof body?.table === 'string' ? body.table.trim() : '';
+        if (!tableName) return reply(errorResponse('Table name is required.', 400));
+        const quotedSource = escapeIdentifier(tableName);
+        const info = (await db.execute(`PRAGMA table_info(${quotedSource});`)) ?? [];
+        if (info.length === 0) return reply(errorResponse(`Table "${tableName}" not found.`, 404));
+
+        const requestedCols: string[] = Array.isArray(body?.columns)
+          ? body.columns.map(String).filter(Boolean)
+          : info
+              .filter((r) => !String(r.type ?? '').toUpperCase().includes('BLOB'))
+              .map((r) => String(r.name));
+        if (requestedCols.length === 0) {
+          return reply(errorResponse('No searchable columns found.', 400));
+        }
+
+        const ftsName = `_fts_${tableName}`;
+        const quotedFts = escapeIdentifier(ftsName);
+        const colList = requestedCols.map((c) => escapeIdentifier(c)).join(', ');
+        await db.execute(`DROP TABLE IF EXISTS ${quotedFts};`);
+        await db.execute(`CREATE VIRTUAL TABLE ${quotedFts} USING fts5(${colList});`);
+        await db.execute(`INSERT INTO ${quotedFts}(${colList}) SELECT ${colList} FROM ${quotedSource};`);
+        const cnt = (await db.execute(`SELECT COUNT(*) AS count FROM ${quotedFts};`)) ?? [];
+        return reply(
+          jsonResponse(
+            {
+              ok: true,
+              ftsTable: ftsName,
+              sourceTable: tableName,
+              columns: requestedCols,
+              rowCount: Number(cnt[0]?.count ?? 0),
+            },
+            201,
+          ),
+          `Indexed ${tableName} into ${ftsName}`,
+        );
+      }
+
+      if (pathname === '/api/search' && request.method === 'GET') {
+        const tableName = url.searchParams.get('table')?.trim() || '';
+        const q = url.searchParams.get('q')?.trim() || '';
+        const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 25) || 25));
+        if (!tableName) return reply(errorResponse('Query parameter "table" is required.', 400));
+        const ftsName = tableName.startsWith('_fts_') ? tableName : `_fts_${tableName}`;
+        const quotedFts = escapeIdentifier(ftsName);
+        if (!q) {
+          const rows = (await db.execute(`SELECT rowid, * FROM ${quotedFts} LIMIT ?;`, [limit])) ?? [];
+          const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+          return reply(jsonResponse({ rows, columns }));
+        }
+        const safeQuery = q.includes('"') ? q : `"${q.replace(/"/g, '""')}"*`;
+        const info = (await db.execute(`PRAGMA table_info(${quotedFts});`)) ?? [];
+        const snippetExpr = info.length > 0
+          ? `snippet(${quotedFts}, 0, '<mark>', '</mark>', '...', 24) AS _snippet,`
+          : '';
+        const rows =
+          (await db.execute(
+            `SELECT rowid, bm25(${quotedFts}) AS _rank, ${snippetExpr} * FROM ${quotedFts} WHERE ${quotedFts} MATCH ? ORDER BY _rank LIMIT ?;`,
+            [safeQuery, limit],
+          )) ?? [];
+        const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+        return reply(jsonResponse({ rows, columns }), `FTS5 "${q}" on ${ftsName}`);
+      }
+
+      // ── Encrypted Backup & Restore ─────────────────────────────────────
+      if (pathname === '/api/backups/export' && request.method === 'POST') {
+        const body = (await request.json().catch(() => null)) as { passphrase?: string } | null;
+        const passphrase = typeof body?.passphrase === 'string' ? body.passphrase : '';
+        if (passphrase.length < 4) {
+          return reply(errorResponse('Passphrase must be at least 4 characters.', 400));
+        }
+        const allTables = (await listTables(db)).filter((t) => !t.name.startsWith('_fts_') && !t.name.startsWith('sqlite_'));
+        const tablesData: Record<string, { sql: string | null; rows: Record<string, unknown>[] }> = {};
+        for (const t of allTables) {
+          const dataRows = (await db.execute(`SELECT * FROM ${escapeIdentifier(t.name)};`)) ?? [];
+          const sqlRow = (await db.execute(
+            `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?;`,
+            [t.name],
+          )) ?? [];
+          tablesData[t.name] = {
+            sql: sqlRow[0]?.sql ? String(sqlRow[0].sql) : null,
+            rows: dataRows,
+          };
+        }
+        const payload = JSON.stringify({
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          tables: tablesData,
+        });
+        const encrypted = await encryptBackupData(new TextEncoder().encode(payload), passphrase);
+        return reply(
+          jsonResponse({
+            filename: `local-lite-backup-${new Date().toISOString().slice(0, 10)}.localbackup`,
+            sizeBytes: encrypted.byteLength,
+            tableCount: Object.keys(tablesData).length,
+            dataBase64: Buffer.from(encrypted).toString('base64'),
+          }),
+          `Exported ${Object.keys(tablesData).length} tables`,
+        );
+      }
+
+      if (pathname === '/api/backups/restore' && request.method === 'POST') {
+        if (readOnly) return reply(errorResponse('Dashboard is in read-only mode.', 403));
+        const body = (await request.json().catch(() => null)) as {
+          passphrase?: string;
+          dataBase64?: string;
+        } | null;
+        const passphrase = typeof body?.passphrase === 'string' ? body.passphrase : '';
+        const dataBase64 = typeof body?.dataBase64 === 'string' ? body.dataBase64 : '';
+        if (!passphrase || !dataBase64) {
+          return reply(errorResponse('Passphrase and backup data are required.', 400));
+        }
+        const encryptedBytes = new Uint8Array(Buffer.from(dataBase64, 'base64'));
+        let decryptedBytes: Uint8Array;
+        try {
+          decryptedBytes = await decryptBackupData(encryptedBytes, passphrase);
+        } catch {
+          return reply(errorResponse('Failed to decrypt backup. Check passphrase or file integrity.', 400));
+        }
+        const snapshot = JSON.parse(new TextDecoder().decode(decryptedBytes)) as {
+          version: number;
+          tables: Record<string, { sql: string | null; rows: Record<string, unknown>[] }>;
+        };
+        if (!snapshot?.tables || typeof snapshot.tables !== 'object') {
+          return reply(errorResponse('Invalid backup payload.', 400));
+        }
+        let restoredTables = 0;
+        let restoredRows = 0;
+        for (const [tableName, tableEntry] of Object.entries(snapshot.tables)) {
+          if (tableEntry.sql) {
+            const createSql = tableEntry.sql.replace(/^CREATE\s+TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ');
+            await db.execute(createSql);
+          }
+          const quoted = escapeIdentifier(tableName);
+          await db.execute(`DELETE FROM ${quoted};`);
+          for (const row of tableEntry.rows ?? []) {
+            const keys = Object.keys(row);
+            if (keys.length === 0) continue;
+            const colsSql = keys.map((k) => escapeIdentifier(k)).join(', ');
+            const placeholders = keys.map(() => '?').join(', ');
+            await db.execute(
+              `INSERT INTO ${quoted} (${colsSql}) VALUES (${placeholders});`,
+              keys.map((k) => row[k]),
+            );
+            restoredRows++;
+          }
+          restoredTables++;
+        }
+        return reply(
+          jsonResponse({ ok: true, restoredTables, restoredRows }),
+          `Restored ${restoredTables} tables (${restoredRows} rows)`,
+        );
+      }
+
+      return reply(errorResponse('Not found.', 404));
     } catch (err: any) {
-      return errorResponse(err?.message ?? 'Internal server error.', 500);
+      return reply(errorResponse(err?.message ?? 'Internal server error.', 500), err?.message);
     }
   };
 }

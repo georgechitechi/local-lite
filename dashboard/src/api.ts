@@ -13,12 +13,19 @@ export interface TableIndexInfo {
   columns: string[];
 }
 
+export interface TableForeignKeyInfo {
+  table: string;
+  from: string;
+  to: string;
+}
+
 export interface TableSummary {
   name: string;
   internal: boolean;
   rowCount: number;
   columns: TableColumnInfo[];
   indexes: TableIndexInfo[];
+  foreignKeys?: TableForeignKeyInfo[];
 }
 
 export interface OverviewResponse {

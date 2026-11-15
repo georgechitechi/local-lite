@@ -36,6 +36,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [busyTimeout, setBusyTimeout] = useState('5000');
   const [cacheSize, setCacheSize] = useState('-64000');
   const [foreignKeys, setForeignKeys] = useState('1');
+  const [backupPassphrase, setBackupPassphrase] = useState('');
+  const [restorePassphrase, setRestorePassphrase] = useState('');
+  const [backupBusy, setBackupBusy] = useState(false);
 
   const [kvModal, setKvModal] = useState<{
     open: boolean;
@@ -67,6 +70,69 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     localStorage.setItem('local_lite_auth_token', tokenInput.trim());
     setStatusMsg('Connection settings saved.');
     onRefresh();
+  };
+
+  const exportEncryptedBackup = async () => {
+    if (backupPassphrase.length < 4) {
+      onError('Passphrase must be at least 4 characters.');
+      return;
+    }
+    setBackupBusy(true);
+    try {
+      onError(null);
+      const res = await apiRequest<{
+        filename: string;
+        sizeBytes: number;
+        tableCount: number;
+        dataBase64: string;
+      }>('/api/backups/export', {
+        method: 'POST',
+        body: JSON.stringify({ passphrase: backupPassphrase }),
+      });
+      const bin = atob(res.dataBase64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatusMsg(`Exported ${res.tableCount} tables (${res.sizeBytes} bytes encrypted).`);
+    } catch (err: any) {
+      onError(err.message);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const restoreEncryptedBackup = async (file: File) => {
+    if (!restorePassphrase) {
+      onError('Enter the backup passphrase before selecting a file.');
+      return;
+    }
+    setBackupBusy(true);
+    try {
+      onError(null);
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+      const dataBase64 = btoa(bin);
+      const res = await apiRequest<{ restoredTables: number; restoredRows: number }>(
+        '/api/backups/restore',
+        {
+          method: 'POST',
+          body: JSON.stringify({ passphrase: restorePassphrase, dataBase64 }),
+        },
+      );
+      setStatusMsg(`Restored ${res.restoredTables} tables (${res.restoredRows} rows).`);
+      onRefresh();
+    } catch (err: any) {
+      onError(err.message);
+    } finally {
+      setBackupBusy(false);
+    }
   };
 
   const applyPragma = async (pragma: string, value: string | number | boolean) => {
@@ -601,6 +667,76 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
         )}
+
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="label" style={{ marginBottom: 10 }}>
+            Encrypted Backup &amp; Restore (AES-256-GCM)
+          </div>
+          <div className="kv-list">
+            <div className="kv-row">
+              <div>
+                <strong>Export Encrypted Snapshot</strong>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                  Download an AES-256-GCM encrypted <code>.localbackup</code> file of all tables and rows.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Passphrase (min 4 chars)"
+                  value={backupPassphrase}
+                  onChange={(e) => setBackupPassphrase(e.target.value)}
+                  style={{ width: 190 }}
+                />
+                <button
+                  className="btn primary"
+                  disabled={backupBusy || backupPassphrase.length < 4}
+                  onClick={() => void exportEncryptedBackup()}
+                >
+                  {backupBusy ? 'Working...' : 'Export .localbackup'}
+                </button>
+              </div>
+            </div>
+
+            <div className="kv-row">
+              <div>
+                <strong>Restore from Encrypted Backup</strong>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                  Enter passphrase and select a <code>.localbackup</code> file to restore tables and rows.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Backup passphrase"
+                  value={restorePassphrase}
+                  onChange={(e) => setRestorePassphrase(e.target.value)}
+                  style={{ width: 190 }}
+                  disabled={readOnly}
+                />
+                <label
+                  className={`btn${readOnly || backupBusy || !restorePassphrase ? ' disabled' : ''}`}
+                  style={{ cursor: readOnly || backupBusy || !restorePassphrase ? 'not-allowed' : 'pointer', opacity: readOnly || backupBusy || !restorePassphrase ? 0.5 : 1 }}
+                >
+                  Restore File
+                  <input
+                    type="file"
+                    accept=".localbackup"
+                    disabled={readOnly || backupBusy || !restorePassphrase}
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (f) void restoreEncryptedBackup(f);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {kvModal.open && (
