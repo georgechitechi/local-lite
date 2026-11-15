@@ -80,18 +80,9 @@ async function loadModuleExports(filePath) {
     return await import(pathToFileURL(absPath).href);
   }
 
+  const requireFromCwd = createRequire(path.join(process.cwd(), 'package.json'));
   try {
-    return await import(pathToFileURL(absPath).href);
-  } catch {
-    const requireFromCwd = createRequire(path.join(process.cwd(), 'package.json'));
-    let ts;
-    try {
-      ts = requireFromCwd('typescript');
-    } catch {
-      throw new Error(
-        `Cannot load TypeScript file "${filePath}". Install "typescript" in your project or pass a .js/.mjs/.json file.`,
-      );
-    }
+    const ts = requireFromCwd('typescript');
     const source = await readFile(absPath, 'utf8');
     const transpiled = ts.transpileModule(source, {
       compilerOptions: {
@@ -108,6 +99,14 @@ async function loadModuleExports(filePath) {
     );
     fn.runInThisContext()(moduleObj.exports, () => ({}), moduleObj);
     return moduleObj.exports;
+  } catch {
+    try {
+      return await import(pathToFileURL(absPath).href);
+    } catch {
+      throw new Error(
+        `Cannot load TypeScript file "${filePath}". Install "typescript" in your project or pass a .js/.mjs/.json file.`,
+      );
+    }
   }
 }
 
