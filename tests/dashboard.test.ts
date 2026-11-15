@@ -29,7 +29,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
   });
 
   it('serves the HTML dashboard UI on GET /', async () => {
-    const handler = createDashboardHandler(db, { title: 'Test Dash' });
+    const handler = createDashboardHandler(db, { title: 'Test Dash', requireAuth: false });
     const res = await handler(new Request('http://localhost/'));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/html');
@@ -38,7 +38,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
   });
 
   it('lists tables, overview, and system tables', async () => {
-    const handler = createDashboardHandler(db);
+    const handler = createDashboardHandler(db, { requireAuth: false });
 
     const overviewRes = await handler(
       new Request('http://localhost/api/overview'),
@@ -63,7 +63,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
   });
 
   it('supports querying, inserting, updating, and deleting table rows', async () => {
-    const handler = createDashboardHandler(db);
+    const handler = createDashboardHandler(db, { requireAuth: false });
 
     const searchRes = await handler(
       new Request('http://localhost/api/tables/todos/rows?search=Ship'),
@@ -158,7 +158,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
   });
 
   it('supports settings, pragmas, maintenance, export, and kv-store management', async () => {
-    const handler = createDashboardHandler(db, { title: 'Settings Dash' });
+    const handler = createDashboardHandler(db, { title: 'Settings Dash', requireAuth: false });
 
     const settingsRes = await handler(new Request('http://localhost/api/settings'));
     expect(settingsRes.status).toBe(200);
@@ -215,7 +215,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
   });
 
   it('supports table DDL, JSON import, indexes, files, auth-admin, and jobs endpoints', async () => {
-    const handler = createDashboardHandler(db);
+    const handler = createDashboardHandler(db, { requireAuth: false });
 
     const createTableRes = await handler(
       new Request('http://localhost/api/tables', {
@@ -343,7 +343,7 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
       INSERT INTO sync_outbox (table_name, operation, status, payload)
       VALUES ('books', 'insert', 'failed', '{"after":{"id":"b1"}}');
     `);
-    const handler = createDashboardHandler(db);
+    const handler = createDashboardHandler(db, { requireAuth: false });
 
     // 1. Foreign keys in /api/tables
     const tablesRes = await handler(new Request('http://local.test/api/tables'));
@@ -464,5 +464,97 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
       new Request('http://local.test/api/logs', { method: 'DELETE' }),
     );
     expect(clearLogsRes.status).toBe(200);
+  });
+
+  it('requires local-lite auth login by default and supports setup, login, and logout', async () => {
+    const handler = createDashboardHandler(db);
+
+    // 1. Unauthenticated /api/* is blocked
+    const unauthTables = await handler(new Request('http://local.test/api/tables'));
+    expect(unauthTables.status).toBe(401);
+
+    // 2. Status shows requireAuth: true, authenticated: false, userCount: 0
+    const statusBefore = await (
+      await handler(new Request('http://local.test/api/dashboard-auth/status'))
+    ).json();
+    expect(statusBefore).toMatchObject({
+      requireAuth: true,
+      authenticated: false,
+      userCount: 0,
+    });
+
+    // 3. First-time admin setup
+    const setupRes = await handler(
+      new Request('http://local.test/api/dashboard-auth/setup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'admin@example.com',
+          username: 'admin',
+          password: 'Password123!',
+        }),
+      }),
+    );
+    expect(setupRes.status).toBe(201);
+    const setupBody = await setupRes.json();
+    expect(setupBody.token).toBeTruthy();
+    expect(setupBody.user.email).toBe('admin@example.com');
+
+    // 4. Second setup attempt is rejected
+    const secondSetup = await handler(
+      new Request('http://local.test/api/dashboard-auth/setup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'other@example.com',
+          password: 'Password123!',
+        }),
+      }),
+    );
+    expect(secondSetup.status).toBe(403);
+
+    // 5. Authenticated /api/tables succeeds
+    const authTables = await handler(
+      new Request('http://local.test/api/tables', {
+        headers: { authorization: `Bearer ${setupBody.token}` },
+      }),
+    );
+    expect(authTables.status).toBe(200);
+
+    // 6. Logout invalidates session
+    const logoutRes = await handler(
+      new Request('http://local.test/api/dashboard-auth/logout', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${setupBody.token}` },
+      }),
+    );
+    expect(logoutRes.status).toBe(200);
+    const afterLogout = await handler(
+      new Request('http://local.test/api/tables', {
+        headers: { authorization: `Bearer ${setupBody.token}` },
+      }),
+    );
+    expect(afterLogout.status).toBe(401);
+
+    // 7. Login with LocalAuthEngine credentials restores access
+    const loginRes = await handler(
+      new Request('http://local.test/api/dashboard-auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          identifier: 'admin@example.com',
+          password: 'Password123!',
+        }),
+      }),
+    );
+    expect(loginRes.status).toBe(200);
+    const loginBody = await loginRes.json();
+    expect(loginBody.token).toBeTruthy();
+    const afterLogin = await handler(
+      new Request('http://local.test/api/tables', {
+        headers: { authorization: `Bearer ${loginBody.token}` },
+      }),
+    );
+    expect(afterLogin.status).toBe(200);
   });
 });

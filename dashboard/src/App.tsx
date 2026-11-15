@@ -33,6 +33,25 @@ type ViewTab =
 
 export function App() {
   const [view, setView] = useState<ViewTab>('data');
+  const [authState, setAuthState] = useState<{
+    checking: boolean;
+    requireAuth: boolean;
+    authenticated: boolean;
+    userCount: number;
+    user: { id: string; email?: string; username?: string; name?: string; role?: string } | null;
+  }>({
+    checking: true,
+    requireAuth: true,
+    authenticated: false,
+    userCount: 0,
+    user: null,
+  });
+  const [authIdentifier, setAuthIdentifier] = useState('');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (localStorage.getItem('local_lite_theme') as 'dark' | 'light') || 'dark',
   );
@@ -113,12 +132,14 @@ export function App() {
     const list = data.tables || [];
     setTables(list);
     setSelectedTable((prev) => {
-      if (prev && list.some((t) => t.name === prev)) return prev;
-      const firstUser = list.find((t) => !t.internal) || list[0];
+      if (prev && prev !== '_local_sessions' && list.some((t) => t.name === prev && (!t.internal || showSystem))) {
+        return prev;
+      }
+      const firstUser = list.find((t) => !t.internal && t.name !== '_local_sessions');
       return firstUser ? firstUser.name : null;
     });
     return list;
-  }, []);
+  }, [showSystem]);
 
   const refreshActiveView = useCallback(async () => {
     setError(null);
@@ -126,9 +147,11 @@ export function App() {
       if (view === 'data') {
         const list = await loadTables();
         const active =
-          selectedTable && list.some((t) => t.name === selectedTable)
+          selectedTable &&
+          selectedTable !== '_local_sessions' &&
+          list.some((t) => t.name === selectedTable && (!t.internal || showSystem))
             ? selectedTable
-            : (list.find((t) => !t.internal) || list[0])?.name;
+            : list.find((t) => !t.internal && t.name !== '_local_sessions')?.name;
         if (active) {
           const q = new URLSearchParams({
             limit: String(limit),
@@ -185,21 +208,53 @@ export function App() {
     orderDir,
   ]);
 
-  useEffect(() => {
-    refreshActiveView();
-  }, [refreshActiveView]);
-
-  useEffect(() => {
-    apiRequest<OverviewResponse>('/api/overview')
-      .then(setOverview)
-      .catch(() => {});
+  const checkAuthStatus = useCallback(async () => {
+    try {
+      const res = await apiRequest<{
+        requireAuth: boolean;
+        authenticated: boolean;
+        userCount: number;
+        user: { id: string; email?: string; username?: string; name?: string; role?: string } | null;
+      }>('/api/dashboard-auth/status');
+      setAuthState({
+        checking: false,
+        requireAuth: res.requireAuth,
+        authenticated: res.authenticated,
+        userCount: res.userCount,
+        user: res.user,
+      });
+    } catch {
+      setAuthState((prev) => ({ ...prev, checking: false, authenticated: false }));
+    }
   }, []);
 
   useEffect(() => {
-    if (pollMs <= 0) return;
+    void checkAuthStatus();
+    const onUnauthorized = () => {
+      localStorage.removeItem('local_lite_auth_token');
+      setAuthState((prev) => ({ ...prev, authenticated: false, user: null }));
+    };
+    window.addEventListener('local-lite:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('local-lite:unauthorized', onUnauthorized);
+  }, [checkAuthStatus]);
+
+  useEffect(() => {
+    if (!authState.authenticated) return;
+    refreshActiveView();
+  }, [authState.authenticated, refreshActiveView]);
+
+  useEffect(() => {
+    if (!authState.authenticated) return;
+    apiRequest<OverviewResponse>('/api/overview')
+      .then(setOverview)
+      .catch(() => {});
+  }, [authState.authenticated]);
+
+  useEffect(() => {
+    if (!authState.authenticated || pollMs <= 0) return;
     const id = window.setInterval(refreshActiveView, pollMs);
     return () => window.clearInterval(id);
-  }, [pollMs, refreshActiveView]);
+  }, [authState.authenticated, pollMs, refreshActiveView]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -255,13 +310,160 @@ export function App() {
 
   const visibleTables = tables.filter(
     (t) =>
+      t.name !== '_local_sessions' &&
       (showSystem || !t.internal) &&
       (!tableFilter.trim() ||
         t.name.toLowerCase().includes(tableFilter.trim().toLowerCase())),
   );
 
-  const selectedMeta = tables.find((t) => t.name === selectedTable);
+  const selectedMeta =
+    selectedTable === '_local_sessions'
+      ? undefined
+      : tables.find((t) => t.name === selectedTable);
   const readOnly = Boolean(overview?.readOnly);
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthBusy(true);
+    try {
+      const isSetup = authState.userCount === 0;
+      const endpoint = isSetup ? '/api/dashboard-auth/setup' : '/api/dashboard-auth/login';
+      const payload = isSetup
+        ? {
+            email: authIdentifier.trim(),
+            username: authUsername.trim() || undefined,
+            name: authName.trim() || undefined,
+            password: authPassword,
+          }
+        : {
+            identifier: authIdentifier.trim(),
+            password: authPassword,
+          };
+      const res = await apiRequest<{ user: any; token: string }>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (res.token) {
+        localStorage.setItem('local_lite_auth_token', res.token);
+      }
+      setAuthPassword('');
+      setAuthState((prev) => ({
+        ...prev,
+        authenticated: true,
+        userCount: Math.max(1, prev.userCount),
+        user: res.user,
+      }));
+    } catch (err: any) {
+      setAuthError(err?.message || 'Authentication failed');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await apiRequest('/api/dashboard-auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('local_lite_auth_token');
+    setAuthState((prev) => ({ ...prev, authenticated: false, user: null }));
+  };
+
+  if (authState.checking) {
+    return (
+      <div className="app" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ color: 'var(--muted)', fontSize: 13 }}>Checking session...</div>
+      </div>
+    );
+  }
+
+  if (authState.requireAuth && !authState.authenticated) {
+    const isSetup = authState.userCount === 0;
+    return (
+      <div className="app" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 20 }}>
+        <form
+          onSubmit={handleAuthSubmit}
+          className="card"
+          style={{ width: 380, maxWidth: '100%', padding: 22 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span className="dot" />
+            <strong style={{ fontSize: 15 }}>local-lite Dashboard</strong>
+          </div>
+          <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 16 }}>
+            {isSetup
+              ? 'Create the first local-auth admin account to access the dashboard.'
+              : 'Sign in with your local-lite account to continue.'}
+          </div>
+          {authError && (
+            <div className="error-banner" style={{ marginBottom: 12 }}>
+              {authError}
+            </div>
+          )}
+          <div className="field-row">
+            <label>{isSetup ? 'Email' : 'Email or Username'}</label>
+            <input
+              className="input"
+              type={isSetup ? 'email' : 'text'}
+              required
+              autoFocus
+              placeholder={isSetup ? 'admin@example.com' : 'email or username'}
+              value={authIdentifier}
+              onChange={(e) => setAuthIdentifier(e.target.value)}
+            />
+          </div>
+          {isSetup && (
+            <>
+              <div className="field-row">
+                <label>Username (optional)</label>
+                <input
+                  className="input"
+                  placeholder="admin"
+                  value={authUsername}
+                  onChange={(e) => setAuthUsername(e.target.value)}
+                />
+              </div>
+              <div className="field-row">
+                <label>Name (optional)</label>
+                <input
+                  className="input"
+                  placeholder="Admin"
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+          <div className="field-row">
+            <label>Password</label>
+            <input
+              className="input"
+              type="password"
+              required
+              minLength={isSetup ? 8 : 1}
+              placeholder={isSetup ? 'Minimum 8 characters' : 'Password'}
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn primary"
+            type="submit"
+            disabled={authBusy}
+            style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}
+          >
+            {authBusy
+              ? 'Please wait...'
+              : isSetup
+                ? 'Create Admin & Sign In'
+                : 'Sign In'}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -404,6 +606,33 @@ export function App() {
             >
               <span>Settings</span>
             </button>
+            {authState.requireAuth && authState.user && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 6,
+                  padding: '6px 8px 2px',
+                  fontSize: 11,
+                  color: 'var(--muted)',
+                }}
+              >
+                <span
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  title={authState.user.email || authState.user.username || authState.user.id}
+                >
+                  {authState.user.email || authState.user.username || authState.user.name || 'Signed in'}
+                </span>
+                <button
+                  className="btn"
+                  style={{ padding: '2px 7px', fontSize: 11 }}
+                  onClick={() => void handleLogout()}
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </aside>
 

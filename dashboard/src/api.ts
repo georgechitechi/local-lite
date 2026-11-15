@@ -114,10 +114,14 @@ export async function apiRequest<T = any>(
   }
   const res = await fetch(`${getApiBase()}${path}`, {
     ...options,
+    credentials: 'same-origin',
     headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/api/dashboard-auth/')) {
+      window.dispatchEvent(new Event('local-lite:unauthorized'));
+    }
     throw new Error(data.error || `Request failed (${res.status})`);
   }
   return data as T;

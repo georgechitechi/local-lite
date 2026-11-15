@@ -1,4 +1,5 @@
 import type { LocalDBAdapter } from '../adapters/local/index.js';
+import { generateCryptoToken, LocalAuthEngine } from '../auth/local.js';
 import { decryptBackupData, encryptBackupData } from '../backups/encryption.js';
 import { DEFAULT_KV_STORE_TABLE, KVStore } from '../kv-store/store.js';
 import { escapeIdentifier, isInternalTable, isReadQuery } from '../utils/sql.js';
@@ -10,6 +11,8 @@ export interface DashboardHandlerOptions {
   readOnly?: boolean;
   /** Optional bearer/query token required to access the dashboard and its APIs. */
   authToken?: string;
+  /** Require local-lite user login to access dashboard APIs. Defaults to true. */
+  requireAuth?: boolean;
   /** Base path if mounted under a sub-path (e.g. '/_dashboard'). Defaults to ''. */
   basePath?: string;
 }
@@ -74,6 +77,28 @@ function isAuthorized(request: Request, url: URL, authToken?: string): boolean {
   if (header === `Bearer ${authToken}`) return true;
   if (url.searchParams.get('token') === authToken) return true;
   return false;
+}
+
+function extractSessionToken(request: Request, url: URL): string | null {
+  const header = request.headers.get('authorization');
+  if (header && header.startsWith('Bearer ')) {
+    const token = header.slice(7).trim();
+    if (token) return token;
+  }
+  const queryToken = url.searchParams.get('token');
+  if (queryToken) return queryToken;
+  const cookieHeader = request.headers.get('cookie');
+  if (cookieHeader) {
+    for (const part of cookieHeader.split(';')) {
+      const eq = part.indexOf('=');
+      if (eq === -1) continue;
+      const k = part.slice(0, eq).trim();
+      if (k === 'local_lite_session') {
+        return decodeURIComponent(part.slice(eq + 1).trim());
+      }
+    }
+  }
+  return null;
 }
 
 async function listTables(db: LocalDBAdapter): Promise<TableSummary[]> {
@@ -184,7 +209,57 @@ export function createDashboardHandler(
 ): (request: Request) => Promise<Response> {
   const title = options.title ?? 'local-lite Dashboard';
   const readOnly = Boolean(options.readOnly);
+  const requireAuth = options.requireAuth !== false;
   const basePath = (options.basePath ?? '').replace(/\/+$/, '');
+  const authEngine = new LocalAuthEngine(db);
+  let authInitPromise: Promise<void> | null = null;
+  const ensureAuth = () => (authInitPromise ??= authEngine.initialize());
+
+  const countUsers = async (): Promise<number> => {
+    await ensureAuth();
+    const rows = (await db.execute(`SELECT COUNT(*) AS cnt FROM _local_users;`)) ?? [];
+    return Number(rows[0]?.cnt ?? 0);
+  };
+
+  const verifyLocalSession = async (
+    request: Request,
+    url: URL,
+  ): Promise<{ id: string; email?: string; username?: string; name?: string; role?: string } | null> => {
+    const token = extractSessionToken(request, url);
+    if (!token) return null;
+    await ensureAuth();
+    const rows =
+      (await db.execute(
+        `SELECT s.id AS session_id, s.user_id, s.expires_at, u.email, u.username, u.display_name, u.role
+         FROM _local_sessions s
+         INNER JOIN _local_users u ON u.id = s.user_id
+         WHERE s.token = ?
+         LIMIT 1;`,
+        [token],
+      )) ?? [];
+    const row = rows[0];
+    if (!row) return null;
+    if (row.expires_at !== null && row.expires_at !== undefined && Number(row.expires_at) <= Date.now()) {
+      return null;
+    }
+    return {
+      id: String(row.user_id),
+      email: row.email ? String(row.email) : undefined,
+      username: row.username ? String(row.username) : undefined,
+      name: row.display_name ? String(row.display_name) : undefined,
+      role: row.role ? String(row.role) : undefined,
+    };
+  };
+
+  const withSessionCookie = (res: Response, token: string, maxAgeSeconds = 60 * 60 * 24 * 7) => {
+    const headers = new Headers(res.headers);
+    headers.append(
+      'Set-Cookie',
+      `local_lite_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`,
+    );
+    return new Response(res.body, { status: res.status, headers });
+  };
+
   const logs: DashboardLogEntry[] = [];
   let nextLogId = 1;
   const recordLog = (
@@ -215,9 +290,116 @@ export function createDashboardHandler(
       pathname = pathname.slice(basePath.length) || '/';
     }
 
-    if (!isAuthorized(request, url, options.authToken)) {
+    if (options.authToken && !isAuthorized(request, url, options.authToken)) {
       recordLog(request.method, pathname, 401, startedAt, 'Unauthorized');
       return errorResponse('Unauthorized.', 401);
+    }
+
+    // ── Local Auth endpoints (accessible before login) ──────────────────
+    if (pathname === '/api/dashboard-auth/status' && request.method === 'GET') {
+      try {
+        const userCount = await countUsers();
+        const sessionUser = requireAuth ? await verifyLocalSession(request, url) : null;
+        return jsonResponse({
+          requireAuth,
+          authenticated: !requireAuth || Boolean(options.authToken && isAuthorized(request, url, options.authToken)) || Boolean(sessionUser),
+          userCount,
+          user: sessionUser,
+        });
+      } catch (err: any) {
+        return errorResponse(err?.message ?? 'Auth status failed.', 500);
+      }
+    }
+
+    if (pathname === '/api/dashboard-auth/setup' && request.method === 'POST') {
+      try {
+        const userCount = await countUsers();
+        if (userCount > 0) {
+          return errorResponse('Admin account already exists. Please sign in.', 403);
+        }
+        const body = (await request.json().catch(() => null)) as {
+          email?: string;
+          username?: string;
+          password?: string;
+          name?: string;
+        } | null;
+        const result = await authEngine.signUp({
+          email: String(body?.email ?? ''),
+          username: body?.username ? String(body.username) : undefined,
+          password: String(body?.password ?? ''),
+          displayName: body?.name ? String(body.name) : undefined,
+          role: 'admin',
+        });
+        let token = result.session?.token ?? '';
+        if (!token && result.session?.id) {
+          token = generateCryptoToken(32).token;
+          await db.execute(`UPDATE _local_sessions SET token = ? WHERE id = ?;`, [
+            token,
+            result.session.id,
+          ]);
+        }
+        const res = jsonResponse({
+          user: result.user,
+          token,
+          expiresAt: result.session?.expiresAt ?? null,
+        }, 201);
+        return token ? withSessionCookie(res, token) : res;
+      } catch (err: any) {
+        return errorResponse(err?.message ?? 'Setup failed.', 400);
+      }
+    }
+
+    if (pathname === '/api/dashboard-auth/login' && request.method === 'POST') {
+      try {
+        await ensureAuth();
+        const body = (await request.json().catch(() => null)) as {
+          identifier?: string;
+          password?: string;
+        } | null;
+        const result = await authEngine.signIn({
+          identifier: String(body?.identifier ?? ''),
+          password: String(body?.password ?? ''),
+        });
+        let token = result.session?.token ?? '';
+        if (!token && result.session?.id) {
+          token = generateCryptoToken(32).token;
+          await db.execute(`UPDATE _local_sessions SET token = ? WHERE id = ?;`, [
+            token,
+            result.session.id,
+          ]);
+        }
+        const res = jsonResponse({
+          user: result.user,
+          token,
+          expiresAt: result.session?.expiresAt ?? null,
+        });
+        return token ? withSessionCookie(res, token) : res;
+      } catch (err: any) {
+        return errorResponse(err?.message ?? 'Invalid credentials.', 401);
+      }
+    }
+
+    if (pathname === '/api/dashboard-auth/logout' && request.method === 'POST') {
+      try {
+        const token = extractSessionToken(request, url);
+        if (token) {
+          await ensureAuth();
+          await db.execute(`DELETE FROM _local_sessions WHERE token = ?;`, [token]);
+        }
+        return withSessionCookie(jsonResponse({ ok: true }), '', 0);
+      } catch (err: any) {
+        return errorResponse(err?.message ?? 'Logout failed.', 500);
+      }
+    }
+
+    // Gate all other /api/* requests behind local-lite session auth when requireAuth is enabled
+    if (requireAuth && pathname.startsWith('/api/')) {
+      const staticTokenOk = Boolean(options.authToken && isAuthorized(request, url, options.authToken));
+      const sessionUser = staticTokenOk ? { id: 'token' } : await verifyLocalSession(request, url);
+      if (!sessionUser) {
+        recordLog(request.method, pathname, 401, startedAt, 'Unauthorized');
+        return errorResponse('Authentication required.', 401);
+      }
     }
 
     let loggedThisRequest = false;
