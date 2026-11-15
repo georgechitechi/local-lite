@@ -4,6 +4,7 @@ import type {
   SyncOperation,
   SyncOp,
 } from '../core/types.js';
+import type { LocalDBAdapter } from '../adapters/local/index.js';
 import type { ApiEndpoint, ApiRequestContext } from './index.js';
 
 export interface ServerSyncRecord {
@@ -183,6 +184,283 @@ export class MemoryServerSyncStorage implements ServerSyncStorage {
     this.tables.clear();
     this.changeLog = [];
     this.monotonicCursor = 0;
+  }
+}
+
+export interface SQLiteServerSyncStorageOptions {
+  /**
+   * Optional maximum changelog entries to retain. Older entries are compacted after writes.
+   */
+  maxChangeLogEntries?: number;
+}
+
+/**
+ * Persistent SQLite-backed ServerSyncStorage for production self-hosted sync servers.
+ * Works with any LocalDBAdapter (e.g. BetterSQLite3Adapter, NodeSQLiteAdapter, LibSQLAdapter).
+ */
+export class SQLiteServerSyncStorage implements ServerSyncStorage {
+  private initPromise?: Promise<void>;
+  private maxChangeLogEntries?: number;
+
+  constructor(
+    private db: LocalDBAdapter,
+    options: SQLiteServerSyncStorageOptions = {},
+  ) {
+    this.maxChangeLogEntries = options.maxChangeLogEntries;
+  }
+
+  private async ensureSchema(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        await this.db.execute(
+          `CREATE TABLE IF NOT EXISTS _sync_server_records (
+            table_name TEXT NOT NULL,
+            row_id TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            operation TEXT NOT NULL,
+            cursor INTEGER NOT NULL,
+            PRIMARY KEY (table_name, row_id)
+          );`,
+        );
+        await this.db.execute(
+          `CREATE TABLE IF NOT EXISTS _sync_server_changelog (
+            cursor INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            row_id TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            operation TEXT NOT NULL
+          );`,
+        );
+        await this.db.execute(
+          `CREATE INDEX IF NOT EXISTS idx_sync_srv_log_table_cursor ON _sync_server_changelog (table_name, cursor);`,
+        );
+      })().catch((err) => {
+        this.initPromise = undefined;
+        throw err;
+      });
+    }
+    await this.initPromise;
+  }
+
+  async applyOperations(
+    operations: SyncOperation[],
+    overrideTime?: number,
+  ): Promise<{
+    applied: number;
+    successfulIds: string[];
+    serverTime: number;
+    cursor: number;
+  }> {
+    await this.ensureSchema();
+    const serverTime = overrideTime ?? Date.now();
+    let applied = 0;
+    const successfulIds: string[] = [];
+    let latestCursor = 0;
+
+    await this.db.transaction(async (tx) => {
+      for (const op of operations) {
+        if (!op.tableName || !op.rowId) continue;
+        const rowId = String(op.rowId);
+
+        const existingRows = await tx.execute(
+          `SELECT payload, timestamp FROM _sync_server_records WHERE table_name = ? AND row_id = ? LIMIT 1`,
+          [op.tableName, rowId],
+        );
+        const existing = existingRows?.[0];
+        const opTime = op.timestamp ?? serverTime;
+
+        if (existing && Number(existing.timestamp) > opTime) {
+          successfulIds.push(op.id);
+          continue;
+        }
+
+        let existingPayload: Record<string, any> = {};
+        if (existing?.payload) {
+          try {
+            existingPayload =
+              typeof existing.payload === 'string'
+                ? JSON.parse(existing.payload)
+                : existing.payload;
+          } catch {
+            existingPayload = {};
+          }
+        }
+
+        const isDelete = op.operation === 'DELETE';
+        const recordPayload = isDelete
+          ? { id: op.rowId, deleted: true }
+          : { ...existingPayload, ...(op.payload || {}), id: op.rowId };
+        const serializedPayload = JSON.stringify(recordPayload);
+        const recordTimestamp = Math.max(opTime, serverTime);
+
+        const insertRes = await tx.execute(
+          `INSERT INTO _sync_server_changelog (table_name, row_id, payload, timestamp, operation) VALUES (?, ?, ?, ?, ?)`,
+          [
+            op.tableName,
+            rowId,
+            serializedPayload,
+            recordTimestamp,
+            op.operation,
+          ],
+        );
+
+        let cursor = Number(insertRes?.[0]?.lastInsertRowid ?? 0);
+        if (!cursor) {
+          const maxRows = await tx.execute(
+            `SELECT MAX(cursor) AS cursor FROM _sync_server_changelog`,
+          );
+          cursor = Number(maxRows?.[0]?.cursor ?? 0);
+        }
+
+        await tx.execute(
+          `INSERT INTO _sync_server_records (table_name, row_id, payload, timestamp, operation, cursor)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (table_name, row_id) DO UPDATE SET
+             payload = excluded.payload,
+             timestamp = excluded.timestamp,
+             operation = excluded.operation,
+             cursor = excluded.cursor`,
+          [
+            op.tableName,
+            rowId,
+            serializedPayload,
+            recordTimestamp,
+            op.operation,
+            cursor,
+          ],
+        );
+
+        latestCursor = Math.max(latestCursor, cursor);
+        applied += 1;
+        successfulIds.push(op.id);
+      }
+
+      if (
+        this.maxChangeLogEntries !== undefined &&
+        Number.isFinite(this.maxChangeLogEntries) &&
+        this.maxChangeLogEntries > 0 &&
+        latestCursor > this.maxChangeLogEntries
+      ) {
+        await tx.execute(
+          `DELETE FROM _sync_server_changelog WHERE cursor <= ?`,
+          [latestCursor - this.maxChangeLogEntries],
+        );
+      }
+    });
+
+    if (latestCursor === 0) {
+      const maxRows = await this.db.execute(
+        `SELECT MAX(cursor) AS cursor FROM _sync_server_changelog`,
+      );
+      latestCursor = Number(maxRows?.[0]?.cursor ?? 0);
+    }
+
+    return { applied, successfulIds, serverTime, cursor: latestCursor };
+  }
+
+  async getDeltas(
+    tables: string[],
+    since: number,
+    limit: number = 1000,
+  ): Promise<{
+    changes: DeltaChanges;
+    cursor: number;
+    hasMore: boolean;
+    serverTime: number;
+  }> {
+    await this.ensureSchema();
+    const serverTime = Date.now();
+    const safeLimit = Math.max(1, Math.floor(limit));
+
+    const maxRows = await this.db.execute(
+      `SELECT MAX(cursor) AS maxCursor FROM _sync_server_changelog`,
+    );
+    const currentMaxCursor = Number(maxRows?.[0]?.maxCursor ?? 0);
+    const useCursorFilter = since <= currentMaxCursor;
+
+    const params: any[] = [since];
+    let whereClause = useCursorFilter ? `cursor > ?` : `timestamp > ?`;
+    if (tables.length > 0) {
+      const placeholders = tables.map(() => '?').join(', ');
+      whereClause += ` AND table_name IN (${placeholders})`;
+      params.push(...tables);
+    }
+    params.push(safeLimit + 1);
+
+    const rows = await this.db.execute(
+      `SELECT cursor, table_name, row_id, payload, timestamp, operation
+       FROM _sync_server_changelog
+       WHERE ${whereClause}
+       ORDER BY cursor ASC
+       LIMIT ?`,
+      params,
+    );
+
+    const hasMore = rows.length > safeLimit;
+    const paged = hasMore ? rows.slice(0, safeLimit) : rows;
+
+    const latestMap = new Map<string, DeltaChange>();
+    let maxCursor = since;
+
+    for (const row of paged) {
+      let parsedPayload: Record<string, any> = {};
+      try {
+        parsedPayload =
+          typeof row.payload === 'string'
+            ? JSON.parse(row.payload)
+            : (row.payload ?? {});
+      } catch {
+        parsedPayload = {};
+      }
+
+      const key = `${row.table_name}:${row.row_id}`;
+      const ts = Number(row.timestamp);
+      const cur = Number(row.cursor);
+      latestMap.set(key, {
+        tableName: row.table_name,
+        operation: row.operation as SyncOp,
+        rowId: row.row_id,
+        payload: parsedPayload,
+        timestamp: ts,
+      });
+      if (useCursorFilter) {
+        if (cur > maxCursor) maxCursor = cur;
+      } else {
+        if (ts > maxCursor) maxCursor = ts;
+      }
+    }
+
+    const deltaList = Array.from(latestMap.values());
+    return {
+      changes: {
+        timestamp: serverTime,
+        changes: deltaList,
+        hasMore,
+      },
+      cursor: maxCursor,
+      hasMore,
+      serverTime,
+    };
+  }
+
+  /**
+   * Compacts older changelog entries, retaining the most recent `retentionCount` rows.
+   */
+  async compactChangeLog(retentionCount: number = 10000): Promise<void> {
+    await this.ensureSchema();
+    if (!Number.isFinite(retentionCount) || retentionCount < 0) return;
+    const maxRows = await this.db.execute(
+      `SELECT MAX(cursor) AS cursor FROM _sync_server_changelog`,
+    );
+    const maxCursor = Number(maxRows?.[0]?.cursor ?? 0);
+    if (maxCursor > retentionCount) {
+      await this.db.execute(
+        `DELETE FROM _sync_server_changelog WHERE cursor <= ?`,
+        [maxCursor - retentionCount],
+      );
+    }
   }
 }
 

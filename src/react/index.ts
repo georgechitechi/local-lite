@@ -170,6 +170,55 @@ export function clearLiveQueryCache(): void {
   inFlightQueries.clear();
 }
 
+function isPlainEqualityMatch(actual: any, expected: any): boolean {
+  if (typeof expected === 'boolean') {
+    return actual === expected || actual === (expected ? 1 : 0);
+  }
+  return actual === expected;
+}
+
+function shouldInvalidateLiveQuery(
+  event: any,
+  options: QueryOptions | undefined,
+  currentRows: any[],
+  primaryKey: string,
+): boolean {
+  if (!event || !event.rowId || event.rowId === 'batch') return true;
+  if (!options || !options.where || typeof options.where === 'function') {
+    return true;
+  }
+
+  const rowIdStr = String(event.rowId);
+  const inResult = currentRows.some(
+    (r) =>
+      r && r[primaryKey] !== undefined && String(r[primaryKey]) === rowIdStr,
+  );
+
+  if (event.operation === 'DELETE') {
+    return inResult;
+  }
+
+  if (
+    (event.operation === 'INSERT' || event.operation === 'UPDATE') &&
+    !inResult &&
+    event.payload &&
+    typeof event.payload === 'object'
+  ) {
+    const whereObj = options.where as Record<string, any>;
+    if ('$or' in whereObj || '$and' in whereObj) return true;
+    for (const [key, expected] of Object.entries(whereObj)) {
+      if (expected !== null && typeof expected === 'object') continue;
+      if (Object.prototype.hasOwnProperty.call(event.payload, key)) {
+        if (!isPlainEqualityMatch(event.payload[key], expected)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 /**
  * Hook to execute a live reactive table query that automatically re-runs
  * whenever the table is mutated locally or via incoming remote delta.
@@ -241,13 +290,24 @@ export function useLiveQuery<T = any>(
   }, [client, tableName, cacheKey]);
 
   const scheduleRefetch = useCoalescedRunner(refetch);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   useEffect(() => {
     if (!client || !client.db) return;
 
     refetch();
 
-    const unsubscribe = client.events.on(tableName, () => {
+    const pk = client.getPrimaryKey();
+    const unsubscribe = client.events.on(tableName, (event: any) => {
+      const opts =
+        typeof queryParamRef.current === 'object' &&
+        queryParamRef.current !== null
+          ? queryParamRef.current
+          : undefined;
+      if (!shouldInvalidateLiveQuery(event, opts, dataRef.current, pk)) {
+        return;
+      }
       advanceTableVersion(client, tableName);
       scheduleRefetch();
     });
@@ -644,6 +704,8 @@ export function useLiveInfiniteQuery<T = any>(
   }, [loadData]);
 
   const scheduleRefetch = useCoalescedRunner(refetch);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   const fetchNextPage = useCallback(async () => {
     if (!hasNextPage || isFetchingNextPage) return;
@@ -657,7 +719,18 @@ export function useLiveInfiniteQuery<T = any>(
 
     loadData(1, false);
 
-    const unsubscribe = client.events.on(tableName, () => {
+    const pk = client.getPrimaryKey();
+    const unsubscribe = client.events.on(tableName, (event: any) => {
+      if (
+        !shouldInvalidateLiveQuery(
+          event,
+          optionsRef.current,
+          dataRef.current,
+          pk,
+        )
+      ) {
+        return;
+      }
       advanceTableVersion(client, tableName);
       scheduleRefetch();
     });

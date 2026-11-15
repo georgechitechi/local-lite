@@ -18,12 +18,20 @@ export interface RemoteBackupArchive {
   downloadUrl: string | null;
 }
 
+export interface RemoteRequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface RemoteDBAdapter {
-  pushChanges(operations: SyncOperation[]): Promise<boolean | PushResult>;
+  pushChanges(
+    operations: SyncOperation[],
+    options?: RemoteRequestOptions,
+  ): Promise<boolean | PushResult>;
   /** Return a complete batch through timestamp; reject on partial failure. Supports optional scope for data filtering. */
   fetchChanges(
     sinceTimestamp: number,
     scope?: Record<string, any>,
+    options?: RemoteRequestOptions,
   ): Promise<DeltaChanges>;
   /** Live events do not advance the durable pull checkpoint; return a cleanup function. */
   subscribeToLiveChanges(

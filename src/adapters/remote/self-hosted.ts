@@ -2,6 +2,7 @@ import {
   RemoteDBAdapter,
   RemoteBackupArchive,
   RemoteAutomationJob,
+  RemoteRequestOptions,
 } from './index.js';
 import { DeltaChanges, PushResult, SyncOperation } from '../../core/types.js';
 
@@ -92,7 +93,10 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes client mutations to the self-hosted sync backend.
    */
-  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
+  async pushChanges(
+    operations: SyncOperation[],
+    options?: RemoteRequestOptions,
+  ): Promise<PushResult> {
     if (operations.length === 0) {
       return { success: true, successfulIds: [] };
     }
@@ -101,6 +105,7 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       method: 'POST',
       headers: this.getRequestHeaders(),
       body: JSON.stringify({ operations }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -123,6 +128,7 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   async fetchChanges(
     sinceTimestamp: number,
     _scope?: Record<string, any>,
+    options?: RemoteRequestOptions,
   ): Promise<DeltaChanges> {
     const tablesParam = encodeURIComponent(this.tables.join(','));
     const url = `${this.url}?tables=${tablesParam}&since=${encodeURIComponent(String(sinceTimestamp))}`;
@@ -130,6 +136,7 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     const response = await this.fetchFn(url, {
       method: 'GET',
       headers: this.getRequestHeaders(),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -144,7 +151,14 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       this.lastPollCursor,
       data.cursor ?? sinceTimestamp,
     );
-    return data.changes ?? { timestamp: Date.now(), changes: [] };
+    const deltas: DeltaChanges = data.changes ?? {
+      timestamp: Date.now(),
+      changes: [],
+    };
+    if (data.hasMore !== undefined && deltas.hasMore === undefined) {
+      deltas.hasMore = Boolean(data.hasMore);
+    }
+    return deltas;
   }
 
   /**

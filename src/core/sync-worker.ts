@@ -42,27 +42,6 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 /** Safety cap on consecutive paginated pull pages per cycle. */
 const MAX_PULL_PAGES = 100;
 
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return promise;
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
 function stableScopeValue(value: any): any {
   if (Array.isArray(value)) return value.map(stableScopeValue);
   if (value && typeof value === 'object') {
@@ -142,6 +121,7 @@ export class SyncWorker {
   private deltaQueue: Promise<void> = Promise.resolve();
   private statusRun?: Promise<void>;
   private statusRerunRequested = false;
+  private activeControllers = new Set<AbortController>();
 
   // Telemetry metrics
   private totalPushedOperations = 0;
@@ -305,6 +285,10 @@ export class SyncWorker {
       this.networkUnsubscribe();
       this.networkUnsubscribe = undefined;
     }
+    for (const controller of this.activeControllers) {
+      controller.abort();
+    }
+    this.activeControllers.clear();
   }
 
   /**
@@ -471,6 +455,33 @@ export class SyncWorker {
     }
   }
 
+  private async runWithAbortTimeout<T>(
+    timeoutMs: number,
+    message: string,
+    fn: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const controller = new AbortController();
+    this.activeControllers.add(controller);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        return await fn(controller.signal);
+      }
+      return await Promise.race([
+        fn(controller.signal),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error(message));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      this.activeControllers.delete(controller);
+    }
+  }
+
   private async isOnline(): Promise<boolean> {
     try {
       return await Promise.resolve(this.network.isOnline());
@@ -573,10 +584,13 @@ export class SyncWorker {
       // Mark records as PROCESSING
       await OutboxStore.markProcessing(this.db, recordIds);
 
-      const pushRes = await withTimeout(
-        this.remote.pushChanges(operations),
+      const pushRes = await this.runWithAbortTimeout(
         this.requestTimeoutMs,
         `Remote push timed out after ${this.requestTimeoutMs}ms`,
+        (signal) =>
+          this.remote.pushChanges.length >= 2
+            ? this.remote.pushChanges(operations, { signal })
+            : this.remote.pushChanges(operations),
       );
       const durationMs = Date.now() - startTime;
       this.lastPushDurationMs = durationMs;
@@ -764,12 +778,20 @@ export class SyncWorker {
       for (let page = 0; page < MAX_PULL_PAGES; page++) {
         if (this.isPaused) break;
         const sinceTimestamp = this.lastPulledTimestamp;
-        const deltas = await withTimeout(
-          scope !== undefined
-            ? this.remote.fetchChanges(sinceTimestamp, scope)
-            : this.remote.fetchChanges(sinceTimestamp),
+        const deltas = await this.runWithAbortTimeout(
           this.requestTimeoutMs,
           `Remote pull timed out after ${this.requestTimeoutMs}ms`,
+          (signal) => {
+            const acceptsOptions = this.remote.fetchChanges.length >= 3;
+            if (scope !== undefined) {
+              return acceptsOptions
+                ? this.remote.fetchChanges(sinceTimestamp, scope, { signal })
+                : this.remote.fetchChanges(sinceTimestamp, scope);
+            }
+            return acceptsOptions
+              ? this.remote.fetchChanges(sinceTimestamp, undefined, { signal })
+              : this.remote.fetchChanges(sinceTimestamp);
+          },
         );
 
         const pageCount = deltas?.changes?.length || 0;

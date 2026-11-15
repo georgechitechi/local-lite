@@ -345,7 +345,12 @@ export class TransactionalClient {
         (rel) => rel.references === relationship.table,
       );
       if (!hasDownstream) {
-        await this.batchDeleteRows(relationship.table, childIds, options);
+        await this.batchDeleteRows(
+          relationship.table,
+          childIds,
+          visited,
+          options,
+        );
       } else {
         for (const childId of childIds) {
           await this.deleteRelated(
@@ -392,11 +397,18 @@ export class TransactionalClient {
 
     for (let i = 0; i < rowIds.length; i += 500) {
       const chunk = rowIds.slice(i, i + 500);
-      const placeholders = chunk.map(() => '?').join(', ');
-      await this.tx.execute(
-        `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} IN (${placeholders})`,
-        [...setParams, ...chunk],
-      );
+      if (chunk.length === 1) {
+        await this.tx.execute(
+          `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} = ?`,
+          [...setParams, chunk[0]],
+        );
+      } else {
+        const placeholders = chunk.map(() => '?').join(', ');
+        await this.tx.execute(
+          `UPDATE ${safeTable} SET ${setClause} WHERE ${safePk} IN (${placeholders})`,
+          [...setParams, ...chunk],
+        );
+      }
     }
 
     const payload = { [foreignKey]: null };
@@ -443,26 +455,41 @@ export class TransactionalClient {
   private async batchDeleteRows(
     tableName: string,
     rowIds: string[],
+    visited: Set<string>,
     options: MutateOptions = {},
   ): Promise<void> {
-    if (rowIds.length === 0) return;
+    const unvisitedIds = rowIds.filter((id) => {
+      const key = `${tableName}:${id}`;
+      if (visited.has(key)) return false;
+      visited.add(key);
+      return true;
+    });
+    if (unvisitedIds.length === 0) return;
+
     const pk = options.primaryKey ?? this.parent.getPrimaryKey();
     const timestamp = options.customTimestamp ?? Date.now();
     const safeTable = escapeIdentifier(tableName);
     const safePk = escapeIdentifier(pk);
 
-    for (let i = 0; i < rowIds.length; i += 500) {
-      const chunk = rowIds.slice(i, i + 500);
-      const placeholders = chunk.map(() => '?').join(', ');
-      await this.tx.execute(
-        `DELETE FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
-        chunk,
-      );
+    for (let i = 0; i < unvisitedIds.length; i += 500) {
+      const chunk = unvisitedIds.slice(i, i + 500);
+      if (chunk.length === 1) {
+        await this.tx.execute(
+          `DELETE FROM ${safeTable} WHERE ${safePk} = ?`,
+          [chunk[0]],
+        );
+      } else {
+        const placeholders = chunk.map(() => '?').join(', ');
+        await this.tx.execute(
+          `DELETE FROM ${safeTable} WHERE ${safePk} IN (${placeholders})`,
+          chunk,
+        );
+      }
     }
 
     if (!options.skipOutbox) {
       if (!this.parent.coalesceOutbox) {
-        const ops = rowIds.map((id) => ({
+        const ops = unvisitedIds.map((id) => ({
           id: generateUUID(),
           tableName,
           rowId: id,
@@ -475,9 +502,9 @@ export class TransactionalClient {
       } else {
         const pendingMap = await OutboxStore.getActivePendingMap(
           this.tx,
-          rowIds,
+          unvisitedIds,
         );
-        for (const id of rowIds) {
+        for (const id of unvisitedIds) {
           const outboxId = await this.parent.recordOutboxMutation(
             this.tx,
             tableName,
@@ -492,7 +519,7 @@ export class TransactionalClient {
       }
     }
 
-    for (const id of rowIds) {
+    for (const id of unvisitedIds) {
       this.queuedTableEvents.push({
         tableName,
         event: { operation: 'DELETE', rowId: id, payload: null, source: 'local' },
