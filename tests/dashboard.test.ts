@@ -17,10 +17,10 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
       `INSERT INTO todos (id, title, done) VALUES ('1', 'Write docs', 0), ('2', 'Ship dashboard', 1);`,
     );
     await db.execute(
-      `CREATE TABLE _local_kv_store (key TEXT PRIMARY KEY, value TEXT);`,
+      `CREATE TABLE _local_kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL, type TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, expires_at INTEGER);`,
     );
     await db.execute(
-      `INSERT INTO _local_kv_store (key, value) VALUES ('theme', '"dark"');`,
+      `INSERT INTO _local_kv_store (key, value, type, created_at, updated_at, expires_at) VALUES ('theme', 'dark', 'string', 1000, 1000, NULL);`,
     );
   });
 
@@ -156,5 +156,62 @@ describe('Dashboard Handler (src/server/dashboard.ts)', () => {
       }),
     );
     expect(blockedSql.status).toBe(403);
+  });
+
+  it('supports settings, pragmas, maintenance, export, and kv-store management', async () => {
+    const handler = createDashboardHandler(db, { title: 'Settings Dash' });
+
+    const settingsRes = await handler(new Request('http://localhost/api/settings'));
+    expect(settingsRes.status).toBe(200);
+    const settings = await settingsRes.json();
+    expect(settings.dashboard.title).toBe('Settings Dash');
+    expect(settings.pragmas.journalMode).toBeDefined();
+    expect(settings.kvStore.exists).toBe(true);
+    expect(settings.kvStore.entries).toHaveLength(1);
+
+    const pragmaRes = await handler(
+      new Request('http://localhost/api/settings/pragma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pragma: 'busy_timeout', value: 2500 }),
+      }),
+    );
+    expect(pragmaRes.status).toBe(200);
+
+    const integrityRes = await handler(
+      new Request('http://localhost/api/settings/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'integrity_check' }),
+      }),
+    );
+    expect(integrityRes.status).toBe(200);
+    const integrity = await integrityRes.json();
+    expect(integrity.ok).toBe(true);
+
+    const kvSetRes = await handler(
+      new Request('http://localhost/api/kv-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'maxRetries', type: 'number', value: '5' }),
+      }),
+    );
+    expect(kvSetRes.status).toBe(200);
+
+    const kvDelRes = await handler(
+      new Request('http://localhost/api/kv-store', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'maxRetries' }),
+      }),
+    );
+    expect(kvDelRes.status).toBe(200);
+
+    const exportRes = await handler(
+      new Request('http://localhost/api/settings/export'),
+    );
+    expect(exportRes.status).toBe(200);
+    const exported = await exportRes.json();
+    expect(exported.tables.todos).toHaveLength(2);
   });
 });

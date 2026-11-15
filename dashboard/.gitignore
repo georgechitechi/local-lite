@@ -1,0 +1,10 @@
+/target/
+*.sqlite*
+node_modules/
+/dist/
+.env*
+build/
+*.apk
+*.aab
+scripts/*
+!scripts/package-smoke.mjs

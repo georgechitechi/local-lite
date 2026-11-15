@@ -1,4 +1,5 @@
 import type { LocalDBAdapter } from '../adapters/local/index.js';
+import { DEFAULT_KV_STORE_TABLE, KVStore } from '../kv-store/store.js';
 import { escapeIdentifier, isInternalTable, isReadQuery } from '../utils/sql.js';
 
 export interface DashboardHandlerOptions {
@@ -217,6 +218,145 @@ export function createDashboardHandler(
       if (request.method === 'GET' && pathname === '/api/tables') {
         const tables = await listTables(db);
         return jsonResponse({ tables });
+      }
+
+      if (request.method === 'POST' && pathname === '/api/tables') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const body = (await request.json().catch(() => null)) as {
+          name?: string;
+          columns?: Array<{
+            name: string;
+            type?: string;
+            pk?: boolean;
+            notnull?: boolean;
+          }>;
+        } | null;
+        const name = String(body?.name ?? '').trim();
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+          return errorResponse('Invalid table name. Use letters, numbers, and underscores.', 400);
+        }
+        if (isInternalTable(name)) {
+          return errorResponse('Cannot create an internal system table.', 400);
+        }
+        const cols = Array.isArray(body?.columns) ? body.columns : [];
+        if (cols.length === 0) {
+          return errorResponse('At least one column is required.', 400);
+        }
+        const allowedTypes = new Set(['TEXT', 'INTEGER', 'REAL', 'BLOB', 'NUMERIC']);
+        const colDefs = cols.map((c) => {
+          const colName = String(c.name ?? '').trim();
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(colName)) {
+            throw new Error(`Invalid column name: ${colName}`);
+          }
+          const colType = allowedTypes.has(String(c.type ?? 'TEXT').toUpperCase())
+            ? String(c.type ?? 'TEXT').toUpperCase()
+            : 'TEXT';
+          const parts = [escapeIdentifier(colName), colType];
+          if (c.pk) parts.push('PRIMARY KEY');
+          if (c.notnull && !c.pk) parts.push('NOT NULL');
+          return parts.join(' ');
+        });
+        await db.execute(
+          `CREATE TABLE ${escapeIdentifier(name)} (${colDefs.join(', ')});`,
+        );
+        return jsonResponse({ ok: true, name }, 201);
+      }
+
+      const dropTableMatch = pathname.match(/^\/api\/tables\/([^/]+)$/);
+      if (dropTableMatch && request.method === 'DELETE') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const tableName = decodeURIComponent(dropTableMatch[1]);
+        if (isInternalTable(tableName)) {
+          return errorResponse('Cannot drop internal system tables.', 403);
+        }
+        await db.execute(`DROP TABLE IF EXISTS ${escapeIdentifier(tableName)};`);
+        return jsonResponse({ ok: true });
+      }
+
+      const clearTableMatch = pathname.match(/^\/api\/tables\/([^/]+)\/clear$/);
+      if (clearTableMatch && request.method === 'POST') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const tableName = decodeURIComponent(clearTableMatch[1]);
+        if (isInternalTable(tableName)) {
+          return errorResponse('Cannot clear internal system tables from here.', 403);
+        }
+        await db.execute(`DELETE FROM ${escapeIdentifier(tableName)};`);
+        return jsonResponse({ ok: true });
+      }
+
+      const importTableMatch = pathname.match(/^\/api\/tables\/([^/]+)\/import$/);
+      if (importTableMatch && request.method === 'POST') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const tableName = decodeURIComponent(importTableMatch[1]);
+        const tables = await listTables(db);
+        const tableMeta = tables.find((t) => t.name === tableName);
+        if (!tableMeta) {
+          return errorResponse(`Table "${tableName}" not found.`, 404);
+        }
+        const body = (await request.json().catch(() => null)) as {
+          rows?: Record<string, any>[];
+        } | null;
+        const rows = Array.isArray(body?.rows) ? body.rows : [];
+        if (rows.length === 0) {
+          return errorResponse('rows array is required.', 400);
+        }
+        const validCols = new Set(tableMeta.columns.map((c) => c.name));
+        let imported = 0;
+        for (const row of rows) {
+          if (!row || typeof row !== 'object') continue;
+          const entries = Object.entries(row).filter(([k]) => validCols.has(k));
+          if (entries.length === 0) continue;
+          const cols = entries.map(([k]) => escapeIdentifier(k)).join(', ');
+          const placeholders = entries.map(() => '?').join(', ');
+          await db.execute(
+            `INSERT OR REPLACE INTO ${escapeIdentifier(tableName)} (${cols}) VALUES (${placeholders});`,
+            entries.map(([, v]) => v),
+          );
+          imported += 1;
+        }
+        return jsonResponse({ ok: true, imported });
+      }
+
+      const indexCreateMatch = pathname.match(/^\/api\/tables\/([^/]+)\/indexes$/);
+      if (indexCreateMatch && request.method === 'POST') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const tableName = decodeURIComponent(indexCreateMatch[1]);
+        const body = (await request.json().catch(() => null)) as {
+          name?: string;
+          columns?: string[];
+          unique?: boolean;
+        } | null;
+        const idxName = String(body?.name ?? '').trim();
+        const cols = Array.isArray(body?.columns) ? body.columns.filter(Boolean) : [];
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(idxName) || cols.length === 0) {
+          return errorResponse('Valid index name and at least one column are required.', 400);
+        }
+        const uniqueSql = body?.unique ? 'UNIQUE ' : '';
+        const colSql = cols.map((c) => escapeIdentifier(c)).join(', ');
+        await db.execute(
+          `CREATE ${uniqueSql}INDEX IF NOT EXISTS ${escapeIdentifier(idxName)} ON ${escapeIdentifier(tableName)} (${colSql});`,
+        );
+        return jsonResponse({ ok: true }, 201);
+      }
+
+      const indexDropMatch = pathname.match(/^\/api\/tables\/([^/]+)\/indexes\/([^/]+)$/);
+      if (indexDropMatch && request.method === 'DELETE') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const idxName = decodeURIComponent(indexDropMatch[2]);
+        await db.execute(`DROP INDEX IF EXISTS ${escapeIdentifier(idxName)};`);
+        return jsonResponse({ ok: true });
       }
 
       const exportMatch = pathname.match(/^\/api\/tables\/([^/]+)\/export$/);
@@ -453,7 +593,7 @@ export function createDashboardHandler(
         const [outbox, kvStore, scheduler, actions, users, sessions, migrations] =
           await Promise.all([
             readRowsIfTableExists(db, 'sync_outbox', 200),
-            readRowsIfTableExists(db, '_local_kv_store', 200),
+            readRowsIfTableExists(db, DEFAULT_KV_STORE_TABLE, 200),
             readRowsIfTableExists(db, '_local_scheduler', 100),
             readRowsIfTableExists(db, '_local_actions', 100),
             readRowsIfTableExists(db, '_local_users', 100),
@@ -469,6 +609,255 @@ export function createDashboardHandler(
           sessions,
           migrations,
         });
+      }
+
+      if (request.method === 'GET' && pathname === '/api/settings') {
+        const [
+          journalRows,
+          syncRows,
+          busyRows,
+          cacheRows,
+          fkRows,
+          pageSizeRows,
+          pageCountRows,
+          freelistRows,
+          kvRows,
+          outboxRows,
+          scheduledJobsRows,
+          schedulerRows,
+        ] = await Promise.all([
+          db.execute('PRAGMA journal_mode;').catch(() => [] as any[]),
+          db.execute('PRAGMA synchronous;').catch(() => [] as any[]),
+          db.execute('PRAGMA busy_timeout;').catch(() => [] as any[]),
+          db.execute('PRAGMA cache_size;').catch(() => [] as any[]),
+          db.execute('PRAGMA foreign_keys;').catch(() => [] as any[]),
+          db.execute('PRAGMA page_size;').catch(() => [] as any[]),
+          db.execute('PRAGMA page_count;').catch(() => [] as any[]),
+          db.execute('PRAGMA freelist_count;').catch(() => [] as any[]),
+          readRowsIfTableExists(db, DEFAULT_KV_STORE_TABLE, 500),
+          readRowsIfTableExists(db, 'sync_outbox', 1000),
+          readRowsIfTableExists(db, '_local_scheduled_jobs', 100),
+          readRowsIfTableExists(db, '_local_scheduler', 100),
+        ]);
+
+        const outboxList = outboxRows ?? [];
+        return jsonResponse({
+          dashboard: {
+            title,
+            readOnly,
+            authEnabled: Boolean(options.authToken),
+            basePath,
+          },
+          pragmas: {
+            journalMode: String(journalRows?.[0]?.journal_mode ?? 'unknown'),
+            synchronous: Number(syncRows?.[0]?.synchronous ?? 0),
+            busyTimeout: Number(busyRows?.[0]?.timeout ?? busyRows?.[0]?.busy_timeout ?? 0),
+            cacheSize: Number(cacheRows?.[0]?.cache_size ?? 0),
+            foreignKeys: Boolean(Number(fkRows?.[0]?.foreign_keys ?? 0)),
+            pageSize: Number(pageSizeRows?.[0]?.page_size ?? 0),
+            pageCount: Number(pageCountRows?.[0]?.page_count ?? 0),
+            freelistCount: Number(freelistRows?.[0]?.freelist_count ?? 0),
+          },
+          kvStore: {
+            exists: kvRows !== null,
+            entries: kvRows ?? [],
+          },
+          sync: {
+            outboxExists: outboxRows !== null,
+            outboxTotal: outboxList.length,
+            outboxPending: outboxList.filter((r: any) => r.status === 'pending' || !r.status).length,
+            outboxFailed: outboxList.filter((r: any) => r.status === 'failed').length,
+            schedulerJobs: scheduledJobsRows ?? schedulerRows ?? null,
+          },
+        });
+      }
+
+      if (request.method === 'POST' && pathname === '/api/settings/pragma') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const body = (await request.json().catch(() => null)) as {
+          pragma?: string;
+          value?: string | number | boolean;
+        } | null;
+        const pragma = String(body?.pragma ?? '');
+        const val = body?.value;
+
+        if (pragma === 'journal_mode') {
+          const allowed = new Set(['DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY', 'WAL', 'OFF']);
+          const mode = String(val ?? '').toUpperCase();
+          if (!allowed.has(mode)) {
+            return errorResponse(`Unsupported journal_mode: ${mode}`, 400);
+          }
+          const rows = await db.execute(`PRAGMA journal_mode = ${mode};`);
+          return jsonResponse({ ok: true, pragma, value: rows?.[0]?.journal_mode ?? mode });
+        }
+
+        if (pragma === 'synchronous') {
+          const num = Number(val);
+          if (!Number.isInteger(num) || num < 0 || num > 3) {
+            return errorResponse('synchronous must be 0 (OFF), 1 (NORMAL), 2 (FULL), or 3 (EXTRA).', 400);
+          }
+          await db.execute(`PRAGMA synchronous = ${num};`);
+          return jsonResponse({ ok: true, pragma, value: num });
+        }
+
+        if (pragma === 'busy_timeout') {
+          const ms = Number(val);
+          if (!Number.isInteger(ms) || ms < 0 || ms > 600000) {
+            return errorResponse('busy_timeout must be an integer between 0 and 600000 ms.', 400);
+          }
+          await db.execute(`PRAGMA busy_timeout = ${ms};`);
+          return jsonResponse({ ok: true, pragma, value: ms });
+        }
+
+        if (pragma === 'cache_size') {
+          const size = Number(val);
+          if (!Number.isInteger(size) || size < -1048576 || size > 1048576) {
+            return errorResponse('cache_size must be an integer between -1048576 and 1048576.', 400);
+          }
+          await db.execute(`PRAGMA cache_size = ${size};`);
+          return jsonResponse({ ok: true, pragma, value: size });
+        }
+
+        if (pragma === 'foreign_keys') {
+          const enabled = val === true || val === 1 || val === '1' || String(val).toUpperCase() === 'ON';
+          await db.execute(`PRAGMA foreign_keys = ${enabled ? 'ON' : 'OFF'};`);
+          return jsonResponse({ ok: true, pragma, value: enabled });
+        }
+
+        return errorResponse(`Unsupported pragma "${pragma}".`, 400);
+      }
+
+      if (request.method === 'POST' && pathname === '/api/settings/maintenance') {
+        const body = (await request.json().catch(() => null)) as { action?: string } | null;
+        const action = String(body?.action ?? '');
+
+        if (action === 'integrity_check') {
+          const rows = await db.execute('PRAGMA integrity_check;');
+          const result = (rows ?? []).map((r: any) => Object.values(r)[0]).join(', ') || 'ok';
+          return jsonResponse({ ok: true, action, message: `Integrity check: ${result}` });
+        }
+
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+
+        if (action === 'vacuum') {
+          await db.execute('VACUUM;');
+          return jsonResponse({ ok: true, action, message: 'VACUUM completed.' });
+        }
+        if (action === 'checkpoint') {
+          const rows = await db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+          return jsonResponse({ ok: true, action, message: 'WAL checkpoint completed.', detail: rows?.[0] ?? null });
+        }
+        if (action === 'prune_kv_expired') {
+          const exists = await db.execute(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?;`,
+            [DEFAULT_KV_STORE_TABLE],
+          );
+          if (exists?.length) {
+            await KVStore.pruneExpired(db, DEFAULT_KV_STORE_TABLE);
+          }
+          return jsonResponse({ ok: true, action, message: 'Expired KV Store entries pruned.' });
+        }
+        if (action === 'prune_outbox') {
+          const exists = await db.execute(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sync_outbox';`,
+          );
+          if (exists?.length) {
+            await db.execute(`DELETE FROM sync_outbox WHERE status = 'synced';`);
+          }
+          return jsonResponse({ ok: true, action, message: 'Synced outbox entries pruned.' });
+        }
+        if (action === 'clear_failed_outbox') {
+          const exists = await db.execute(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sync_outbox';`,
+          );
+          if (exists?.length) {
+            await db.execute(`DELETE FROM sync_outbox WHERE status = 'failed';`);
+          }
+          return jsonResponse({ ok: true, action, message: 'Failed outbox mutations cleared.' });
+        }
+
+        return errorResponse(`Unsupported maintenance action "${action}".`, 400);
+      }
+
+      if (request.method === 'GET' && pathname === '/api/settings/export') {
+        const includeInternal = url.searchParams.get('includeInternal') === '1';
+        const tables = await listTables(db);
+        const selected = includeInternal ? tables : tables.filter((t) => !t.internal);
+        const data: Record<string, any[]> = {};
+        for (const t of selected) {
+          data[t.name] =
+            (await db.execute(`SELECT * FROM ${escapeIdentifier(t.name)} LIMIT 50000;`)) ?? [];
+        }
+        return new Response(
+          JSON.stringify({ exportedAt: new Date().toISOString(), tables: data }, null, 2),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Content-Disposition': 'attachment; filename="local-lite-export.json"',
+            },
+          },
+        );
+      }
+
+      if (pathname === '/api/kv-store') {
+        if (readOnly) {
+          return errorResponse('Dashboard is running in read-only mode.', 403);
+        }
+        const body = (await request.json().catch(() => null)) as {
+          key?: string;
+          value?: any;
+          type?: string;
+          ttlMs?: number | null;
+        } | null;
+
+        if (request.method === 'POST') {
+          const key = String(body?.key ?? '').trim();
+          if (!key) {
+            return errorResponse('Key is required.', 400);
+          }
+          await KVStore.ensureSchema(db, DEFAULT_KV_STORE_TABLE);
+          const type = ['string', 'number', 'boolean', 'json'].includes(String(body?.type))
+            ? String(body?.type)
+            : 'string';
+          let valueStr: string;
+          if (type === 'number') {
+            const n = Number(body?.value);
+            if (Number.isNaN(n)) return errorResponse('Invalid number value.', 400);
+            valueStr = String(n);
+          } else if (type === 'boolean') {
+            const b = body?.value === true || body?.value === 'true' || body?.value === '1' || body?.value === 1;
+            valueStr = b ? '1' : '0';
+          } else if (type === 'json') {
+            try {
+              const parsed = typeof body?.value === 'string' ? JSON.parse(body.value) : body?.value;
+              valueStr = JSON.stringify(parsed ?? null);
+            } catch {
+              return errorResponse('Invalid JSON value.', 400);
+            }
+          } else {
+            valueStr = String(body?.value ?? '');
+          }
+          const now = Date.now();
+          const expiresAt =
+            body?.ttlMs != null && Number(body.ttlMs) > 0 ? now + Number(body.ttlMs) : null;
+          await KVStore.set(db, DEFAULT_KV_STORE_TABLE, key, valueStr, type, now, expiresAt);
+          return jsonResponse({ ok: true });
+        }
+
+        if (request.method === 'DELETE') {
+          const key = String(body?.key ?? '').trim();
+          if (!key) {
+            return errorResponse('Key is required.', 400);
+          }
+          await KVStore.ensureSchema(db, DEFAULT_KV_STORE_TABLE);
+          await KVStore.delete(db, DEFAULT_KV_STORE_TABLE, key);
+          return jsonResponse({ ok: true });
+        }
       }
 
       return errorResponse('Not found.', 404);
@@ -518,6 +907,15 @@ function renderDashboardHtml(
       --amber: #fbbf24;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    [data-theme="light"] {
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --panel-2: #f0f3f6;
+      --panel-3: #e6ebf1;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --muted: #656d76;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; }
@@ -603,6 +1001,19 @@ function renderDashboardHtml(
       margin-bottom: 12px; padding: 10px 12px; border-radius: 6px;
       background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5;
     }
+    .success-banner {
+      margin-bottom: 12px; padding: 10px 12px; border-radius: 6px;
+      background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); color: var(--green);
+    }
+    .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; }
+    .setting-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .setting-row:last-child { border-bottom: 0; }
+    .setting-label { display: flex; flex-direction: column; gap: 2px; }
+    .setting-label strong { font-size: 12px; }
+    .setting-label span { font-size: 11px; color: var(--muted); }
     .empty { padding: 40px; text-align: center; color: var(--muted); }
     .modal-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,0.68); display: none; align-items: center; justify-content: center; z-index: 50;
@@ -645,6 +1056,7 @@ function renderDashboardHtml(
           <button class="nav-btn" data-view="sql"><span>SQL Console</span></button>
           <button class="nav-btn" data-view="sync"><span>Sync &amp; System</span></button>
           <button class="nav-btn" data-view="overview"><span>Overview</span></button>
+          <button class="nav-btn" data-view="settings"><span>Settings</span></button>
         </div>
         <div class="tables-header">
           <span>Tables</span>
@@ -688,7 +1100,7 @@ function renderDashboardHtml(
       showSystem: false,
       rows: [],
       total: 0,
-      limit: 50,
+      limit: Number(localStorage.getItem('local_lite_limit') || 50),
       offset: 0,
       search: '',
       filterCol: '',
@@ -697,11 +1109,16 @@ function renderDashboardHtml(
       orderDir: 'ASC',
       overview: null,
       system: null,
+      settings: null,
+      settingsMsg: null,
+      theme: localStorage.getItem('local_lite_theme') || 'dark',
       sqlText: 'SELECT name, type FROM sqlite_master ORDER BY name;',
       sqlResult: null,
       sqlHistory: JSON.parse(localStorage.getItem('local_lite_sql_history') || '[]'),
       error: null,
     };
+
+    document.documentElement.setAttribute('data-theme', state.theme);
 
     const modeBadge = document.getElementById('modeBadge');
     modeBadge.textContent = READ_ONLY ? 'Read-Only' : 'Read / Write';
@@ -824,6 +1241,8 @@ function renderDashboardHtml(
           document.getElementById('dbBadge').textContent = 'SQLite ' + state.overview.sqliteVersion;
         } else if (state.view === 'sync') {
           state.system = await api('/api/system');
+        } else if (state.view === 'settings') {
+          state.settings = await api('/api/settings');
         }
       } catch (err) {
         state.error = err.message;
@@ -1154,6 +1573,262 @@ function renderDashboardHtml(
             \`).join('')}
           </div>
         \` : '<div class="empty">Loading...</div>');
+      } else if (state.view === 'settings') {
+        toolbar.innerHTML = '<strong>Settings &amp; Administration</strong>';
+        const s = state.settings;
+        const msgHtml = state.settingsMsg ? \`<div class="success-banner">\${esc(state.settingsMsg)}</div>\` : '';
+        if (!s) {
+          content.innerHTML = errHtml + '<div class="empty">Loading settings...</div>';
+          return;
+        }
+        const p = s.pragmas || {};
+        const kvEntries = (s.kvStore && s.kvStore.entries) || [];
+        const sync = s.sync || {};
+        const roDis = READ_ONLY ? 'disabled' : '';
+        content.innerHTML = errHtml + msgHtml + \`
+          <div class="settings-grid">
+            <div class="card">
+              <div class="label" style="margin-bottom:10px;">Dashboard &amp; Connection</div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>Title</strong><span>Configured dashboard header title</span></div>
+                <span class="badge">\${esc(s.dashboard.title)}</span>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>Access Mode</strong><span>Write operations are \${READ_ONLY ? 'blocked' : 'enabled'}</span></div>
+                <span class="badge \${READ_ONLY ? 'ro' : 'ok'}">\${READ_ONLY ? 'Read-Only' : 'Read / Write'}</span>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>Auth Token</strong><span>Bearer / query token protection</span></div>
+                <span class="badge \${s.dashboard.authEnabled ? 'ok' : ''}">\${s.dashboard.authEnabled ? 'Enabled' : 'Disabled'}</span>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>Theme</strong><span>Switch between dark and light mode</span></div>
+                <select id="themeSelect" class="input">
+                  <option value="dark" \${state.theme === 'dark' ? 'selected' : ''}>Dark</option>
+                  <option value="light" \${state.theme === 'light' ? 'selected' : ''}>Light</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>Rows Per Page</strong><span>Default pagination size for Data view</span></div>
+                <select id="pageSizeSelect" class="input">
+                  \${[25, 50, 100, 250].map(n => \`<option value="\${n}" \${state.limit === n ? 'selected' : ''}>\${n} rows</option>\`).join('')}
+                </select>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="label" style="margin-bottom:10px;">SQLite PRAGMAs &amp; Storage</div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>journal_mode</strong><span>Current: \${esc(p.journalMode)}</span></div>
+                <div style="display:flex;gap:6px;">
+                  <select id="pragmaJournal" class="input" \${roDis}>
+                    \${['WAL', 'DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY'].map(m => \`<option value="\${m}" \${String(p.journalMode).toUpperCase() === m ? 'selected' : ''}>\${m}</option>\`).join('')}
+                  </select>
+                  <button class="btn pragma-apply" data-pragma="journal_mode" data-input="pragmaJournal" \${roDis}>Apply</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>synchronous</strong><span>0=OFF, 1=NORMAL, 2=FULL, 3=EXTRA</span></div>
+                <div style="display:flex;gap:6px;">
+                  <select id="pragmaSync" class="input" \${roDis}>
+                    \${[[0,'0 (OFF)'],[1,'1 (NORMAL)'],[2,'2 (FULL)'],[3,'3 (EXTRA)']].map(([v,lbl]) => \`<option value="\${v}" \${Number(p.synchronous) === v ? 'selected' : ''}>\${lbl}</option>\`).join('')}
+                  </select>
+                  <button class="btn pragma-apply" data-pragma="synchronous" data-input="pragmaSync" \${roDis}>Apply</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>busy_timeout (ms)</strong><span>Lock wait timeout in milliseconds</span></div>
+                <div style="display:flex;gap:6px;">
+                  <input id="pragmaBusy" type="number" class="input" style="width:90px;" value="\${esc(p.busyTimeout)}" \${roDis} />
+                  <button class="btn pragma-apply" data-pragma="busy_timeout" data-input="pragmaBusy" \${roDis}>Apply</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>cache_size</strong><span>Pages (positive) or KiB (negative)</span></div>
+                <div style="display:flex;gap:6px;">
+                  <input id="pragmaCache" type="number" class="input" style="width:90px;" value="\${esc(p.cacheSize)}" \${roDis} />
+                  <button class="btn pragma-apply" data-pragma="cache_size" data-input="pragmaCache" \${roDis}>Apply</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>foreign_keys</strong><span>Enforce foreign key constraints</span></div>
+                <div style="display:flex;gap:6px;">
+                  <select id="pragmaFk" class="input" \${roDis}>
+                    <option value="1" \${p.foreignKeys ? 'selected' : ''}>ON</option>
+                    <option value="0" \${!p.foreignKeys ? 'selected' : ''}>OFF</option>
+                  </select>
+                  <button class="btn pragma-apply" data-pragma="foreign_keys" data-input="pragmaFk" \${roDis}>Apply</button>
+                </div>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn maint-btn" data-action="vacuum" \${roDis}>Run VACUUM</button>
+                <button class="btn maint-btn" data-action="checkpoint" \${roDis}>WAL Checkpoint</button>
+                <button class="btn maint-btn" data-action="integrity_check">Integrity Check</button>
+                <a class="btn" href="\${authUrl('/api/settings/export')}" download>Export JSON</a>
+              </div>
+              <div style="margin-top:8px;color:var(--muted);font-size:11px;font-family:var(--mono);">
+                Page size: \${p.pageSize} B • Pages: \${p.pageCount} • Freelist: \${p.freelistCount}
+              </div>
+            </div>
+
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div class="label" style="margin:0;">KV Store Manager (_local_kv_store)</div>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn maint-btn" data-action="prune_kv_expired" \${roDis}>Prune Expired</button>
+                  <button id="addKvBtn" class="btn primary" \${roDis}>+ Set Key</button>
+                </div>
+              </div>
+              \${kvEntries.length === 0 ? '<div style="color:var(--muted);">No keys stored in _local_kv_store.</div>' : \`
+                <div class="grid-wrap" style="max-height:280px;">
+                  <table>
+                    <thead><tr><th>Key</th><th>Type</th><th>Value</th><th>Expires</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      \${kvEntries.map(k => \`
+                        <tr>
+                          <td>\${esc(k.key)}</td>
+                          <td><span class="badge">\${esc(k.type)}</span></td>
+                          <td>\${esc(k.type === 'encrypted' ? '[encrypted]' : String(k.value ?? ''))}</td>
+                          <td>\${k.expires_at ? new Date(Number(k.expires_at)).toLocaleString() : 'Never'}</td>
+                          <td>
+                            <button class="btn kv-edit" data-key="\${esc(k.key)}" \${roDis}>Edit</button>
+                            <button class="btn danger kv-del" data-key="\${esc(k.key)}" \${roDis}>Del</button>
+                          </td>
+                        </tr>
+                      \`).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              \`}
+            </div>
+
+            <div class="card">
+              <div class="label" style="margin-bottom:10px;">Sync, Outbox &amp; Scheduler</div>
+              <div class="setting-row">
+                <div class="setting-label"><strong>sync_outbox</strong><span>Total: \${sync.outboxTotal ?? 0} • Pending: \${sync.outboxPending ?? 0} • Failed: \${sync.outboxFailed ?? 0}</span></div>
+                <span class="badge">\${sync.outboxExists ? 'Active' : 'Not initialized'}</span>
+              </div>
+              <div style="margin:10px 0 14px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn maint-btn" data-action="prune_outbox" \${roDis}>Prune Synced Outbox</button>
+                <button class="btn danger maint-btn" data-action="clear_failed_outbox" \${roDis}>Clear Failed Mutations</button>
+              </div>
+              <div class="label" style="margin-bottom:6px;">Scheduled Jobs</div>
+              \${!sync.schedulerJobs ? '<div style="color:var(--muted);">No scheduler table initialized.</div>' :
+                sync.schedulerJobs.length === 0 ? '<div style="color:var(--muted);">0 scheduled jobs.</div>' :
+                '<pre style="max-height:180px;overflow:auto;">' + esc(JSON.stringify(sync.schedulerJobs, null, 2)) + '</pre>'}
+            </div>
+          </div>
+        \`;
+
+        document.getElementById('themeSelect').onchange = (e) => {
+          state.theme = e.target.value;
+          localStorage.setItem('local_lite_theme', state.theme);
+          document.documentElement.setAttribute('data-theme', state.theme);
+        };
+        document.getElementById('pageSizeSelect').onchange = (e) => {
+          state.limit = Number(e.target.value);
+          localStorage.setItem('local_lite_limit', String(state.limit));
+          state.settingsMsg = 'Default page size updated to ' + state.limit + ' rows.';
+          renderMain();
+        };
+        content.querySelectorAll('.pragma-apply').forEach(btn => {
+          btn.onclick = async () => {
+            state.error = null;
+            state.settingsMsg = null;
+            try {
+              const inp = document.getElementById(btn.dataset.input);
+              await api('/api/settings/pragma', {
+                method: 'POST',
+                body: JSON.stringify({ pragma: btn.dataset.pragma, value: inp.value }),
+              });
+              state.settingsMsg = 'Updated PRAGMA ' + btn.dataset.pragma + '.';
+              state.settings = await api('/api/settings');
+            } catch (err) { state.error = err.message; }
+            renderMain();
+          };
+        });
+        content.querySelectorAll('.maint-btn').forEach(btn => {
+          btn.onclick = async () => {
+            state.error = null;
+            state.settingsMsg = null;
+            try {
+              const res = await api('/api/settings/maintenance', {
+                method: 'POST',
+                body: JSON.stringify({ action: btn.dataset.action }),
+              });
+              state.settingsMsg = res.message || 'Maintenance completed.';
+              state.settings = await api('/api/settings');
+            } catch (err) { state.error = err.message; }
+            renderMain();
+          };
+        });
+
+        const openKvModal = (existing) => {
+          openModal(existing ? 'Edit KV Store Key' : 'Set KV Store Key', \`
+            <div class="field-row">
+              <label>Key</label>
+              <input id="kvKeyInput" class="input" value="\${esc(existing ? existing.key : '')}" \${existing ? 'disabled' : ''} />
+            </div>
+            <div class="field-row">
+              <label>Type</label>
+              <select id="kvTypeInput" class="input" style="width:100%;">
+                \${['string', 'number', 'boolean', 'json'].map(t => \`<option value="\${t}" \${existing && existing.type === t ? 'selected' : ''}>\${t}</option>\`).join('')}
+              </select>
+            </div>
+            <div class="field-row">
+              <label>Value</label>
+              <input id="kvValInput" class="input" value="\${esc(existing ? existing.value : '')}" />
+            </div>
+            <div class="field-row">
+              <label>TTL (ms, optional)</label>
+              <input id="kvTtlInput" type="number" class="input" placeholder="Leave blank for no expiration" />
+            </div>
+            <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
+              <button id="saveKvBtn" class="btn primary">Save Key</button>
+            </div>
+          \`);
+          document.getElementById('saveKvBtn').onclick = async () => {
+            try {
+              const ttlRaw = document.getElementById('kvTtlInput').value.trim();
+              await api('/api/kv-store', {
+                method: 'POST',
+                body: JSON.stringify({
+                  key: document.getElementById('kvKeyInput').value.trim(),
+                  type: document.getElementById('kvTypeInput').value,
+                  value: document.getElementById('kvValInput').value,
+                  ttlMs: ttlRaw ? Number(ttlRaw) : null,
+                }),
+              });
+              closeModal();
+              state.settingsMsg = 'KV Store key saved.';
+              state.settings = await api('/api/settings');
+              renderMain();
+            } catch (err) { alert(err.message); }
+          };
+        };
+
+        const addKvBtn = document.getElementById('addKvBtn');
+        if (addKvBtn) addKvBtn.onclick = () => openKvModal(null);
+        content.querySelectorAll('.kv-edit').forEach(btn => {
+          btn.onclick = () => {
+            const entry = kvEntries.find(x => x.key === btn.dataset.key);
+            if (entry) openKvModal(entry);
+          };
+        });
+        content.querySelectorAll('.kv-del').forEach(btn => {
+          btn.onclick = async () => {
+            if (!confirm('Delete key "' + btn.dataset.key + '"?')) return;
+            try {
+              await api('/api/kv-store', {
+                method: 'DELETE',
+                body: JSON.stringify({ key: btn.dataset.key }),
+              });
+              state.settingsMsg = 'Deleted key "' + btn.dataset.key + '".';
+              state.settings = await api('/api/settings');
+              renderMain();
+            } catch (err) { state.error = err.message; renderMain(); }
+          };
+        });
       }
     }
 
