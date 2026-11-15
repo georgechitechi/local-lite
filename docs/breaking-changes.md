@@ -47,6 +47,7 @@ The following redundant aliases have been removed in favor of a single canonical
 - **Remote request timeout (`requestTimeoutMs: 30000`)**: `SyncWorker` now aborts/times out `pushChanges()` and `fetchChanges()` after `30000` ms by default (`requestTimeoutMs: 0` disables it). `RemoteDBAdapter` implementations may accept an optional `{ signal?: AbortSignal }` argument.
 - **SQL `LIKE` wildcard escaping**: `$contains`, `$startsWith`, and `$endsWith` now escape literal `%`, `_`, and `\` using `LIKE ? ESCAPE '\'`.
 - **Server changelog retention (`maxChangeLogEntries: 10000`)**: Both `MemoryServerSyncStorage` and `SQLiteServerSyncStorage` retain the latest `10000` changelog entries by default (`Infinity` or `0` disables compaction on `SQLiteServerSyncStorage`).
+- **OAuth CSPRNG requirement**: `AppleAuthClient`, `GitHubAuthClient`, `GoogleAuthClient`, and `MicrosoftAuthClient` now require `globalThis.crypto.getRandomValues` (or a custom `options.randomBytes` provider on `GoogleAuthClient` / `MicrosoftAuthClient`) when generating OAuth `state` and PKCE verifiers, instead of falling back to `Math.random()`.
 
 **Review checklist (2.0.0)**
 

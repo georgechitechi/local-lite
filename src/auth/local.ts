@@ -5,6 +5,7 @@ import { DBExecutable } from '../core/schema-manager.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
 import { generateUUID } from '../utils/uuid.js';
 import { escapeIdentifier } from '../utils/sql.js';
+import { getRandomBytes } from '../utils/crypto.js';
 import { timingSafeEqual } from '../keys/generator.js';
 import {
   SessionManager,
@@ -179,30 +180,7 @@ export interface CreateResetTokenResult {
  * Generates cryptographically secure random bytes across Web, Expo/React Native, and Node.js.
  */
 export function getCryptoRandomBytes(length: number): Uint8Array {
-  const cryptoObj =
-    typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-  if (cryptoObj?.getRandomValues) {
-    try {
-      return cryptoObj.getRandomValues(new Uint8Array(length));
-    } catch {
-      // Fallback below
-    }
-  }
-  try {
-    const nodeCrypto = (globalThis as any).process?.versions?.node
-      ? (globalThis as any).require('node:crypto')
-      : null;
-    if (nodeCrypto?.randomBytes) {
-      return new Uint8Array(nodeCrypto.randomBytes(length));
-    }
-  } catch {
-    // Fallback ignored
-  }
-  const fallback = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    fallback[i] = Math.floor(Math.random() * 256);
-  }
-  return fallback;
+  return getRandomBytes(length);
 }
 
 /**
