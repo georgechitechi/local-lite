@@ -155,6 +155,16 @@
       "types": "./dist/email/index.d.ts",
       "import": "./dist/email/index.js",
       "default": "./dist/email/index.js"
+    },
+    "./payments": {
+      "types": "./dist/payments/index.d.ts",
+      "import": "./dist/payments/index.js",
+      "default": "./dist/payments/index.js"
+    },
+    "./payments/server": {
+      "types": "./dist/payments/server.d.ts",
+      "import": "./dist/payments/server.js",
+      "default": "./dist/payments/server.js"
     }
   },
   "scripts": {

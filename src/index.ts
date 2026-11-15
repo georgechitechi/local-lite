@@ -28,3 +28,4 @@ export * from './kv/index.js';
 export * from './search/index.js';
 export * from './storage/index.js';
 export * from './scheduler/index.js';
+export * from './payments/index.js';
