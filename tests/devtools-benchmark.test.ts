@@ -119,4 +119,32 @@ describe('SQLite benchmark workload', () => {
     expect(results[0].operations).toBe(500);
     expect(results.some((r) => r.category === 'App Data')).toBe(false);
   });
+
+  it('benchmarks QueryBuilder, kvStore, storage, keys, and actions without leaving leftovers', async () => {
+    const db = await setup(5);
+    const results = await runSQLiteBenchmark(client);
+    const names = results.map((r) => r.name);
+
+    expect(names).toContain('client.from() QueryBuilder & Count');
+    expect(names).toContain('client.kvStore Set / Get / Delete');
+    expect(names).toContain('client.storage Blob & SHA-256 Roundtrip');
+    expect(names).toContain('API Keys & Signed Tokens (HMAC-SHA256)');
+    expect(names).toContain('client.actions Outbox Enqueue & Cancel');
+    expect(names).toContain('Relational JOIN + Sum/Avg Torture');
+    expect(names).toContain('Outbox Coalescing Mutation Storm');
+    expect(names).toContain('10KB+ Unicode JSON Payload Stress');
+    expect(names).toContain('FTS5 Full-Text Index & BM25 Search');
+
+    for (const r of results) {
+      expect(r.status).toBe('success');
+      expect(r.durationMs).toBeGreaterThan(0);
+    }
+
+    expect(await client!.storage.list()).toHaveLength(0);
+    expect(await client!.actions.list()).toHaveLength(0);
+    const outboxLeftovers = await db.execute(
+      "SELECT COUNT(*) AS c FROM sync_outbox WHERE table_name LIKE '_sync%'",
+    );
+    expect(Number(outboxLeftovers[0].c)).toBe(0);
+  });
 });

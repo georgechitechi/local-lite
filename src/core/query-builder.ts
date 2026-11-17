@@ -277,22 +277,31 @@ export class QueryBuilder<T = any> {
     if (typeof columnOrFilter === 'string') {
       if (value !== undefined) {
         const rawOp = String(operatorOrValue).toLowerCase().trim();
-        const opKey =
-          rawOp === '>='
-            ? '$gte'
-            : rawOp === '<='
-              ? '$lte'
-              : rawOp === '>'
-                ? '$gt'
-                : rawOp === '<'
-                  ? '$lt'
-                  : rawOp === '!=' || rawOp === '<>'
-                    ? '$ne'
-                    : rawOp === '=' || rawOp === '=='
-                      ? '$eq'
-                      : rawOp === 'like'
-                        ? '$contains'
-                        : '$eq';
+        const opMap: Record<string, string> = {
+          '>=': '$gte',
+          '<=': '$lte',
+          '>': '$gt',
+          '<': '$lt',
+          '!=': '$ne',
+          '<>': '$ne',
+          '=': '$eq',
+          '==': '$eq',
+          like: '$contains',
+          in: '$in',
+          'not in': '$nin',
+          $eq: '$eq',
+          $ne: '$ne',
+          $gt: '$gt',
+          $gte: '$gte',
+          $lt: '$lt',
+          $lte: '$lte',
+          $in: '$in',
+          $nin: '$nin',
+          $contains: '$contains',
+          $startswith: '$startsWith',
+          $endswith: '$endsWith',
+        };
+        const opKey = opMap[rawOp] ?? '$eq';
 
         const existing =
           typeof this.whereConditions[columnOrFilter] === 'object' &&

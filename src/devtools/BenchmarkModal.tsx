@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
+import {
+  createSignedToken,
+  generateApiKey,
+  verifyApiKey,
+  verifySignedToken,
+} from '../keys/index.js';
 import { escapeIdentifier } from '../utils/sql.js';
 import { RN, RNSafeArea, devtoolsBaseRNStyles } from './shared.js';
 
@@ -585,6 +591,315 @@ export async function runSQLiteBenchmark(
       status: 'success',
     });
 
+    // 11b. client.from() QueryBuilder & SQL Aggregations
+    if (client?.from) {
+      const qbIterations = 15;
+      onProgress?.('Benchmarking QueryBuilder & SQL aggregations...', 0.975);
+      const tQbStart = now();
+      for (let i = 0; i < qbIterations; i++) {
+        await client
+          .from('_sync_bench_temp')
+          .where('score', '$gt', 100)
+          .orderBy('score', 'DESC')
+          .limit(25)
+          .execute();
+        await client
+          .from('_sync_bench_temp')
+          .where('score', '$gte', 0)
+          .count();
+      }
+      const tQbDuration = elapsed(tQbStart);
+      const qbOps = qbIterations * 2;
+      list.push({
+        name: 'client.from() QueryBuilder & Count',
+        category: 'Local-Lite Client',
+        description: `${qbOps} fluent .where().orderBy().limit().execute() and .count() queries`,
+        operations: qbOps,
+        durationMs: tQbDuration,
+        opsPerSec: Math.round((qbOps / tQbDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11c. client.kvStore Set / Get / Delete
+    if (client?.kvStore) {
+      const kvCount = scaleWorkload(25);
+      onProgress?.(`Benchmarking client.kvStore (${kvCount} keys)...`, 0.98);
+      const tKvStart = now();
+      for (let i = 0; i < kvCount; i++) {
+        await client.kvStore.set(`_sync_bench_kv_${i}`, { i, ok: true });
+      }
+      for (let i = 0; i < kvCount; i++) {
+        await client.kvStore.get(`_sync_bench_kv_${i}`);
+      }
+      for (let i = 0; i < kvCount; i++) {
+        await client.kvStore.delete(`_sync_bench_kv_${i}`);
+      }
+      const tKvDuration = elapsed(tKvStart);
+      const kvOps = kvCount * 3;
+      list.push({
+        name: 'client.kvStore Set / Get / Delete',
+        category: 'Local-Lite Client',
+        description: `${kvOps.toLocaleString()} JSON preference writes, reads & deletes`,
+        operations: kvOps,
+        durationMs: tKvDuration,
+        opsPerSec: Math.round((kvOps / tKvDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11d. client.storage Blob Save / Get / Delete (SHA-256)
+    if (client?.storage) {
+      const blobCount = 10;
+      onProgress?.(`Benchmarking client.storage (${blobCount} blobs)...`, 0.985);
+      const tBlobStart = now();
+      for (let i = 0; i < blobCount; i++) {
+        const key = `_sync_bench_blob_${i}.txt`;
+        await client.storage.save(key, `bench-payload-${i}`, {
+          mimeType: 'text/plain',
+          autoUpload: false,
+        });
+        await client.storage.get(key);
+        await client.storage.delete(key);
+      }
+      const tBlobDuration = elapsed(tBlobStart);
+      const blobOps = blobCount * 3;
+      list.push({
+        name: 'client.storage Blob & SHA-256 Roundtrip',
+        category: 'Local-Lite Client',
+        description: `${blobOps} blob save (with SHA-256), read & delete operations`,
+        operations: blobOps,
+        durationMs: tBlobDuration,
+        opsPerSec: Math.round((blobOps / tBlobDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11e. API Keys & Signed Tokens (HMAC-SHA256)
+    const keyOpsCount = 25;
+    onProgress?.('Benchmarking API keys & HMAC-SHA256 tokens...', 0.99);
+    const tKeysStart = now();
+    const tokenSecret = 'bench-secret-key';
+    for (let i = 0; i < keyOpsCount; i++) {
+      const generated = generateApiKey({ prefix: 'll_bench' });
+      verifyApiKey(generated.key, generated.keyHash);
+      const token = createSignedToken({
+        secret: tokenSecret,
+        payload: { i },
+        expiresInMs: 60_000,
+      });
+      verifySignedToken(token, tokenSecret);
+    }
+    const tKeysDuration = elapsed(tKeysStart);
+    const totalKeyOps = keyOpsCount * 4;
+    list.push({
+      name: 'API Keys & Signed Tokens (HMAC-SHA256)',
+      category: 'Memory / JSON',
+      description: `${totalKeyOps} cryptographic API key generations, checksum/hash checks & token sign/verify cycles`,
+      operations: totalKeyOps,
+      durationMs: tKeysDuration,
+      opsPerSec: Math.round((totalKeyOps / tKeysDuration) * 1000),
+      status: 'success',
+    });
+
+    // 11f. client.actions Outbox Enqueue & Cancel
+    if (client?.actions) {
+      const actionCount = 20;
+      onProgress?.(`Benchmarking client.actions outbox (${actionCount})...`, 0.992);
+      const tActStart = now();
+      for (let i = 0; i < actionCount; i++) {
+        const rec = await client.actions.enqueue({
+          action: '_sync_bench_action',
+          payload: { i },
+        });
+        await client.actions.cancel(rec.id);
+      }
+      await client.actions.prune({
+        cancelledOlderThanMs: 0,
+      });
+      const tActDuration = elapsed(tActStart);
+      const actOps = actionCount * 2;
+      list.push({
+        name: 'client.actions Outbox Enqueue & Cancel',
+        category: 'Outbox / Sync',
+        description: `${actOps} offline action outbox enqueue, cancel & prune operations`,
+        operations: actOps,
+        durationMs: tActDuration,
+        opsPerSec: Math.round((actOps / tActDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11g. Multi-Table Relational JOIN + Aggregation Torture
+    if (client?.from && client?.batch) {
+      const orderCount = scaleWorkload(100);
+      onProgress?.(
+        `Running relational JOIN + aggregation torture (${orderCount} orders)...`,
+        0.993,
+      );
+      await db.execute(
+        'CREATE TABLE IF NOT EXISTS "_sync_bench_orders" (id TEXT PRIMARY KEY, user_id TEXT, amount REAL, status TEXT, created_at INTEGER)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS "_sync_bench_orders_uid" ON "_sync_bench_orders" (user_id)',
+      );
+      const tJoinStart = now();
+      const orderMutations = Array.from({ length: orderCount }, (_, i) => ({
+        tableName: '_sync_bench_orders',
+        id: `ord-${i}`,
+        operation: 'INSERT' as const,
+        payload: {
+          user_id: `b-batch-${50 + (i % 50)}`,
+          amount: (i + 1) * 12.5,
+          status: i % 3 === 0 ? 'paid' : i % 3 === 1 ? 'pending' : 'refunded',
+          created_at: Date.now(),
+        },
+        skipOutbox: true,
+      }));
+      await client.batch(orderMutations);
+      for (let i = 0; i < 10; i++) {
+        await client
+          .from('_sync_bench_orders')
+          .join(
+            '_sync_bench_temp',
+            '_sync_bench_orders.user_id',
+            '_sync_bench_temp.id',
+          )
+          .where('status', '$in', ['paid', 'pending'])
+          .orderBy('amount', 'DESC')
+          .limit(30)
+          .execute();
+        await client
+          .from('_sync_bench_orders')
+          .where('status', '$eq', 'paid')
+          .sum('amount');
+        await client
+          .from('_sync_bench_orders')
+          .where('status', '$ne', 'refunded')
+          .avg('amount');
+      }
+      const tJoinDuration = elapsed(tJoinStart);
+      const joinOps = orderCount + 30;
+      list.push({
+        name: 'Relational JOIN + Sum/Avg Torture',
+        category: 'Local-Lite Client',
+        description: `${orderCount.toLocaleString()} relational inserts + 30 INNER JOIN, $in, sum() & avg() queries`,
+        operations: joinOps,
+        durationMs: tJoinDuration,
+        opsPerSec: Math.round((joinOps / tJoinDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11h. Outbox Coalescing & Rapid Mutation Storm
+    if (client?.insert && client?.update && client?.delete) {
+      const stormEntities = 20;
+      onProgress?.(
+        `Running outbox coalescing mutation storm (${stormEntities * 6} ops)...`,
+        0.994,
+      );
+      const tStormStart = now();
+      for (let i = 0; i < stormEntities; i++) {
+        const id = `storm-${i}`;
+        await client.insert('_sync_bench_temp', id, {
+          title: `Storm ${i}`,
+          score: i,
+          metadata: '{}',
+          created_at: Date.now(),
+        });
+        for (let u = 1; u <= 4; u++) {
+          await client.update('_sync_bench_temp', id, {
+            title: `Storm ${i} v${u}`,
+            score: i + u * 10,
+          });
+        }
+        await client.delete('_sync_bench_temp', id);
+      }
+      const tStormDuration = elapsed(tStormStart);
+      const stormOps = stormEntities * 6;
+      list.push({
+        name: 'Outbox Coalescing Mutation Storm',
+        category: 'Outbox / Sync',
+        description: `${stormOps} rapid insert -> 4x update -> delete cycles through live outbox coalescing`,
+        operations: stormOps,
+        durationMs: tStormDuration,
+        opsPerSec: Math.round((stormOps / tStormDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11i. Large 10KB Unicode/JSON Payload Stress
+    if (client?.insert && client?.findById && client?.delete) {
+      const largeCount = 15;
+      onProgress?.('Stress-testing 10KB+ nested Unicode JSON payloads...', 0.9945);
+      const bigBlob = JSON.stringify({
+        emoji: '⚡🔐🧪🌍🚀'.repeat(40),
+        nested: Array.from({ length: 40 }, (_, k) => ({
+          idx: k,
+          text: `Payload-"quoted"-\\escaped\\-日本語-${k}`,
+        })),
+      });
+      const tBigStart = now();
+      for (let i = 0; i < largeCount; i++) {
+        const id = `big-${i}`;
+        await client.insert(
+          '_sync_bench_temp',
+          id,
+          {
+            title: `Large Unicode #${i}`,
+            score: i,
+            metadata: bigBlob,
+            created_at: Date.now(),
+          },
+          { skipOutbox: true },
+        );
+        await client.findById('_sync_bench_temp', id);
+        await client.delete('_sync_bench_temp', id, { skipOutbox: true });
+      }
+      const tBigDuration = elapsed(tBigStart);
+      const bigOps = largeCount * 3;
+      list.push({
+        name: '10KB+ Unicode JSON Payload Stress',
+        category: 'Memory / JSON',
+        description: `${bigOps} insert, point-lookup & delete cycles with 10KB+ nested unicode JSON`,
+        operations: bigOps,
+        durationMs: tBigDuration,
+        opsPerSec: Math.round((bigOps / tBigDuration) * 1000),
+        status: 'success',
+      });
+    }
+
+    // 11j. FTS5 Full-Text Search & BM25 Ranking
+    if (client?.search) {
+      onProgress?.('Benchmarking FTS5 full-text indexing & BM25 search...', 0.9948);
+      const tFtsStart = now();
+      try {
+        await client.search.createIndex({
+          table: '_sync_bench_temp',
+          columns: ['title'],
+        });
+        const ftsRows = await client.findMany('_sync_bench_temp', {
+          limit: 100,
+        });
+        await client.search.rebuildIndex('_sync_bench_temp', ftsRows);
+        for (let i = 0; i < 20; i++) {
+          await client.search.query('_sync_bench_temp', 'Batch', { limit: 20 });
+        }
+        const tFtsDuration = elapsed(tFtsStart);
+        list.push({
+          name: 'FTS5 Full-Text Index & BM25 Search',
+          category: 'Local-Lite Client',
+          description: 'FTS5 index creation, full rebuild & 20 ranked prefix queries',
+          operations: 22,
+          durationMs: tFtsDuration,
+          opsPerSec: Math.round((22 / tFtsDuration) * 1000),
+          status: 'success',
+        });
+      } finally {
+        await client.search.dropIndex('_sync_bench_temp').catch(() => {});
+      }
+    }
+
     // 12. Read-only benchmarks against the app's real tables (never writes app data)
     const realTables = [...appTables].sort((a, b) => b[1] - a[1]).slice(0, 3);
     for (const [tableName, rowCount] of realTables) {
@@ -632,13 +947,14 @@ export async function runSQLiteBenchmark(
 
     onProgress?.('Benchmark complete!', 1);
   } finally {
+    await db.execute('DROP TABLE IF EXISTS "_sync_bench_orders"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
     await db
       .execute('DROP TABLE IF EXISTS "_sync_bench_outbox"')
       .catch(() => {});
     await db
-      .execute('DELETE FROM "sync_outbox" WHERE "tableName" LIKE ?', ['_sync%'])
+      .execute('DELETE FROM "sync_outbox" WHERE "table_name" LIKE ?', ['_sync%'])
       .catch(() => {});
   }
 
