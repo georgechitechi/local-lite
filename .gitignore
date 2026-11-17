@@ -8,3 +8,4 @@ build/
 *.aab
 scripts/*
 !scripts/package-smoke.mjs
+*.db
