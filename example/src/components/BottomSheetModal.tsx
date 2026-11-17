@@ -8,6 +8,7 @@ import {
   View,
   type DimensionValue,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface BottomSheetModalProps {
   visible: boolean;
@@ -24,6 +25,9 @@ export function BottomSheetModal({
   maxHeight = '85%',
   children,
 }: BottomSheetModalProps) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 20);
+
   return (
     <Modal
       visible={visible}
@@ -32,7 +36,7 @@ export function BottomSheetModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { paddingTop: insets.top }]}>
         <TouchableOpacity
           style={[
             styles.overlay,
@@ -41,7 +45,12 @@ export function BottomSheetModal({
           activeOpacity={1}
           onPress={onClose}
         />
-        <View style={[styles.container, { maxHeight }]}>
+        <View
+          style={[
+            styles.container,
+            { maxHeight, paddingBottom: bottomPadding },
+          ]}
+        >
           <View style={styles.handleWrap}>
             <View style={styles.handle} />
           </View>
@@ -77,7 +86,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
     overflow: 'hidden',
     borderTopWidth: 1,
     borderColor: '#e2e8f0',

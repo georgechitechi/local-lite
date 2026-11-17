@@ -13,6 +13,7 @@ import {
 import type { LocalFirstClient } from 'local-lite/config';
 import type { ActionRecord } from 'local-lite';
 import { DevMailbox, type DevSentEmail } from 'local-lite/email';
+import { KeyboardScrollView } from 'react-native-keyboard-scroll';
 import { BottomSheetModal } from '../components/BottomSheetModal';
 import { getClient } from '../lib/sync';
 
@@ -172,7 +173,7 @@ export default function EmailsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView
+      <KeyboardScrollView
         style={[
           styles.container,
           selectedEmail !== null && styles.blurredContent,
@@ -401,7 +402,7 @@ export default function EmailsScreen() {
             ))
           )}
         </View>
-      </ScrollView>
+      </KeyboardScrollView>
 
       <BottomSheetModal
         visible={selectedEmail !== null}

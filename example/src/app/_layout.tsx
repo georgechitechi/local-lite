@@ -64,6 +64,16 @@ function TabsNavigator() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="lab"
+        options={{
+          title: 'Lab',
+          headerTitle: 'local-lite Feature Lab',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 18, color }}>🧪</Text>
+          ),
+        }}
+      />
     </Tabs>
   );
 }

@@ -4,13 +4,13 @@ import {
   Alert,
   Linking,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardScrollView } from 'react-native-keyboard-scroll';
 import {
   createDarajaAdapter,
   createManualPaymentAdapter,
@@ -360,7 +360,7 @@ export default function PaymentsScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardScrollView contentContainerStyle={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>💳 local-lite Payments</Text>
@@ -797,7 +797,7 @@ export default function PaymentsScreen() {
           ))
         )}
       </View>
-    </ScrollView>
+    </KeyboardScrollView>
   );
 }
 

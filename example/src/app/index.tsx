@@ -5,11 +5,11 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
+import { KeyboardScrollView } from 'react-native-keyboard-scroll';
 import { getClient } from '../lib/sync';
 import type { LocalFirstClient } from 'local-lite/config';
 import type { LocalUser } from 'local-lite/auth';
@@ -234,7 +234,7 @@ export default function Index() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardScrollView contentContainerStyle={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>⚡ local-lite Local Auth</Text>
@@ -672,7 +672,7 @@ export default function Index() {
           )}
         </View>
       )}
-    </ScrollView>
+    </KeyboardScrollView>
   );
 }
 
