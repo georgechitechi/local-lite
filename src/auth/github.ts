@@ -337,16 +337,13 @@ export class GitHubAuthClient {
 
     return {
       id,
-      userId: id,
       login: raw.login,
       name,
-      displayName: name,
       email: normalizedEmail,
       emailVerified: true,
       provider: 'github',
       providerAccountId: rawId,
       avatarUrl,
-      picture: avatarUrl,
       bio: raw.bio,
       company: raw.company,
       location: raw.location,

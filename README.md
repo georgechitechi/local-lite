@@ -59,38 +59,8 @@ to discard failed writes belong to the caller. The core does not inspect backend
 error codes to delete failed mutations. Conflict resolution and retry settings
 remain configurable; the existing default conflict strategy is last-write-wins.
 
-### Compatibility changes from 0.0.3
-
-- Missing remote configuration now throws. Temporary demo behavior requires
-  `inMemoryRemote: true`; it must never silently acknowledge production writes.
-- `autoSchema` now defaults to `false` in the configuration factory as well as the
-  core constructor. Set `autoSchema: true` to retain inferred schema behavior.
-- Versioned `schemaMigrations` run transactionally before sync starts, including
-  when initialization is deferred with `autoInitialize: false`.
-- `initialize()` is safe to call repeatedly or concurrently. After `stop()`, call
-  `client.syncWorker.start()` to resume. Mutations after stop remain queued.
-- `autoStart: false` prepares storage without automatic sync. Explicit push/pull
-  methods remain available. Stop does not cancel adapter calls already in flight.
-- Realtime changes update local rows without advancing the durable pull cursor.
-  Custom pull adapters must return complete batches through their checkpoint and
-  reject partial failures. Supabase table failures now reject the pull.
-- Custom realtime adapters must return an unsubscribe function; stopped workers
-  ignore callbacks from a previous subscription.
-
 For an application-level upgrade checklist or AI-assisted code review, see the
 [Breaking Changes and AI Code-Review Guide](./docs/breaking-changes.md).
-
-### Breaking changes in 0.0.30
-
-- The repeat-on-initialize `migrations` option has been removed. Move SQL into
-  versioned `schemaMigrations`.
-- `ExpoFileDriver` now requires the Expo SDK 58+ `File`, `Directory`, and `Paths`
-  APIs. Replace `fileSystem` injection with those named options.
-- Custom `RemoteDBAdapter.subscribeToLiveChanges()` implementations must return
-  a cleanup function, including when no subscription is established.
-- `_migrations` is no longer treated as an internal table name.
-- FTS table creation no longer retries without the configured tokenizer; SQLite
-  tokenizer errors now propagate.
 
 ## AI Skills
 

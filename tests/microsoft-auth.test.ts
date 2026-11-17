@@ -25,25 +25,15 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
       },
       'microsoft',
     ),
-    userId: resolveUnifiedUserId(
-      {
-        id: 'ms-user-789',
-        email: 'developer@outlook.com',
-        emailVerified: true,
-      },
-      'microsoft',
-    ),
     provider: 'microsoft' as const,
     providerAccountId: 'ms-user-789',
     email: 'developer@outlook.com',
     emailVerified: true,
     name: 'Morgan Taylor',
-    displayName: 'Morgan Taylor',
     givenName: 'Morgan',
     familyName: 'Taylor',
     userPrincipalName: 'developer@outlook.com',
     avatarUrl: null,
-    picture: null,
   };
 
   it('performs PKCE authorization code flow and fetches Microsoft Graph user profile', async () => {
@@ -93,7 +83,6 @@ describe('MicrosoftAuthClient / OneDriveAuthClient', () => {
 
     expect(user).toMatchObject(sampleUser);
     expect(user?.id).toBeDefined();
-    expect(user?.userId).toBe(user?.id);
     expect(authEvents[0]).toMatchObject(sampleUser);
 
     const authUrl = new URL(authorizationUrl);

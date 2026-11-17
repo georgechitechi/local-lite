@@ -12,20 +12,6 @@ export * from './types.js';
 export { resolveLocalAdapter } from './resolve-local.js';
 export { resolveRemoteAdapter } from './resolve-remote.js';
 
-// Re-export adapters and core client for convenience
-export { LocalFirstClient } from '../core/client.js';
-export { ExpoSQLiteAdapter } from '../adapters/local/expo-sqlite.js';
-export { OpSQLiteAdapter } from '../adapters/local/op-sqlite.js';
-export { BetterSQLite3Adapter } from '../adapters/local/better-sqlite3.js';
-export { LibSQLAdapter } from '../adapters/local/libsql.js';
-export { SqlJsAdapter } from '../adapters/local/sql-js.js';
-export { NodeSQLiteAdapter } from '../adapters/local/node-sqlite.js';
-export { SupabaseRemoteAdapter } from '../adapters/remote/supabase.js';
-export { ConvexRemoteAdapter } from '../adapters/remote/convex.js';
-export { FirestoreRemoteAdapter } from '../adapters/remote/firestore.js';
-export { SelfHostedRemoteAdapter } from '../adapters/remote/self-hosted.js';
-export type { RemoteDBAdapter } from '../adapters/remote/index.js';
-
 /**
  * Type-safe configuration helper function (similar to defineConfig in Vite/Tailwind).
  */

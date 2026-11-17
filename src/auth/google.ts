@@ -370,13 +370,10 @@ export class GoogleAuthClient {
 
     return {
       id,
-      userId: id,
       email,
       emailVerified,
       name,
-      displayName: name,
       avatarUrl,
-      picture: avatarUrl,
       provider: 'google',
       providerAccountId: sub,
       givenName: raw.given_name,

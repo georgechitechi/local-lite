@@ -255,13 +255,10 @@ export class AppleAuthClient {
     );
     const user: AppleUser = {
       id: canonicalId,
-      userId: canonicalId,
       email,
       emailVerified: Boolean(claims.email_verified ?? true),
       name,
-      displayName: name,
       avatarUrl: null,
-      picture: null,
       provider: 'apple',
       providerAccountId: id,
       givenName,
@@ -305,13 +302,10 @@ export class AppleAuthClient {
     );
     const user: AppleUser = {
       id: canonicalId,
-      userId: canonicalId,
       email: finalEmail,
       emailVerified: true,
       name: resolvedName,
-      displayName: resolvedName,
       avatarUrl: null,
-      picture: null,
       provider: 'apple',
       providerAccountId: rawId,
       givenName: resolvedGivenName,
