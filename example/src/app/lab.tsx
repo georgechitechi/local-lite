@@ -147,7 +147,7 @@ export default function LabScreen() {
   const handleTriggerJob = async (jobId: string) => {
     if (!client) return;
     try {
-      client.scheduler.setHandler(jobId, async () => {});
+      client.scheduler.setHandler(jobId, async () => { });
       const run = await client.scheduler.trigger(jobId);
       await refreshAll(client);
       showToast(`Job "${jobId}" finished: ${run.status} (${run.durationMs ?? 0}ms)`);
@@ -612,6 +612,50 @@ export default function LabScreen() {
                 alwaysVisible
                 enableBenchmark
                 onOpenBenchmark={() => setBenchmarkVisible(true)}
+                renderTrigger={({ open, status, statusColor, statusLabel }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.inspectorTrigger,
+                      { borderColor: statusColor },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={open}
+                  >
+                    <View style={styles.inspectorTriggerLeft}>
+                      <View
+                        style={[
+                          styles.inspectorDot,
+                          { backgroundColor: statusColor },
+                        ]}
+                      />
+                      <View>
+                        <Text style={styles.inspectorTitle}>
+                          Open SyncInspector
+                        </Text>
+                        <Text style={styles.inspectorSub}>
+                          {status.pendingCount > 0
+                            ? `${status.pendingCount} queued in outbox`
+                            : 'Inspect tables, outbox & sync state'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.inspectorStatusPill,
+                        { backgroundColor: `${statusColor}18` },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.inspectorStatusText,
+                          { color: statusColor },
+                        ]}
+                      >
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
               />
             </View>
             <BenchmarkModal
@@ -944,6 +988,47 @@ const styles = StyleSheet.create({
   },
   inspectorWrap: {
     marginTop: 8,
+  },
+  inspectorTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  inspectorTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  inspectorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  inspectorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  inspectorSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  inspectorStatusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  inspectorStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   codeBox: {
     backgroundColor: '#0f172a',
