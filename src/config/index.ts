@@ -1,5 +1,6 @@
 import { LocalFirstClient } from '../core/client.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
+import { createEmailHandler } from '../email/index.js';
 import { LocalLiteConfig } from './types.js';
 import { resolveLocalAdapter } from './resolve-local.js';
 import { resolveRemoteAdapter } from './resolve-remote.js';
@@ -86,7 +87,6 @@ export async function createSyncClient(
         "Nodemailer email delivery is server-only. Import 'local-lite/server' and register createNodemailerHandler from your server runtime.",
       );
     }
-    const { createEmailHandler } = await import('../email/index.js');
     const emailHandler = createEmailHandler({
       provider: config.email.provider,
       transport: config.email.transport,

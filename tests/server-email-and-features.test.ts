@@ -179,7 +179,7 @@ describe('Advanced Email, Server Endpoints & Action Features', () => {
     it('captures outgoing emails in DevMailbox without real network requests', async () => {
       DevMailbox.clear();
       const handler = createEmailHandler({
-        provider: 'dev',
+        provider: 'preview',
         silentDev: true,
       });
 

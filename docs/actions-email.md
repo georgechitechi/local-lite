@@ -165,7 +165,7 @@ client.actions.registerEmailHandler(
 // 4. Local Development Mailbox & Terminal Preview
 client.actions.registerEmailHandler(
   createEmailHandler({
-    provider: 'dev', // captures emails in memory and logs formatted preview table in terminal
+    provider: 'preview', // captures emails in memory and logs formatted preview table in terminal
     defaultFrom: 'dev@localhost',
   })
 );
@@ -173,7 +173,7 @@ client.actions.registerEmailHandler(
 
 #### Development Mailbox (`DevMailbox`)
 
-During local testing or unit tests, use `provider: 'dev'` or the `DevMailbox` class:
+During local testing or unit tests, use `provider: 'preview'` or the `DevMailbox` class:
 
 ```typescript
 import { DevMailbox } from 'local-lite/email';

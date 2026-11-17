@@ -11,13 +11,13 @@ export const syncConfig = defineSyncConfig({
   database: () => SQLite.openDatabaseAsync('local_auth_example.db'),
   localOnly: true,
   autoSchema: true,
-  localAuth: {
+  auth: {
     minPasswordLength: 6,
     maxFailedAttempts: 3,
     lockoutDurationMs: 30 * 1000, // 30s for fast interactive testing
   },
   email: {
-    provider: 'dev',
+    provider: 'preview',
     defaults: {
       from: 'Local Lite Demo <no-reply@local-lite.dev>',
     },

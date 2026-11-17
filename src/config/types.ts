@@ -96,7 +96,7 @@ export interface EmailConfig {
    * - 'sendgrid': Direct HTTP dispatch to SendGrid API.
    * - 'postmark': Direct HTTP dispatch to Postmark API.
    * - 'http': Custom HTTP endpoint or webhook.
-   * - 'dev' | 'preview': Local in-memory DevMailbox for development and testing.
+   * - 'preview': Local in-memory DevMailbox for development and testing.
    */
   provider?:
     | 'nodemailer'
@@ -104,7 +104,6 @@ export interface EmailConfig {
     | 'sendgrid'
     | 'postmark'
     | 'http'
-    | 'dev'
     | 'preview'
     | 'custom';
 

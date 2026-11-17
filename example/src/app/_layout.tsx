@@ -58,7 +58,7 @@ function TabsNavigator() {
         name="emails"
         options={{
           title: 'Emails',
-          headerTitle: 'local-lite Emails (Dev)',
+          headerTitle: 'local-lite Emails (Preview)',
           tabBarIcon: ({ color }) => (
             <Text style={{ fontSize: 18, color }}>✉️</Text>
           ),

@@ -13,7 +13,6 @@ export type EmailProviderType =
   | 'sendgrid'
   | 'postmark'
   | 'http'
-  | 'dev'
   | 'preview'
   | 'custom';
 
@@ -569,7 +568,7 @@ export function createDevEmailHandler(
 export function createEmailHandler(
   config: EmailDeliveryConfig,
 ): ConcreteEmailHandler {
-  if (config.provider === 'dev' || config.provider === 'preview') {
+  if (config.provider === 'preview') {
     return createDevEmailHandler({ ...config, silent: config.silentDev });
   }
 
@@ -597,6 +596,6 @@ export function createEmailHandler(
   }
 
   throw new Error(
-    "Invalid email configuration: Provide 'transport' (for Nodemailer/SMTP), 'provider' ('resend'|'sendgrid'|'postmark'|'dev'), or 'endpoint' (for HTTP delivery).",
+    "Invalid email configuration: Provide 'transport' (for Nodemailer/SMTP), 'provider' ('resend'|'sendgrid'|'postmark'|'preview'), or 'endpoint' (for HTTP delivery).",
   );
 }

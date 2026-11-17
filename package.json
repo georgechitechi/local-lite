@@ -175,6 +175,7 @@
   "scripts": {
     "build": "tsc",
     "docs": "node scripts/serve-docs.mjs",
+    "example": "npm run --prefix example dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:package": "node scripts/package-smoke.mjs",
@@ -234,7 +235,7 @@
     "@types/react": "^19.3.0",
     "@types/uuid": "^11.0.0",
     "expo-sqlite": "^58.0.17",
-    "nodemailer": "^10.5.0",
+    "nodemailer": "^10.6.0",
     "react": "^19.3.1",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

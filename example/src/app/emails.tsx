@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createElement, useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -56,6 +57,10 @@ export default function EmailsScreen() {
 
   const [inbox, setInbox] = useState<DevSentEmail[]>([]);
   const [outbox, setOutbox] = useState<ActionRecord[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState<DevSentEmail | null>(null);
+  const [previewMode, setPreviewMode] = useState<'rendered' | 'text' | 'raw'>(
+    'rendered',
+  );
   const [statusMessage, setStatusMessage] = useState<{
     text: string;
     type: 'success' | 'error';
@@ -135,7 +140,7 @@ export default function EmailsScreen() {
       const result = await client.actions.flush();
       await refreshState(client);
       showToast(
-        `Flushed outbox: ${result.succeeded} sent, ${result.failed} failed`,
+        `Flushed outbox: ${result.completed} sent, ${result.failed} failed`,
       );
     } catch (err: any) {
       showToast(err?.message || 'Flush failed', 'error');
@@ -147,7 +152,10 @@ export default function EmailsScreen() {
   const handleClearMailbox = async () => {
     DevMailbox.clear();
     if (client) {
-      await client.actions.prune({ statuses: ['completed', 'failed'] });
+      await client.actions.prune({
+        completedOlderThanMs: 0,
+        failedOlderThanMs: 0,
+      });
     }
     await refreshState(client);
     showToast('Cleared DevMailbox and pruned completed outbox records');
@@ -163,212 +171,357 @@ export default function EmailsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.badgeRow}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Provider: dev (DevMailbox)</Text>
+    <View style={styles.screen}>
+      <ScrollView
+        style={[styles.container, selectedEmail !== null && styles.blurredContent]}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.badgeRow}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>Provider: preview (DevMailbox)</Text>
+          </View>
+          <View style={styles.badgeSecondary}>
+            <Text style={styles.badgeSecondaryText}>
+              Inbox: {inbox.length} | Outbox: {outbox.length}
+            </Text>
+          </View>
         </View>
-        <View style={styles.badgeSecondary}>
-          <Text style={styles.badgeSecondaryText}>
-            Inbox: {inbox.length} | Outbox: {outbox.length}
-          </Text>
-        </View>
-      </View>
 
-      {statusMessage && (
-        <View
-          style={[
-            styles.toast,
-            statusMessage.type === 'error' ? styles.toastError : styles.toastSuccess,
-          ]}
-        >
-          <Text
+        {statusMessage && (
+          <View
             style={[
-              styles.toastText,
-              statusMessage.type === 'error'
-                ? styles.toastTextError
-                : styles.toastTextSuccess,
+              styles.toast,
+              statusMessage.type === 'error' ? styles.toastError : styles.toastSuccess,
             ]}
           >
-            {statusMessage.text}
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Compose Test Email</Text>
-        <Text style={styles.cardSubtitle}>
-          Dispatches through client.actions.sendEmail() using the local dev provider.
-        </Text>
-
-        <View style={styles.presetRow}>
-          {PRESETS.map((preset) => (
-            <TouchableOpacity
-              key={preset.label}
-              style={styles.presetChip}
-              onPress={() => {
-                setTo(preset.to);
-                setSubject(preset.subject);
-                setText(preset.text);
-                setHtml(preset.html);
-              }}
+            <Text
+              style={[
+                styles.toastText,
+                statusMessage.type === 'error'
+                  ? styles.toastTextError
+                  : styles.toastTextSuccess,
+              ]}
             >
-              <Text style={styles.presetChipText}>{preset.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>To *</Text>
-        <TextInput
-          style={styles.input}
-          value={to}
-          onChangeText={setTo}
-          placeholder="recipient@example.com"
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        <Text style={styles.label}>From (optional, uses defaultFrom)</Text>
-        <TextInput
-          style={styles.input}
-          value={from}
-          onChangeText={setFrom}
-          placeholder="Local Lite Demo <no-reply@local-lite.dev>"
-          autoCapitalize="none"
-        />
-
-        <Text style={styles.label}>Subject *</Text>
-        <TextInput
-          style={styles.input}
-          value={subject}
-          onChangeText={setSubject}
-          placeholder="Email subject"
-        />
-
-        <Text style={styles.label}>Text Body</Text>
-        <TextInput
-          style={[styles.input, styles.multiline]}
-          value={text}
-          onChangeText={setText}
-          placeholder="Plain text body..."
-          multiline
-          numberOfLines={3}
-        />
-
-        <Text style={styles.label}>HTML Body</Text>
-        <TextInput
-          style={[styles.input, styles.multiline]}
-          value={html}
-          onChangeText={setHtml}
-          placeholder="<p>HTML body...</p>"
-          multiline
-          numberOfLines={3}
-        />
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.primaryButton, sending && styles.buttonDisabled]}
-            onPress={() => handleSend(true)}
-            disabled={sending}
-          >
-            <Text style={styles.primaryButtonText}>
-              {sending ? 'Sending...' : 'Send & Flush'}
+              {statusMessage.text}
             </Text>
-          </TouchableOpacity>
+          </View>
+        )}
 
-          <TouchableOpacity
-            style={[styles.secondaryButton, sending && styles.buttonDisabled]}
-            onPress={() => handleSend(false)}
-            disabled={sending}
-          >
-            <Text style={styles.secondaryButtonText}>Enqueue Only</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={styles.outlineButton}
-            onPress={handleFlush}
-            disabled={sending}
-          >
-            <Text style={styles.outlineButtonText}>Flush Outbox</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.dangerOutlineButton}
-            onPress={handleClearMailbox}
-            disabled={sending}
-          >
-            <Text style={styles.dangerOutlineButtonText}>Clear Inbox</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>DevMailbox Inbox ({inbox.length})</Text>
-        <Text style={styles.cardSubtitle}>
-          Captured in-memory without sending real network requests.
-        </Text>
-
-        {inbox.length === 0 ? (
-          <Text style={styles.emptyText}>
-            No emails dispatched yet. Tap "Send & Flush" above to test.
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Compose Test Email</Text>
+          <Text style={styles.cardSubtitle}>
+            Dispatches through client.actions.sendEmail() using the local preview provider.
           </Text>
-        ) : (
-          inbox.map((item) => (
-            <View key={item.id} style={styles.emailItem}>
-              <View style={styles.emailHeader}>
-                <Text style={styles.emailSubject}>{item.mailOptions.subject}</Text>
-                <Text style={styles.emailTime}>
-                  {new Date(item.sentAt).toLocaleTimeString()}
-                </Text>
-              </View>
-              <Text style={styles.emailMeta}>
-                From: {String(item.mailOptions.from || 'default')}
-              </Text>
-              <Text style={styles.emailMeta}>
-                To:{' '}
-                {Array.isArray(item.mailOptions.to)
-                  ? item.mailOptions.to.join(', ')
-                  : String(item.mailOptions.to)}
-              </Text>
-              {item.mailOptions.text ? (
-                <Text style={styles.emailBody}>{item.mailOptions.text}</Text>
-              ) : null}
-              {item.mailOptions.html ? (
-                <Text style={styles.emailHtml}>HTML: {item.mailOptions.html}</Text>
-              ) : null}
-              <Text style={styles.emailId}>ID: {item.id}</Text>
-            </View>
-          ))
-        )}
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Action Outbox ({outbox.length})</Text>
-        {outbox.length === 0 ? (
-          <Text style={styles.emptyText}>No send_email records in outbox.</Text>
-        ) : (
-          outbox.map((rec) => (
-            <View key={rec.id} style={styles.outboxItem}>
-              <View style={styles.emailHeader}>
-                <Text style={styles.outboxSubject}>
-                  {rec.payload?.subject || '(no subject)'}
-                </Text>
-                <Text style={styles.outboxStatus}>{rec.status.toUpperCase()}</Text>
-              </View>
-              <Text style={styles.emailMeta}>
-                To: {String(rec.payload?.to || '')} | Attempts: {rec.attempts}
+          <View style={styles.presetRow}>
+            {PRESETS.map((preset) => (
+              <TouchableOpacity
+                key={preset.label}
+                style={styles.presetChip}
+                onPress={() => {
+                  setTo(preset.to);
+                  setSubject(preset.subject);
+                  setText(preset.text);
+                  setHtml(preset.html);
+                }}
+              >
+                <Text style={styles.presetChipText}>{preset.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>To *</Text>
+          <TextInput
+            style={styles.input}
+            value={to}
+            onChangeText={setTo}
+            placeholder="recipient@example.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <Text style={styles.label}>From (optional, uses defaultFrom)</Text>
+          <TextInput
+            style={styles.input}
+            value={from}
+            onChangeText={setFrom}
+            placeholder="Local Lite Demo <no-reply@local-lite.dev>"
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.label}>Subject *</Text>
+          <TextInput
+            style={styles.input}
+            value={subject}
+            onChangeText={setSubject}
+            placeholder="Email subject"
+          />
+
+          <Text style={styles.label}>Text Body</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={text}
+            onChangeText={setText}
+            placeholder="Plain text body..."
+            multiline
+            numberOfLines={3}
+          />
+
+          <Text style={styles.label}>HTML Body</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={html}
+            onChangeText={setHtml}
+            placeholder="<p>HTML body...</p>"
+            multiline
+            numberOfLines={3}
+          />
+
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.primaryButton, sending && styles.buttonDisabled]}
+              onPress={() => handleSend(true)}
+              disabled={sending}
+            >
+              <Text style={styles.primaryButtonText}>
+                {sending ? 'Sending...' : 'Send & Flush'}
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, sending && styles.buttonDisabled]}
+              onPress={() => handleSend(false)}
+              disabled={sending}
+            >
+              <Text style={styles.secondaryButtonText}>Enqueue Only</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.outlineButton}
+              onPress={handleFlush}
+              disabled={sending}
+            >
+              <Text style={styles.outlineButtonText}>Flush Outbox</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dangerOutlineButton}
+              onPress={handleClearMailbox}
+              disabled={sending}
+            >
+              <Text style={styles.dangerOutlineButtonText}>Clear Inbox</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>DevMailbox Inbox ({inbox.length})</Text>
+          <Text style={styles.cardSubtitle}>
+            Captured in-memory without sending real network requests.
+          </Text>
+
+          {inbox.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No emails dispatched yet. Tap "Send & Flush" above to test.
+            </Text>
+          ) : (
+            inbox.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.emailItem}
+                activeOpacity={0.75}
+                onPress={() => {
+                  setSelectedEmail(item);
+                  setPreviewMode(item.mailOptions.html ? 'rendered' : 'text');
+                }}
+              >
+                <View style={styles.emailHeader}>
+                  <Text style={styles.emailSubject}>{item.mailOptions.subject}</Text>
+                  <Text style={styles.emailTime}>
+                    {new Date(item.sentAt).toLocaleTimeString()}
+                  </Text>
+                </View>
+                <Text style={styles.emailMeta}>
+                  From: {String(item.mailOptions.from || 'default')}
+                </Text>
+                <Text style={styles.emailMeta}>
+                  To:{' '}
+                  {Array.isArray(item.mailOptions.to)
+                    ? item.mailOptions.to.join(', ')
+                    : String(item.mailOptions.to)}
+                </Text>
+                {item.mailOptions.text ? (
+                  <Text style={styles.emailBody} numberOfLines={2}>
+                    {item.mailOptions.text}
+                  </Text>
+                ) : null}
+                <View style={styles.emailFooter}>
+                  <Text style={styles.emailId}>ID: {item.id}</Text>
+                  <Text style={styles.previewLink}>Preview →</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Action Outbox ({outbox.length})</Text>
+          {outbox.length === 0 ? (
+            <Text style={styles.emptyText}>No send_email records in outbox.</Text>
+          ) : (
+            outbox.map((rec) => (
+              <View key={rec.id} style={styles.outboxItem}>
+                <View style={styles.emailHeader}>
+                  <Text style={styles.outboxSubject}>
+                    {rec.payload?.subject || '(no subject)'}
+                  </Text>
+                  <Text style={styles.outboxStatus}>{rec.status.toUpperCase()}</Text>
+                </View>
+                <Text style={styles.emailMeta}>
+                  To: {String(rec.payload?.to || '')} | Retries: {rec.retryCount}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={selectedEmail !== null}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setSelectedEmail(null)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <TouchableOpacity
+            style={[
+              styles.sheetOverlay,
+              Platform.OS === 'web' && ({ backdropFilter: 'blur(8px)' } as any),
+            ]}
+            activeOpacity={1}
+            onPress={() => setSelectedEmail(null)}
+          />
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHandleWrap}>
+              <View style={styles.sheetHandle} />
             </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                {selectedEmail?.mailOptions.subject || 'Email Preview'}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setSelectedEmail(null)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedEmail && (
+              <>
+                <View style={styles.modalMetaBox}>
+                  <Text style={styles.emailMeta}>
+                    <Text style={styles.metaBold}>From: </Text>
+                    {String(selectedEmail.mailOptions.from || 'default')}
+                  </Text>
+                  <Text style={styles.emailMeta}>
+                    <Text style={styles.metaBold}>To: </Text>
+                    {Array.isArray(selectedEmail.mailOptions.to)
+                      ? selectedEmail.mailOptions.to.join(', ')
+                      : String(selectedEmail.mailOptions.to)}
+                  </Text>
+                  <Text style={styles.emailMeta}>
+                    <Text style={styles.metaBold}>Sent: </Text>
+                    {new Date(selectedEmail.sentAt).toLocaleString()}
+                  </Text>
+                </View>
+
+                <View style={styles.modeTabs}>
+                  {(['rendered', 'text', 'raw'] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.modeTab,
+                        previewMode === mode && styles.modeTabActive,
+                      ]}
+                      onPress={() => setPreviewMode(mode)}
+                    >
+                      <Text
+                        style={[
+                          styles.modeTabText,
+                          previewMode === mode && styles.modeTabTextActive,
+                        ]}
+                      >
+                        {mode === 'rendered'
+                          ? 'Preview'
+                          : mode === 'text'
+                            ? 'Plain Text'
+                            : 'Raw HTML'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <ScrollView style={styles.previewBody}>
+                  {previewMode === 'rendered' ? (
+                    selectedEmail.mailOptions.html ? (
+                      Platform.OS === 'web' ? (
+                        createElement('iframe', {
+                          srcDoc: selectedEmail.mailOptions.html,
+                          style: {
+                            width: '100%',
+                            minHeight: 260,
+                            border: 'none',
+                            backgroundColor: '#ffffff',
+                          },
+                          sandbox: '',
+                        })
+                      ) : (
+                        <Text style={styles.previewText}>
+                          {selectedEmail.mailOptions.html
+                            .replace(/<style[\s\S]*?<\/style>/gi, '')
+                            .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n\n')
+                            .replace(/<br\s*\/?>/gi, '\n')
+                            .replace(/<[^>]+>/g, '')
+                            .replace(/\n{3,}/g, '\n\n')
+                            .trim()}
+                        </Text>
+                      )
+                    ) : (
+                      <Text style={styles.previewText}>
+                        {selectedEmail.mailOptions.text || '(empty body)'}
+                      </Text>
+                    )
+                  ) : previewMode === 'text' ? (
+                    <Text style={styles.previewText}>
+                      {selectedEmail.mailOptions.text || '(no plain text body)'}
+                    </Text>
+                  ) : (
+                    <Text style={styles.previewCode}>
+                      {selectedEmail.mailOptions.html || '(no HTML body)'}
+                    </Text>
+                  )}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  blurredContent: {
+    filter: [{ blur: 6 }] as any,
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
@@ -620,5 +773,122 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#0284c7',
+  },
+  emailFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  previewLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0284c7',
+  },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+  },
+  sheetContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+    paddingBottom: 20,
+    overflow: 'hidden',
+    borderTopWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sheetHandleWrap: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#cbd5e1',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    gap: 12,
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  modalCloseBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  modalMetaBox: {
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    gap: 2,
+  },
+  metaBold: {
+    fontWeight: '700',
+    color: '#334155',
+  },
+  modeTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    gap: 6,
+    paddingTop: 8,
+  },
+  modeTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  modeTabActive: {
+    borderBottomColor: '#0284c7',
+  },
+  modeTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  modeTabTextActive: {
+    color: '#0284c7',
+  },
+  previewBody: {
+    padding: 16,
+    minHeight: 220,
+  },
+  previewText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#0f172a',
+  },
+  previewCode: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#334155',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
