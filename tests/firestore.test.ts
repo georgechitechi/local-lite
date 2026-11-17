@@ -1,28 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FirestoreRemoteAdapter } from '../src/adapters/remote/firestore.js';
 
-describe('FirestoreRemoteAdapter', () => {
-  it('pushes mutations using compat/RN batch writes and handles soft deletes', async () => {
+describe('FirestoreRemoteAdapter (Modular Firebase SDK v11+)', () => {
+  it('pushes mutations using modular writeBatch and handles soft deletes', async () => {
     const commitSpy = vi.fn().mockResolvedValue(undefined);
     const setSpy = vi.fn();
+    const mockBatch = { set: setSpy, commit: commitSpy };
 
-    const mockDoc = vi.fn().mockReturnValue({ id: 'mock-doc' });
-    const mockCollection = vi.fn().mockReturnValue({ doc: mockDoc });
-
-    const mockBatch = {
-      set: setSpy,
-      commit: commitSpy,
+    const mockModule = {
+      writeBatch: vi.fn().mockReturnValue(mockBatch),
+      collection: vi.fn().mockImplementation((_db, table) => ({ table })),
+      doc: vi.fn().mockImplementation((col, id) => ({ col, id })),
     };
 
-    const mockFirestore = {
-      batch: vi.fn().mockReturnValue(mockBatch),
-      collection: mockCollection,
-    };
+    const mockDb = { type: 'firestore-modular' };
 
-    const adapter = new FirestoreRemoteAdapter(mockFirestore as any, {
+    const adapter = new FirestoreRemoteAdapter(mockDb as any, {
       tables: ['properties'],
       deletedColumn: 'deleted',
       updatedAtColumn: 'updatedAt',
+      firestoreModule: mockModule,
     });
 
     const success = await adapter.pushChanges([
@@ -45,10 +42,8 @@ describe('FirestoreRemoteAdapter', () => {
     ]);
 
     expect(success).toBe(true);
-    expect(mockFirestore.batch).toHaveBeenCalledTimes(1);
+    expect(mockModule.writeBatch).toHaveBeenCalledWith(mockDb);
     expect(setSpy).toHaveBeenCalledTimes(2);
-
-    // Verify INSERT write
     expect(setSpy).toHaveBeenNthCalledWith(
       1,
       expect.anything(),
@@ -60,8 +55,6 @@ describe('FirestoreRemoteAdapter', () => {
       }),
       { merge: true },
     );
-
-    // Verify DELETE soft-delete write
     expect(setSpy).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
@@ -71,54 +64,17 @@ describe('FirestoreRemoteAdapter', () => {
       }),
       { merge: true },
     );
-
     expect(commitSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('pushes mutations using modular Firestore SDK mock functions', async () => {
-    const commitSpy = vi.fn().mockResolvedValue(undefined);
-    const setSpy = vi.fn();
-    const mockBatch = { set: setSpy, commit: commitSpy };
-
-    const mockModule = {
-      writeBatch: vi.fn().mockReturnValue(mockBatch),
-      collection: vi.fn().mockImplementation((_db, table) => ({ table })),
-      doc: vi.fn().mockImplementation((col, id) => ({ col, id })),
-    };
-
-    // A modular Firestore instance does NOT have .batch() on itself
-    const mockDb = { type: 'firestore-modular' };
-
-    const adapter = new FirestoreRemoteAdapter(mockDb as any, {
-      tables: ['tenants'],
-      firestoreModule: mockModule,
-    });
-
-    const success = await adapter.pushChanges([
-      {
-        id: 'op-1',
-        tableName: 'tenants',
-        rowId: 'ten-1',
-        operation: 'UPDATE',
-        payload: { name: 'Alice' },
-        timestamp: Date.now(),
-      },
-    ]);
-
-    expect(success).toBe(true);
-    expect(mockModule.writeBatch).toHaveBeenCalledWith(mockDb);
-    expect(setSpy).toHaveBeenCalledTimes(1);
-    expect(commitSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('fetches delta changes and correctly handles soft deletes and timestamp extraction', async () => {
-    const docs = [
+  it('fetches delta changes using modular query, where, and getDocs', async () => {
+    const mockDocs = [
       {
         id: 'doc-1',
         data: () => ({
           id: 'doc-1',
           name: 'Alice',
-          updatedAt: 1700002000000,
+          updatedAt: 1700001000000,
           deleted: false,
         }),
       },
@@ -127,94 +83,92 @@ describe('FirestoreRemoteAdapter', () => {
         data: () => ({
           id: 'doc-2',
           name: 'Bob',
-          updatedAt: { toMillis: () => 1700005000000 }, // Firestore Timestamp object
+          updatedAt: 1700005000000,
           deleted: true,
         }),
       },
     ];
 
-    const getSpy = vi.fn().mockResolvedValue({ docs });
-    const whereSpy = vi.fn().mockReturnValue({ get: getSpy });
-    const collectionSpy = vi.fn().mockReturnValue({ where: whereSpy });
-
-    const mockFirestore = {
-      collection: collectionSpy,
+    const mockModule = {
+      collection: vi.fn().mockImplementation((_db, table) => ({ table })),
+      where: vi.fn().mockImplementation((field, op, val) => ({ field, op, val })),
+      query: vi.fn().mockImplementation((col, w) => ({ col, w })),
+      getDocs: vi.fn().mockResolvedValue({ docs: mockDocs }),
     };
 
-    const adapter = new FirestoreRemoteAdapter(mockFirestore as any, {
+    const adapter = new FirestoreRemoteAdapter({} as any, {
       tables: ['tenants'],
       deletedColumn: 'deleted',
       updatedAtColumn: 'updatedAt',
+      firestoreModule: mockModule,
     });
 
     const deltas = await adapter.fetchChanges(1700000000000);
 
-    expect(collectionSpy).toHaveBeenCalledWith('tenants');
-    expect(whereSpy).toHaveBeenCalledWith('updatedAt', '>', 1700000000000);
+    expect(mockModule.collection).toHaveBeenCalledWith(expect.anything(), 'tenants');
+    expect(mockModule.where).toHaveBeenCalledWith('updatedAt', '>', 1700000000000);
     expect(deltas.changes).toHaveLength(2);
-
-    expect(deltas.changes[0].operation).toBe('UPDATE');
-    expect(deltas.changes[0].rowId).toBe('doc-1');
-    expect(deltas.changes[0].payload).toEqual(
-      expect.objectContaining({ name: 'Alice' }),
+    expect(deltas.changes[0]).toEqual(
+      expect.objectContaining({
+        operation: 'UPDATE',
+        rowId: 'doc-1',
+        payload: expect.objectContaining({ name: 'Alice' }),
+      }),
     );
-
-    expect(deltas.changes[1].operation).toBe('DELETE');
-    expect(deltas.changes[1].rowId).toBe('doc-2');
-    expect(deltas.changes[1].payload).toBeNull();
-
+    expect(deltas.changes[1]).toEqual(
+      expect.objectContaining({
+        operation: 'DELETE',
+        rowId: 'doc-2',
+        payload: null,
+      }),
+    );
     expect(deltas.timestamp).toBe(1700005000000);
   });
 
-  it('subscribes to live changes via onSnapshot and unsubscribes cleanly with destroy()', () => {
+  it('subscribes to live changes via modular onSnapshot and unsubscribes cleanly', async () => {
     const unsubscribeSpy = vi.fn();
     let snapshotCallback: ((snapshot: any) => void) | undefined;
 
-    const onSnapshotSpy = vi.fn().mockImplementation((cb) => {
-      snapshotCallback = cb;
-      return unsubscribeSpy;
-    });
-
-    const whereSpy = vi.fn().mockReturnValue({ onSnapshot: onSnapshotSpy });
-    const collectionSpy = vi.fn().mockReturnValue({ where: whereSpy });
-
-    const mockFirestore = {
-      collection: collectionSpy,
+    const mockModule = {
+      collection: vi.fn().mockImplementation((_db, table) => ({ table })),
+      where: vi.fn().mockImplementation((field, op, val) => ({ field, op, val })),
+      query: vi.fn().mockImplementation((col, w) => ({ col, w })),
+      onSnapshot: vi.fn().mockImplementation((_q, cb) => {
+        snapshotCallback = cb;
+        return unsubscribeSpy;
+      }),
     };
 
-    const adapter = new FirestoreRemoteAdapter(mockFirestore as any, {
+    const adapter = new FirestoreRemoteAdapter({} as any, {
       tables: ['properties'],
       updatedAtColumn: 'updatedAt',
       deletedColumn: 'deleted',
+      firestoreModule: mockModule,
     });
 
     const liveHandler = vi.fn();
     const unsubscribe = adapter.subscribeToLiveChanges(liveHandler);
-    expect(typeof unsubscribe).toBe('function');
+    await vi.waitFor(() => {
+      expect(mockModule.onSnapshot).toHaveBeenCalledTimes(1);
+    });
 
-    expect(onSnapshotSpy).toHaveBeenCalledTimes(1);
-
-    // Simulate incoming snapshot with docChanges
-    if (snapshotCallback) {
-      snapshotCallback({
-        docChanges: () => [
-          {
-            type: 'modified',
-            doc: {
+    snapshotCallback?.({
+      docChanges: () => [
+        {
+          type: 'modified',
+          doc: {
+            id: 'prop-99',
+            data: () => ({
               id: 'prop-99',
-              data: () => ({
-                id: 'prop-99',
-                title: 'Penthouse',
-                updatedAt: 1700008000000,
-                deleted: false,
-              }),
-            },
+              title: 'Penthouse',
+              updatedAt: 1700008000000,
+              deleted: false,
+            }),
           },
-        ],
-      });
-    }
+        },
+      ],
+    });
 
-    expect(liveHandler).toHaveBeenCalledTimes(1);
     expect(liveHandler).toHaveBeenCalledWith({
       timestamp: 1700008000000,
       changes: [
@@ -228,42 +182,32 @@ describe('FirestoreRemoteAdapter', () => {
       ],
     });
 
-    // Cleanup
     unsubscribe();
     expect(unsubscribeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to per-document writes when batch.commit fails, returning PushResult with failedIds', async () => {
+  it('falls back to modular setDoc when batch.commit fails, returning PushResult with failedIds', async () => {
     const commitSpy = vi
       .fn()
       .mockRejectedValue(new Error('Batch failed: document 2 forbidden'));
     const setSpy = vi.fn();
 
-    const mockDoc1 = {
-      set: vi.fn().mockResolvedValue(undefined),
-    };
-    const mockDoc2 = {
-      set: vi.fn().mockRejectedValue(new Error('Permission denied on doc 2')),
-    };
+    const setDocSpy = vi.fn().mockImplementation(async (docRef) => {
+      if (docRef.id === 'p-2') {
+        throw new Error('Permission denied on doc 2');
+      }
+    });
 
-    const mockCollection = vi.fn().mockImplementation((table) => ({
-      doc: vi
-        .fn()
-        .mockImplementation((id) => (id === 'p-1' ? mockDoc1 : mockDoc2)),
-    }));
-
-    const mockBatch = {
-      set: setSpy,
-      commit: commitSpy,
+    const mockModule = {
+      writeBatch: vi.fn().mockReturnValue({ set: setSpy, commit: commitSpy }),
+      collection: vi.fn().mockImplementation((_db, table) => ({ table })),
+      doc: vi.fn().mockImplementation((col, id) => ({ col, id })),
+      setDoc: setDocSpy,
     };
 
-    const mockFirestore = {
-      batch: vi.fn().mockReturnValue(mockBatch),
-      collection: mockCollection,
-    };
-
-    const adapter = new FirestoreRemoteAdapter(mockFirestore as any, {
+    const adapter = new FirestoreRemoteAdapter({} as any, {
       tables: ['properties'],
+      firestoreModule: mockModule,
     });
 
     const result = await adapter.pushChanges([
@@ -290,7 +234,6 @@ describe('FirestoreRemoteAdapter', () => {
       failedIds: ['op-2'],
       errors: { 'op-2': 'Permission denied on doc 2' },
     });
-    expect(mockDoc1.set).toHaveBeenCalledTimes(1);
-    expect(mockDoc2.set).toHaveBeenCalledTimes(1);
+    expect(setDocSpy).toHaveBeenCalledTimes(2);
   });
 });

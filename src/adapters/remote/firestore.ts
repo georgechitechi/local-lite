@@ -150,10 +150,12 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     const errors: Record<string, string> = {};
 
     try {
-      const isCompat =
-        typeof this.db.batch === 'function' &&
-        typeof this.db.collection === 'function';
-      const mod = isCompat ? null : await this.getModule();
+      const mod = await this.getModule();
+      if (!mod || typeof mod.writeBatch !== 'function') {
+        throw new Error(
+          'Modular firebase/firestore SDK (writeBatch, collection, doc) is required in local-lite v3.',
+        );
+      }
 
       const CHUNK_SIZE = 450;
       for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
@@ -177,66 +179,36 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
           }
         };
 
-        if (isCompat) {
-          // React Native Firebase / Compat SDK
-          try {
-            const batch = this.db.batch();
-            for (const op of chunk) {
-              const docRef = this.db.collection(op.tableName).doc(op.rowId);
-              batch.set(docRef, buildDocData(op), { merge: true });
-            }
-            await batch.commit();
-          } catch (batchError: any) {
-            this.logger.warn(
-              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`,
+        try {
+          const batch = mod.writeBatch(this.db);
+          for (const op of chunk) {
+            const docRef = mod.doc(
+              mod.collection(this.db, op.tableName),
+              op.rowId,
             );
-            for (const op of chunk) {
-              try {
-                const docRef = this.db.collection(op.tableName).doc(op.rowId);
-                await docRef.set(buildDocData(op), { merge: true });
-              } catch (opErr: any) {
-                failedIds.push(op.id);
-                errors[op.id] = opErr?.message || String(opErr);
-              }
-            }
+            batch.set(docRef, buildDocData(op), { merge: true });
           }
-        } else if (mod && typeof mod.writeBatch === 'function') {
-          // Modular Firebase SDK
-          try {
-            const batch = mod.writeBatch(this.db);
-            for (const op of chunk) {
+          await batch.commit();
+        } catch (batchError: any) {
+          this.logger.warn(
+            `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`,
+          );
+          for (const op of chunk) {
+            try {
               const docRef = mod.doc(
                 mod.collection(this.db, op.tableName),
                 op.rowId,
               );
-              batch.set(docRef, buildDocData(op), { merge: true });
-            }
-            await batch.commit();
-          } catch (batchError: any) {
-            this.logger.warn(
-              `[Firestore] Batch write failed, falling back to per-document writes: ${batchError?.message || batchError}`,
-            );
-            for (const op of chunk) {
-              try {
-                const docRef = mod.doc(
-                  mod.collection(this.db, op.tableName),
-                  op.rowId,
-                );
-                if (typeof mod.setDoc === 'function') {
-                  await mod.setDoc(docRef, buildDocData(op), { merge: true });
-                } else {
-                  throw batchError;
-                }
-              } catch (opErr: any) {
-                failedIds.push(op.id);
-                errors[op.id] = opErr?.message || String(opErr);
+              if (typeof mod.setDoc === 'function') {
+                await mod.setDoc(docRef, buildDocData(op), { merge: true });
+              } else {
+                throw batchError;
               }
+            } catch (opErr: any) {
+              failedIds.push(op.id);
+              errors[op.id] = opErr?.message || String(opErr);
             }
           }
-        } else {
-          throw new Error(
-            'Firestore client does not have .batch() and modular firebase/firestore writeBatch could not be loaded.',
-          );
         }
       }
 
@@ -265,8 +237,12 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     }
 
     try {
-      const isCompat = typeof this.db.collection === 'function';
-      const mod = isCompat ? null : await this.getModule();
+      const mod = await this.getModule();
+      if (!mod || typeof mod.getDocs !== 'function') {
+        throw new Error(
+          'Modular firebase/firestore SDK (getDocs, query, collection, where) is required in local-lite v3.',
+        );
+      }
 
       let maxServerTimestamp = sinceTimestamp;
       const changes: DeltaChange[] = [];
@@ -276,23 +252,12 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
         const chunk = this.tables.slice(i, i + CHUNK_SIZE);
         const results = await Promise.all(
           chunk.map(async (table) => {
-            let docs: any[] = [];
-
-            if (isCompat) {
-              const snapshot = await this.db
-                .collection(table)
-                .where(this.updatedAtColumn, '>', sinceTimestamp)
-                .get();
-              docs = snapshot.docs || [];
-            } else if (mod && typeof mod.getDocs === 'function') {
-              const q = mod.query(
-                mod.collection(this.db, table),
-                mod.where(this.updatedAtColumn, '>', sinceTimestamp),
-              );
-              const snapshot = await mod.getDocs(q);
-              docs = snapshot.docs || [];
-            }
-            return { table, docs };
+            const q = mod.query(
+              mod.collection(this.db, table),
+              mod.where(this.updatedAtColumn, '>', sinceTimestamp),
+            );
+            const snapshot = await mod.getDocs(q);
+            return { table, docs: snapshot.docs || [] };
           }),
         );
 
@@ -355,9 +320,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     }
 
     const setupListeners = async () => {
-      const isCompat = typeof this.db.collection === 'function';
-      const mod = isCompat ? null : await this.getModule();
+      const mod = await this.getModule();
       if (generation !== this.liveGeneration) return;
+      if (!mod || typeof mod.onSnapshot !== 'function') return;
       const currentCursor = Date.now() - 2000;
 
       for (const table of this.tables) {
@@ -415,30 +380,18 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
             }
           };
 
-          if (isCompat) {
-            const unsub = this.db
-              .collection(table)
-              .where(this.updatedAtColumn, '>', currentCursor)
-              .onSnapshot(handleSnapshot, (err: any) => {
-                console.warn(`Firestore onSnapshot error on ${table}:`, err);
-              });
-            if (typeof unsub === 'function') {
-              this.unsubscribers.push(unsub);
-            }
-          } else if (mod && typeof mod.onSnapshot === 'function') {
-            const q = mod.query(
-              mod.collection(this.db, table),
-              mod.where(this.updatedAtColumn, '>', currentCursor),
+          const q = mod.query(
+            mod.collection(this.db, table),
+            mod.where(this.updatedAtColumn, '>', currentCursor),
+          );
+          const unsub = mod.onSnapshot(q, handleSnapshot, (err: any) => {
+            console.warn(
+              `Firestore modular onSnapshot error on ${table}:`,
+              err,
             );
-            const unsub = mod.onSnapshot(q, handleSnapshot, (err: any) => {
-              console.warn(
-                `Firestore modular onSnapshot error on ${table}:`,
-                err,
-              );
-            });
-            if (typeof unsub === 'function') {
-              this.unsubscribers.push(unsub);
-            }
+          });
+          if (typeof unsub === 'function') {
+            this.unsubscribers.push(unsub);
           }
         } catch (err) {
           console.warn(
@@ -467,7 +420,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     for (const unsub of this.unsubscribers) {
       try {
         unsub();
-      } catch {}
+      } catch { }
     }
     this.unsubscribers = [];
   }

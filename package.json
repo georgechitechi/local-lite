@@ -1,6 +1,6 @@
 {
   "name": "local-lite",
-  "version": "2.0.7",
+  "version": "3.0.0",
   "description": "Never let a lost connection break a promise. Local-first sync that faithfully keeps data safe until you're back online.",
   "license": "MIT",
   "main": "dist/index.js",
@@ -217,17 +217,17 @@
     "prepublishOnly": "npm run test && npm run build && npm run test:package"
   },
   "peerDependencies": {
-    "@libsql/client": "^0.6.0",
-    "@op-engineering/op-sqlite": "^0.1.0",
-    "@supabase/supabase-js": "^2.0.0",
-    "better-sqlite3": "^8.0.0",
-    "convex": ">=1.0.0",
+    "@libsql/client": ">=0.14.0",
+    "@op-engineering/op-sqlite": ">=10.0.0",
+    "@supabase/supabase-js": ">=2.45.0",
+    "better-sqlite3": ">=11.0.0",
+    "convex": ">=1.15.0",
     "expo-file-system": ">=58.0.0",
     "expo-sqlite": ">=58.0.0",
-    "firebase": ">=9.0.0",
+    "firebase": ">=11.0.0",
     "nodemailer": ">=6.9.0",
     "react": ">=18.0.0",
-    "sql.js": "^1.8.0"
+    "sql.js": ">=1.10.0"
   },
   "peerDependenciesMeta": {
     "nodemailer": {
