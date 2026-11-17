@@ -55,6 +55,7 @@ export async function resolveRemoteAdapter(
       url: config.server.url,
       token: config.server.token,
       headers: config.server.headers,
+      fetch: config.server.fetch,
       tables: config.tables,
       primaryKey: config.primaryKey,
       pollIntervalMs: config.server.pollIntervalMs,

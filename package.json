@@ -66,6 +66,11 @@
       "import": "./dist/adapters/remote/firestore.js",
       "default": "./dist/adapters/remote/firestore.js"
     },
+    "./self-hosted": {
+      "types": "./dist/adapters/remote/self-hosted.d.ts",
+      "import": "./dist/adapters/remote/self-hosted.js",
+      "default": "./dist/adapters/remote/self-hosted.js"
+    },
     "./auth": {
       "types": "./dist/auth/index.d.ts",
       "import": "./dist/auth/index.js",

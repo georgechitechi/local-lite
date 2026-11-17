@@ -18,5 +18,9 @@ export type {
   LocalDBAdapter,
   LocalTransaction,
 } from '../adapters/local/index.js';
-export type { RemoteDBAdapter } from '../adapters/remote/index.js';
+export type {
+  RemoteAutomationJob,
+  RemoteBackupArchive,
+  RemoteDBAdapter,
+} from '../adapters/remote/index.js';
 export * from '../utils/logger.js';

@@ -2,6 +2,7 @@ export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 
 export * from './email.js';
 export * from './sync.js';
+export * from './auth.js';
 export * from './dashboard.js';
 
 export interface ApiRequestContext<TConfig = unknown> {

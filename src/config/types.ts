@@ -161,6 +161,11 @@ export interface SelfHostedServerConfigOptions {
   headers?: Record<string, string>;
 
   /**
+   * Custom fetch implementation (defaults to globalThis.fetch).
+   */
+  fetch?: typeof fetch;
+
+  /**
    * Polling interval in milliseconds for live change detection. Default: 5000.
    */
   pollIntervalMs?: number;
