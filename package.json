@@ -121,6 +121,16 @@
       "import": "./dist/adapters/local/node-sqlite.js",
       "default": "./dist/adapters/local/node-sqlite.js"
     },
+    "./sqlite-wasm": {
+      "types": "./dist/adapters/local/sqlite-wasm.d.ts",
+      "import": "./dist/adapters/local/sqlite-wasm.js",
+      "default": "./dist/adapters/local/sqlite-wasm.js"
+    },
+    "./postgres": {
+      "types": "./dist/adapters/remote/postgres.d.ts",
+      "import": "./dist/adapters/remote/postgres.js",
+      "default": "./dist/adapters/remote/postgres.js"
+    },
     "./core": {
       "types": "./dist/core/index.d.ts",
       "import": "./dist/core/index.js",
@@ -170,6 +180,31 @@
       "types": "./dist/payments/server.d.ts",
       "import": "./dist/payments/server.js",
       "default": "./dist/payments/server.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte/index.d.ts",
+      "import": "./dist/svelte/index.js",
+      "default": "./dist/svelte/index.js"
+    },
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "import": "./dist/vue/index.js",
+      "default": "./dist/vue/index.js"
+    },
+    "./solid": {
+      "types": "./dist/solid/index.d.ts",
+      "import": "./dist/solid/index.js",
+      "default": "./dist/solid/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
+    },
+    "./presence": {
+      "types": "./dist/presence/index.d.ts",
+      "import": "./dist/presence/index.js",
+      "default": "./dist/presence/index.js"
     }
   },
   "scripts": {

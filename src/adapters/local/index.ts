@@ -16,3 +16,4 @@ export * from './better-sqlite3.js';
 export * from './libsql.js';
 export * from './sql-js.js';
 export * from './node-sqlite.js';
+export * from './sqlite-wasm.js';

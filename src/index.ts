@@ -9,6 +9,8 @@ export * from './core/table-manager.js';
 export * from './core/schema-manager.js';
 export * from './core/query-builder.js';
 export * from './core/maintenance.js';
+export * from './core/field-encryption.js';
+export * from './core/audit.js';
 export * from './reactive/event-emitter.js';
 export * from './adapters/local/index.js';
 export * from './adapters/remote/index.js';

@@ -41,6 +41,16 @@ export interface SelfHostedRemoteAdapterOptions {
    * Polling interval in milliseconds for live change detection. Default: 5000.
    */
   pollIntervalMs?: number;
+
+  /**
+   * Optional WebSocket URL for instant push delta notifications (falls back to polling if omitted or disconnected).
+   */
+  wsUrl?: string;
+
+  /**
+   * Optional WebSocket constructor override (defaults to globalThis.WebSocket).
+   */
+  WebSocketImpl?: typeof WebSocket;
 }
 
 /**
@@ -60,6 +70,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   private activeSubscribers = new Set<(changes: DeltaChanges) => void>();
   private pollTimer?: any;
   private lastPollCursor = 0;
+  private wsUrl?: string;
+  private WebSocketImpl?: typeof WebSocket;
+  private ws?: WebSocket;
 
   constructor(options: SelfHostedRemoteAdapterOptions) {
     if (!options.url) {
@@ -71,6 +84,8 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     this.customHeaders = options.headers ?? {};
     this.fetchFn = options.fetch || globalThis.fetch;
     this.pollIntervalMs = options.pollIntervalMs ?? 5000;
+    this.wsUrl = options.wsUrl;
+    this.WebSocketImpl = options.WebSocketImpl ?? (globalThis as any).WebSocket;
 
     if (!this.fetchFn) {
       throw new Error(
@@ -177,15 +192,60 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     }
     this.activeSubscribers.add(callback);
 
-    if (!this.pollTimer) {
+    if (this.wsUrl && typeof this.WebSocketImpl === 'function') {
+      if (!this.ws) {
+        this.connectWebSocket();
+      }
+    } else if (!this.pollTimer) {
       this.startPolling();
     }
 
     return () => {
       this.activeSubscribers.delete(callback);
-      if (this.activeSubscribers.size === 0 && this.pollTimer) {
-        clearInterval(this.pollTimer);
-        this.pollTimer = undefined;
+      if (this.activeSubscribers.size === 0) {
+        if (this.pollTimer) {
+          clearInterval(this.pollTimer);
+          this.pollTimer = undefined;
+        }
+        if (this.ws) {
+          try {
+            this.ws.close();
+          } catch {}
+          this.ws = undefined;
+        }
+      }
+    };
+  }
+
+  private connectWebSocket(): void {
+    if (!this.wsUrl || typeof this.WebSocketImpl !== 'function') return;
+    const urlWithAuth = this.token
+      ? `${this.wsUrl}${this.wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(this.token)}`
+      : this.wsUrl;
+    const socket = new this.WebSocketImpl(urlWithAuth);
+    this.ws = socket;
+
+    socket.onmessage = (event: MessageEvent) => {
+      try {
+        const parsed =
+          typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const changes: DeltaChanges = parsed?.changes ?? parsed;
+        if (changes && typeof changes === 'object') {
+          for (const subscriber of this.activeSubscribers) {
+            try {
+              subscriber(changes);
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    socket.onclose = () => {
+      if (this.ws === socket) {
+        this.ws = undefined;
+      }
+      if (this.activeSubscribers.size > 0 && !this.pollTimer) {
+        this.startPolling();
       }
     };
   }

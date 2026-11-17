@@ -1873,6 +1873,17 @@ export class LocalFirstClient {
   }
 
   /**
+   * Edits the JSON payload of a queued or failed outbox mutation (useful for fixing poison-pill items before retry).
+   */
+  async editOutboxMutationPayload(
+    id: string,
+    payload: Record<string, any>,
+  ): Promise<void> {
+    await OutboxStore.updatePayload(this.db, id, payload, Date.now());
+    this.events.emit('sync_outbox', { operation: 'UPDATE', rowId: id });
+  }
+
+  /**
    * Retrieves the persisted last_synced_at timestamp cursor (in ms).
    */
   async getLastSyncedAt(): Promise<number> {

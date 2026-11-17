@@ -142,4 +142,101 @@ describe('QueryBuilder & Native Relational Operations', () => {
     expect(firstHouse?.id).toBe('h2');
     expect(firstHouse?.rent).toBe(20000);
   });
+
+  it('supports $not, whereNot(), and orWhere() boolean combinators', async () => {
+    const notTerminated = await client
+      .from('contracts')
+      .whereNot({ status: 'TERMINATED' })
+      .orderBy('id', 'asc')
+      .execute();
+    expect(notTerminated.map((c) => c.id)).toEqual(['c1', 'c2']);
+
+    const orRows = await client
+      .from('houses')
+      .orWhere({ house_number: '101' }, { rent: { $gte: 25000 } })
+      .orderBy('house_number', 'asc')
+      .execute();
+    expect(orRows.map((h) => h.id)).toEqual(['h1', 'h3']);
+
+    const nestedNot = await client
+      .from('contracts')
+      .where({ $not: { tenant_id: null } })
+      .execute();
+    expect(nestedNot).toHaveLength(2);
+  });
+
+  it('supports distinct() and groupBy() + having()', async () => {
+    const distinctAmounts = await client
+      .from('receipts')
+      .distinct()
+      .select('amount')
+      .orderBy('amount', 'asc')
+      .execute();
+    expect(distinctAmounts.map((r) => r.amount)).toEqual([15000, 20000]);
+
+    const highReceiptContracts = await client
+      .from('receipts')
+      .select(['contract_id', 'SUM(amount) AS total_paid'])
+      .groupBy('contract_id')
+      .having('SUM(amount)', '>=', 25000)
+      .execute();
+    expect(highReceiptContracts).toHaveLength(1);
+    expect(highReceiptContracts[0].contract_id).toBe('c1');
+    expect(highReceiptContracts[0].total_paid).toBe(30000);
+  });
+
+  it('preloads hasMany and belongsTo relations via .with()', async () => {
+    const relClient = new LocalFirstClient({
+      local: db,
+      remote: new MemoryDemoRemoteAdapter(0),
+      network: new DefaultNetworkStatusProvider(false),
+      autoSchema: true,
+      tables: ['contracts', 'houses', 'tenants', 'receipts'],
+      relationships: [
+        { table: 'contracts', foreignKey: 'house_id', references: 'houses' },
+        { table: 'contracts', foreignKey: 'tenant_id', references: 'tenants' },
+        { table: 'receipts', foreignKey: 'contract_id', references: 'contracts' },
+      ],
+      autoStart: false,
+      logger: false,
+    });
+    await relClient.initialize();
+
+    const housesWithContracts = await relClient
+      .from('houses')
+      .with('contracts')
+      .orderBy('house_number', 'asc')
+      .execute();
+    expect(housesWithContracts[0].contracts).toHaveLength(1);
+    expect(housesWithContracts[0].contracts[0].id).toBe('c1');
+
+    const contractsWithParents = await relClient
+      .from('contracts')
+      .with('houses', { table: 'tenants', as: 'tenant', type: 'belongsTo', foreignKey: 'tenant_id' })
+      .orderBy('id', 'asc')
+      .execute();
+    expect(contractsWithParents[0].houses?.house_number).toBe('101');
+    expect(contractsWithParents[0].tenant?.name).toBe('Alice Smith');
+    expect(contractsWithParents[2].tenant).toBeNull();
+  });
+
+  it('supports clone() and prepare() for reusable parameterized queries', async () => {
+    const base = client.from('contracts').where({ status: 'ACTIVE' });
+    const cloned = base.clone().where({ house_id: 'h2' });
+
+    expect(await base.count()).toBe(2);
+    expect(await cloned.count()).toBe(1);
+
+    const prepared = client
+      .from('houses')
+      .where('rent', '>=', 20000)
+      .orderBy('house_number', 'asc')
+      .prepare();
+
+    const rows20k = await prepared.execute();
+    expect(rows20k.map((h) => h.id)).toEqual(['h2', 'h3']);
+
+    const rows25k = await prepared.execute([25000]);
+    expect(rows25k.map((h) => h.id)).toEqual(['h3']);
+  });
 });

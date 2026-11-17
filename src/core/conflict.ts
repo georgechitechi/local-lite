@@ -39,6 +39,75 @@ export const clientWinsResolver: ConflictResolver = (
   return 'apply-remote';
 };
 
+export interface PNCounterState {
+  p: Record<string, number>;
+  n: Record<string, number>;
+}
+
+/**
+ * Merges two distributed PN-Counter states by taking the element-wise max of positive and negative vectors.
+ */
+export function mergePNCounter(
+  a: PNCounterState | null | undefined,
+  b: PNCounterState | null | undefined,
+): PNCounterState {
+  const p: Record<string, number> = { ...(a?.p ?? {}) };
+  const n: Record<string, number> = { ...(a?.n ?? {}) };
+  for (const [k, v] of Object.entries(b?.p ?? {})) {
+    p[k] = Math.max(p[k] ?? 0, v);
+  }
+  for (const [k, v] of Object.entries(b?.n ?? {})) {
+    n[k] = Math.max(n[k] ?? 0, v);
+  }
+  return { p, n };
+}
+
+/**
+ * Computes the net numeric value of a PN-Counter state.
+ */
+export function pnCounterValue(state: PNCounterState): number {
+  const pos = Object.values(state.p).reduce((acc, v) => acc + v, 0);
+  const neg = Object.values(state.n).reduce((acc, v) => acc + v, 0);
+  return pos - neg;
+}
+
+export interface LWWElementSetState {
+  add: Record<string, number>;
+  remove: Record<string, number>;
+}
+
+/**
+ * Merges two LWW-Element-Set states by taking the max timestamp for each add/remove entry.
+ */
+export function mergeLWWElementSet(
+  a: LWWElementSetState | null | undefined,
+  b: LWWElementSetState | null | undefined,
+): LWWElementSetState {
+  const add: Record<string, number> = { ...(a?.add ?? {}) };
+  const remove: Record<string, number> = { ...(a?.remove ?? {}) };
+  for (const [k, ts] of Object.entries(b?.add ?? {})) {
+    add[k] = Math.max(add[k] ?? 0, ts);
+  }
+  for (const [k, ts] of Object.entries(b?.remove ?? {})) {
+    remove[k] = Math.max(remove[k] ?? 0, ts);
+  }
+  return { add, remove };
+}
+
+/**
+ * Returns the active elements of an LWW-Element-Set (add timestamp >= remove timestamp).
+ */
+export function lwwElementSetValues(state: LWWElementSetState): string[] {
+  const result: string[] = [];
+  for (const [item, addTs] of Object.entries(state.add)) {
+    const remTs = state.remove[item] ?? -1;
+    if (addTs >= remTs) {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
 /**
  * Creates a smart 3-way field-level conflict resolver.
  * Merges disjoint fields from both local and remote offline mutations,
@@ -102,6 +171,28 @@ export function createFieldMergeResolver(
         merged[key] = localVal;
       } else if (rule === 'remote') {
         merged[key] = remoteVal;
+      } else if (rule === 'set-union') {
+        const remoteArr = Array.isArray(remoteVal) ? remoteVal : [];
+        const localArr = Array.isArray(localVal) ? localVal : [];
+        merged[key] = Array.from(new Set([...remoteArr, ...localArr]));
+      } else if (rule === 'pn-counter') {
+        if (
+          typeof localVal === 'object' &&
+          localVal !== null &&
+          'p' in localVal &&
+          typeof remoteVal === 'object' &&
+          remoteVal !== null &&
+          'p' in remoteVal
+        ) {
+          merged[key] = mergePNCounter(localVal, remoteVal);
+        } else {
+          const baseNum = typeof baseRow[key] === 'number' ? baseRow[key] : 0;
+          const localDelta = (Number(localVal) || 0) - baseNum;
+          const remoteDelta = (Number(remoteVal) || 0) - baseNum;
+          merged[key] = baseNum + localDelta + remoteDelta;
+        }
+      } else if (rule === 'lww-element-set') {
+        merged[key] = mergeLWWElementSet(localVal, remoteVal);
       } else {
         const winner = rule === 'newer' ? 'newer' : defaultWinner;
         if (winner === 'local') {

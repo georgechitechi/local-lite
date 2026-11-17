@@ -200,4 +200,62 @@ describe('createFieldMergeResolver', () => {
     const resolver = getConflictResolver('field-merge');
     expect(typeof resolver).toBe('function');
   });
+
+  it('supports CRDT field rules: set-union, pn-counter, and lww-element-set', () => {
+    const resolver = createFieldMergeResolver({
+      fieldRules: {
+        posts: {
+          tags: 'set-union',
+          likes: 'pn-counter',
+          reactions: 'pn-counter',
+          labels: 'lww-element-set',
+        },
+      },
+    });
+
+    const context: ConflictContext = {
+      tableName: 'posts',
+      rowId: 'p1',
+      localRow: { id: 'p1', likes: 10 },
+      remoteChange: {
+        tableName: 'posts',
+        rowId: 'p1',
+        operation: 'UPDATE',
+        timestamp: 2000,
+        payload: {
+          tags: ['news', 'tech'],
+          likes: 13, // +3 from base 10
+          reactions: { p: { nodeA: 2, nodeB: 5 }, n: { nodeA: 1 } },
+          labels: { add: { featured: 200, hot: 100 }, remove: { hot: 150 } },
+        },
+      },
+      localOutboxRecord: {
+        id: 'ob1',
+        tableName: 'posts',
+        rowId: 'p1',
+        operation: 'UPDATE',
+        timestamp: 1500,
+        status: 'PENDING',
+        retryCount: 0,
+        payload: {
+          tags: ['tech', 'ai'],
+          likes: 12, // +2 from base 10
+          reactions: { p: { nodeA: 4, nodeB: 3 }, n: { nodeB: 1 } },
+          labels: { add: { featured: 120, hot: 250 }, remove: {} },
+        },
+      },
+    };
+
+    const result = resolver(context) as { mergePayload: Record<string, any> };
+    expect(result.mergePayload.tags).toEqual(['news', 'tech', 'ai']);
+    expect(result.mergePayload.likes).toBe(15); // 10 + 2 + 3
+    expect(result.mergePayload.reactions).toEqual({
+      p: { nodeA: 4, nodeB: 5 },
+      n: { nodeA: 1, nodeB: 1 },
+    });
+    expect(result.mergePayload.labels).toEqual({
+      add: { featured: 200, hot: 250 },
+      remove: { hot: 150 },
+    });
+  });
 });

@@ -119,9 +119,14 @@ export function matchesWhere(
     if (!andMatches) return false;
   }
 
+  // Handle $not combinator
+  if ('$not' in where && where.$not !== undefined) {
+    if (matchesWhere(row, where.$not as WhereFilter)) return false;
+  }
+
   // Field-level conditions
   for (const [key, filter] of Object.entries(where)) {
-    if (key === '$or' || key === '$and') continue;
+    if (key === '$or' || key === '$and' || key === '$not') continue;
     if (!matchesField(row[key], filter)) {
       return false;
     }

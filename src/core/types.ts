@@ -59,7 +59,15 @@ export type ConflictResolver = (
 export type ConflictStrategy =
   'last-write-wins' | 'server-wins' | 'client-wins' | 'field-merge';
 
-export type FieldMergeWinner = 'remote' | 'local' | 'newer' | 'max' | 'min';
+export type FieldMergeWinner =
+  | 'remote'
+  | 'local'
+  | 'newer'
+  | 'max'
+  | 'min'
+  | 'set-union'
+  | 'pn-counter'
+  | 'lww-element-set';
 
 export type FieldMergeCustomResolver = (
   localVal: any,
@@ -164,6 +172,9 @@ export type WhereFilter =
       $and?: (
         Record<string, FieldFilter> | ((row: Record<string, any>) => boolean)
       )[];
+      $not?:
+        | Record<string, FieldFilter>
+        | ((row: Record<string, any>) => boolean);
       [key: string]: any;
     };
 

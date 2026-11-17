@@ -65,3 +65,4 @@ export * from './demo.js';
 export * from './convex.js';
 export * from './firestore.js';
 export * from './self-hosted.js';
+export * from './postgres.js';

@@ -48,6 +48,28 @@ export interface JoinDefinition {
   secondCol: string;
 }
 
+export interface WithRelationSpec {
+  /** Related table name to load. */
+  table: string;
+  /** Property name to attach on each parent row (defaults to `table`). */
+  as?: string;
+  /** Foreign key column name (auto-resolved from client.relationships if omitted). */
+  foreignKey?: string;
+  /** Local key column name (defaults to primaryKey / 'id'). */
+  localKey?: string;
+  /** Explicit cardinality; inferred from client.relationships when omitted. */
+  type?: 'hasMany' | 'belongsTo';
+  /** Optional filter applied to the related rows query. */
+  where?: WhereFilter;
+}
+
+export interface PreparedQuery<T = any> {
+  sql: string;
+  params: any[];
+  execute(overrideParams?: any[]): Promise<T[]>;
+  first(overrideParams?: any[]): Promise<T | null>;
+}
+
 export interface AggregateSpec {
   where?: WhereFilter;
   count?: boolean;
@@ -71,6 +93,50 @@ export interface AggregateResult {
 
 function escapeLikePattern(value: unknown): string {
   return String(value).replace(/[\\%_]/g, '\\$&');
+}
+
+const OP_MAP: Record<string, string> = {
+  '>=': '$gte',
+  '<=': '$lte',
+  '>': '$gt',
+  '<': '$lt',
+  '!=': '$ne',
+  '<>': '$ne',
+  '=': '$eq',
+  '==': '$eq',
+  like: '$contains',
+  in: '$in',
+  'not in': '$nin',
+  $eq: '$eq',
+  $ne: '$ne',
+  $gt: '$gt',
+  $gte: '$gte',
+  $lt: '$lt',
+  $lte: '$lte',
+  $in: '$in',
+  $nin: '$nin',
+  $contains: '$contains',
+  $startswith: '$startsWith',
+  $endswith: '$endsWith',
+};
+
+function mergeWhereOperator(
+  target: Record<string, any>,
+  column: string,
+  operatorOrValue: any,
+  value?: any,
+): void {
+  if (value !== undefined) {
+    const rawOp = String(operatorOrValue).toLowerCase().trim();
+    const opKey = OP_MAP[rawOp] ?? '$eq';
+    const existing =
+      typeof target[column] === 'object' && target[column] !== null
+        ? (target[column] as any)
+        : {};
+    target[column] = { ...existing, [opKey]: value };
+  } else {
+    target[column] = operatorOrValue;
+  }
 }
 
 /**
@@ -197,9 +263,17 @@ function compileWhereConditions(
     }
   }
 
+  // Handle $not — negate the compiled sub-conditions
+  if (where.$not && typeof where.$not === 'object') {
+    const notList = compileWhereConditions(where.$not, params);
+    if (notList.length > 0) {
+      clauses.push(`NOT (${notList.join(' AND ')})`);
+    }
+  }
+
   // Handle regular column conditions
   for (const [col, val] of Object.entries(where)) {
-    if (col === '$or' || col === '$and') continue;
+    if (col === '$or' || col === '$and' || col === '$not') continue;
     const safeCol = formatColumnIdentifier(col);
     const clause = compileComparison(safeCol, val, params);
     if (clause) {
@@ -208,6 +282,126 @@ function compileWhereConditions(
   }
 
   return clauses;
+}
+
+/**
+ * Batch-loads declared relationships or explicit WithRelationSpec entries for hydrated rows.
+ */
+async function preloadRelations(
+  client: ClientLike,
+  parentTable: string,
+  rows: any[],
+  relations: Array<string | WithRelationSpec>,
+  includeDeleted: boolean,
+): Promise<void> {
+  if (!rows || rows.length === 0 || relations.length === 0) return;
+
+  const rootClient: any = 'parent' in client ? (client as any).parent : client;
+  const declaredRels: Array<{
+    table: string;
+    foreignKey: string;
+    references: string;
+  }> = rootClient?.relationships ?? [];
+  const defaultPk: string = rootClient?.primaryKey ?? 'id';
+
+  for (const relInput of relations) {
+    const spec: WithRelationSpec =
+      typeof relInput === 'string' ? { table: relInput } : relInput;
+
+    let relType = spec.type;
+    let targetTable = spec.table;
+    let foreignKey = spec.foreignKey;
+    let localKey = spec.localKey ?? defaultPk;
+    const propName = spec.as ?? spec.table;
+
+    if (!relType || !foreignKey) {
+      // 1) Check hasMany: child.references === parentTable && child.table === targetTable
+      const hasManyMatch = declaredRels.find(
+        (r) => r.references === parentTable && r.table === targetTable,
+      );
+      if (hasManyMatch) {
+        relType = relType ?? 'hasMany';
+        foreignKey = foreignKey ?? hasManyMatch.foreignKey;
+      } else {
+        // 2) Check belongsTo: parentTable.references === targetTable (or singular/plural match)
+        const belongsToMatch = declaredRels.find(
+          (r) =>
+            r.table === parentTable &&
+            (r.references === targetTable ||
+              r.references === `${targetTable}s` ||
+              r.foreignKey === `${targetTable}_id`),
+        );
+        if (belongsToMatch) {
+          relType = relType ?? 'belongsTo';
+          targetTable = belongsToMatch.references;
+          foreignKey = foreignKey ?? belongsToMatch.foreignKey;
+        }
+      }
+    }
+
+    if (!relType || !foreignKey) {
+      throw new Error(
+        `Cannot resolve relation "${propName}" from "${parentTable}". Declare it in client relationships or pass an explicit WithRelationSpec.`,
+      );
+    }
+
+    if (relType === 'hasMany') {
+      const parentKeys = Array.from(
+        new Set(
+          rows
+            .map((r) => r?.[localKey])
+            .filter((v) => v !== null && v !== undefined),
+        ),
+      );
+      if (parentKeys.length === 0) {
+        for (const r of rows) r[propName] = [];
+        continue;
+      }
+      const qb = new QueryBuilder(client, targetTable)
+        .where({ [foreignKey]: { $in: parentKeys } })
+        .withDeleted(includeDeleted);
+      if (spec.where) qb.where(spec.where);
+      const children = await qb.execute();
+      const grouped = new Map<any, any[]>();
+      for (const child of children) {
+        const fkVal = child?.[foreignKey];
+        let bucket = grouped.get(fkVal);
+        if (!bucket) {
+          bucket = [];
+          grouped.set(fkVal, bucket);
+        }
+        bucket.push(child);
+      }
+      for (const r of rows) {
+        r[propName] = grouped.get(r?.[localKey]) ?? [];
+      }
+    } else {
+      // belongsTo
+      const fkValues = Array.from(
+        new Set(
+          rows
+            .map((r) => r?.[foreignKey])
+            .filter((v) => v !== null && v !== undefined),
+        ),
+      );
+      if (fkValues.length === 0) {
+        for (const r of rows) r[propName] = null;
+        continue;
+      }
+      const qb = new QueryBuilder(client, targetTable)
+        .where({ [localKey]: { $in: fkValues } })
+        .withDeleted(includeDeleted);
+      if (spec.where) qb.where(spec.where);
+      const parents = await qb.execute();
+      const byKey = new Map<any, any>();
+      for (const p of parents) {
+        byKey.set(p?.[localKey], p);
+      }
+      for (const r of rows) {
+        r[propName] = byKey.get(r?.[foreignKey]) ?? null;
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -220,8 +414,11 @@ export class QueryBuilder<T = any> {
   private client: ClientLike;
   private tableName: string;
   private selectCols: string[] = ['*'];
+  private isDistinct: boolean = false;
   private joins: JoinDefinition[] = [];
   private whereConditions: Record<string, any> = {};
+  private havingConditions: Record<string, any> = {};
+  private withRelations: Array<string | WithRelationSpec> = [];
   private orderColumn?: string;
   private orderDirection: 'ASC' | 'DESC' = 'ASC';
   private limitCount?: number;
@@ -243,6 +440,14 @@ export class QueryBuilder<T = any> {
     if (flat.length > 0) {
       this.selectCols = flat;
     }
+    return this;
+  }
+
+  /**
+   * Adds DISTINCT to the SELECT projection.
+   */
+  distinct(enabled: boolean = true): this {
+    this.isDistinct = enabled;
     return this;
   }
 
@@ -275,45 +480,47 @@ export class QueryBuilder<T = any> {
     value?: any,
   ): this {
     if (typeof columnOrFilter === 'string') {
-      if (value !== undefined) {
-        const rawOp = String(operatorOrValue).toLowerCase().trim();
-        const opMap: Record<string, string> = {
-          '>=': '$gte',
-          '<=': '$lte',
-          '>': '$gt',
-          '<': '$lt',
-          '!=': '$ne',
-          '<>': '$ne',
-          '=': '$eq',
-          '==': '$eq',
-          like: '$contains',
-          in: '$in',
-          'not in': '$nin',
-          $eq: '$eq',
-          $ne: '$ne',
-          $gt: '$gt',
-          $gte: '$gte',
-          $lt: '$lt',
-          $lte: '$lte',
-          $in: '$in',
-          $nin: '$nin',
-          $contains: '$contains',
-          $startswith: '$startsWith',
-          $endswith: '$endsWith',
-        };
-        const opKey = opMap[rawOp] ?? '$eq';
-
-        const existing =
-          typeof this.whereConditions[columnOrFilter] === 'object' &&
-          this.whereConditions[columnOrFilter] !== null
-            ? (this.whereConditions[columnOrFilter] as any)
-            : {};
-        this.whereConditions[columnOrFilter] = { ...existing, [opKey]: value };
-      } else {
-        this.whereConditions[columnOrFilter] = operatorOrValue;
-      }
+      mergeWhereOperator(
+        this.whereConditions,
+        columnOrFilter,
+        operatorOrValue,
+        value,
+      );
     } else if (columnOrFilter && typeof columnOrFilter === 'object') {
       this.whereConditions = { ...this.whereConditions, ...columnOrFilter };
+    }
+    return this;
+  }
+
+  /**
+   * Adds a negated WHERE condition ($not). Multiple calls are combined with $and.
+   */
+  whereNot(filter: Record<string, any>): this {
+    if (!filter || typeof filter !== 'object') return this;
+    if (this.whereConditions.$not === undefined) {
+      this.whereConditions.$not = filter;
+    } else {
+      const existing = Array.isArray(this.whereConditions.$and)
+        ? this.whereConditions.$and
+        : [];
+      this.whereConditions.$and = [...existing, { $not: filter }];
+    }
+    return this;
+  }
+
+  /**
+   * Adds an OR group of filter objects to the WHERE clause.
+   */
+  orWhere(...filters: Record<string, any>[]): this {
+    const valid = filters.filter((f) => f && typeof f === 'object');
+    if (valid.length === 0) return this;
+    if (Array.isArray(this.whereConditions.$or)) {
+      const existing = Array.isArray(this.whereConditions.$and)
+        ? this.whereConditions.$and
+        : [];
+      this.whereConditions.$and = [...existing, { $or: valid }];
+    } else {
+      this.whereConditions.$or = valid;
     }
     return this;
   }
@@ -336,6 +543,99 @@ export class QueryBuilder<T = any> {
   groupBy(...columns: Array<string | string[]>): this {
     this.groupByCols = columns.flat();
     return this;
+  }
+
+  /**
+   * Adds HAVING criteria to filter grouped aggregation results.
+   */
+  having(
+    columnOrFilter: string | Record<string, any>,
+    operatorOrValue?: any,
+    value?: any,
+  ): this {
+    if (typeof columnOrFilter === 'string') {
+      mergeWhereOperator(
+        this.havingConditions,
+        columnOrFilter,
+        operatorOrValue,
+        value,
+      );
+    } else if (columnOrFilter && typeof columnOrFilter === 'object') {
+      this.havingConditions = { ...this.havingConditions, ...columnOrFilter };
+    }
+    return this;
+  }
+
+  /**
+   * Eagerly preloads related records from declared client relationships or explicit relation specs.
+   */
+  with(...relations: Array<string | WithRelationSpec>): this {
+    this.withRelations.push(...relations);
+    return this;
+  }
+
+  /**
+   * Returns a shallow-cloned QueryBuilder with independent mutable state.
+   */
+  clone(): QueryBuilder<T> {
+    const copy = new QueryBuilder<T>(this.client, this.tableName);
+    copy.selectCols = [...this.selectCols];
+    copy.isDistinct = this.isDistinct;
+    copy.joins = this.joins.map((j) => ({ ...j }));
+    copy.whereConditions = { ...this.whereConditions };
+    copy.havingConditions = { ...this.havingConditions };
+    copy.withRelations = [...this.withRelations];
+    copy.orderColumn = this.orderColumn;
+    copy.orderDirection = this.orderDirection;
+    copy.limitCount = this.limitCount;
+    copy.offsetCount = this.offsetCount;
+    copy.groupByCols = [...this.groupByCols];
+    copy.includeDeleted = this.includeDeleted;
+    return copy;
+  }
+
+  /**
+   * Compiles the query once into a reusable PreparedQuery handle.
+   */
+  prepare(): PreparedQuery<T> {
+    const { sql, params } = this.toSQL();
+    const client = this.client;
+    const tableName = this.tableName;
+    const withRelations = [...this.withRelations];
+    const includeDeleted = this.includeDeleted;
+
+    const run = async (overrideParams?: any[]): Promise<T[]> => {
+      const effectiveParams = overrideParams ?? params;
+      const rawRows = await client.query<T>(sql, effectiveParams);
+      const hydrator =
+        'hydrateRow' in client
+          ? (client as any).hydrateRow.bind(client)
+          : (client as any).parent?.hydrateRow?.bind((client as any).parent);
+      const hydrated =
+        hydrator && rawRows && rawRows.length > 0
+          ? rawRows.map((r: any) => hydrator(tableName, r))
+          : rawRows;
+      if (withRelations.length > 0 && hydrated.length > 0) {
+        await preloadRelations(
+          client,
+          tableName,
+          hydrated,
+          withRelations,
+          includeDeleted,
+        );
+      }
+      return hydrated;
+    };
+
+    return {
+      sql,
+      params,
+      execute: run,
+      async first(overrideParams?: any[]): Promise<T | null> {
+        const rows = await run(overrideParams);
+        return rows.length > 0 ? rows[0] : null;
+      },
+    };
   }
 
   /**
@@ -385,7 +685,7 @@ export class QueryBuilder<T = any> {
     const params: any[] = [];
     const projections = this.selectCols.map(formatColumnIdentifier).join(', ');
     const fromTable = `"${this.tableName.replace(/"/g, '""')}"`;
-    let sql = `SELECT ${projections} FROM ${fromTable}`;
+    let sql = `SELECT ${this.isDistinct ? 'DISTINCT ' : ''}${projections} FROM ${fromTable}`;
 
     // Append JOINs
     for (const j of this.joins) {
@@ -428,6 +728,20 @@ export class QueryBuilder<T = any> {
     // GROUP BY
     if (this.groupByCols.length > 0) {
       sql += ` GROUP BY ${this.groupByCols.map(formatColumnIdentifier).join(', ')}`;
+    }
+
+    // HAVING
+    if (
+      this.havingConditions &&
+      Object.keys(this.havingConditions).length > 0
+    ) {
+      const havingClauses = compileWhereConditions(
+        this.havingConditions,
+        params,
+      );
+      if (havingClauses.length > 0) {
+        sql += ` HAVING ${havingClauses.join(' AND ')}`;
+      }
     }
 
     // ORDER BY
@@ -479,10 +793,20 @@ export class QueryBuilder<T = any> {
           : (this.client as any).parent?.hydrateRow?.bind(
               (this.client as any).parent,
             );
-      if (hydrator && rawRows && rawRows.length > 0) {
-        return rawRows.map((r: any) => hydrator(this.tableName, r));
+      const hydrated =
+        hydrator && rawRows && rawRows.length > 0
+          ? rawRows.map((r: any) => hydrator(this.tableName, r))
+          : rawRows;
+      if (this.withRelations.length > 0 && hydrated && hydrated.length > 0) {
+        await preloadRelations(
+          this.client,
+          this.tableName,
+          hydrated,
+          this.withRelations,
+          this.includeDeleted,
+        );
       }
-      return rawRows;
+      return hydrated;
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {
@@ -511,13 +835,16 @@ export class QueryBuilder<T = any> {
    */
   async count(): Promise<number> {
     const originalSelect = this.selectCols;
+    const originalWith = this.withRelations;
     this.selectCols = ['COUNT(*) AS _count'];
+    this.withRelations = [];
     try {
       const rows = await this.execute();
       const countVal = (rows[0] as any)?._count;
       return typeof countVal === 'number' ? countVal : Number(countVal) || 0;
     } finally {
       this.selectCols = originalSelect;
+      this.withRelations = originalWith;
     }
   }
 
@@ -526,14 +853,17 @@ export class QueryBuilder<T = any> {
    */
   async sum(column: string): Promise<number> {
     const originalSelect = this.selectCols;
+    const originalWith = this.withRelations;
     const safeCol = formatColumnIdentifier(column);
     this.selectCols = [`COALESCE(SUM(${safeCol}), 0) AS _sum`];
+    this.withRelations = [];
     try {
       const rows = await this.execute();
       const sumVal = (rows[0] as any)?._sum;
       return typeof sumVal === 'number' ? sumVal : Number(sumVal) || 0;
     } finally {
       this.selectCols = originalSelect;
+      this.withRelations = originalWith;
     }
   }
 
@@ -542,8 +872,10 @@ export class QueryBuilder<T = any> {
    */
   async avg(column: string): Promise<number | null> {
     const originalSelect = this.selectCols;
+    const originalWith = this.withRelations;
     const safeCol = formatColumnIdentifier(column);
     this.selectCols = [`AVG(${safeCol}) AS _avg`];
+    this.withRelations = [];
     try {
       const rows = await this.execute();
       const avgVal = (rows[0] as any)?._avg;
@@ -552,6 +884,7 @@ export class QueryBuilder<T = any> {
         : Number(avgVal) || 0;
     } finally {
       this.selectCols = originalSelect;
+      this.withRelations = originalWith;
     }
   }
 }

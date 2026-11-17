@@ -10,6 +10,8 @@ export * from './table-manager.js';
 export * from './schema-manager.js';
 export * from './query-builder.js';
 export * from './maintenance.js';
+export * from './field-encryption.js';
+export * from './audit.js';
 export * from '../reactive/event-emitter.js';
 export * from '../adapters/network/index.js';
 export type {
