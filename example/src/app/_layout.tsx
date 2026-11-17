@@ -37,40 +37,40 @@ function TabsNavigator() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Auth',
-          headerTitle: 'local-lite Auth',
+          title: 'Properties',
+          headerTitle: 'Properties & Houses',
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 18, color }}>🔐</Text>
+            <Text style={{ fontSize: 18, color }}>🏠</Text>
           ),
         }}
       />
       <Tabs.Screen
-        name="payments"
+        name="tenants"
         options={{
-          title: 'Payments',
-          headerTitle: 'local-lite Payments',
+          title: 'Tenants',
+          headerTitle: 'Tenants & Contacts',
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 18, color }}>💳</Text>
+            <Text style={{ fontSize: 18, color }}>👥</Text>
           ),
         }}
       />
       <Tabs.Screen
-        name="emails"
+        name="contracts"
         options={{
-          title: 'Emails',
-          headerTitle: 'local-lite Emails (Preview)',
+          title: 'Contracts',
+          headerTitle: 'Lease Contracts',
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 18, color }}>✉️</Text>
+            <Text style={{ fontSize: 18, color }}>📄</Text>
           ),
         }}
       />
       <Tabs.Screen
-        name="lab"
+        name="receipts"
         options={{
-          title: 'Lab',
-          headerTitle: 'local-lite Feature Lab',
+          title: 'Receipts',
+          headerTitle: 'Rent Receipts',
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 18, color }}>🧪</Text>
+            <Text style={{ fontSize: 18, color }}>💵</Text>
           ),
         }}
       />
@@ -78,7 +78,7 @@ function TabsNavigator() {
   );
 }
 
-export default function RootLayout() {
+export default function Layout() {
   return (
     <SafeAreaProvider>
       <TabsNavigator />
