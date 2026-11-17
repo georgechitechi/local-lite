@@ -7,6 +7,22 @@ description: Review a codebase that uses the local-lite npm package for code tha
 
 Checklist and automated review instructions for upgrading apps to the latest version of `local-lite`.
 
+## 0. Upgrade Checklist (3.0.0 Breaking Changes)
+
+* **Trimmed Root & Config Barrels**:
+  - `'local-lite'` now exports only `core`, `config`, `schema`, and `utils` (`uuid`, `sql`, `portability`).
+  - `'local-lite/config'` no longer re-exports `LocalFirstClient` or provider adapters.
+  - **Action**: Move React hooks to `'local-lite/react'`, auth to `'local-lite/auth'`, feature modules (`actions`, `backups`, `keys`, `kv-store`, `search`, `storage`, `scheduler`, `payments`) to `'local-lite/<module>'`, and adapters to `'local-lite/<adapter>'`.
+* **Firebase Modular SDK v11+ Only**:
+  - Removed v8/compat `.collection()`, `.batch()`, `.ref()`, `.put()`, and `.save()` branches from `FirestoreRemoteAdapter` and `createFirebaseStorageUploader`.
+  - **Action**: Pass modular `firebase/firestore` and `firebase/storage` (`firebase >= 11.0.0`) instances/modules.
+* **Strict `RemoteDBAdapter.pushChanges(): Promise<PushResult>`**:
+  - Returning `boolean` from `pushChanges()` is no longer supported.
+  - **Action**: Return `{ success, successfulIds, failedIds, errors? }` from all custom remote adapters.
+* **Canonical `AuthUser` Shape (`local-lite/auth`)**:
+  - Removed `userId`, `displayName`, `picture`, and `UnifiedAuthUser` aliases.
+  - **Action**: Replace with `id`, `name`, `avatarUrl`, and `AuthUser`.
+
 ## 1. Upgrade Checklist (2.0.0 & Legacy Migrations)
 
 Search the codebase for each affected pattern and apply the migration:

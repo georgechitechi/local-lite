@@ -59,8 +59,16 @@ to discard failed writes belong to the caller. The core does not inspect backend
 error codes to delete failed mutations. Conflict resolution and retry settings
 remain configurable; the existing default conflict strategy is last-write-wins.
 
-For an application-level upgrade checklist or AI-assisted code review, see the
+For an application-level upgrade checklist or AI-assisted code review (including `v3.0.0` breaking changes), see the
 [Breaking Changes and AI Code-Review Guide](./docs/breaking-changes.md).
+
+### What's new in 3.0.0
+
+- **Subpath-only feature & adapter imports:** Root `'local-lite'` exports core, config, schema, and utils; adapters, React/Vue/Svelte/Solid bindings, auth, backups, payments, testing, and presence live at their dedicated `local-lite/<subpath>` entry points.
+- **QueryBuilder & CRDTs:** `.whereNot()`, `.orWhere()`, `.distinct()`, `.having()`, `.with()` eager relation preloading, `.clone()`, `.prepare()`, plus `'set-union'`, `'pn-counter'`, and `'lww-element-set'` CRDT rules in `createFieldMergeResolver()`.
+- **New Adapters & Bindings:** `local-lite/sqlite-wasm` (OPFS), `local-lite/postgres`, WebSocket realtime (`wsUrl`) on `SelfHostedRemoteAdapter`, `local-lite/vue`, `local-lite/svelte`, `local-lite/solid`, `local-lite/testing`, and `local-lite/presence`.
+- **Security & Audit:** `FieldEncryptor` (AES-256-GCM column encryption), `applySqlCipherKey()`, and `AuditManager` (`_audit_log` + `undo()` / `redo()`).
+- **Modern SDKs:** Firebase Modular SDK v11+ only (compat/v8 removed) and strict `PushResult` on `RemoteDBAdapter.pushChanges()`.
 
 ## AI Skills
 

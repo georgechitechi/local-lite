@@ -1,6 +1,6 @@
 # Breaking Changes and AI Code-Review Guide
 
-This guide records breaking changes introduced in `local-lite` (2.0.0 and 0.0.30) and gives
+This guide records breaking changes introduced in `local-lite` (`3.0.0`, `2.0.0`, and `0.0.30`) and gives
 an actionable checklist for reviewing an application or repository update.
 Use it when upgrading to this version or when asking an AI assistant to check
 whether dependent code needs changes.
@@ -21,6 +21,52 @@ This guide ships with the package at
 `node_modules/local-lite/skills/local-lite-upgrade/SKILL.md` (setup and custom
 adapter skills live beside it); copy the folders
 into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
+
+## Changes in 3.0.0
+
+### 1. Subpath-only exports (trimmed root & config barrels)
+
+The root `'local-lite'` entry point now exports only `core`, `config`, `schema`, and `utils` (`uuid`, `sql`, `portability`). `local-lite/config` no longer re-exports `LocalFirstClient` or provider adapter classes.
+
+| Removed import | Replacement |
+| :--- | :--- |
+| `import { useLiveQuery } from 'local-lite'` | `import { useLiveQuery } from 'local-lite/react'` |
+| `import { LocalAuthEngine, GoogleAuthClient } from 'local-lite'` | `import { LocalAuthEngine, GoogleAuthClient } from 'local-lite/auth'` |
+| `import { ActionManager } from 'local-lite'` | `import { ActionManager } from 'local-lite/actions'` |
+| `import { LocalFirstClient } from 'local-lite/config'` | `import { LocalFirstClient } from 'local-lite'` (or `'local-lite/core'`) |
+| `import { SupabaseRemoteAdapter } from 'local-lite'` / `'local-lite/config'` | `import { SupabaseRemoteAdapter } from 'local-lite/supabase'` |
+| `import { ExpoSQLiteAdapter } from 'local-lite'` / `'local-lite/config'` | `import { ExpoSQLiteAdapter } from 'local-lite/expo-sqlite'` |
+
+All feature modules (`backups`, `keys`, `kv-store`, `search`, `storage`, `scheduler`, `payments`, `testing`, `presence`, `vue`, `svelte`, `solid`) must be imported from their `local-lite/<subpath>` entry point.
+
+### 2. Firebase Modular SDK v11+ only (v8 / compat removed)
+
+- `FirestoreRemoteAdapter` (`local-lite/firebase`) and `createFirebaseStorageUploader` (`local-lite/storage`) now require the modular `firebase/firestore` and `firebase/storage` SDKs (`firebase >= 11.0.0`).
+- Compat/v8 `.collection()`, `.batch()`, `.ref()`, `.put()`, and `.save()` fallback branches have been removed.
+
+### 3. Strict `RemoteDBAdapter.pushChanges(): Promise<PushResult>`
+
+- `RemoteDBAdapter.pushChanges()` no longer accepts `boolean` (`true`/`false`) return values.
+- All built-in and custom remote adapters must return a structured `PushResult`:
+  ```ts
+  { success: true, successfulIds: operations.map((op) => op.id), failedIds: [] }
+  ```
+
+### 4. Canonical `AuthUser` identity (`local-lite/auth`)
+
+- Removed redundant compatibility aliases from `AuthUser`: `userId`, `displayName`, and `picture`. Use canonical `id`, `name`, and `avatarUrl` instead.
+- Removed the `UnifiedAuthUser` type alias; use `AuthUser`.
+
+### 5. Updated `peerDependencies` minimums
+
+`firebase >=11.0.0`, `@supabase/supabase-js >=2.45.0`, `convex >=1.15.0`, `better-sqlite3 >=11.0.0`, `@libsql/client >=0.14.0`, `@op-engineering/op-sqlite >=10.0.0`, `sql.js >=1.10.0`.
+
+**Review checklist (3.0.0)**
+
+- Search for imports from `'local-lite'` or `'local-lite/config'` that reference React hooks, auth, actions/storage/search/kv-store/payments, or local/remote adapter classes, and move them to `local-lite/<subpath>`.
+- Search custom `RemoteDBAdapter` implementations and tests for `pushChanges()` returning `boolean` and update them to return `PushResult`.
+- Search Firebase usage for compat `.collection()` / `.batch()` / `.ref()` / `.put()` mocks or instances and migrate to modular `firebase/firestore` and `firebase/storage`.
+- Search auth consumers for `user.userId`, `user.displayName`, `user.picture`, or `UnifiedAuthUser` and replace with `user.id`, `user.name`, `user.avatarUrl`, and `AuthUser`.
 
 ## Changes in 2.0.0
 
