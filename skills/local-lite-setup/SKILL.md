@@ -70,7 +70,8 @@ Create a singleton client configuration with `defineSyncConfig` and `createSyncC
 
 ```typescript
 import * as SQLite from 'expo-sqlite';
-import { defineSyncConfig, createSyncClient, type LocalFirstClient } from 'local-lite/config';
+import { defineSyncConfig, createSyncClient } from 'local-lite/config';
+import type { LocalFirstClient } from 'local-lite';
 
 export const syncConfig = defineSyncConfig({
   // 1. Local Database instance or factory
@@ -177,7 +178,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Button } from 'react-native';
 import { useLiveQuery, useSyncStatus, useLocalAuth } from 'local-lite/react';
 import { getSyncClient } from './sync.config';
-import type { LocalFirstClient } from 'local-lite/config';
+import type { LocalFirstClient } from 'local-lite';
 
 export function App() {
   const [client, setClient] = useState<LocalFirstClient | null>(null);

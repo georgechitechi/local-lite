@@ -9,7 +9,7 @@ Implement `RemoteDBAdapter` (exported from `local-lite`, with `SyncOperation`, `
 
 ## Contract
 
-- `pushChanges(operations): Promise<boolean | PushResult>`
+- `pushChanges(operations): Promise<PushResult>`
   - Must be idempotent: the client retries after failures, so applying the same operation twice must be safe.
   - Return `false` (or a failing `PushResult`) or reject on failure so operations stay in the outbox. Never report success for operations that were not stored.
 - `fetchChanges(sinceTimestamp, scope?): Promise<DeltaChanges>`
@@ -27,16 +27,19 @@ Implement `RemoteDBAdapter` (exported from `local-lite`, with `SyncOperation`, `
 ## Skeleton
 
 ```typescript
-import type { RemoteDBAdapter, SyncOperation, DeltaChanges } from 'local-lite';
+import type { RemoteDBAdapter, SyncOperation, DeltaChanges, PushResult } from 'local-lite/core';
 
 export class MyAdapter implements RemoteDBAdapter {
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
     const res = await fetch('/sync/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ operations }),
     });
-    return res.ok;
+    if (!res.ok) {
+      return { success: false, successfulIds: [], failedIds: operations.map((op) => op.id) };
+    }
+    return { success: true, successfulIds: operations.map((op) => op.id), failedIds: [] };
   }
 
   async fetchChanges(since: number, scope?: Record<string, any>): Promise<DeltaChanges> {
