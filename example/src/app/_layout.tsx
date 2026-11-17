@@ -54,6 +54,16 @@ function TabsNavigator() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="emails"
+        options={{
+          title: 'Emails',
+          headerTitle: 'local-lite Emails (Dev)',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 18, color }}>✉️</Text>
+          ),
+        }}
+      />
     </Tabs>
   );
 }

@@ -16,6 +16,12 @@ export const syncConfig = defineSyncConfig({
     maxFailedAttempts: 3,
     lockoutDurationMs: 30 * 1000, // 30s for fast interactive testing
   },
+  email: {
+    provider: 'dev',
+    defaults: {
+      from: 'Local Lite Demo <no-reply@local-lite.dev>',
+    },
+  },
 });
 
 export function getClient(): Promise<LocalFirstClient> {
