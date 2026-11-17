@@ -1,5 +1,6 @@
 import type { LocalDBAdapter } from '../adapters/local/index.js';
 import { generateCryptoToken, LocalAuthEngine } from '../auth/local.js';
+import { jsonError as httpJsonError, jsonResponse as httpJsonResponse } from '../utils/http.js';
 import { decryptBackupData, encryptBackupData } from '../backups/encryption.js';
 import { DEFAULT_KV_STORE_TABLE, KVStore } from '../kv-store/store.js';
 import { escapeIdentifier, isInternalTable, isReadQuery } from '../utils/sql.js';
@@ -58,17 +59,17 @@ interface DashboardLogEntry {
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
+  return httpJsonResponse(data, {
     status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-    },
+    headers: { 'Cache-Control': 'no-store' },
   });
 }
 
 function errorResponse(message: string, status = 400): Response {
-  return jsonResponse({ error: message }, status);
+  return httpJsonError(message, {
+    status,
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }
 
 function isAuthorized(request: Request, url: URL, authToken?: string): boolean {
@@ -260,6 +261,32 @@ export function createDashboardHandler(
     return new Response(res.body, { status: res.status, headers });
   };
 
+  const buildAuthSessionResponse = async (
+    result: {
+      user: unknown;
+      session?: { id?: string; token?: string | null; expiresAt?: number | null } | null;
+    },
+    status = 200,
+  ): Promise<Response> => {
+    let token = result.session?.token ?? '';
+    if (!token && result.session?.id) {
+      token = generateCryptoToken(32).token;
+      await db.execute(`UPDATE _local_sessions SET token = ? WHERE id = ?;`, [
+        token,
+        result.session.id,
+      ]);
+    }
+    const res = jsonResponse(
+      {
+        user: result.user,
+        token,
+        expiresAt: result.session?.expiresAt ?? null,
+      },
+      status,
+    );
+    return token ? withSessionCookie(res, token) : res;
+  };
+
   const logs: DashboardLogEntry[] = [];
   let nextLogId = 1;
   const recordLog = (
@@ -350,20 +377,7 @@ export function createDashboardHandler(
           displayName: body?.name ? String(body.name) : undefined,
           role: 'admin',
         });
-        let token = result.session?.token ?? '';
-        if (!token && result.session?.id) {
-          token = generateCryptoToken(32).token;
-          await db.execute(`UPDATE _local_sessions SET token = ? WHERE id = ?;`, [
-            token,
-            result.session.id,
-          ]);
-        }
-        const res = jsonResponse({
-          user: result.user,
-          token,
-          expiresAt: result.session?.expiresAt ?? null,
-        }, 201);
-        return token ? withSessionCookie(res, token) : res;
+        return await buildAuthSessionResponse(result, 201);
       } catch (err: any) {
         return errorResponse(err?.message ?? 'Setup failed.', 400);
       }
@@ -380,20 +394,7 @@ export function createDashboardHandler(
           identifier: String(body?.identifier ?? ''),
           password: String(body?.password ?? ''),
         });
-        let token = result.session?.token ?? '';
-        if (!token && result.session?.id) {
-          token = generateCryptoToken(32).token;
-          await db.execute(`UPDATE _local_sessions SET token = ? WHERE id = ?;`, [
-            token,
-            result.session.id,
-          ]);
-        }
-        const res = jsonResponse({
-          user: result.user,
-          token,
-          expiresAt: result.session?.expiresAt ?? null,
-        });
-        return token ? withSessionCookie(res, token) : res;
+        return await buildAuthSessionResponse(result);
       } catch (err: any) {
         return errorResponse(err?.message ?? 'Invalid credentials.', 401);
       }

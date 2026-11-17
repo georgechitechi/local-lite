@@ -329,6 +329,21 @@ export async function verifyPassword(
 }
 
 /**
+ * Performs a constant-time dummy password verification to mitigate
+ * timing-based account enumeration when an account does not exist.
+ */
+export async function verifyDummyPassword(
+  iterations: number = DEFAULT_PASSWORD_ITERATIONS,
+): Promise<void> {
+  await verifyPassword(
+    'dummy_password',
+    '0'.repeat(128),
+    '0'.repeat(32),
+    Math.min(iterations, 5_000),
+  );
+}
+
+/**
  * Generates an opaque random token and its corresponding SHA-256 hash.
  */
 export function generateCryptoToken(lengthBytes: number = 32): {
@@ -450,32 +465,30 @@ export class LocalAuthEngine {
             const fetchFn = resolvedOptions.remote!.fetch || globalThis.fetch;
             if (!fetchFn) return null;
             const customHeaders = resolvedOptions.remote!.headers ?? {};
-            if (mode === 'refresh' || !password) {
-              if (!session?.token) return null;
-              const res = await fetchFn(`${baseUrl}/auth/local/refresh`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...customHeaders,
-                  Authorization: `Bearer ${session.token}`,
-                },
-              });
-              if (!res.ok) return null;
-              const data = (await res.json()) as { token?: string };
-              return data?.token ? { token: data.token } : null;
-            }
-            const res = await fetchFn(`${baseUrl}/auth/local`, {
+            const isRefresh = mode === 'refresh' || !password;
+            if (isRefresh && !session?.token) return null;
+
+            const endpoint = isRefresh
+              ? `${baseUrl}/auth/local/refresh`
+              : `${baseUrl}/auth/local`;
+            const headers: Record<string, string> = {
+              'Content-Type': 'application/json',
+              ...customHeaders,
+              ...(isRefresh ? { Authorization: `Bearer ${session.token}` } : {}),
+            };
+            const res = await fetchFn(endpoint, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...customHeaders,
-              },
-              body: JSON.stringify({
-                mode: mode === 'signup' ? 'signup' : 'signin',
-                email: user.email,
-                password,
-                displayName: user.displayName ?? undefined,
-              }),
+              headers,
+              ...(isRefresh
+                ? {}
+                : {
+                    body: JSON.stringify({
+                      mode: mode === 'signup' ? 'signup' : 'signin',
+                      email: user.email,
+                      password,
+                      displayName: user.displayName ?? undefined,
+                    }),
+                  }),
             });
             if (!res.ok) return null;
             const data = (await res.json()) as { token?: string };
@@ -508,6 +521,29 @@ export class LocalAuthEngine {
     return this.remoteAuthHandler;
   }
 
+  private async performRemoteAuthExchange<TMetadata>(
+    context: RemoteAuthExchangeContext<TMetadata>,
+  ): Promise<{ token: string; [key: string]: any } | null> {
+    if (!this.remoteAuthHandler) return null;
+    const result = await this.remoteAuthHandler(context);
+    if (result && result.token) {
+      await this.sessionManager.updateTokens({ token: result.token });
+      context.session.token = result.token;
+    }
+    return result;
+  }
+
+  private async tryRemoteAuthExchange<TMetadata>(
+    context: RemoteAuthExchangeContext<TMetadata>,
+  ): Promise<void> {
+    if (!this.remoteAuthHandler) return;
+    try {
+      await this.performRemoteAuthExchange(context);
+    } catch {
+      // Non-fatal if offline
+    }
+  }
+
   /**
    * Triggers token exchange with the registered remote sync provider for the active session.
    */
@@ -520,16 +556,11 @@ export class LocalAuthEngine {
     if (!session || !session.userId) return null;
     const user = await this.getUserById(session.userId);
     if (!user) return null;
-    const result = await this.remoteAuthHandler({
+    return this.performRemoteAuthExchange({
       user,
       session,
       mode: 'refresh',
     });
-    if (result && result.token) {
-      await this.sessionManager.updateTokens({ token: result.token });
-      session.token = result.token;
-    }
-    return result;
   }
 
   /**
@@ -716,21 +747,13 @@ export class LocalAuthEngine {
         offlineDurationMs: options.offlineDurationMs,
         setActive: true,
       });
-      if (this.remoteAuthHandler && session) {
-        try {
-          const remoteRes = await this.remoteAuthHandler({
-            user,
-            session,
-            mode: 'signup',
-            password: options.password,
-          });
-          if (remoteRes && remoteRes.token) {
-            await this.sessionManager.updateTokens({ token: remoteRes.token });
-            session.token = remoteRes.token;
-          }
-        } catch {
-          // Non-fatal if offline
-        }
+      if (session) {
+        await this.tryRemoteAuthExchange({
+          user,
+          session,
+          mode: 'signup',
+          password: options.password,
+        });
       }
     }
 
@@ -762,13 +785,7 @@ export class LocalAuthEngine {
     ) as StoredUserRow | null;
 
     if (!row) {
-      // Dummy verification to mitigate timing attacks against non-existent accounts
-      await verifyPassword(
-        'dummy_password',
-        '0'.repeat(128),
-        '0'.repeat(32),
-        Math.min(this.iterations, 5_000),
-      );
+      await verifyDummyPassword(this.iterations);
       throw new Error('Invalid email/username or password.');
     }
 
@@ -875,21 +892,13 @@ export class LocalAuthEngine {
         offlineDurationMs: options.offlineDurationMs,
         setActive: true,
       });
-      if (this.remoteAuthHandler && session) {
-        try {
-          const remoteRes = await this.remoteAuthHandler({
-            user,
-            session,
-            mode: 'signin',
-            password,
-          });
-          if (remoteRes && remoteRes.token) {
-            await this.sessionManager.updateTokens({ token: remoteRes.token });
-            session.token = remoteRes.token;
-          }
-        } catch {
-          // Non-fatal if offline
-        }
+      if (session) {
+        await this.tryRemoteAuthExchange({
+          user,
+          session,
+          mode: 'signin',
+          password,
+        });
       }
     }
 

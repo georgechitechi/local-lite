@@ -6,10 +6,12 @@ import { resolveUnifiedUserId } from '../auth/identity.js';
 import {
   getCryptoRandomBytes,
   hashPassword,
+  verifyDummyPassword,
   verifyPassword,
 } from '../auth/local.js';
 import { timingSafeEqual } from '../keys/generator.js';
 import { createSignedToken, verifySignedToken } from '../keys/signed-token.js';
+import { jsonError } from '../utils/http.js';
 import { generateUUID } from '../utils/uuid.js';
 
 export interface ServerAuthUserRecord {
@@ -317,6 +319,14 @@ const DEFAULT_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_SERVER_PASSWORD_ITERATIONS = 100_000;
 const DEFAULT_OTP_TTL_MS = 15 * 60 * 1000;
 
+function normalizeEmail(raw: unknown): string {
+  return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+}
+
+function isValidEmail(email: string): boolean {
+  return Boolean(email && email.includes('@'));
+}
+
 function deriveSubSecret(secret: string, scope: string): string {
   return bytesToHex(hmac(sha256, utf8ToBytes(secret), utf8ToBytes(scope)));
 }
@@ -442,7 +452,7 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
       return new Response(null, { status: 204 });
     }
     if (request.method.toUpperCase() !== 'POST') {
-      return Response.json({ error: 'Method Not Allowed' }, { status: 405 });
+      return jsonError('Method Not Allowed', 405);
     }
 
     const pathname = new URL(request.url).pathname.replace(/\/+$/, '');
@@ -455,7 +465,7 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
         storage,
       );
       if (!verified) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        return jsonError('Unauthorized', 401);
       }
       const token = issueToken({
         id: verified.id,
@@ -470,18 +480,14 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
     try {
       body = (await request.json()) as Record<string, any>;
     } catch {
-      return Response.json({ error: 'Invalid JSON payload' }, { status: 400 });
+      return jsonError('Invalid JSON payload', 400);
     }
 
     // 2. Forgot Password (6-digit Email OTP)
     if (pathname.endsWith('/forgot-password')) {
-      const email =
-        typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-      if (!email || !email.includes('@')) {
-        return Response.json(
-          { error: 'Please enter a valid email address.' },
-          { status: 400 },
-        );
+      const email = normalizeEmail(body.email);
+      if (!isValidEmail(email)) {
+        return jsonError('Please enter a valid email address.', 400);
       }
 
       const existing = await storage.findUserByEmail(email);
@@ -528,40 +534,34 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
 
     // 3. Reset Password with OTP
     if (pathname.endsWith('/reset-password')) {
-      const email =
-        typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const email = normalizeEmail(body.email);
       const otp = typeof body.otp === 'string' ? body.otp.trim() : '';
       const newPassword =
         typeof body.newPassword === 'string' ? body.newPassword : '';
 
-      if (!email || !email.includes('@') || !/^\d{6}$/.test(otp)) {
-        return Response.json(
-          { error: 'Valid email and 6-digit verification code are required.' },
-          { status: 400 },
+      if (!isValidEmail(email) || !/^\d{6}$/.test(otp)) {
+        return jsonError(
+          'Valid email and 6-digit verification code are required.',
+          400,
         );
       }
       if (newPassword.length < minPasswordLength) {
-        return Response.json(
-          {
-            error: `New password must be at least ${minPasswordLength} characters.`,
-          },
-          { status: 400 },
+        return jsonError(
+          `New password must be at least ${minPasswordLength} characters.`,
+          400,
         );
       }
 
       const now = Date.now();
       const otpRow = await storage.findLatestActiveOtp(email);
       if (!otpRow || otpRow.expiresAt <= now) {
-        return Response.json(
-          { error: 'Invalid or expired verification code.' },
-          { status: 400 },
-        );
+        return jsonError('Invalid or expired verification code.', 400);
       }
       if (otpRow.attempts >= maxOtpAttempts) {
         await storage.markOtpUsed(otpRow.id, now);
-        return Response.json(
-          { error: 'Too many invalid attempts. Please request a new code.' },
-          { status: 429 },
+        return jsonError(
+          'Too many invalid attempts. Please request a new code.',
+          429,
         );
       }
 
@@ -573,10 +573,7 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
           nextAttempts,
           nextAttempts >= maxOtpAttempts ? now : null,
         );
-        return Response.json(
-          { error: 'Invalid or expired verification code.' },
-          { status: 400 },
-        );
+        return jsonError('Invalid or expired verification code.', 400);
       }
 
       const hashed = await hashPassword(newPassword, {
@@ -595,36 +592,27 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
 
     // 4. Sign In / Sign Up
     const mode = body.mode === 'signup' ? 'signup' : 'signin';
-    const email =
-      typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const email = normalizeEmail(body.email);
     const password = typeof body.password === 'string' ? body.password : '';
     const displayName =
       typeof body.displayName === 'string' && body.displayName.trim()
         ? body.displayName.trim()
         : null;
 
-    if (!email || !email.includes('@') || !password) {
-      return Response.json(
-        { error: 'Valid email and password are required.' },
-        { status: 400 },
-      );
+    if (!isValidEmail(email) || !password) {
+      return jsonError('Valid email and password are required.', 400);
     }
 
     const existing = await storage.findUserByEmail(email);
 
     if (mode === 'signup') {
       if (existing) {
-        return Response.json(
-          { error: 'An account with this email already exists.' },
-          { status: 409 },
-        );
+        return jsonError('An account with this email already exists.', 409);
       }
       if (password.length < minPasswordLength) {
-        return Response.json(
-          {
-            error: `Password must be at least ${minPasswordLength} characters.`,
-          },
-          { status: 400 },
+        return jsonError(
+          `Password must be at least ${minPasswordLength} characters.`,
+          400,
         );
       }
 
@@ -659,24 +647,15 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
     }
 
     if (!existing) {
-      // Constant-time dummy verification mitigates timing-based email enumeration.
-      await verifyPassword(
-        'dummy_password',
-        '0'.repeat(64),
-        '0'.repeat(32),
-        Math.min(passwordIterations, 5_000),
-      );
-      return Response.json(
-        { error: 'Invalid email or password.' },
-        { status: 401 },
-      );
+      await verifyDummyPassword(passwordIterations);
+      return jsonError('Invalid email or password.', 401);
     }
 
     const now = Date.now();
     if (existing.lockedUntil && existing.lockedUntil > now) {
-      return Response.json(
-        { error: 'Account temporarily locked due to too many failed attempts.' },
-        { status: 429 },
+      return jsonError(
+        'Account temporarily locked due to too many failed attempts.',
+        429,
       );
     }
 
@@ -700,10 +679,7 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
         lockedUntil,
         now,
       );
-      return Response.json(
-        { error: 'Invalid email or password.' },
-        { status: 401 },
-      );
+      return jsonError('Invalid email or password.', 401);
     }
 
     if (existing.failedLoginAttempts > 0 || existing.lockedUntil) {
