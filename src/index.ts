@@ -1,33 +1,10 @@
-export * from './core/client.js';
-export * from './core/types.js';
-export * from './core/query.js';
-export * from './core/sync-worker.js';
-export * from './core/conflict.js';
-export * from './core/outbox-store.js';
-export * from './core/meta-store.js';
-export * from './core/table-manager.js';
-export * from './core/schema-manager.js';
-export * from './core/query-builder.js';
-export * from './core/maintenance.js';
-export * from './core/field-encryption.js';
-export * from './core/audit.js';
-export * from './reactive/event-emitter.js';
-export * from './adapters/local/index.js';
-export * from './adapters/remote/index.js';
-export * from './adapters/network/index.js';
+// v3.0.0 root entry point: core engine, config factory, schema utilities, and shared helpers.
+// Provider adapters (supabase, convex, firebase, postgres, sqlite), React/Vue/Svelte/Solid hooks,
+// and feature modules (auth, backups, storage, search, kv-store, scheduler, actions, keys, payments, testing, presence)
+// are imported via their dedicated subpath exports (e.g. 'local-lite/react', 'local-lite/supabase').
+export * from './core/index.js';
 export * from './config/index.js';
-export * from './react/index.js';
+export * from './schema/index.js';
 export * from './utils/uuid.js';
 export * from './utils/sql.js';
-export * from './utils/logger.js';
 export * from './utils/portability.js';
-export * from './schema/index.js';
-export * from './auth/index.js';
-export * from './backups/index.js';
-export * from './actions/index.js';
-export * from './keys/index.js';
-export * from './kv-store/index.js';
-export * from './search/index.js';
-export * from './storage/index.js';
-export * from './scheduler/index.js';
-export * from './payments/index.js';

@@ -1,5 +1,5 @@
 import { RemoteDBAdapter } from './index.js';
-import { DeltaChanges, SyncOperation } from '../../core/types.js';
+import { DeltaChanges, PushResult, SyncOperation } from '../../core/types.js';
 
 /**
  * Built-in In-Memory Demo Remote Adapter.
@@ -15,7 +15,7 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
     this.simulatedLatencyMs = simulatedLatencyMs;
   }
 
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
     if (this.simulatedLatencyMs > 0) {
       await new Promise((resolve) =>
         setTimeout(resolve, this.simulatedLatencyMs),
@@ -23,7 +23,11 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
     }
     this.pushedBatches.push(operations);
     this.allPushedOperations.push(...operations);
-    return true;
+    return {
+      success: true,
+      successfulIds: operations.map((op) => op.id),
+      failedIds: [],
+    };
   }
 
   async fetchChanges(_sinceTimestamp: number): Promise<DeltaChanges> {
@@ -65,8 +69,12 @@ export class MemoryDemoRemoteAdapter implements RemoteDBAdapter {
  * and maintains zero cloud backend connections.
  */
 export class NoopRemoteAdapter implements RemoteDBAdapter {
-  async pushChanges(_operations: SyncOperation[]): Promise<boolean> {
-    return true;
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
+    return {
+      success: true,
+      successfulIds: operations.map((op) => op.id),
+      failedIds: [],
+    };
   }
 
   async fetchChanges(_sinceTimestamp: number): Promise<DeltaChanges> {

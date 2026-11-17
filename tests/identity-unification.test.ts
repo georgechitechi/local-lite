@@ -6,7 +6,7 @@ import {
   SessionManager,
   GoogleAuthClient,
   GitHubAuthClient,
-} from '../src/index.js';
+} from '../src/auth/index.js';
 import { MockDB } from './helpers/mock-db.js';
 
 describe('User Identity Unification (local-lite/auth)', () => {

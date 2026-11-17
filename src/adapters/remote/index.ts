@@ -26,7 +26,7 @@ export interface RemoteDBAdapter {
   pushChanges(
     operations: SyncOperation[],
     options?: RemoteRequestOptions,
-  ): Promise<boolean | PushResult>;
+  ): Promise<PushResult>;
   /** Return a complete batch through timestamp; reject on partial failure. Supports optional scope for data filtering. */
   fetchChanges(
     sinceTimestamp: number,

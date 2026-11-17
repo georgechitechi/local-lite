@@ -126,11 +126,9 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes outbox operations as a batch mutation to Convex.
    */
-  async pushChanges(
-    operations: SyncOperation[],
-  ): Promise<boolean | PushResult> {
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
     if (!operations || operations.length === 0) {
-      return true;
+      return { success: true, successfulIds: [], failedIds: [] };
     }
 
     try {
@@ -148,17 +146,40 @@ export class ConvexRemoteAdapter implements RemoteDBAdapter {
       });
 
       if (res && typeof res === 'object' && Array.isArray(res.failedIds)) {
+        const failedSet = new Set(res.failedIds);
         return {
           success: res.failedIds.length === 0,
+          successfulIds: operations
+            .filter((op) => !failedSet.has(op.id))
+            .map((op) => op.id),
           failedIds: res.failedIds,
           errors: res.errors,
         };
       }
 
-      return res !== false;
+      if (res === false) {
+        return {
+          success: false,
+          successfulIds: [],
+          failedIds: operations.map((op) => op.id),
+        };
+      }
+
+      return {
+        success: true,
+        successfulIds: operations.map((op) => op.id),
+        failedIds: [],
+      };
     } catch (error) {
       this.logger.error(formatConvexError(error, { operation: 'pushChanges' }));
-      return false;
+      return {
+        success: false,
+        successfulIds: [],
+        failedIds: operations.map((op) => op.id),
+        errors: {
+          _batch: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
   }
 

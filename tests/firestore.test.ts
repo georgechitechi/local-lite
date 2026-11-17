@@ -41,7 +41,11 @@ describe('FirestoreRemoteAdapter (Modular Firebase SDK v11+)', () => {
       },
     ]);
 
-    expect(success).toBe(true);
+    expect(success).toEqual({
+      success: true,
+      successfulIds: ['op-1', 'op-2'],
+      failedIds: [],
+    });
     expect(mockModule.writeBatch).toHaveBeenCalledWith(mockDb);
     expect(setSpy).toHaveBeenCalledTimes(2);
     expect(setSpy).toHaveBeenNthCalledWith(
@@ -231,6 +235,7 @@ describe('FirestoreRemoteAdapter (Modular Firebase SDK v11+)', () => {
 
     expect(result).toEqual({
       success: false,
+      successfulIds: ['op-1'],
       failedIds: ['op-2'],
       errors: { 'op-2': 'Permission denied on doc 2' },
     });

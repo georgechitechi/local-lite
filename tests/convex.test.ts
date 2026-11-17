@@ -36,7 +36,11 @@ describe('ConvexRemoteAdapter', () => {
 
     const result = await adapter.pushChanges(ops);
 
-    expect(result).toBe(true);
+    expect(result).toEqual({
+      success: true,
+      successfulIds: ['op-1', 'op-2'],
+      failedIds: [],
+    });
     expect(mutationSpy).toHaveBeenCalledTimes(1);
     expect(mutationSpy).toHaveBeenCalledWith('sync:pushBatch', {
       operations: ops,
@@ -49,7 +53,11 @@ describe('ConvexRemoteAdapter', () => {
     const adapter = new ConvexRemoteAdapter(mockConvex as any);
 
     const result = await adapter.pushChanges([]);
-    expect(result).toBe(true);
+    expect(result).toEqual({
+      success: true,
+      successfulIds: [],
+      failedIds: [],
+    });
     expect(mutationSpy).not.toHaveBeenCalled();
   });
 
@@ -69,7 +77,12 @@ describe('ConvexRemoteAdapter', () => {
       },
     ]);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({
+      success: false,
+      successfulIds: [],
+      failedIds: ['op-1'],
+      errors: { _batch: 'Network error' },
+    });
   });
 
   it('returns structured PushResult when Convex backend reports partial failures', async () => {
@@ -101,6 +114,7 @@ describe('ConvexRemoteAdapter', () => {
 
     expect(result).toEqual({
       success: false,
+      successfulIds: ['op-1'],
       failedIds: ['op-2'],
       errors: { 'op-2': 'Row forbidden' },
     });

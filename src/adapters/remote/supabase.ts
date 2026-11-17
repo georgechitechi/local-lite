@@ -219,11 +219,9 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
   /**
    * Pushes outbox operations to Supabase.
    */
-  async pushChanges(
-    operations: SyncOperation[],
-  ): Promise<boolean | PushResult> {
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
     if (!operations || operations.length === 0) {
-      return true;
+      return { success: true, successfulIds: [], failedIds: [] };
     }
 
     const client = this.getClient();
@@ -231,7 +229,11 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
       this.logger.debug(
         'Supabase client is not available; skipping remote push.',
       );
-      return false;
+      return {
+        success: false,
+        successfulIds: [],
+        failedIds: operations.map((op) => op.id),
+      };
     }
 
     // 1. If custom RPC is configured, perform atomic batch RPC
@@ -251,9 +253,18 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
         this.logger.error(
           formatSupabaseError(error, { operation: 'batch_rpc' }),
         );
-        return false;
+        return {
+          success: false,
+          successfulIds: [],
+          failedIds: operations.map((op) => op.id),
+          errors: { _batch: error.message || String(error) },
+        };
       }
-      return true;
+      return {
+        success: true,
+        successfulIds: operations.map((op) => op.id),
+        failedIds: [],
+      };
     }
 
     // 2. Direct table operations with consecutive batching and per-operation tracking
@@ -543,7 +554,11 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
     }
 
     if (failedIds.length === 0) {
-      return true;
+      return {
+        success: true,
+        successfulIds,
+        failedIds: [],
+      };
     }
 
     return {

@@ -139,11 +139,9 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
    * Chunks operations into batches of 450 (below Firestore 500-write limit).
    * Falls back to individual writes if a batch fails, returning partial push results.
    */
-  async pushChanges(
-    operations: SyncOperation[],
-  ): Promise<boolean | PushResult> {
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
     if (!operations || operations.length === 0) {
-      return true;
+      return { success: true, successfulIds: [], failedIds: [] };
     }
 
     const failedIds: string[] = [];
@@ -212,19 +210,36 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
         }
       }
 
+      const failedSet = new Set(failedIds);
+      const successfulIds = operations
+        .filter((op) => !failedSet.has(op.id))
+        .map((op) => op.id);
+
       if (failedIds.length > 0) {
         return {
           success: false,
+          successfulIds,
           failedIds,
           errors,
         };
       }
-      return true;
+      return {
+        success: true,
+        successfulIds,
+        failedIds: [],
+      };
     } catch (error) {
       this.logger.error(
         formatFirestoreError(error, { operation: 'pushChanges' }),
       );
-      return false;
+      return {
+        success: false,
+        successfulIds: [],
+        failedIds: operations.map((op) => op.id),
+        errors: {
+          _batch: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
   }
 
