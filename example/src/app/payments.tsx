@@ -27,7 +27,13 @@ import {
 
 const CURRENCIES = ['KES', 'USD', 'NGN', 'GHS', 'EUR'] as const;
 const COUNTRIES = ['KE', 'US', 'NG', 'GH', 'GB'] as const;
-const ALL_PROVIDER_IDS = ['manual', 'daraja', 'stripe', 'paystack', 'bank_transfer'] as const;
+const ALL_PROVIDER_IDS = [
+  'manual',
+  'daraja',
+  'stripe',
+  'paystack',
+  'bank_transfer',
+] as const;
 
 interface PaymentLogEntry {
   id: string;
@@ -92,7 +98,10 @@ function createMockPaymentFetch(): typeof fetch {
       });
     }
 
-    return Response.json({ error: `Unhandled mock URL: ${url}` }, { status: 404 });
+    return Response.json(
+      { error: `Unhandled mock URL: ${url}` },
+      { status: 404 },
+    );
   }) as typeof fetch;
 }
 
@@ -115,18 +124,26 @@ export default function PaymentsScreen() {
   const [paystackSecretKey, setPaystackSecretKey] = useState('');
 
   // Form inputs
-  const [selectedProvider, setSelectedProvider] = useState<PaymentProviderId>('daraja');
+  const [selectedProvider, setSelectedProvider] =
+    useState<PaymentProviderId>('daraja');
   const [actionId, setActionId] = useState(makeActionId);
   const [amount, setAmount] = useState('1500');
   const [phone, setPhone] = useState('0712345678');
   const [email, setEmail] = useState('demo@example.com');
   const [description, setDescription] = useState('Local-lite test order');
-  const [callbackUrl, setCallbackUrl] = useState('https://api.example.com/payments/callback');
-  const [returnUrl, setReturnUrl] = useState('https://app.example.com/payments/return');
+  const [callbackUrl, setCallbackUrl] = useState(
+    'https://api.example.com/payments/callback',
+  );
+  const [returnUrl, setReturnUrl] = useState(
+    'https://app.example.com/payments/return',
+  );
 
   // Execution & logs
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [message, setMessage] = useState<{
+    text: string;
+    type: 'success' | 'error';
+  } | null>(null);
   const [history, setHistory] = useState<PaymentLogEntry[]>([]);
 
   const mockFetch = useMemo(() => createMockPaymentFetch(), []);
@@ -169,11 +186,15 @@ export default function PaymentsScreen() {
           fetch: fetchImpl,
         }),
         createStripeCheckoutAdapter({
-          secretKey: simulated ? 'sk_test_mock' : stripeSecretKey || 'sk_test_missing',
+          secretKey: simulated
+            ? 'sk_test_mock'
+            : stripeSecretKey || 'sk_test_missing',
           fetch: fetchImpl,
         }),
         createPaystackAdapter({
-          secretKey: simulated ? 'sk_test_paystack_mock' : paystackSecretKey || 'sk_test_missing',
+          secretKey: simulated
+            ? 'sk_test_paystack_mock'
+            : paystackSecretKey || 'sk_test_missing',
           fetch: fetchImpl,
         }),
       ],
@@ -205,7 +226,9 @@ export default function PaymentsScreen() {
 
   // Keep selectedProvider aligned with available options when filters change
   const activeOption =
-    availableOptions.find((o) => o.id === selectedProvider) ?? availableOptions[0] ?? null;
+    availableOptions.find((o) => o.id === selectedProvider) ??
+    availableOptions[0] ??
+    null;
   const activeProviderId = activeOption?.id ?? selectedProvider;
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -231,7 +254,10 @@ export default function PaymentsScreen() {
 
   const handleInitiate = async () => {
     if (!activeOption) {
-      showToast('No payment provider is available for the current context.', 'error');
+      showToast(
+        'No payment provider is available for the current context.',
+        'error',
+      );
       return;
     }
 
@@ -281,7 +307,8 @@ export default function PaymentsScreen() {
 
     try {
       const checkoutId = entry.result.providerRef || `ws_CO_${Date.now()}`;
-      const merchantReqId = entry.result.merchantRequestId || `mr_${Date.now()}`;
+      const merchantReqId =
+        entry.result.merchantRequestId || `mr_${Date.now()}`;
       const normalizedPhone = formatKenyanPhone(phone || '0712345678');
 
       const webhookReq = new Request(callbackUrl, {
@@ -338,12 +365,15 @@ export default function PaymentsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>💳 local-lite Payments</Text>
         <Text style={styles.subtitle}>
-          Test PaymentRegistry context filtering, offline manual payments, M-Pesa Daraja, Stripe,
-          Paystack & custom adapters
+          Test PaymentRegistry context filtering, offline manual payments,
+          M-Pesa Daraja, Stripe, Paystack & custom adapters
         </Text>
         <View style={styles.badgeRow}>
           <TouchableOpacity
-            style={[styles.badge, simulated ? styles.badgeInfo : styles.badgeWarn]}
+            style={[
+              styles.badge,
+              simulated ? styles.badgeInfo : styles.badgeWarn,
+            ]}
             onPress={() => setSimulated((s) => !s)}
           >
             <Text style={styles.badgeText}>
@@ -351,10 +381,15 @@ export default function PaymentsScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.badge, isOnline ? styles.badgeSuccess : styles.badgeMuted]}
+            style={[
+              styles.badge,
+              isOnline ? styles.badgeSuccess : styles.badgeMuted,
+            ]}
             onPress={() => setIsOnline((o) => !o)}
           >
-            <Text style={styles.badgeText}>{isOnline ? 'Online' : 'Offline'}</Text>
+            <Text style={styles.badgeText}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -383,7 +418,14 @@ export default function PaymentsScreen() {
               style={[styles.chip, currency === c && styles.chipActive]}
               onPress={() => setCurrency(c)}
             >
-              <Text style={[styles.chipText, currency === c && styles.chipTextActive]}>{c}</Text>
+              <Text
+                style={[
+                  styles.chipText,
+                  currency === c && styles.chipTextActive,
+                ]}
+              >
+                {c}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -396,20 +438,32 @@ export default function PaymentsScreen() {
               style={[styles.chip, country === c && styles.chipActive]}
               onPress={() => setCountry(c)}
             >
-              <Text style={[styles.chipText, country === c && styles.chipTextActive]}>{c}</Text>
+              <Text
+                style={[
+                  styles.chipText,
+                  country === c && styles.chipTextActive,
+                ]}
+              >
+                {c}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <Text style={styles.label}>
-          Enabled Providers ({enabledFilter ? `${enabledFilter.length} selected` : 'All'})
+          Enabled Providers (
+          {enabledFilter ? `${enabledFilter.length} selected` : 'All'})
         </Text>
         <View style={styles.chipRow}>
           <TouchableOpacity
             style={[styles.chip, !enabledFilter && styles.chipActive]}
             onPress={() => setEnabledFilter(null)}
           >
-            <Text style={[styles.chipText, !enabledFilter && styles.chipTextActive]}>All</Text>
+            <Text
+              style={[styles.chipText, !enabledFilter && styles.chipTextActive]}
+            >
+              All
+            </Text>
           </TouchableOpacity>
           {ALL_PROVIDER_IDS.map((id) => {
             const active = !enabledFilter || enabledFilter.includes(id);
@@ -419,7 +473,11 @@ export default function PaymentsScreen() {
                 style={[styles.chip, active && styles.chipActive]}
                 onPress={() => toggleProviderFilter(id)}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{id}</Text>
+                <Text
+                  style={[styles.chipText, active && styles.chipTextActive]}
+                >
+                  {id}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -433,7 +491,8 @@ export default function PaymentsScreen() {
         </Text>
         {availableOptions.length === 0 ? (
           <Text style={styles.emptyText}>
-            No payment providers match {currency} / {country} ({isOnline ? 'online' : 'offline'}).
+            No payment providers match {currency} / {country} (
+            {isOnline ? 'online' : 'offline'}).
           </Text>
         ) : (
           availableOptions.map((option) => {
@@ -441,7 +500,10 @@ export default function PaymentsScreen() {
             return (
               <TouchableOpacity
                 key={option.id}
-                style={[styles.methodCard, isSelected && styles.methodCardActive]}
+                style={[
+                  styles.methodCard,
+                  isSelected && styles.methodCardActive,
+                ]}
                 onPress={() => setSelectedProvider(option.id)}
               >
                 <View style={styles.methodHeader}>
@@ -565,7 +627,9 @@ export default function PaymentsScreen() {
 
         {!simulated && activeProviderId === 'daraja' && (
           <View style={styles.liveBox}>
-            <Text style={styles.liveBoxTitle}>Live Daraja Sandbox Credentials</Text>
+            <Text style={styles.liveBoxTitle}>
+              Live Daraja Sandbox Credentials
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Consumer Key"
@@ -627,7 +691,10 @@ export default function PaymentsScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.primaryButton, (!activeOption || submitting) && styles.buttonDisabled]}
+          style={[
+            styles.primaryButton,
+            (!activeOption || submitting) && styles.buttonDisabled,
+          ]}
           onPress={handleInitiate}
           disabled={!activeOption || submitting}
         >
@@ -644,7 +711,9 @@ export default function PaymentsScreen() {
       {/* Payment History & Webhook Tester */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>
-          <Text style={styles.sectionTitle}>4. Payment Results ({history.length})</Text>
+          <Text style={styles.sectionTitle}>
+            4. Payment Results ({history.length})
+          </Text>
           {history.length > 0 && (
             <TouchableOpacity onPress={() => setHistory([])}>
               <Text style={styles.linkText}>Clear</Text>
@@ -661,7 +730,8 @@ export default function PaymentsScreen() {
             <View key={entry.id} style={styles.historyItem}>
               <View style={styles.rowBetween}>
                 <Text style={styles.historyTitle}>
-                  {entry.result.provider.toUpperCase()} • {entry.currency} {entry.amount}
+                  {entry.result.provider.toUpperCase()} • {entry.currency}{' '}
+                  {entry.amount}
                 </Text>
                 <View
                   style={[
@@ -673,7 +743,9 @@ export default function PaymentsScreen() {
                         : styles.statusPending,
                   ]}
                 >
-                  <Text style={styles.statusPillText}>{entry.result.status}</Text>
+                  <Text style={styles.statusPillText}>
+                    {entry.result.status}
+                  </Text>
                 </View>
               </View>
 
@@ -681,10 +753,14 @@ export default function PaymentsScreen() {
                 Action: {entry.result.actionId} • {entry.timestamp}
               </Text>
               {entry.result.providerRef ? (
-                <Text style={styles.historyMeta}>Ref: {entry.result.providerRef}</Text>
+                <Text style={styles.historyMeta}>
+                  Ref: {entry.result.providerRef}
+                </Text>
               ) : null}
               {entry.result.customerMessage ? (
-                <Text style={styles.historyMsg}>{entry.result.customerMessage}</Text>
+                <Text style={styles.historyMsg}>
+                  {entry.result.customerMessage}
+                </Text>
               ) : null}
 
               {entry.result.checkoutUrl ? (
@@ -712,8 +788,8 @@ export default function PaymentsScreen() {
               {entry.webhook && (
                 <View style={styles.webhookBox}>
                   <Text style={styles.webhookTitle}>
-                    Webhook Verified: {entry.webhook.verified ? 'Yes' : 'No'} • Receipt:{' '}
-                    {entry.webhook.receiptNumber ?? 'N/A'}
+                    Webhook Verified: {entry.webhook.verified ? 'Yes' : 'No'} •
+                    Receipt: {entry.webhook.receiptNumber ?? 'N/A'}
                   </Text>
                 </View>
               )}

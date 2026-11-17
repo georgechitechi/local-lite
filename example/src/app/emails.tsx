@@ -2,7 +2,6 @@ import { createElement, useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
 import type { LocalFirstClient } from 'local-lite/config';
 import type { ActionRecord } from 'local-lite';
 import { DevMailbox, type DevSentEmail } from 'local-lite/email';
+import { BottomSheetModal } from '../components/BottomSheetModal';
 import { getClient } from '../lib/sync';
 
 const PRESETS = [
@@ -173,7 +173,10 @@ export default function EmailsScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        style={[styles.container, selectedEmail !== null && styles.blurredContent]}
+        style={[
+          styles.container,
+          selectedEmail !== null && styles.blurredContent,
+        ]}
         contentContainerStyle={styles.content}
       >
         <View style={styles.badgeRow}>
@@ -191,7 +194,9 @@ export default function EmailsScreen() {
           <View
             style={[
               styles.toast,
-              statusMessage.type === 'error' ? styles.toastError : styles.toastSuccess,
+              statusMessage.type === 'error'
+                ? styles.toastError
+                : styles.toastSuccess,
             ]}
           >
             <Text
@@ -210,7 +215,8 @@ export default function EmailsScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Compose Test Email</Text>
           <Text style={styles.cardSubtitle}>
-            Dispatches through client.actions.sendEmail() using the local preview provider.
+            Dispatches through client.actions.sendEmail() using the local
+            preview provider.
           </Text>
 
           <View style={styles.presetRow}>
@@ -317,7 +323,9 @@ export default function EmailsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>DevMailbox Inbox ({inbox.length})</Text>
+          <Text style={styles.cardTitle}>
+            DevMailbox Inbox ({inbox.length})
+          </Text>
           <Text style={styles.cardSubtitle}>
             Captured in-memory without sending real network requests.
           </Text>
@@ -338,7 +346,9 @@ export default function EmailsScreen() {
                 }}
               >
                 <View style={styles.emailHeader}>
-                  <Text style={styles.emailSubject}>{item.mailOptions.subject}</Text>
+                  <Text style={styles.emailSubject}>
+                    {item.mailOptions.subject}
+                  </Text>
                   <Text style={styles.emailTime}>
                     {new Date(item.sentAt).toLocaleTimeString()}
                   </Text>
@@ -369,7 +379,9 @@ export default function EmailsScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Action Outbox ({outbox.length})</Text>
           {outbox.length === 0 ? (
-            <Text style={styles.emptyText}>No send_email records in outbox.</Text>
+            <Text style={styles.emptyText}>
+              No send_email records in outbox.
+            </Text>
           ) : (
             outbox.map((rec) => (
               <View key={rec.id} style={styles.outboxItem}>
@@ -377,10 +389,13 @@ export default function EmailsScreen() {
                   <Text style={styles.outboxSubject}>
                     {rec.payload?.subject || '(no subject)'}
                   </Text>
-                  <Text style={styles.outboxStatus}>{rec.status.toUpperCase()}</Text>
+                  <Text style={styles.outboxStatus}>
+                    {rec.status.toUpperCase()}
+                  </Text>
                 </View>
                 <Text style={styles.emailMeta}>
-                  To: {String(rec.payload?.to || '')} | Retries: {rec.retryCount}
+                  To: {String(rec.payload?.to || '')} | Retries:{' '}
+                  {rec.retryCount}
                 </Text>
               </View>
             ))
@@ -388,128 +403,99 @@ export default function EmailsScreen() {
         </View>
       </ScrollView>
 
-      <Modal
+      <BottomSheetModal
         visible={selectedEmail !== null}
-        animationType="slide"
-        transparent
-        statusBarTranslucent
-        onRequestClose={() => setSelectedEmail(null)}
+        onClose={() => setSelectedEmail(null)}
+        title={selectedEmail?.mailOptions.subject || 'Email Preview'}
       >
-        <View style={styles.sheetBackdrop}>
-          <TouchableOpacity
-            style={[
-              styles.sheetOverlay,
-              Platform.OS === 'web' && ({ backdropFilter: 'blur(8px)' } as any),
-            ]}
-            activeOpacity={1}
-            onPress={() => setSelectedEmail(null)}
-          />
-          <View style={styles.sheetContainer}>
-            <View style={styles.sheetHandleWrap}>
-              <View style={styles.sheetHandle} />
-            </View>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle} numberOfLines={1}>
-                {selectedEmail?.mailOptions.subject || 'Email Preview'}
+        {selectedEmail && (
+          <>
+            <View style={styles.modalMetaBox}>
+              <Text style={styles.emailMeta}>
+                <Text style={styles.metaBold}>From: </Text>
+                {String(selectedEmail.mailOptions.from || 'default')}
               </Text>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setSelectedEmail(null)}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
+              <Text style={styles.emailMeta}>
+                <Text style={styles.metaBold}>To: </Text>
+                {Array.isArray(selectedEmail.mailOptions.to)
+                  ? selectedEmail.mailOptions.to.join(', ')
+                  : String(selectedEmail.mailOptions.to)}
+              </Text>
+              <Text style={styles.emailMeta}>
+                <Text style={styles.metaBold}>Sent: </Text>
+                {new Date(selectedEmail.sentAt).toLocaleString()}
+              </Text>
             </View>
 
-            {selectedEmail && (
-              <>
-                <View style={styles.modalMetaBox}>
-                  <Text style={styles.emailMeta}>
-                    <Text style={styles.metaBold}>From: </Text>
-                    {String(selectedEmail.mailOptions.from || 'default')}
+            <View style={styles.modeTabs}>
+              {(['rendered', 'text', 'raw'] as const).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[
+                    styles.modeTab,
+                    previewMode === mode && styles.modeTabActive,
+                  ]}
+                  onPress={() => setPreviewMode(mode)}
+                >
+                  <Text
+                    style={[
+                      styles.modeTabText,
+                      previewMode === mode && styles.modeTabTextActive,
+                    ]}
+                  >
+                    {mode === 'rendered'
+                      ? 'Preview'
+                      : mode === 'text'
+                        ? 'Plain Text'
+                        : 'Raw HTML'}
                   </Text>
-                  <Text style={styles.emailMeta}>
-                    <Text style={styles.metaBold}>To: </Text>
-                    {Array.isArray(selectedEmail.mailOptions.to)
-                      ? selectedEmail.mailOptions.to.join(', ')
-                      : String(selectedEmail.mailOptions.to)}
-                  </Text>
-                  <Text style={styles.emailMeta}>
-                    <Text style={styles.metaBold}>Sent: </Text>
-                    {new Date(selectedEmail.sentAt).toLocaleString()}
-                  </Text>
-                </View>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-                <View style={styles.modeTabs}>
-                  {(['rendered', 'text', 'raw'] as const).map((mode) => (
-                    <TouchableOpacity
-                      key={mode}
-                      style={[
-                        styles.modeTab,
-                        previewMode === mode && styles.modeTabActive,
-                      ]}
-                      onPress={() => setPreviewMode(mode)}
-                    >
-                      <Text
-                        style={[
-                          styles.modeTabText,
-                          previewMode === mode && styles.modeTabTextActive,
-                        ]}
-                      >
-                        {mode === 'rendered'
-                          ? 'Preview'
-                          : mode === 'text'
-                            ? 'Plain Text'
-                            : 'Raw HTML'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <ScrollView style={styles.previewBody}>
-                  {previewMode === 'rendered' ? (
-                    selectedEmail.mailOptions.html ? (
-                      Platform.OS === 'web' ? (
-                        createElement('iframe', {
-                          srcDoc: selectedEmail.mailOptions.html,
-                          style: {
-                            width: '100%',
-                            minHeight: 260,
-                            border: 'none',
-                            backgroundColor: '#ffffff',
-                          },
-                          sandbox: '',
-                        })
-                      ) : (
-                        <Text style={styles.previewText}>
-                          {selectedEmail.mailOptions.html
-                            .replace(/<style[\s\S]*?<\/style>/gi, '')
-                            .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n\n')
-                            .replace(/<br\s*\/?>/gi, '\n')
-                            .replace(/<[^>]+>/g, '')
-                            .replace(/\n{3,}/g, '\n\n')
-                            .trim()}
-                        </Text>
-                      )
-                    ) : (
-                      <Text style={styles.previewText}>
-                        {selectedEmail.mailOptions.text || '(empty body)'}
-                      </Text>
-                    )
-                  ) : previewMode === 'text' ? (
-                    <Text style={styles.previewText}>
-                      {selectedEmail.mailOptions.text || '(no plain text body)'}
-                    </Text>
+            <ScrollView style={styles.previewBody}>
+              {previewMode === 'rendered' ? (
+                selectedEmail.mailOptions.html ? (
+                  Platform.OS === 'web' ? (
+                    createElement('iframe', {
+                      srcDoc: selectedEmail.mailOptions.html,
+                      style: {
+                        width: '100%',
+                        minHeight: 260,
+                        border: 'none',
+                        backgroundColor: '#ffffff',
+                      },
+                      sandbox: '',
+                    })
                   ) : (
-                    <Text style={styles.previewCode}>
-                      {selectedEmail.mailOptions.html || '(no HTML body)'}
+                    <Text style={styles.previewText}>
+                      {selectedEmail.mailOptions.html
+                        .replace(/<style[\s\S]*?<\/style>/gi, '')
+                        .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n\n')
+                        .replace(/<br\s*\/?>/gi, '\n')
+                        .replace(/<[^>]+>/g, '')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim()}
                     </Text>
-                  )}
-                </ScrollView>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+                  )
+                ) : (
+                  <Text style={styles.previewText}>
+                    {selectedEmail.mailOptions.text || '(empty body)'}
+                  </Text>
+                )
+              ) : previewMode === 'text' ? (
+                <Text style={styles.previewText}>
+                  {selectedEmail.mailOptions.text || '(no plain text body)'}
+                </Text>
+              ) : (
+                <Text style={styles.previewCode}>
+                  {selectedEmail.mailOptions.html || '(no HTML body)'}
+                </Text>
+              )}
+            </ScrollView>
+          </>
+        )}
+      </BottomSheetModal>
     </View>
   );
 }
@@ -520,7 +506,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   blurredContent: {
-    filter: [{ blur: 6 }] as any,
+    filter: [{ blur: 2 }] as any,
   },
   container: {
     flex: 1,
@@ -745,11 +731,6 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginTop: 4,
   },
-  emailHtml: {
-    fontSize: 11,
-    color: '#64748b',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
   emailId: {
     fontSize: 11,
     color: '#94a3b8',
@@ -784,60 +765,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#0284c7',
-  },
-  sheetBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sheetOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-  },
-  sheetContainer: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-    paddingBottom: 20,
-    overflow: 'hidden',
-    borderTopWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  sheetHandleWrap: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#cbd5e1',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    gap: 12,
-  },
-  modalTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  modalCloseBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  modalCloseText: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: '600',
   },
   modalMetaBox: {
     backgroundColor: '#f8fafc',
