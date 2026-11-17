@@ -404,6 +404,33 @@ async function preloadRelations(
   }
 }
 
+async function hydrateAndPreload<T>(
+  client: ClientLike,
+  tableName: string,
+  rawRows: T[],
+  withRelations: Array<string | WithRelationSpec>,
+  includeDeleted: boolean,
+): Promise<T[]> {
+  const hydrator =
+    'hydrateRow' in client
+      ? (client as any).hydrateRow.bind(client)
+      : (client as any).parent?.hydrateRow?.bind((client as any).parent);
+  const hydrated =
+    hydrator && rawRows && rawRows.length > 0
+      ? rawRows.map((r: any) => hydrator(tableName, r))
+      : rawRows;
+  if (withRelations.length > 0 && hydrated && hydrated.length > 0) {
+    await preloadRelations(
+      client,
+      tableName,
+      hydrated,
+      withRelations,
+      includeDeleted,
+    );
+  }
+  return hydrated;
+}
+
 // ---------------------------------------------------------------------------
 
 /**
@@ -607,24 +634,13 @@ export class QueryBuilder<T = any> {
     const run = async (overrideParams?: any[]): Promise<T[]> => {
       const effectiveParams = overrideParams ?? params;
       const rawRows = await client.query<T>(sql, effectiveParams);
-      const hydrator =
-        'hydrateRow' in client
-          ? (client as any).hydrateRow.bind(client)
-          : (client as any).parent?.hydrateRow?.bind((client as any).parent);
-      const hydrated =
-        hydrator && rawRows && rawRows.length > 0
-          ? rawRows.map((r: any) => hydrator(tableName, r))
-          : rawRows;
-      if (withRelations.length > 0 && hydrated.length > 0) {
-        await preloadRelations(
-          client,
-          tableName,
-          hydrated,
-          withRelations,
-          includeDeleted,
-        );
-      }
-      return hydrated;
+      return hydrateAndPreload(
+        client,
+        tableName,
+        rawRows,
+        withRelations,
+        includeDeleted,
+      );
     };
 
     return {
@@ -787,26 +803,13 @@ export class QueryBuilder<T = any> {
     const { sql, params } = this.toSQL();
     try {
       const rawRows = await this.client.query<T>(sql, params);
-      const hydrator =
-        'hydrateRow' in this.client
-          ? (this.client as any).hydrateRow.bind(this.client)
-          : (this.client as any).parent?.hydrateRow?.bind(
-              (this.client as any).parent,
-            );
-      const hydrated =
-        hydrator && rawRows && rawRows.length > 0
-          ? rawRows.map((r: any) => hydrator(this.tableName, r))
-          : rawRows;
-      if (this.withRelations.length > 0 && hydrated && hydrated.length > 0) {
-        await preloadRelations(
-          this.client,
-          this.tableName,
-          hydrated,
-          this.withRelations,
-          this.includeDeleted,
-        );
-      }
-      return hydrated;
+      return await hydrateAndPreload(
+        this.client,
+        this.tableName,
+        rawRows,
+        this.withRelations,
+        this.includeDeleted,
+      );
     } catch (err: any) {
       const msg = String(err?.message || err || '');
       if (msg.includes('no such table') || msg.includes('no such column')) {

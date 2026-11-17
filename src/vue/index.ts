@@ -1,5 +1,9 @@
 import { LocalFirstClient } from '../core/client.js';
 import { QueryOptions, SyncStatusEvent } from '../core/types.js';
+import {
+  subscribeLiveQuery,
+  subscribeSyncStatus,
+} from '../reactive/live-query.js';
 
 export interface VueRef<T> {
   value: T;
@@ -29,38 +33,17 @@ export function useLiveQuery<T = any>(
   const data = vue.ref<T[]>([]);
   const loading = vue.ref<boolean>(true);
   const error = vue.ref<Error | null>(null);
-  let active = true;
 
-  const refresh = async () => {
-    try {
-      const rows = await client
-        .from<T>(tableName)
-        .applyOptions(options)
-        .execute();
-      if (!active) return;
-      data.value = rows;
-      loading.value = false;
-      error.value = null;
-    } catch (err: any) {
-      if (!active) return;
-      loading.value = false;
-      error.value = err instanceof Error ? err : new Error(String(err));
-    }
-  };
-
-  void refresh();
-  const unsubTable = client.events.on(tableName, () => {
-    void refresh();
-  });
-  const unsubReset = client.events.on('reset', () => {
-    void refresh();
-  });
-
-  const dispose = () => {
-    active = false;
-    unsubTable();
-    unsubReset();
-  };
+  const { refresh, dispose } = subscribeLiveQuery<T>(
+    client,
+    tableName,
+    options,
+    (state) => {
+      data.value = state.data;
+      loading.value = state.loading;
+      error.value = state.error;
+    },
+  );
 
   vue.onUnmounted?.(dispose);
 
@@ -80,20 +63,9 @@ export function useSyncStatus(
     isPulling: false,
     pendingCount: 0,
   });
-  void client
-    .getMetrics()
-    .then((m) => {
-      status.value = {
-        isOnline: m.isOnline,
-        isPushing: m.isPushing,
-        isPulling: m.isPulling,
-        pendingCount: m.outboxPendingCount,
-      };
-    })
-    .catch(() => {});
-  const unsub = client.events.on('sync:status', (next: SyncStatusEvent) => {
+  const dispose = subscribeSyncStatus(client, (next) => {
     status.value = next;
   });
-  vue.onUnmounted?.(unsub);
-  return { status, dispose: unsub };
+  vue.onUnmounted?.(dispose);
+  return { status, dispose };
 }
