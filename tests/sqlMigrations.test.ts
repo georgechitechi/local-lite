@@ -111,10 +111,10 @@ describe('SQL migration generator', () => {
       dryRun: true,
     });
     expect(second.up).toEqual([
-      'ALTER TABLE `properties` ADD COLUMN `location` VARCHAR(255) NULL;',
+      'ALTER TABLE `properties` ADD COLUMN IF NOT EXISTS `location` VARCHAR(255) NULL;',
     ]);
     expect(second.down).toEqual([
-      'ALTER TABLE `properties` DROP COLUMN `location`;',
+      'ALTER TABLE `properties` DROP COLUMN IF EXISTS `location`;',
     ]);
   });
 
