@@ -381,9 +381,15 @@ export function generateSqlDiff(
             ? { ...col, nullable: true, defaultSql: 'NULL' }
             : col;
         up.push(
-          `ALTER TABLE ${qTable} ADD COLUMN ${formatColumnDef(colName, safeCol, dialect)};`,
+          dialect === 'mysql'
+            ? `ALTER TABLE ${qTable} ADD COLUMN IF NOT EXISTS ${formatColumnDef(colName, safeCol, dialect)};`
+            : `ALTER TABLE ${qTable} ADD COLUMN ${formatColumnDef(colName, safeCol, dialect)};`,
         );
-        down.unshift(`ALTER TABLE ${qTable} DROP COLUMN ${quoteIdent(colName, dialect)};`);
+        down.unshift(
+          dialect === 'mysql'
+            ? `ALTER TABLE ${qTable} DROP COLUMN IF EXISTS ${quoteIdent(colName, dialect)};`
+            : `ALTER TABLE ${qTable} DROP COLUMN ${quoteIdent(colName, dialect)};`,
+        );
       } else if (prevCol.sqlType !== col.sqlType) {
         warnings.push(
           `Column type changed for ${tableName}.${colName} (${prevCol.sqlType} -> ${col.sqlType}); review manually before altering.`,
@@ -585,7 +591,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
     if (!table) return;
 
     for (const clause of splitTopLevel(alterMatch[2], ',')) {
-      const addCol = clause.match(/^ADD\s+(?:COLUMN\s+)?[`"]?(\w+)[`"]?\s+([\s\S]+)$/i);
+      const addCol = clause.match(
+        /^ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?\s+([\s\S]+)$/i,
+      );
       if (addCol && !/^(?:UNIQUE|INDEX|KEY|CONSTRAINT|PRIMARY|FOREIGN)\b/i.test(addCol[1])) {
         table.columns[addCol[1]] = {
           sqlType: parseSqlType(addCol[2]),
@@ -594,7 +602,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
         };
         continue;
       }
-      const dropCol = clause.match(/^DROP\s+(?:COLUMN\s+)?[`"]?(\w+)[`"]?$/i);
+      const dropCol = clause.match(
+        /^DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?[`"]?(\w+)[`"]?$/i,
+      );
       if (dropCol) {
         delete table.columns[dropCol[1]];
         continue;
