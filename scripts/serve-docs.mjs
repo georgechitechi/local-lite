@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const docsDir = path.resolve(__dirname, '..', 'docs');
-const port = Number(process.env.PORT) || 3000;
+const port = process.env.PORT !== undefined ? Number(process.env.PORT) : 3000;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -49,6 +49,23 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, () => {
-  console.log(`Docs server running at http://localhost:${port}`);
+server.once('listening', () => {
+  const address = server.address();
+  const actualPort = typeof address === 'object' && address ? address.port : port;
+  console.log(`Docs server running at http://localhost:${actualPort}`);
 });
+
+function startServer(targetPort, allowFallback) {
+  server.once('error', (err) => {
+    if (err.code === 'EADDRINUSE' && allowFallback) {
+      startServer(targetPort + 1, targetPort + 1 < port + 10);
+      return;
+    }
+    console.error(`Failed to start docs server on port ${targetPort}: ${err.message}`);
+    process.exitCode = 1;
+  });
+
+  server.listen(targetPort);
+}
+
+startServer(port, process.env.PORT === undefined);
