@@ -16,7 +16,7 @@ Implement `RemoteDBAdapter` (exported from `local-lite`, with `SyncOperation`, `
   - Return a **complete** batch of everything changed after `sinceTimestamp`, through the timestamp you report. Reject on partial failure; never return a truncated page as complete, or the checkpoint will skip data.
   - Apply `scope` filtering server-side when provided.
 - `subscribeToLiveChanges(callback, scope?): () => void`
-  - **Must return a cleanup function** (a no-op if no listener was created). Returning `void` is a breaking change since 0.0.30.
+  - **Must return a cleanup function** (a no-op if no listener was created). Returning `void` is not supported.
   - Live events do not advance the durable pull checkpoint.
   - `scope` may be an object or a (possibly async) function. If setup is async, guard against cleanup running before setup finishes (generation counter or cancelled flag) so listeners do not leak.
 - `setSyncScope?(scope)`: optional; implement it if the backend filters by scope, and re-subscribe live listeners when scope changes.
