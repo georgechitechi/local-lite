@@ -359,7 +359,6 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       .replace(/^functions\//, '')
       .replace('contracts:sendRenewalReminder', 'contracts/renewal')
       .replace('contracts:sendTerminationNotice', 'contracts/termination')
-      .replace('payments:initiateDaraja', 'payments/stk')
       .replace('tenantSelfService:createSelfServiceLink', 'tenant-self-service')
       .replace('email:send', 'email')
       .replace('convexBackups:listMyBackups', 'backups/list')

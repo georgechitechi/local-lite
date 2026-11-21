@@ -25,9 +25,6 @@ export interface PaymentInitiateInput {
   provider: PaymentProviderId;
   amount: number;
   currency: string;
-  businessId?: string;
-  tenantId?: string;
-  contractId?: string;
   userId?: string;
   phone?: string;
   email?: string;
@@ -44,7 +41,6 @@ export interface PaymentInitiateResult {
   actionId: string;
   duplicate?: boolean;
   providerRef?: string;
-  merchantRequestId?: string;
   checkoutUrl?: string;
   customerMessage?: string;
   raw?: unknown;
@@ -54,7 +50,6 @@ export interface PaymentWebhookResult {
   verified: boolean;
   actionId?: string;
   providerRef?: string;
-  merchantRequestId?: string;
   receiptNumber?: string;
   amount?: number;
   currency?: string;
@@ -90,15 +85,11 @@ export interface PaymentReservationRecord {
   provider: PaymentProviderId;
   currency: string;
   amount: number;
-  businessId?: string;
   userId?: string;
-  tenantId?: string;
-  contractId?: string;
   phone?: string;
   email?: string;
   callbackHash?: string;
   providerRef?: string;
-  merchantRequestId?: string;
   customerMessage?: string;
   status: PaymentStatus;
   error?: string | null;
@@ -120,7 +111,6 @@ export interface PaymentReservationStore {
     actionId: string,
     update: {
       providerRef?: string;
-      merchantRequestId?: string;
       customerMessage?: string;
     },
   ) => Promise<void>;

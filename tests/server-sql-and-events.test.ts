@@ -251,19 +251,17 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
         if (sql.startsWith('INSERT INTO')) {
           rows.set(params[0], {
             action_id: params[0],
-            business_id: params[1],
-            user_id: params[2],
-            tenant_id: params[3],
-            contract_id: params[4],
-            provider: params[5],
-            currency: params[6],
-            phone: params[7],
-            amount: params[8],
-            callback_hash: params[9],
-            status: params[10],
+            user_id: params[1],
+            provider: params[2],
+            currency: params[3],
+            phone: params[4],
+            email: params[5],
+            amount: params[6],
+            callback_hash: params[7],
+            status: params[8],
           });
         } else if (sql.includes('SET status = ?, checkout_id = ?')) {
-          const r = rows.get(params[4]);
+          const r = rows.get(params[3]);
           if (r) {
             r.status = params[0];
             r.checkout_id = params[1];
@@ -288,9 +286,6 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
       provider: 'stripe',
       amount: 500,
       currency: 'USD',
-      businessId: 'b1',
-      tenantId: 't1',
-      contractId: 'c1',
       userId: 'u1',
       callbackHash: 'h1',
       status: 'initializing',
