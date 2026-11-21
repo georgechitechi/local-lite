@@ -4,7 +4,6 @@ export type ApiMethod =
 export * from './email.js';
 export * from './sync.js';
 export * from './auth.js';
-export * from './dashboard.js';
 export * from './sqlDialect.js';
 export * from './sqlSyncStorage.js';
 export * from './syncEvents.js';
