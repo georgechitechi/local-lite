@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { SqlExecutor } from '../server/sqlDialect.js';
 import type { PaymentRegistry } from './registry.js';
 import type {
   PaymentInitiateInput,
@@ -67,6 +68,97 @@ export function createMemoryPaymentStore(): PaymentReservationStore {
   };
 }
 
+/**
+ * SQL-backed PaymentReservationStore for MySQL and PostgreSQL servers.
+ */
+export function createSqlPaymentStore(
+  executor: SqlExecutor,
+  tableName = '_payment_requests',
+): PaymentReservationStore {
+  const mapRow = (row: any): PaymentReservationRecord | null => {
+    if (!row) return null;
+    return {
+      actionId: String(row.action_id),
+      provider: (row.provider || 'daraja') as any,
+      amount: Number(row.amount),
+      currency: String(row.currency || 'KES'),
+      businessId: String(row.business_id),
+      tenantId: String(row.tenant_id),
+      contractId: String(row.contract_id),
+      userId: String(row.user_id),
+      phone: row.phone ? String(row.phone) : undefined,
+      callbackHash: String(row.callback_hash),
+      status: row.status,
+      providerRef: row.checkout_id ? String(row.checkout_id) : undefined,
+      merchantRequestId: row.merchant_id ? String(row.merchant_id) : undefined,
+      customerMessage: row.customer_message
+        ? String(row.customer_message)
+        : undefined,
+      error: row.error ? String(row.error) : null,
+    };
+  };
+
+  return {
+    async findByActionId(actionId) {
+      const rows = await executor.query(
+        `SELECT * FROM ${tableName} WHERE action_id = ? LIMIT 1`,
+        [actionId],
+      );
+      return mapRow(rows[0]);
+    },
+    async findByCallbackHash(callbackHash) {
+      const rows = await executor.query(
+        `SELECT * FROM ${tableName} WHERE callback_hash = ? LIMIT 1`,
+        [callbackHash],
+      );
+      return mapRow(rows[0]);
+    },
+    async findByProviderRef(providerRef) {
+      const rows = await executor.query(
+        `SELECT * FROM ${tableName} WHERE checkout_id = ? OR action_id = ? LIMIT 1`,
+        [providerRef, providerRef],
+      );
+      return mapRow(rows[0]);
+    },
+    async reserve(record) {
+      await executor.execute(
+        `INSERT INTO ${tableName} (action_id, business_id, user_id, tenant_id, contract_id, provider, currency, phone, amount, callback_hash, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          record.actionId,
+          record.businessId,
+          record.userId,
+          record.tenantId,
+          record.contractId,
+          record.provider,
+          record.currency,
+          record.phone || '',
+          record.amount,
+          record.callbackHash,
+          record.status,
+        ],
+      );
+    },
+    async markPending(actionId, update) {
+      await executor.execute(
+        `UPDATE ${tableName} SET status = ?, checkout_id = ?, merchant_id = ?, customer_message = ? WHERE action_id = ?`,
+        [
+          'pending',
+          update.providerRef || actionId,
+          update.merchantRequestId || null,
+          update.customerMessage || '',
+          actionId,
+        ],
+      );
+    },
+    async markFinal(actionId, status, error = null) {
+      await executor.execute(
+        `UPDATE ${tableName} SET status = ?, error = ? WHERE action_id = ?`,
+        [status, error, actionId],
+      );
+    },
+  };
+}
+
 export interface PaymentServerHandlerOptions {
   registry: PaymentRegistry;
   store: PaymentReservationStore;
@@ -75,6 +167,10 @@ export interface PaymentServerHandlerOptions {
     reservation: PaymentReservationRecord,
     webhook: PaymentWebhookResult,
   ) => Promise<void>;
+  onReconcile?: (
+    reservation: PaymentReservationRecord,
+    request: Request,
+  ) => Promise<Response>;
 }
 
 /**
@@ -84,7 +180,7 @@ export interface PaymentServerHandlerOptions {
 export function createPaymentServerHandler(
   options: PaymentServerHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  const { registry, store, callbackBaseUrl, onCompleted } = options;
+  const { registry, store, callbackBaseUrl, onCompleted, onReconcile } = options;
 
   async function handleInitiate(request: Request): Promise<Response> {
     const body: any = await request.json();
@@ -295,13 +391,93 @@ export function createPaymentServerHandler(
     return Response.json({ ResultCode: 0, ResultDesc: 'Accepted' });
   }
 
+  async function handleOptions(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    let currency = url.searchParams.get('currency') || undefined;
+    let country = url.searchParams.get('country') || undefined;
+    if (request.method === 'POST') {
+      const body: any = await request.json().catch(() => null);
+      currency = body?.currency || currency;
+      country = body?.country || country;
+    }
+    return Response.json({
+      options: registry.getAvailableOptions({
+        currency,
+        country,
+        isOnline: true,
+      }),
+    });
+  }
+
+  async function handleStatus(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const ref =
+      url.searchParams.get('checkoutRequestId') ||
+      url.searchParams.get('actionId') ||
+      '';
+    if (!ref) {
+      return Response.json(
+        { error: 'checkoutRequestId is required.' },
+        { status: 400 },
+      );
+    }
+    const row =
+      (store.findByProviderRef ? await store.findByProviderRef(ref) : null) ??
+      (await store.findByActionId(ref));
+    if (!row) {
+      return Response.json({ status: 'pending' });
+    }
+    return Response.json({
+      status: row.status,
+      error: row.error || undefined,
+      amount: row.amount,
+    });
+  }
+
+  async function handleReconcile(request: Request): Promise<Response> {
+    if (!onReconcile) {
+      return Response.json(
+        { error: 'Payment reconciliation is not configured.' },
+        { status: 501 },
+      );
+    }
+    const body: any = await request.json().catch(() => null);
+    const actionId = body?.actionId;
+    if (typeof actionId !== 'string' || !actionId || actionId.length > 128) {
+      return Response.json(
+        { error: 'Valid actionId is required.' },
+        { status: 400 },
+      );
+    }
+    const reservation = await store.findByActionId(actionId);
+    if (!reservation) {
+      return Response.json(
+        { error: 'Payment request not found.' },
+        { status: 404 },
+      );
+    }
+    return await onReconcile(reservation, request);
+  }
+
   return async (request: Request): Promise<Response> => {
+    const pathname = new URL(request.url).pathname;
+    if (pathname.endsWith('/options')) {
+      if (!['GET', 'POST'].includes(request.method)) {
+        return Response.json({ error: 'Method Not Allowed' }, { status: 405 });
+      }
+      return handleOptions(request);
+    }
+    if (pathname.endsWith('/status') && request.method === 'GET') {
+      return handleStatus(request);
+    }
     if (request.method !== 'POST') {
       return Response.json({ error: 'Method Not Allowed' }, { status: 405 });
     }
-    const pathname = new URL(request.url).pathname;
     if (pathname.endsWith('/callback')) {
       return handleCallback(request);
+    }
+    if (pathname.endsWith('/reconcile')) {
+      return handleReconcile(request);
     }
     return handleInitiate(request);
   };
