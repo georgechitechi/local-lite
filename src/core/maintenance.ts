@@ -90,7 +90,7 @@ export class DatabaseMaintenance {
     }
 
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     const statusPlaceholders = statuses.map(() => '?').join(', ');
     conditions.push(`status IN (${statusPlaceholders})`);
@@ -122,7 +122,7 @@ export class DatabaseMaintenance {
       );
       if (selectOldest.length === 0) return 0;
 
-      const ids = selectOldest.map((r: any) => r.id);
+      const ids = selectOldest.map((r) => r.id);
       const idPlaceholders = ids.map(() => '?').join(', ');
       await this.db.execute(
         `DELETE FROM sync_outbox WHERE id IN (${idPlaceholders})`,
@@ -158,7 +158,7 @@ export class DatabaseMaintenance {
       const masterRows = await this.db.execute(
         `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'`,
       );
-      tableNames = masterRows.map((r: any) => r.name);
+      tableNames = masterRows.map((r) => String(r.name));
     } catch {
       tableNames = this.getKnownTables();
     }

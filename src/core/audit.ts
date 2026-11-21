@@ -7,8 +7,8 @@ export interface AuditEntry {
   tableName: string;
   rowId: string;
   operation: SyncOp;
-  before: Record<string, any> | null;
-  after: Record<string, any> | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
   actor?: string | null;
   createdAt: number;
   undone: boolean;
@@ -67,8 +67,8 @@ export class AuditManager {
     tableName: string;
     rowId: string;
     operation: SyncOp;
-    before?: Record<string, any> | null;
-    after?: Record<string, any> | null;
+    before?: Record<string, unknown> | null;
+    after?: Record<string, unknown> | null;
     actor?: string | null;
     createdAt?: number;
   }): Promise<AuditEntry> {
@@ -110,7 +110,7 @@ export class AuditManager {
   }): Promise<AuditEntry[]> {
     await this.initialize();
     const where: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (options?.tableName) {
       where.push('table_name = ?');
       params.push(options.tableName);
@@ -131,14 +131,14 @@ export class AuditManager {
       `SELECT * FROM _audit_log ${whereSql} ORDER BY created_at DESC, rowid DESC ${limitSql}`,
       params,
     );
-    return rows.map((r: any) => ({
-      id: r.id,
-      tableName: r.table_name,
-      rowId: r.row_id,
+    return rows.map((r) => ({
+      id: String(r.id),
+      tableName: String(r.table_name),
+      rowId: String(r.row_id),
       operation: r.operation as SyncOp,
-      before: r.before_json ? JSON.parse(r.before_json) : null,
-      after: r.after_json ? JSON.parse(r.after_json) : null,
-      actor: r.actor ?? null,
+      before: r.before_json ? JSON.parse(String(r.before_json)) : null,
+      after: r.after_json ? JSON.parse(String(r.after_json)) : null,
+      actor: r.actor ? String(r.actor) : null,
       createdAt: Number(r.created_at),
       undone: r.undone === 1 || r.undone === true,
     }));

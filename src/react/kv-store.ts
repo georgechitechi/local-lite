@@ -8,7 +8,7 @@ import { LocalFirstClient } from '../core/client.js';
  * Example:
  * const [theme, setTheme, loading] = useKVStore(client, 'theme', 'light');
  */
-export function useKVStore<T = any>(
+export function useKVStore<T = unknown>(
   client: LocalFirstClient | null | undefined,
   key: string,
   defaultValue?: T,
@@ -39,11 +39,14 @@ export function useKVStore<T = any>(
 
     load();
 
-    const unsubscribe = client.events.on('_local_kv_store', (e: any) => {
-      if (!e || e.key === key || !e.key) {
-        load();
-      }
-    });
+    const unsubscribe = client.events.on(
+      '_local_kv_store',
+      (e?: { key?: string }) => {
+        if (!e || e.key === key || !e.key) {
+          load();
+        }
+      },
+    );
 
     return () => {
       isMounted = false;

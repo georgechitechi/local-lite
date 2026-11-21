@@ -15,7 +15,7 @@ export interface UseSearchOptions extends SearchQueryOptions {
  * Example:
  * const { results, loading, error } = useSearch(client, 'properties', searchQuery);
  */
-export function useSearch<T = any>(
+export function useSearch<T = Record<string, unknown>>(
   client: LocalFirstClient | null | undefined,
   table: string,
   queryText: string,
@@ -44,7 +44,7 @@ export function useSearch<T = any>(
           setResults(res);
           setError(null);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
           setError(err instanceof Error ? err : new Error(String(err)));
         }
