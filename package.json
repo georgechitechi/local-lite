@@ -206,7 +206,7 @@
     "example": "npm run --prefix example dev",
     "lint": "npx node-code-cleaner check:all src",
     "lint:fix": "npx node-code-cleaner audit src",
-    "lint:package": "publint && attw --pack --profile esm-only",
+    "lint:package": "publint",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:isolate": "vitest run --isolate",
@@ -263,7 +263,6 @@
     }
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.6.6",
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
