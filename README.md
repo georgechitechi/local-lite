@@ -62,6 +62,12 @@ remain configurable; the existing default conflict strategy is last-write-wins.
 For an application-level upgrade checklist or AI-assisted code review (including `v3.0.0` breaking changes), see the
 [Breaking Changes and AI Code-Review Guide](./docs/breaking-changes.md).
 
+### What's new in 3.1.0
+
+- **ESM-only & Node 24+:** Native ESM (`"type": "module"`, `"sideEffects": false`) targeting `node >= 24.0.0` for cleaner tree-shaking and a smaller install footprint.
+- **Stricter TypeScript types:** Public hook and adapter generics (`useLiveQuery`, `liveQuery`, `createLiveQuery`, `useSearch`, `useSession`, `useKVStore`, `PostgresExecutor`, `FieldEncryptor`, `AuditEntry`) now default to `Record<string, unknown>` / `unknown` instead of `any`.
+- **Trimmed surface:** Removed the standalone web `dashboard` handler and CLI commands (`createDashboardHandler`, `local-lite dashboard`, `local-lite dev`).
+
 ### What's new in 3.0.0
 
 - **Subpath-only feature & adapter imports:** Root `'local-lite'` exports core, config, schema, and utils; adapters, React/Vue/Svelte/Solid bindings, auth, backups, payments, testing, and presence live at their dedicated `local-lite/<subpath>` entry points.

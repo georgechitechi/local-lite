@@ -1,6 +1,6 @@
 # Breaking Changes and AI Code-Review Guide
 
-This guide records breaking changes introduced in `local-lite` (`3.0.0`, `2.0.0`, and `0.0.30`) and gives
+This guide records breaking changes introduced in `local-lite` (`3.1.0`, `3.0.0`, `2.0.0`, and `0.0.30`) and gives
 an actionable checklist for reviewing an application or repository update.
 Use it when upgrading to this version or when asking an AI assistant to check
 whether dependent code needs changes.
@@ -21,6 +21,24 @@ This guide ships with the package at
 `node_modules/local-lite/skills/local-lite-upgrade/SKILL.md` (setup and custom
 adapter skills live beside it); copy the folders
 into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
+
+## Changes in 3.1.0
+
+### 1. ESM-only package & Node 24+ requirement
+
+- `local-lite` now ships native ESM (`"type": "module"`, `"sideEffects": false`) with `"engines": { "node": ">=24.0.0" }`.
+- Use ESM `import` (or Node 24's native `require(esm)` for synchronous modules). Legacy CJS-only builds on Node < 24 are no longer supported.
+
+### 2. Removed web dashboard & CLI commands
+
+- Removed `createDashboardHandler` and `DashboardHandlerOptions` from `local-lite/server`.
+- Removed `npx local-lite dashboard` and `npx local-lite dev` from the CLI (`install-skills` and `db:generate` remain).
+
+### 3. Stricter TypeScript generic defaults (`unknown` / `Record<string, unknown>`)
+
+- Generic defaults on `useLiveQuery`, `liveQuery`, `createLiveQuery`, `subscribeLiveQuery`, `useSearch`, `useSession`, `useKVStore`, `PostgresQueryResult`, and `PostgresExecutor` changed from `any` to `Record<string, unknown>` (or `unknown`).
+- `FieldEncryptor.decryptValue()` now returns `Promise<unknown>`, `FieldEncryptor.encryptValue()` returns `Promise<string | null | undefined>`, and `AuditEntry.before` / `after` use `Record<string, unknown> | null`.
+- Pass an explicit type argument (e.g., `useLiveQuery<Todo>(client, 'todos')`) or narrow `unknown` values when upgrading.
 
 ## Changes in 3.0.0
 
