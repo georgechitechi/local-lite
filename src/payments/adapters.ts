@@ -1,19 +1,11 @@
 import type {
+  PaymentContext,
   PaymentInitiateInput,
   PaymentInitiateResult,
   PaymentProviderAdapter,
+  PaymentProviderId,
   PaymentWebhookResult,
 } from './types.js';
-
-function toBase64(value: string): string {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(value, 'utf8').toString('base64');
-  }
-  if (typeof btoa === 'function') {
-    return btoa(value);
-  }
-  throw new Error('No base64 encoder available in this runtime.');
-}
 
 function timingSafeEqualHex(a: string, b: string): boolean {
   const left = a.trim().toLowerCase();
@@ -51,13 +43,48 @@ async function hmacHex(
     .join('');
 }
 
-export function formatKenyanPhone(phone: string | number): string {
-  if (!phone) return '';
-  const cleaned = String(phone).replace(/[^\d]/g, '');
-  if (cleaned.startsWith('254')) return cleaned;
-  if (cleaned.startsWith('0')) return `254${cleaned.slice(1)}`;
-  if (cleaned.length === 9) return `254${cleaned}`;
-  return cleaned;
+export interface GenericPaymentAdapterOptions {
+  id: PaymentProviderId;
+  label: string;
+  description?: string;
+  supportedCurrencies?: string[] | '*';
+  supportedCountries?: string[] | '*';
+  requiresOnline?: boolean;
+  supports?: (context: PaymentContext) => boolean;
+  initiate?: (input: PaymentInitiateInput) => Promise<PaymentInitiateResult>;
+  verifyWebhook?: (
+    request: Request,
+    context?: { rawBody?: string },
+  ) => Promise<PaymentWebhookResult>;
+}
+
+/**
+ * Generic payment adapter factory. Supports offline/manual recording when `initiate`
+ * is omitted, or any custom/regional online provider when `initiate` is supplied.
+ */
+export function createPaymentAdapter(
+  options: GenericPaymentAdapterOptions,
+): PaymentProviderAdapter {
+  return {
+    id: options.id,
+    label: options.label,
+    description: options.description,
+    supportedCurrencies: options.supportedCurrencies ?? '*',
+    supportedCountries: options.supportedCountries ?? '*',
+    requiresOnline: options.requiresOnline ?? Boolean(options.initiate),
+    supports: options.supports,
+    initiate:
+      options.initiate ??
+      (async (input: PaymentInitiateInput): Promise<PaymentInitiateResult> => ({
+        success: true,
+        status: 'completed',
+        provider: options.id,
+        actionId: input.actionId,
+        providerRef: input.actionId,
+        customerMessage: 'Recorded locally.',
+      })),
+    verifyWebhook: options.verifyWebhook,
+  };
 }
 
 export interface ManualPaymentAdapterOptions {
@@ -73,9 +100,8 @@ export interface ManualPaymentAdapterOptions {
 export function createManualPaymentAdapter(
   options: ManualPaymentAdapterOptions = {},
 ): PaymentProviderAdapter {
-  const id = options.id ?? 'manual';
-  return {
-    id,
+  return createPaymentAdapter({
+    id: options.id ?? 'manual',
     label: options.label ?? 'Manual / Offline Payment',
     description:
       options.description ??
@@ -83,218 +109,7 @@ export function createManualPaymentAdapter(
     supportedCurrencies: options.supportedCurrencies ?? '*',
     supportedCountries: '*',
     requiresOnline: false,
-    async initiate(
-      input: PaymentInitiateInput,
-    ): Promise<PaymentInitiateResult> {
-      return {
-        success: true,
-        status: 'completed',
-        provider: id,
-        actionId: input.actionId,
-        providerRef: input.actionId,
-        customerMessage: 'Recorded locally.',
-      };
-    },
-  };
-}
-
-export interface DarajaAdapterOptions {
-  consumerKey: string;
-  consumerSecret: string;
-  shortcode: string;
-  passkey: string;
-  callbackUrl: string;
-  env?: 'sandbox' | 'live' | 'production';
-  apiUrl?: string;
-  partyB?: string;
-  transactionType?: string;
-  fetch?: typeof fetch;
-}
-
-/**
- * Safaricom M-Pesa Daraja STK Push adapter (Kenya / KES).
- */
-export function createDarajaAdapter(
-  options: DarajaAdapterOptions,
-): PaymentProviderAdapter {
-  const fetchImpl = options.fetch ?? globalThis.fetch;
-  const baseUrl = (
-    options.apiUrl?.trim() ||
-    (options.env === 'live' || options.env === 'production'
-      ? 'https://api.safaricom.co.ke'
-      : 'https://sandbox.safaricom.co.ke')
-  ).replace(/\/+$/, '');
-
-  return {
-    id: 'daraja',
-    label: 'M-Pesa (Safaricom Daraja)',
-    description: 'Instant STK Push prompt to a Kenyan M-Pesa number.',
-    supportedCurrencies: ['KES'],
-    supportedCountries: ['KE'],
-    requiresOnline: true,
-    async initiate(
-      input: PaymentInitiateInput,
-    ): Promise<PaymentInitiateResult> {
-      const phone = formatKenyanPhone(input.phone ?? '');
-      if (!/^254\d{9}$/.test(phone)) {
-        throw new Error(
-          'Valid Kenyan phone number (254XXXXXXXXX) is required.',
-        );
-      }
-      const amount = Math.round(input.amount);
-      if (!Number.isInteger(amount) || amount < 1 || amount > 250000) {
-        throw new Error(
-          'M-Pesa amount must be an integer between 1 and 250000.',
-        );
-      }
-      const callbackUrl = (input.callbackUrl ?? options.callbackUrl).trim();
-      if (!callbackUrl.startsWith('https://')) {
-        throw new Error('Daraja callbackUrl must use HTTPS.');
-      }
-
-      const authHeader = `Basic ${toBase64(
-        `${options.consumerKey}:${options.consumerSecret}`,
-      )}`;
-      const oauthRes = await fetchImpl(
-        `${baseUrl}/oauth/v1/generate?grant_type=client_credentials`,
-        {
-          method: 'GET',
-          headers: { Authorization: authHeader },
-        },
-      );
-      if (!oauthRes.ok) {
-        const text = await oauthRes.text();
-        throw new Error(`Daraja OAuth failed (${oauthRes.status}): ${text}`);
-      }
-      const oauthJson: any = await oauthRes.json();
-      const accessToken = oauthJson?.access_token;
-      if (!accessToken) {
-        throw new Error('Daraja OAuth did not return an access_token.');
-      }
-
-      const timestamp = new Date(Date.now() + 3 * 3600000)
-        .toISOString()
-        .replace(/[-:TZ.]/g, '')
-        .slice(0, 14);
-      const password = toBase64(
-        `${options.shortcode}${options.passkey}${timestamp}`,
-      );
-
-      const stkRes = await fetchImpl(
-        `${baseUrl}/mpesa/stkpush/v1/processrequest`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            BusinessShortCode: options.shortcode,
-            Password: password,
-            Timestamp: timestamp,
-            TransactionType:
-              options.transactionType?.trim() || 'CustomerPayBillOnline',
-            Amount: amount,
-            PartyA: phone,
-            PartyB: options.partyB?.trim() || options.shortcode,
-            PhoneNumber: phone,
-            CallBackURL: callbackUrl,
-            AccountReference: (input.contractId || input.actionId).slice(0, 12),
-            TransactionDesc: input.description || 'Payment',
-          }),
-        },
-      );
-
-      const data: any = await stkRes.json();
-      if (
-        !stkRes.ok ||
-        data?.ResponseCode !== '0' ||
-        !data?.CheckoutRequestID ||
-        !data?.MerchantRequestID
-      ) {
-        throw new Error(
-          data?.errorMessage ||
-            data?.ResponseDescription ||
-            'Daraja did not confirm payment initiation.',
-        );
-      }
-
-      return {
-        success: true,
-        status: 'pending',
-        provider: 'daraja',
-        actionId: input.actionId,
-        providerRef: data.CheckoutRequestID,
-        merchantRequestId: data.MerchantRequestID,
-        customerMessage: data.CustomerMessage || '',
-        raw: data,
-      };
-    },
-    async verifyWebhook(request: Request): Promise<PaymentWebhookResult> {
-      const payload: any = await request.json();
-      const callback = payload?.Body?.stkCallback;
-      if (!callback || !Number.isInteger(callback.ResultCode)) {
-        return {
-          verified: false,
-          status: 'failed',
-          error: 'Invalid Daraja callback payload.',
-          rawPayload: payload,
-        };
-      }
-
-      if (callback.ResultCode !== 0) {
-        return {
-          verified: true,
-          providerRef: callback.CheckoutRequestID,
-          merchantRequestId: callback.MerchantRequestID,
-          status: 'failed',
-          error: String(callback.ResultDesc || 'Payment failed'),
-          rawPayload: callback,
-        };
-      }
-
-      const items = callback.CallbackMetadata?.Item;
-      if (!Array.isArray(items)) {
-        return {
-          verified: false,
-          providerRef: callback.CheckoutRequestID,
-          merchantRequestId: callback.MerchantRequestID,
-          status: 'failed',
-          error: 'Missing Daraja callback metadata.',
-          rawPayload: callback,
-        };
-      }
-
-      const readItem = (name: string) =>
-        items.find((entry: any) => entry?.Name === name)?.Value;
-      const receipt = readItem('MpesaReceiptNumber');
-      const amount = Number(readItem('Amount'));
-      const phone = String(readItem('PhoneNumber') ?? '');
-
-      if (typeof receipt !== 'string' || !receipt || !Number.isFinite(amount)) {
-        return {
-          verified: false,
-          providerRef: callback.CheckoutRequestID,
-          merchantRequestId: callback.MerchantRequestID,
-          status: 'failed',
-          error: 'Incomplete Daraja callback metadata.',
-          rawPayload: callback,
-        };
-      }
-
-      return {
-        verified: true,
-        providerRef: callback.CheckoutRequestID,
-        merchantRequestId: callback.MerchantRequestID,
-        receiptNumber: receipt,
-        amount,
-        currency: 'KES',
-        phone,
-        status: 'completed',
-        rawPayload: callback,
-      };
-    },
-  };
+  });
 }
 
 export interface PaystackAdapterOptions {

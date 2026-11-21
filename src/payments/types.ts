@@ -1,5 +1,5 @@
 export type PaymentProviderId =
-  'daraja' | 'stripe' | 'paystack' | 'flutterwave' | 'manual' | (string & {});
+  'stripe' | 'paystack' | 'flutterwave' | 'manual' | (string & {});
 
 export type PaymentStatus =
   'initializing' | 'pending' | 'completed' | 'failed' | 'unknown';

@@ -79,9 +79,9 @@ export function createSqlPaymentStore(
     if (!row) return null;
     return {
       actionId: String(row.action_id),
-      provider: (row.provider || 'daraja') as any,
+      provider: (row.provider || 'manual') as PaymentReservationRecord['provider'],
       amount: Number(row.amount),
-      currency: String(row.currency || 'KES'),
+      currency: String(row.currency || ''),
       businessId: String(row.business_id),
       tenantId: String(row.tenant_id),
       contractId: String(row.contract_id),
@@ -186,7 +186,7 @@ export function createPaymentServerHandler(
   async function handleInitiate(request: Request): Promise<Response> {
     const body: any = await request.json();
     const actionId = body?.actionId;
-    const provider = body?.provider || 'daraja';
+    const provider = body?.provider || 'manual';
     const amount = Number(body?.amount);
     const currency = String(body?.currency || '')
       .trim()
@@ -247,11 +247,11 @@ export function createPaymentServerHandler(
     const callbackToken = createCallbackToken();
     const callbackUrl = callbackBaseUrl
       ? (() => {
-          const url = new URL(callbackBaseUrl);
-          url.searchParams.set('callback_token', callbackToken);
-          url.searchParams.set('provider', provider);
-          return url.toString();
-        })()
+        const url = new URL(callbackBaseUrl);
+        url.searchParams.set('callback_token', callbackToken);
+        url.searchParams.set('provider', provider);
+        return url.toString();
+      })()
       : body?.callbackUrl;
 
     await store.reserve({
@@ -305,7 +305,7 @@ export function createPaymentServerHandler(
           'failed',
           error instanceof Error ? error.message : 'Initiation failed',
         )
-        .catch(() => {});
+        .catch(() => { });
       return Response.json(
         {
           error:
@@ -328,7 +328,7 @@ export function createPaymentServerHandler(
     }
 
     const providerId =
-      url.searchParams.get('provider') || reservation?.provider || 'daraja';
+      url.searchParams.get('provider') || reservation?.provider || '';
     const adapter = registry.getProvider(providerId);
     if (!adapter?.verifyWebhook) {
       return Response.json(
@@ -366,7 +366,7 @@ export function createPaymentServerHandler(
       if (
         typeof webhook.amount === 'number' &&
         Math.round(webhook.amount * 100) !==
-          Math.round(reservation.amount * 100)
+        Math.round(reservation.amount * 100)
       ) {
         return Response.json(
           { error: 'Callback amount mismatch.' },

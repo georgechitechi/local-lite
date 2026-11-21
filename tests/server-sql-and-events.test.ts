@@ -179,16 +179,16 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
     const inserted: any[] = [];
     const executor: SqlExecutor = {
       dialect: 'mysql',
-      async query(sql: string) {
-        if (sql.includes('_server_sync_clock')) return [{ checkpoint: 50 }];
-        if (sql.includes('COALESCE(MAX')) return [{ checkpoint: 50 }];
+      async query<T = unknown>(sql: string): Promise<T[]> {
+        if (sql.includes('_server_sync_clock')) return [{ checkpoint: 50 }] as T[];
+        if (sql.includes('COALESCE(MAX')) return [{ checkpoint: 50 }] as T[];
         return inserted.map((row) => ({
           table_name: row[0],
           row_id: row[1],
           payload: row[4],
           operation: row[5],
           ts: row[6],
-        }));
+        })) as T[];
       },
       async execute(sql: string, params: any[] = []) {
         if (sql.includes('INSERT INTO')) inserted.push(params);
@@ -285,9 +285,9 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
     const store = createSqlPaymentStore(executor);
     await store.reserve({
       actionId: 'a1',
-      provider: 'daraja',
+      provider: 'stripe',
       amount: 500,
-      currency: 'KES',
+      currency: 'USD',
       businessId: 'b1',
       tenantId: 't1',
       contractId: 'c1',

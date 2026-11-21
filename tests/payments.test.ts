@@ -1,12 +1,11 @@
 import crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createDarajaAdapter,
   createManualPaymentAdapter,
+  createPaymentAdapter,
   createPaymentRegistry,
   createPaystackAdapter,
   createStripeCheckoutAdapter,
-  formatKenyanPhone,
 } from '../src/payments/index.js';
 import {
   createMemoryPaymentStore,
@@ -18,22 +17,28 @@ describe('local-lite/payments', () => {
     const registry = createPaymentRegistry({
       providers: [
         createManualPaymentAdapter(),
-        createDarajaAdapter({
-          consumerKey: 'ck',
-          consumerSecret: 'cs',
-          shortcode: '123456',
-          passkey: 'pk',
-          callbackUrl: 'https://api.example.com/payments/callback',
+        createPaymentAdapter({
+          id: 'eu-sepa',
+          label: 'SEPA Instant',
+          supportedCurrencies: ['EUR'],
+          supportedCountries: ['DE', 'FR'],
+          initiate: async (input) => ({
+            success: true,
+            status: 'pending',
+            provider: 'eu-sepa',
+            actionId: input.actionId,
+            providerRef: `sepa_${input.actionId}`,
+          }),
         }),
         createStripeCheckoutAdapter({ secretKey: 'sk_test_123' }),
         createPaystackAdapter({ secretKey: 'sk_paystack_123' }),
       ],
     });
 
-    const kenyaOnline = registry
-      .getAvailableOptions({ currency: 'KES', country: 'KE', isOnline: true })
+    const euOnline = registry
+      .getAvailableOptions({ currency: 'EUR', country: 'DE', isOnline: true })
       .map((o) => o.id);
-    expect(kenyaOnline).toEqual(['manual', 'daraja', 'stripe', 'paystack']);
+    expect(euOnline).toEqual(['manual', 'eu-sepa', 'stripe']);
 
     const usOnline = registry
       .getAvailableOptions({ currency: 'USD', country: 'US', isOnline: true })
@@ -41,82 +46,82 @@ describe('local-lite/payments', () => {
     expect(usOnline).toEqual(['manual', 'stripe', 'paystack']);
 
     const offline = registry
-      .getAvailableOptions({ currency: 'KES', isOnline: false })
+      .getAvailableOptions({ currency: 'EUR', isOnline: false })
       .map((o) => o.id);
     expect(offline).toEqual(['manual']);
 
     registry.configure({ enabledProviders: ['stripe', 'manual'] });
     const configured = registry
-      .getAvailableOptions({ currency: 'KES', country: 'KE', isOnline: true })
+      .getAvailableOptions({ currency: 'EUR', country: 'DE', isOnline: true })
       .map((o) => o.id);
     expect(configured).toEqual(['manual', 'stripe']);
   });
 
-  it('formats Kenyan phone numbers and handles Daraja initiation + webhook verification', async () => {
-    expect(formatKenyanPhone('0712345678')).toBe('254712345678');
-    expect(formatKenyanPhone('712345678')).toBe('254712345678');
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        Response.json({ access_token: 'daraja_tok_123' }),
-      )
-      .mockResolvedValueOnce(
-        Response.json({
-          ResponseCode: '0',
-          CheckoutRequestID: 'ws_CO_123',
-          MerchantRequestID: 'mr_123',
-          CustomerMessage: 'Success. Request accepted',
-        }),
-      );
-
-    const daraja = createDarajaAdapter({
-      consumerKey: 'ck',
-      consumerSecret: 'cs',
-      shortcode: '123456',
-      passkey: 'pk',
-      callbackUrl: 'https://api.example.com/payments/callback',
-      fetch: mockFetch as unknown as typeof fetch,
+  it('supports generic offline and custom online payment adapters', async () => {
+    const offline = createPaymentAdapter({
+      id: 'cash',
+      label: 'Cash',
     });
+    expect(offline.requiresOnline).toBe(false);
+    const offlineRes = await offline.initiate({
+      actionId: 'act_cash',
+      provider: 'cash',
+      amount: 50,
+      currency: 'USD',
+    });
+    expect(offlineRes.status).toBe('completed');
+    expect(offlineRes.providerRef).toBe('act_cash');
 
-    const init = await daraja.initiate({
+    const custom = createPaymentAdapter({
+      id: 'custom-gateway',
+      label: 'Custom Gateway',
+      supportedCurrencies: ['USD', 'EUR'],
+      initiate: async (input) => ({
+        success: true,
+        status: 'pending',
+        provider: 'custom-gateway',
+        actionId: input.actionId,
+        providerRef: 'gw_ref_123',
+      }),
+      verifyWebhook: async (req) => {
+        const body = (await req.json()) as {
+          ref: string;
+          receipt: string;
+          amount: number;
+        };
+        return {
+          verified: true,
+          providerRef: body.ref,
+          receiptNumber: body.receipt,
+          amount: body.amount,
+          status: 'completed',
+        };
+      },
+    });
+    expect(custom.requiresOnline).toBe(true);
+
+    const init = await custom.initiate({
       actionId: 'act_1',
-      provider: 'daraja',
+      provider: 'custom-gateway',
       amount: 1500,
-      currency: 'KES',
-      phone: '0712345678',
-      contractId: 'contract_1',
+      currency: 'USD',
     });
-
     expect(init.status).toBe('pending');
-    expect(init.providerRef).toBe('ws_CO_123');
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(init.providerRef).toBe('gw_ref_123');
 
-    const webhookRes = await daraja.verifyWebhook!(
+    const webhookRes = await custom.verifyWebhook!(
       new Request('https://api.example.com/payments/callback', {
         method: 'POST',
         body: JSON.stringify({
-          Body: {
-            stkCallback: {
-              MerchantRequestID: 'mr_123',
-              CheckoutRequestID: 'ws_CO_123',
-              ResultCode: 0,
-              CallbackMetadata: {
-                Item: [
-                  { Name: 'Amount', Value: 1500 },
-                  { Name: 'MpesaReceiptNumber', Value: 'QWE123RTY' },
-                  { Name: 'PhoneNumber', Value: 254712345678 },
-                ],
-              },
-            },
-          },
+          ref: 'gw_ref_123',
+          receipt: 'RCPT_123',
+          amount: 1500,
         }),
       }),
     );
-
     expect(webhookRes.verified).toBe(true);
     expect(webhookRes.status).toBe('completed');
-    expect(webhookRes.receiptNumber).toBe('QWE123RTY');
+    expect(webhookRes.receiptNumber).toBe('RCPT_123');
     expect(webhookRes.amount).toBe(1500);
   });
 
@@ -168,34 +173,39 @@ describe('local-lite/payments', () => {
 
   it('handles idempotent server reservation and callback completion', async () => {
     const completed: string[] = [];
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ access_token: 'tok' }))
-      .mockResolvedValueOnce(
-        Response.json({
-          ResponseCode: '0',
-          CheckoutRequestID: 'ws_CO_999',
-          MerchantRequestID: 'mr_999',
-          CustomerMessage: 'Accepted',
-        }),
-      );
-
     let capturedCallbackUrl = '';
-    const daraja = createDarajaAdapter({
-      consumerKey: 'ck',
-      consumerSecret: 'cs',
-      shortcode: '123456',
-      passkey: 'pk',
-      callbackUrl: 'https://api.example.com/payments/callback',
-      fetch: (async (url: any, init: any) => {
-        if (String(url).includes('processrequest')) {
-          capturedCallbackUrl = JSON.parse(init.body).CallBackURL;
-        }
-        return mockFetch(url, init);
-      }) as typeof fetch,
+    const customProvider = createPaymentAdapter({
+      id: 'custom-gateway',
+      label: 'Custom Gateway',
+      supportedCurrencies: ['USD'],
+      initiate: async (input) => {
+        capturedCallbackUrl = input.callbackUrl ?? '';
+        return {
+          success: true,
+          status: 'pending',
+          provider: 'custom-gateway',
+          actionId: input.actionId,
+          providerRef: 'gw_CO_999',
+          customerMessage: 'Accepted',
+        };
+      },
+      verifyWebhook: async (req) => {
+        const body = (await req.json()) as {
+          ref: string;
+          receipt: string;
+          amount: number;
+        };
+        return {
+          verified: true,
+          providerRef: body.ref,
+          receiptNumber: body.receipt,
+          amount: body.amount,
+          status: 'completed',
+        };
+      },
     });
 
-    const registry = createPaymentRegistry({ providers: [daraja] });
+    const registry = createPaymentRegistry({ providers: [customProvider] });
     const store = createMemoryPaymentStore();
     const handler = createPaymentServerHandler({
       registry,
@@ -211,10 +221,9 @@ describe('local-lite/payments', () => {
         method: 'POST',
         body: JSON.stringify({
           actionId: 'act_999',
-          provider: 'daraja',
+          provider: 'custom-gateway',
           amount: 1000,
-          currency: 'KES',
-          phone: '254712345678',
+          currency: 'USD',
         }),
       }),
     );
@@ -226,36 +235,27 @@ describe('local-lite/payments', () => {
         method: 'POST',
         body: JSON.stringify({
           actionId: 'act_999',
-          provider: 'daraja',
+          provider: 'custom-gateway',
           amount: 1000,
-          currency: 'KES',
-          phone: '254712345678',
+          currency: 'USD',
         }),
       }),
     );
-    const dupJson: any = await dupRes.json();
+    const dupJson = (await dupRes.json()) as {
+      duplicate: boolean;
+      providerRef: string;
+    };
     expect(dupJson.duplicate).toBe(true);
-    expect(dupJson.providerRef).toBe('ws_CO_999');
+    expect(dupJson.providerRef).toBe('gw_CO_999');
 
     // Mismatched amount callback is rejected
     const badCb = await handler(
       new Request(capturedCallbackUrl, {
         method: 'POST',
         body: JSON.stringify({
-          Body: {
-            stkCallback: {
-              MerchantRequestID: 'mr_999',
-              CheckoutRequestID: 'ws_CO_999',
-              ResultCode: 0,
-              CallbackMetadata: {
-                Item: [
-                  { Name: 'Amount', Value: 500 },
-                  { Name: 'MpesaReceiptNumber', Value: 'BAD123' },
-                  { Name: 'PhoneNumber', Value: 254712345678 },
-                ],
-              },
-            },
-          },
+          ref: 'gw_CO_999',
+          receipt: 'BAD123',
+          amount: 500,
         }),
       }),
     );
@@ -266,20 +266,9 @@ describe('local-lite/payments', () => {
       new Request(capturedCallbackUrl, {
         method: 'POST',
         body: JSON.stringify({
-          Body: {
-            stkCallback: {
-              MerchantRequestID: 'mr_999',
-              CheckoutRequestID: 'ws_CO_999',
-              ResultCode: 0,
-              CallbackMetadata: {
-                Item: [
-                  { Name: 'Amount', Value: 1000 },
-                  { Name: 'MpesaReceiptNumber', Value: 'OK12345' },
-                  { Name: 'PhoneNumber', Value: 254712345678 },
-                ],
-              },
-            },
-          },
+          ref: 'gw_CO_999',
+          receipt: 'OK12345',
+          amount: 1000,
         }),
       }),
     );
