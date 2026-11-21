@@ -731,9 +731,9 @@ export class SyncWorker {
         !Number.isFinite(this.maxRetries) || this.maxRetries === -1;
       if (isInfinite || currentRetry < this.maxRetries) {
         let backoffDelay = Math.min(
-          (this.retryConfig.initialDelayMs || 1000) *
-            Math.pow(this.retryConfig.backoffMultiplier || 1.5, currentRetry),
-          this.retryConfig.maxDelayMs || 30000,
+          (this.retryConfig.initialDelayMs ?? 1000) *
+            Math.pow(this.retryConfig.backoffMultiplier ?? 1.5, currentRetry),
+          this.retryConfig.maxDelayMs ?? 30000,
         );
 
         // Apply ±15% jitter if enabled to avoid synchronized retry stampedes
