@@ -26,12 +26,11 @@
     "url": "https://github.com/georgechitechi/local-lite/issues"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "type": "module",
   "sideEffects": false,
-  "main": "./dist/cjs/index.js",
-  "module": "./dist/index.js",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "local-lite": "bin/local-lite.mjs"
@@ -45,394 +44,160 @@
   ],
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.js"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./react": {
-      "import": {
-        "types": "./dist/react/index.d.ts",
-        "default": "./dist/react/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/react/index.d.ts",
-        "default": "./dist/cjs/react/index.js"
-      }
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
     },
     "./devtools": {
-      "import": {
-        "types": "./dist/devtools/index.d.ts",
-        "default": "./dist/devtools/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/devtools/index.d.ts",
-        "default": "./dist/cjs/devtools/index.js"
-      }
+      "types": "./dist/devtools/index.d.ts",
+      "default": "./dist/devtools/index.js"
     },
     "./config": {
-      "import": {
-        "types": "./dist/config/index.d.ts",
-        "default": "./dist/config/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/config/index.d.ts",
-        "default": "./dist/cjs/config/index.js"
-      }
+      "types": "./dist/config/index.d.ts",
+      "default": "./dist/config/index.js"
     },
     "./server": {
-      "import": {
-        "types": "./dist/server/index.d.ts",
-        "default": "./dist/server/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/server/index.d.ts",
-        "default": "./dist/cjs/server/index.js"
-      }
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
     },
     "./schema": {
-      "import": {
-        "types": "./dist/schema/index.d.ts",
-        "default": "./dist/schema/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/schema/index.d.ts",
-        "default": "./dist/cjs/schema/index.js"
-      }
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
     },
     "./schema/migrations": {
-      "import": {
-        "types": "./dist/schema/sqlMigrations.d.ts",
-        "default": "./dist/schema/sqlMigrations.js"
-      },
-      "require": {
-        "types": "./dist/cjs/schema/sqlMigrations.d.ts",
-        "default": "./dist/cjs/schema/sqlMigrations.js"
-      }
+      "types": "./dist/schema/sqlMigrations.d.ts",
+      "default": "./dist/schema/sqlMigrations.js"
     },
     "./supabase": {
-      "import": {
-        "types": "./dist/adapters/remote/supabase.d.ts",
-        "default": "./dist/adapters/remote/supabase.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/remote/supabase.d.ts",
-        "default": "./dist/cjs/adapters/remote/supabase.js"
-      }
+      "types": "./dist/adapters/remote/supabase.d.ts",
+      "default": "./dist/adapters/remote/supabase.js"
     },
     "./convex": {
-      "import": {
-        "types": "./dist/adapters/remote/convex.d.ts",
-        "default": "./dist/adapters/remote/convex.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/remote/convex.d.ts",
-        "default": "./dist/cjs/adapters/remote/convex.js"
-      }
+      "types": "./dist/adapters/remote/convex.d.ts",
+      "default": "./dist/adapters/remote/convex.js"
     },
     "./firebase": {
-      "import": {
-        "types": "./dist/adapters/remote/firestore.d.ts",
-        "default": "./dist/adapters/remote/firestore.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/remote/firestore.d.ts",
-        "default": "./dist/cjs/adapters/remote/firestore.js"
-      }
+      "types": "./dist/adapters/remote/firestore.d.ts",
+      "default": "./dist/adapters/remote/firestore.js"
     },
     "./self-hosted": {
-      "import": {
-        "types": "./dist/adapters/remote/self-hosted.d.ts",
-        "default": "./dist/adapters/remote/self-hosted.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/remote/self-hosted.d.ts",
-        "default": "./dist/cjs/adapters/remote/self-hosted.js"
-      }
+      "types": "./dist/adapters/remote/self-hosted.d.ts",
+      "default": "./dist/adapters/remote/self-hosted.js"
     },
     "./auth": {
-      "import": {
-        "types": "./dist/auth/index.d.ts",
-        "default": "./dist/auth/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/auth/index.d.ts",
-        "default": "./dist/cjs/auth/index.js"
-      }
+      "types": "./dist/auth/index.d.ts",
+      "default": "./dist/auth/index.js"
     },
     "./auth/local": {
-      "import": {
-        "types": "./dist/auth/local/index.d.ts",
-        "default": "./dist/auth/local/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/auth/local/index.d.ts",
-        "default": "./dist/cjs/auth/local/index.js"
-      }
+      "types": "./dist/auth/local/index.d.ts",
+      "default": "./dist/auth/local/index.js"
     },
     "./backups": {
-      "import": {
-        "types": "./dist/backups/index.d.ts",
-        "default": "./dist/backups/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/backups/index.d.ts",
-        "default": "./dist/cjs/backups/index.js"
-      }
+      "types": "./dist/backups/index.d.ts",
+      "default": "./dist/backups/index.js"
     },
     "./portability": {
-      "import": {
-        "types": "./dist/utils/portability.d.ts",
-        "default": "./dist/utils/portability.js"
-      },
-      "require": {
-        "types": "./dist/cjs/utils/portability.d.ts",
-        "default": "./dist/cjs/utils/portability.js"
-      }
+      "types": "./dist/utils/portability.d.ts",
+      "default": "./dist/utils/portability.js"
     },
     "./maintenance": {
-      "import": {
-        "types": "./dist/core/maintenance.d.ts",
-        "default": "./dist/core/maintenance.js"
-      },
-      "require": {
-        "types": "./dist/cjs/core/maintenance.d.ts",
-        "default": "./dist/cjs/core/maintenance.js"
-      }
+      "types": "./dist/core/maintenance.d.ts",
+      "default": "./dist/core/maintenance.js"
     },
     "./expo-sqlite": {
-      "import": {
-        "types": "./dist/adapters/local/expo-sqlite.d.ts",
-        "default": "./dist/adapters/local/expo-sqlite.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/expo-sqlite.d.ts",
-        "default": "./dist/cjs/adapters/local/expo-sqlite.js"
-      }
+      "types": "./dist/adapters/local/expo-sqlite.d.ts",
+      "default": "./dist/adapters/local/expo-sqlite.js"
     },
     "./op-sqlite": {
-      "import": {
-        "types": "./dist/adapters/local/op-sqlite.d.ts",
-        "default": "./dist/adapters/local/op-sqlite.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/op-sqlite.d.ts",
-        "default": "./dist/cjs/adapters/local/op-sqlite.js"
-      }
+      "types": "./dist/adapters/local/op-sqlite.d.ts",
+      "default": "./dist/adapters/local/op-sqlite.js"
     },
     "./better-sqlite3": {
-      "import": {
-        "types": "./dist/adapters/local/better-sqlite3.d.ts",
-        "default": "./dist/adapters/local/better-sqlite3.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/better-sqlite3.d.ts",
-        "default": "./dist/cjs/adapters/local/better-sqlite3.js"
-      }
+      "types": "./dist/adapters/local/better-sqlite3.d.ts",
+      "default": "./dist/adapters/local/better-sqlite3.js"
     },
     "./libsql": {
-      "import": {
-        "types": "./dist/adapters/local/libsql.d.ts",
-        "default": "./dist/adapters/local/libsql.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/libsql.d.ts",
-        "default": "./dist/cjs/adapters/local/libsql.js"
-      }
+      "types": "./dist/adapters/local/libsql.d.ts",
+      "default": "./dist/adapters/local/libsql.js"
     },
     "./sql-js": {
-      "import": {
-        "types": "./dist/adapters/local/sql-js.d.ts",
-        "default": "./dist/adapters/local/sql-js.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/sql-js.d.ts",
-        "default": "./dist/cjs/adapters/local/sql-js.js"
-      }
+      "types": "./dist/adapters/local/sql-js.d.ts",
+      "default": "./dist/adapters/local/sql-js.js"
     },
     "./node-sqlite": {
-      "import": {
-        "types": "./dist/adapters/local/node-sqlite.d.ts",
-        "default": "./dist/adapters/local/node-sqlite.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/node-sqlite.d.ts",
-        "default": "./dist/cjs/adapters/local/node-sqlite.js"
-      }
+      "types": "./dist/adapters/local/node-sqlite.d.ts",
+      "default": "./dist/adapters/local/node-sqlite.js"
     },
     "./sqlite-wasm": {
-      "import": {
-        "types": "./dist/adapters/local/sqlite-wasm.d.ts",
-        "default": "./dist/adapters/local/sqlite-wasm.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/local/sqlite-wasm.d.ts",
-        "default": "./dist/cjs/adapters/local/sqlite-wasm.js"
-      }
+      "types": "./dist/adapters/local/sqlite-wasm.d.ts",
+      "default": "./dist/adapters/local/sqlite-wasm.js"
     },
     "./postgres": {
-      "import": {
-        "types": "./dist/adapters/remote/postgres.d.ts",
-        "default": "./dist/adapters/remote/postgres.js"
-      },
-      "require": {
-        "types": "./dist/cjs/adapters/remote/postgres.d.ts",
-        "default": "./dist/cjs/adapters/remote/postgres.js"
-      }
+      "types": "./dist/adapters/remote/postgres.d.ts",
+      "default": "./dist/adapters/remote/postgres.js"
     },
     "./core": {
-      "import": {
-        "types": "./dist/core/index.d.ts",
-        "default": "./dist/core/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/core/index.d.ts",
-        "default": "./dist/cjs/core/index.js"
-      }
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
     },
     "./actions": {
-      "import": {
-        "types": "./dist/actions/index.d.ts",
-        "default": "./dist/actions/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/actions/index.d.ts",
-        "default": "./dist/cjs/actions/index.js"
-      }
+      "types": "./dist/actions/index.d.ts",
+      "default": "./dist/actions/index.js"
     },
     "./keys": {
-      "import": {
-        "types": "./dist/keys/index.d.ts",
-        "default": "./dist/keys/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/keys/index.d.ts",
-        "default": "./dist/cjs/keys/index.js"
-      }
+      "types": "./dist/keys/index.d.ts",
+      "default": "./dist/keys/index.js"
     },
     "./kv-store": {
-      "import": {
-        "types": "./dist/kv-store/index.d.ts",
-        "default": "./dist/kv-store/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/kv-store/index.d.ts",
-        "default": "./dist/cjs/kv-store/index.js"
-      }
+      "types": "./dist/kv-store/index.d.ts",
+      "default": "./dist/kv-store/index.js"
     },
     "./search": {
-      "import": {
-        "types": "./dist/search/index.d.ts",
-        "default": "./dist/search/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/search/index.d.ts",
-        "default": "./dist/cjs/search/index.js"
-      }
+      "types": "./dist/search/index.d.ts",
+      "default": "./dist/search/index.js"
     },
     "./storage": {
-      "import": {
-        "types": "./dist/storage/index.d.ts",
-        "default": "./dist/storage/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/storage/index.d.ts",
-        "default": "./dist/cjs/storage/index.js"
-      }
+      "types": "./dist/storage/index.d.ts",
+      "default": "./dist/storage/index.js"
     },
     "./scheduler": {
-      "import": {
-        "types": "./dist/scheduler/index.d.ts",
-        "default": "./dist/scheduler/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/scheduler/index.d.ts",
-        "default": "./dist/cjs/scheduler/index.js"
-      }
+      "types": "./dist/scheduler/index.d.ts",
+      "default": "./dist/scheduler/index.js"
     },
     "./email": {
-      "import": {
-        "types": "./dist/email/index.d.ts",
-        "default": "./dist/email/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/email/index.d.ts",
-        "default": "./dist/cjs/email/index.js"
-      }
+      "types": "./dist/email/index.d.ts",
+      "default": "./dist/email/index.js"
     },
     "./payments": {
-      "import": {
-        "types": "./dist/payments/index.d.ts",
-        "default": "./dist/payments/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/payments/index.d.ts",
-        "default": "./dist/cjs/payments/index.js"
-      }
+      "types": "./dist/payments/index.d.ts",
+      "default": "./dist/payments/index.js"
     },
     "./payments/server": {
-      "import": {
-        "types": "./dist/payments/server.d.ts",
-        "default": "./dist/payments/server.js"
-      },
-      "require": {
-        "types": "./dist/cjs/payments/server.d.ts",
-        "default": "./dist/cjs/payments/server.js"
-      }
+      "types": "./dist/payments/server.d.ts",
+      "default": "./dist/payments/server.js"
     },
     "./svelte": {
-      "import": {
-        "types": "./dist/svelte/index.d.ts",
-        "default": "./dist/svelte/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/svelte/index.d.ts",
-        "default": "./dist/cjs/svelte/index.js"
-      }
+      "types": "./dist/svelte/index.d.ts",
+      "default": "./dist/svelte/index.js"
     },
     "./vue": {
-      "import": {
-        "types": "./dist/vue/index.d.ts",
-        "default": "./dist/vue/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/vue/index.d.ts",
-        "default": "./dist/cjs/vue/index.js"
-      }
+      "types": "./dist/vue/index.d.ts",
+      "default": "./dist/vue/index.js"
     },
     "./solid": {
-      "import": {
-        "types": "./dist/solid/index.d.ts",
-        "default": "./dist/solid/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/solid/index.d.ts",
-        "default": "./dist/cjs/solid/index.js"
-      }
+      "types": "./dist/solid/index.d.ts",
+      "default": "./dist/solid/index.js"
     },
     "./testing": {
-      "import": {
-        "types": "./dist/testing/index.d.ts",
-        "default": "./dist/testing/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/testing/index.d.ts",
-        "default": "./dist/cjs/testing/index.js"
-      }
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
     },
     "./presence": {
-      "import": {
-        "types": "./dist/presence/index.d.ts",
-        "default": "./dist/presence/index.js"
-      },
-      "require": {
-        "types": "./dist/cjs/presence/index.d.ts",
-        "default": "./dist/cjs/presence/index.js"
-      }
+      "types": "./dist/presence/index.d.ts",
+      "default": "./dist/presence/index.js"
     }
   },
   "scripts": {
@@ -441,7 +206,7 @@
     "example": "npm run --prefix example dev",
     "lint": "npx node-code-cleaner check:all src",
     "lint:fix": "npx node-code-cleaner audit src",
-    "lint:package": "publint && attw --pack --ignore-rules no-resolution",
+    "lint:package": "publint && attw --pack --profile esm-only",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:isolate": "vitest run --isolate",
