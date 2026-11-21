@@ -18,7 +18,7 @@ export interface VueCompositionApi {
  * Vue 3 composable for live local-lite queries.
  * Pass `{ ref, onUnmounted }` from `'vue'` to avoid bundling Vue inside `local-lite`.
  */
-export function useLiveQuery<T = any>(
+export function useLiveQuery<T = Record<string, unknown>>(
   client: LocalFirstClient,
   tableName: string,
   options: QueryOptions | undefined,

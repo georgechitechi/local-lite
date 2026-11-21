@@ -15,7 +15,7 @@ export interface SvelteReadable<T> {
 /**
  * Creates a Svelte-compatible Readable store (`$store` reactive) backed by a live local-lite query.
  */
-export function liveQuery<T = any>(
+export function liveQuery<T = Record<string, unknown>>(
   client: LocalFirstClient,
   tableName: string,
   options?: QueryOptions,

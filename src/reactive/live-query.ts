@@ -10,7 +10,7 @@ export interface LiveQueryState<T> {
 /**
  * Framework-agnostic live query subscription helper shared by Svelte, Vue, and Solid bindings.
  */
-export function subscribeLiveQuery<T = any>(
+export function subscribeLiveQuery<T = Record<string, unknown>>(
   client: LocalFirstClient,
   tableName: string,
   options: QueryOptions | undefined,
@@ -28,7 +28,7 @@ export function subscribeLiveQuery<T = any>(
       if (!active) return;
       current = { data: rows, loading: false, error: null };
       onUpdate(current);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!active) return;
       current = {
         ...current,

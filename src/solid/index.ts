@@ -14,7 +14,7 @@ export interface SolidApi {
  * SolidJS primitive for live local-lite queries.
  * Pass `{ createSignal, onCleanup }` from `'solid-js'`.
  */
-export function createLiveQuery<T = any>(
+export function createLiveQuery<T = Record<string, unknown>>(
   client: LocalFirstClient,
   tableName: string,
   options: QueryOptions | undefined,
