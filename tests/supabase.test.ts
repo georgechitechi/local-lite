@@ -39,7 +39,11 @@ describe('SupabaseRemoteAdapter', () => {
       },
     ]);
 
-    expect(success).toBe(true);
+    expect(success).toEqual({
+      success: true,
+      successfulIds: ['op-1', 'op-2'],
+      failedIds: [],
+    });
     expect(upsertSpy).toHaveBeenCalledTimes(1);
     expect(upsertSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -102,7 +106,11 @@ describe('SupabaseRemoteAdapter', () => {
       },
     ]);
 
-    expect(success).toBe(true);
+    expect(success).toEqual({
+      success: true,
+      successfulIds: ['del-1', 'del-2', 'del-3'],
+      failedIds: [],
+    });
     // All 3 consecutive deletes collapse into a single .update().in() call!
     expect(updateSpy).toHaveBeenCalledTimes(1);
     expect(inSpy).toHaveBeenCalledTimes(1);
@@ -175,7 +183,11 @@ describe('SupabaseRemoteAdapter', () => {
         timestamp: Date.now(),
       },
     ]);
-    expect(pushResult).toBe(false);
+    expect(pushResult).toEqual({
+      success: false,
+      successfulIds: [],
+      failedIds: ['op-1'],
+    });
 
     // fetchChanges must return empty deltas instead of throwing
     const fetchResult = await adapter.fetchChanges(12345);

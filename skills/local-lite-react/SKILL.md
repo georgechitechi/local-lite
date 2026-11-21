@@ -32,7 +32,7 @@ Comprehensive guide to building reactive, offline-first user interfaces using `l
 import React, { useMemo } from 'react';
 import { FlatList, Text, View } from 'react-native';
 import { useLiveQuery } from 'local-lite/react';
-import type { LocalFirstClient } from 'local-lite/config';
+import type { LocalFirstClient } from 'local-lite';
 
 interface Todo {
   id: string;

@@ -370,13 +370,10 @@ export class MicrosoftAuthClient {
 
     return {
       id,
-      userId: id,
       email,
       emailVerified: true,
       name,
-      displayName: name,
       avatarUrl: null,
-      picture: null,
       provider: 'microsoft',
       providerAccountId: sub,
       givenName: raw.givenName,

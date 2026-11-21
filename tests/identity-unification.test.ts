@@ -6,7 +6,7 @@ import {
   SessionManager,
   GoogleAuthClient,
   GitHubAuthClient,
-} from '../src/index.js';
+} from '../src/auth/index.js';
 import { MockDB } from './helpers/mock-db.js';
 
 describe('User Identity Unification (local-lite/auth)', () => {
@@ -80,7 +80,7 @@ describe('User Identity Unification (local-lite/auth)', () => {
       const unifiedGoogle = createUnifiedAuthUser(rawGoogle, 'google');
       const unifiedGithub = createUnifiedAuthUser(rawGithub, 'github');
 
-      expect(unifiedGoogle.userId).toBe(unifiedGithub.userId);
+      expect(unifiedGoogle.id).toBe(unifiedGithub.id);
       expect(unifiedGoogle.email).toBe('georgechitechi@gmail.com');
       expect(unifiedGithub.email).toBe('georgechitechi@gmail.com');
       expect(unifiedGoogle.provider).toBe('google');
@@ -198,13 +198,13 @@ describe('User Identity Unification (local-lite/auth)', () => {
 
       // Login with Google
       const googleUser = await authManager.signIn('google');
-      expect(googleUser?.userId).toBeDefined();
-      expect(notifiedUser?.userId).toBe(googleUser?.userId);
+      expect(googleUser?.id).toBeDefined();
+      expect(notifiedUser?.id).toBe(googleUser?.id);
 
       // Login with GitHub
       const githubUser = await authManager.signIn('github');
-      expect(githubUser?.userId).toBe(googleUser?.userId);
-      expect(notifiedUser?.userId).toBe(googleUser?.userId);
+      expect(githubUser?.id).toBe(googleUser?.id);
+      expect(notifiedUser?.id).toBe(googleUser?.id);
 
       expect(await authManager.isAuthenticated()).toBe(true);
 

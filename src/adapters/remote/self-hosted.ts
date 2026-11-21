@@ -51,6 +51,16 @@ export interface SelfHostedRemoteAdapterOptions {
    * Optional WebSocket constructor override (defaults to globalThis.WebSocket).
    */
   WebSocketImpl?: typeof WebSocket;
+
+  /**
+   * Optional Server-Sent Events (SSE) URL for instant push delta notifications.
+   */
+  sseUrl?: string;
+
+  /**
+   * Optional EventSource constructor override (defaults to globalThis.EventSource).
+   */
+  EventSourceImpl?: typeof EventSource;
 }
 
 /**
@@ -73,6 +83,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
   private wsUrl?: string;
   private WebSocketImpl?: typeof WebSocket;
   private ws?: WebSocket;
+  private sseUrl?: string;
+  private EventSourceImpl?: typeof EventSource;
+  private sse?: EventSource;
 
   constructor(options: SelfHostedRemoteAdapterOptions) {
     if (!options.url) {
@@ -86,6 +99,9 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     this.pollIntervalMs = options.pollIntervalMs ?? 5000;
     this.wsUrl = options.wsUrl;
     this.WebSocketImpl = options.WebSocketImpl ?? (globalThis as any).WebSocket;
+    this.sseUrl = options.sseUrl;
+    this.EventSourceImpl =
+      options.EventSourceImpl ?? (globalThis as any).EventSource;
 
     if (!this.fetchFn) {
       throw new Error(
@@ -196,6 +212,10 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       if (!this.ws) {
         this.connectWebSocket();
       }
+    } else if (this.sseUrl && typeof this.EventSourceImpl === 'function') {
+      if (!this.sse) {
+        this.connectSse();
+      }
     } else if (!this.pollTimer) {
       this.startPolling();
     }
@@ -213,6 +233,41 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
           } catch {}
           this.ws = undefined;
         }
+        if (this.sse) {
+          try {
+            this.sse.close();
+          } catch {}
+          this.sse = undefined;
+        }
+      }
+    };
+  }
+
+  private connectSse(): void {
+    if (!this.sseUrl || typeof this.EventSourceImpl !== 'function') return;
+    const urlWithAuth = this.token
+      ? `${this.sseUrl}${this.sseUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(this.token)}`
+      : this.sseUrl;
+    const source = new this.EventSourceImpl(urlWithAuth);
+    this.sse = source;
+
+    source.onmessage = () => {
+      this.fetchChanges(this.lastPollCursor, this.syncScope)
+        .then((deltas) => {
+          if (deltas.changes.length > 0) {
+            this.activeSubscribers.forEach((cb) => cb(deltas));
+          }
+        })
+        .catch(() => {});
+    };
+
+    source.onerror = () => {
+      try {
+        source.close();
+      } catch {}
+      this.sse = undefined;
+      if (this.activeSubscribers.size > 0 && !this.pollTimer) {
+        this.startPolling();
       }
     };
   }

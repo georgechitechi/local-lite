@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { LocalFirstClient } from '../core/client.js';
 import { SessionRecord, CreateSessionOptions } from '../auth/session.js';
 
-export interface UseSessionResult<TUser = any> {
+export interface UseSessionResult<TUser = Record<string, unknown>> {
   session: SessionRecord<TUser> | null;
   user: TUser | null;
   isAuthenticated: boolean;
@@ -30,7 +30,7 @@ export interface UseSessionResult<TUser = any> {
  * Example:
  * const { user, isAuthenticated, isOffline, signOut } = useSession(client);
  */
-export function useSession<TUser = any>(
+export function useSession<TUser = Record<string, unknown>>(
   client: LocalFirstClient | null | undefined,
 ): UseSessionResult<TUser> {
   const [session, setSession] = useState<SessionRecord<TUser> | null>(null);
@@ -90,11 +90,14 @@ export function useSession<TUser = any>(
     });
 
     // Listen to network changes if available
-    const unsubscribeNetwork = client.events.on('network', (status: any) => {
-      if (isMounted && status && typeof status.online === 'boolean') {
-        setIsOffline(!status.online);
-      }
-    });
+    const unsubscribeNetwork = client.events.on(
+      'network',
+      (status?: { online?: boolean }) => {
+        if (isMounted && status && typeof status.online === 'boolean') {
+          setIsOffline(!status.online);
+        }
+      },
+    );
 
     return () => {
       isMounted = false;

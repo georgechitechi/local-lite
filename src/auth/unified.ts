@@ -6,7 +6,7 @@ import { LocalAuthEngine } from './local.js';
 import { SessionManager, SessionRecord } from './session.js';
 import {
   SupportedAuthProvider,
-  UnifiedAuthUser,
+  AuthUser,
   createUnifiedAuthUser,
   DEFAULT_UNIFIED_EMAIL_NAMESPACE,
 } from './identity.js';
@@ -30,7 +30,7 @@ export interface UnifiedAuthConfig {
   emailNamespace?: string;
 }
 
-export type AuthStateChangeListener = (user: UnifiedAuthUser | null) => void;
+export type AuthStateChangeListener = (user: AuthUser | null) => void;
 
 /**
  * High-level orchestrator that unifies multiple OAuth providers (Google, GitHub,
@@ -77,7 +77,7 @@ export class UnifiedAuthManager {
     }
   }
 
-  private notify(user: UnifiedAuthUser | null) {
+  private notify(user: AuthUser | null) {
     for (const listener of this.listeners) {
       try {
         listener(user);
@@ -103,7 +103,7 @@ export class UnifiedAuthManager {
   async signIn(
     provider: SupportedAuthProvider,
     credentials?: any,
-  ): Promise<UnifiedAuthUser | null> {
+  ): Promise<AuthUser | null> {
     let rawUser: any = null;
     let token: string | null = null;
     let refreshToken: string | null = null;
@@ -164,7 +164,7 @@ export class UnifiedAuthManager {
 
     if (this.sessionManager) {
       await this.sessionManager.createSession({
-        userId: unifiedUser.userId,
+        userId: unifiedUser.id,
         user: unifiedUser,
         provider,
         token,
@@ -179,10 +179,9 @@ export class UnifiedAuthManager {
   /**
    * Retrieves the currently authenticated unified user.
    */
-  async getUser(): Promise<UnifiedAuthUser | null> {
+  async getUser(): Promise<AuthUser | null> {
     if (this.sessionManager) {
-      const session =
-        await this.sessionManager.getActiveSession<UnifiedAuthUser>();
+      const session = await this.sessionManager.getActiveSession<AuthUser>();
       if (session?.user) return session.user;
     }
 
@@ -202,9 +201,9 @@ export class UnifiedAuthManager {
   /**
    * Retrieves the active SQLite session record.
    */
-  async getSession(): Promise<SessionRecord<UnifiedAuthUser> | null> {
+  async getSession(): Promise<SessionRecord<AuthUser> | null> {
     if (!this.sessionManager) return null;
-    return await this.sessionManager.getActiveSession<UnifiedAuthUser>();
+    return await this.sessionManager.getActiveSession<AuthUser>();
   }
 
   /**

@@ -1,6 +1,6 @@
 # Breaking Changes and AI Code-Review Guide
 
-This guide records breaking changes introduced in `local-lite` (2.0.0 and 0.0.30) and gives
+This guide records breaking changes introduced in `local-lite` (`3.1.0`, `3.0.0`, and `2.0.0`) and gives
 an actionable checklist for reviewing an application or repository update.
 Use it when upgrading to this version or when asking an AI assistant to check
 whether dependent code needs changes.
@@ -21,6 +21,70 @@ This guide ships with the package at
 `node_modules/local-lite/skills/local-lite-upgrade/SKILL.md` (setup and custom
 adapter skills live beside it); copy the folders
 into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
+
+## Changes in 3.1.0
+
+### 1. ESM-only package & Node 24+ requirement
+
+- `local-lite` now ships native ESM (`"type": "module"`, `"sideEffects": false`) with `"engines": { "node": ">=24.0.0" }`.
+- Use ESM `import` (or Node 24's native `require(esm)` for synchronous modules). Legacy CJS-only builds on Node < 24 are no longer supported.
+
+### 2. Removed web dashboard & CLI commands
+
+- Removed `createDashboardHandler` and `DashboardHandlerOptions` from `local-lite/server`.
+- Removed `npx local-lite dashboard` and `npx local-lite dev` from the CLI (`install-skills` and `db:generate` remain).
+
+### 3. Stricter TypeScript generic defaults (`unknown` / `Record<string, unknown>`)
+
+- Generic defaults on `useLiveQuery`, `liveQuery`, `createLiveQuery`, `subscribeLiveQuery`, `useSearch`, `useSession`, `useKVStore`, `PostgresQueryResult`, and `PostgresExecutor` changed from `any` to `Record<string, unknown>` (or `unknown`).
+- `FieldEncryptor.decryptValue()` now returns `Promise<unknown>`, `FieldEncryptor.encryptValue()` returns `Promise<string | null | undefined>`, and `AuditEntry.before` / `after` use `Record<string, unknown> | null`.
+- Pass an explicit type argument (e.g., `useLiveQuery<Todo>(client, 'todos')`) or narrow `unknown` values when upgrading.
+
+## Changes in 3.0.0
+
+### 1. Subpath-only exports (trimmed root & config barrels)
+
+The root `'local-lite'` entry point now exports only `core`, `config`, `schema`, and `utils` (`uuid`, `sql`, `portability`). `local-lite/config` no longer re-exports `LocalFirstClient` or provider adapter classes.
+
+| Removed import | Replacement |
+| :--- | :--- |
+| `import { useLiveQuery } from 'local-lite'` | `import { useLiveQuery } from 'local-lite/react'` |
+| `import { LocalAuthEngine, GoogleAuthClient } from 'local-lite'` | `import { LocalAuthEngine, GoogleAuthClient } from 'local-lite/auth'` |
+| `import { ActionManager } from 'local-lite'` | `import { ActionManager } from 'local-lite/actions'` |
+| `import { LocalFirstClient } from 'local-lite/config'` | `import { LocalFirstClient } from 'local-lite'` (or `'local-lite/core'`) |
+| `import { SupabaseRemoteAdapter } from 'local-lite'` / `'local-lite/config'` | `import { SupabaseRemoteAdapter } from 'local-lite/supabase'` |
+| `import { ExpoSQLiteAdapter } from 'local-lite'` / `'local-lite/config'` | `import { ExpoSQLiteAdapter } from 'local-lite/expo-sqlite'` |
+
+All feature modules (`backups`, `keys`, `kv-store`, `search`, `storage`, `scheduler`, `payments`, `testing`, `presence`, `vue`, `svelte`, `solid`) must be imported from their `local-lite/<subpath>` entry point.
+
+### 2. Firebase Modular SDK v11+ only (v8 / compat removed)
+
+- `FirestoreRemoteAdapter` (`local-lite/firebase`) and `createFirebaseStorageUploader` (`local-lite/storage`) now require the modular `firebase/firestore` and `firebase/storage` SDKs (`firebase >= 11.0.0`).
+- Compat/v8 `.collection()`, `.batch()`, `.ref()`, `.put()`, and `.save()` fallback branches have been removed.
+
+### 3. Strict `RemoteDBAdapter.pushChanges(): Promise<PushResult>`
+
+- `RemoteDBAdapter.pushChanges()` no longer accepts `boolean` (`true`/`false`) return values.
+- All built-in and custom remote adapters must return a structured `PushResult`:
+  ```ts
+  { success: true, successfulIds: operations.map((op) => op.id), failedIds: [] }
+  ```
+
+### 4. Canonical `AuthUser` identity (`local-lite/auth`)
+
+- Removed redundant compatibility aliases from `AuthUser`: `userId`, `displayName`, and `picture`. Use canonical `id`, `name`, and `avatarUrl` instead.
+- Removed the `UnifiedAuthUser` type alias; use `AuthUser`.
+
+### 5. Updated `peerDependencies` minimums
+
+`firebase >=11.0.0`, `@supabase/supabase-js >=2.45.0`, `convex >=1.15.0`, `better-sqlite3 >=11.0.0`, `@libsql/client >=0.14.0`, `@op-engineering/op-sqlite >=10.0.0`, `sql.js >=1.10.0`.
+
+**Review checklist (3.0.0)**
+
+- Search for imports from `'local-lite'` or `'local-lite/config'` that reference React hooks, auth, actions/storage/search/kv-store/payments, or local/remote adapter classes, and move them to `local-lite/<subpath>`.
+- Search custom `RemoteDBAdapter` implementations and tests for `pushChanges()` returning `boolean` and update them to return `PushResult`.
+- Search Firebase usage for compat `.collection()` / `.batch()` / `.ref()` / `.put()` mocks or instances and migrate to modular `firebase/firestore` and `firebase/storage`.
+- Search auth consumers for `user.userId`, `user.displayName`, `user.picture`, or `UnifiedAuthUser` and replace with `user.id`, `user.name`, `user.avatarUrl`, and `AuthUser`.
 
 ## Changes in 2.0.0
 
@@ -55,120 +119,6 @@ The following redundant aliases have been removed in favor of a single canonical
 - Search for `.find(` on `client` or `tx` instances and replace with `.findMany(`.
 - Search `where:` objects for unprefixed operator keys (`eq`, `gt`, `in`, `contains`, etc.) and prefix them with `$`.
 - Confirm any `expo-sqlite` mock or instance in tests implements `runAsync()`.
-
-## Changes in 0.0.30
-
-### 1. Repeat-on-initialize `migrations` option removed
-
-The `migrations: string[]` option was removed from `LocalLiteConfig` and
-`LocalFirstClientConfig`. Passing it to `createSyncClient()` or the
-`LocalFirstClient` constructor now throws. Use versioned `schemaMigrations`
-instead.
-
-```typescript
-schemaMigrations: [
-  {
-    version: 1,
-    up: 'CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT NOT NULL)',
-  },
-  {
-    version: 2,
-    up: 'ALTER TABLE notes ADD COLUMN archived INTEGER NOT NULL DEFAULT 0',
-  },
-],
-```
-
-**Review checklist**
-
-- Find configuration properties named `migrations` and confirm they are the
-  removed local-lite option, not another library's setting or a local variable.
-- Convert SQL into consecutive, one-time `schemaMigrations` entries.
-- Preserve the complete migration history in the application so existing
-  installations can upgrade. Do not simply rename the array: old statements
-  ran on every initialization, while versioned migrations run once.
-- Update config helpers, test fixtures, and migration-related documentation.
-
-### 2. Expo legacy FileSystem API removed
-
-`ExpoFileDriver` now uses Expo SDK 58+ `File`, `Directory`, and `Paths`.
-The `fileSystem` constructor option and legacy `expo-file-system` methods such
-as `writeAsStringAsync`, `getInfoAsync`, `copyAsync`, and `downloadAsync` are no
-longer supported.
-
-```typescript
-import { File, Directory, Paths } from 'expo-file-system';
-import { ExpoFileDriver } from 'local-lite/storage';
-
-const driver = new ExpoFileDriver({ File, Directory, Paths });
-```
-
-The `baseDir` and `useCache` options remain available.
-
-**Review checklist**
-
-- Find `new ExpoFileDriver({ fileSystem: ... })` and replace it with the modern
-  named API options.
-- Check Expo dependencies and runtime versions; the modern APIs require Expo
-  SDK 58 or newer.
-- Replace direct legacy FileSystem calls in integrations with `File` operations
-  or `ExpoFileDriver` methods.
-- Review tests and examples for legacy mocks or imports.
-
-### 3. Custom realtime adapters must return cleanup
-
-`RemoteDBAdapter.subscribeToLiveChanges()` now has the required return type
-`() => void`. Every custom adapter implementation must return a function that
-unsubscribes its listener. If no listener is created, return a no-op function.
-
-```typescript
-subscribeToLiveChanges(callback: (changes: DeltaChanges) => void): () => void {
-  if (!this.canSubscribe()) return () => {};
-
-  const subscription = this.startSubscription(callback);
-  return () => subscription.unsubscribe();
-}
-```
-
-**Review checklist**
-
-- Find classes and object literals implementing `RemoteDBAdapter`.
-- Confirm all code paths, including missing clients, empty table lists, and
-  initialization failures, return a cleanup function.
-- Confirm cleanup is safe to call once and prevents callbacks from a stopped or
-  replaced subscription.
-- Update mocks and test adapters to match the required signature.
-
-### 4. `_migrations` is no longer an internal table name
-
-`isInternalTable('_migrations')` now returns `false`. The name is not treated as
-a local-lite engine table and may consequently appear in APIs that filter
-internal tables, such as `getTables()` and maintenance reports.
-
-**Review checklist**
-
-- Find uses of `_migrations` as an application table or as a local-lite
-  bookkeeping table.
-- If an application uses this name and expects it to be hidden, rename the
-  application table or filter it explicitly in the application.
-- Do not rename or delete stored tables as part of an automated upgrade without
-  confirming their ownership and contents.
-
-### 5. FTS tokenizer errors now propagate
-
-FTS table creation no longer retries without the `tokenize` option after a
-tokenizer error. A configured tokenizer that the SQLite build does not support
-causes search initialization to fail instead of silently creating a table with
-different tokenization behavior.
-
-**Review checklist**
-
-- Find `client.search` configurations that set a custom tokenizer.
-- Verify the target SQLite build supports the configured tokenizer and FTS5.
-- Test search initialization and representative queries on every supported
-  platform/build.
-- Resolve an unsupported tokenizer by selecting one supported by the target
-  runtime or correcting the SQLite build; do not rely on an implicit tokenizer
-  fallback.
 
 ## Suggested review output
 

@@ -21,19 +21,13 @@ describe('GoogleAuthClient', () => {
       { id: 'google-user-123', email: 'test@example.com', emailVerified: true },
       'google',
     ),
-    userId: resolveUnifiedUserId(
-      { id: 'google-user-123', email: 'test@example.com', emailVerified: true },
-      'google',
-    ),
     provider: 'google' as const,
     providerAccountId: 'google-user-123',
     email: 'test@example.com',
     emailVerified: true,
     name: 'Test Parent',
-    displayName: 'Test Parent',
     givenName: 'Test',
     familyName: 'Parent',
-    picture: 'https://lh3.googleusercontent.com/photo.jpg',
     avatarUrl: 'https://lh3.googleusercontent.com/photo.jpg',
   };
 
@@ -75,7 +69,7 @@ describe('GoogleAuthClient', () => {
             name: sampleUser.name,
             given_name: sampleUser.givenName,
             family_name: sampleUser.familyName,
-            picture: sampleUser.picture,
+            picture: sampleUser.avatarUrl,
           });
         }
         return jsonResponse({}, 404);
@@ -90,7 +84,6 @@ describe('GoogleAuthClient', () => {
 
     expect(user).toMatchObject(sampleUser);
     expect(user?.id).toBeDefined();
-    expect(user?.userId).toBe(user?.id);
     expect(authEvents[0]).toMatchObject(sampleUser);
 
     const authUrl = new URL(authorizationUrl);

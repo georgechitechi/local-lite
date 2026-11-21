@@ -17,7 +17,9 @@ function normalizeCode(value?: string): string {
 export interface PaymentRegistry {
   register: (adapter: PaymentProviderAdapter) => void;
   unregister: (id: PaymentProviderId) => boolean;
-  configure: (config: Pick<PaymentRegistryConfig, 'enabledProviders' | 'defaultCurrency'>) => void;
+  configure: (
+    config: Pick<PaymentRegistryConfig, 'enabledProviders' | 'defaultCurrency'>,
+  ) => void;
   getProvider: (id: PaymentProviderId) => PaymentProviderAdapter | undefined;
   listProviders: () => PaymentProviderAdapter[];
   supports: (id: PaymentProviderId, context?: PaymentContext) => boolean;
@@ -53,7 +55,9 @@ export function createPaymentRegistry(
     const adapter = providers.get(id);
     if (!adapter) return false;
 
-    const allowedList = context.enabledProviders ?? (enabledProviders ? [...enabledProviders] : null);
+    const allowedList =
+      context.enabledProviders ??
+      (enabledProviders ? [...enabledProviders] : null);
     if (allowedList && !allowedList.includes(id)) {
       return false;
     }
@@ -103,7 +107,8 @@ export function createPaymentRegistry(
           : null;
       }
       if (config.defaultCurrency !== undefined) {
-        defaultCurrency = normalizeCode(config.defaultCurrency) || defaultCurrency;
+        defaultCurrency =
+          normalizeCode(config.defaultCurrency) || defaultCurrency;
       }
     },
     getProvider(id) {
@@ -128,7 +133,9 @@ export function createPaymentRegistry(
     async initiate(input) {
       const adapter = providers.get(input.provider);
       if (!adapter) {
-        throw new Error(`Payment provider "${input.provider}" is not registered.`);
+        throw new Error(
+          `Payment provider "${input.provider}" is not registered.`,
+        );
       }
       const currency = normalizeCode(input.currency ?? defaultCurrency);
       if (!currency) {

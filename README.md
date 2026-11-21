@@ -59,38 +59,22 @@ to discard failed writes belong to the caller. The core does not inspect backend
 error codes to delete failed mutations. Conflict resolution and retry settings
 remain configurable; the existing default conflict strategy is last-write-wins.
 
-### Compatibility changes from 0.0.3
-
-- Missing remote configuration now throws. Temporary demo behavior requires
-  `inMemoryRemote: true`; it must never silently acknowledge production writes.
-- `autoSchema` now defaults to `false` in the configuration factory as well as the
-  core constructor. Set `autoSchema: true` to retain inferred schema behavior.
-- Versioned `schemaMigrations` run transactionally before sync starts, including
-  when initialization is deferred with `autoInitialize: false`.
-- `initialize()` is safe to call repeatedly or concurrently. After `stop()`, call
-  `client.syncWorker.start()` to resume. Mutations after stop remain queued.
-- `autoStart: false` prepares storage without automatic sync. Explicit push/pull
-  methods remain available. Stop does not cancel adapter calls already in flight.
-- Realtime changes update local rows without advancing the durable pull cursor.
-  Custom pull adapters must return complete batches through their checkpoint and
-  reject partial failures. Supabase table failures now reject the pull.
-- Custom realtime adapters must return an unsubscribe function; stopped workers
-  ignore callbacks from a previous subscription.
-
-For an application-level upgrade checklist or AI-assisted code review, see the
+For an application-level upgrade checklist or AI-assisted code review (including `v3.0.0` breaking changes), see the
 [Breaking Changes and AI Code-Review Guide](./docs/breaking-changes.md).
 
-### Breaking changes in 0.0.30
+### What's new in 3.1.0
 
-- The repeat-on-initialize `migrations` option has been removed. Move SQL into
-  versioned `schemaMigrations`.
-- `ExpoFileDriver` now requires the Expo SDK 58+ `File`, `Directory`, and `Paths`
-  APIs. Replace `fileSystem` injection with those named options.
-- Custom `RemoteDBAdapter.subscribeToLiveChanges()` implementations must return
-  a cleanup function, including when no subscription is established.
-- `_migrations` is no longer treated as an internal table name.
-- FTS table creation no longer retries without the configured tokenizer; SQLite
-  tokenizer errors now propagate.
+- **ESM-only & Node 24+:** Native ESM (`"type": "module"`, `"sideEffects": false`) targeting `node >= 24.0.0` for cleaner tree-shaking and a smaller install footprint.
+- **Stricter TypeScript types:** Public hook and adapter generics (`useLiveQuery`, `liveQuery`, `createLiveQuery`, `useSearch`, `useSession`, `useKVStore`, `PostgresExecutor`, `FieldEncryptor`, `AuditEntry`) now default to `Record<string, unknown>` / `unknown` instead of `any`.
+- **Trimmed surface:** Removed the standalone web `dashboard` handler and CLI commands (`createDashboardHandler`, `local-lite dashboard`, `local-lite dev`).
+
+### What's new in 3.0.0
+
+- **Subpath-only feature & adapter imports:** Root `'local-lite'` exports core, config, schema, and utils; adapters, React/Vue/Svelte/Solid bindings, auth, backups, payments, testing, and presence live at their dedicated `local-lite/<subpath>` entry points.
+- **QueryBuilder & CRDTs:** `.whereNot()`, `.orWhere()`, `.distinct()`, `.having()`, `.with()` eager relation preloading, `.clone()`, `.prepare()`, plus `'set-union'`, `'pn-counter'`, and `'lww-element-set'` CRDT rules in `createFieldMergeResolver()`.
+- **New Adapters & Bindings:** `local-lite/sqlite-wasm` (OPFS), `local-lite/postgres`, WebSocket realtime (`wsUrl`) on `SelfHostedRemoteAdapter`, `local-lite/vue`, `local-lite/svelte`, `local-lite/solid`, `local-lite/testing`, and `local-lite/presence`.
+- **Security & Audit:** `FieldEncryptor` (AES-256-GCM column encryption), `applySqlCipherKey()`, and `AuditManager` (`_audit_log` + `undo()` / `redo()`).
+- **Modern SDKs:** Firebase Modular SDK v11+ only (compat/v8 removed) and strict `PushResult` on `RemoteDBAdapter.pushChanges()`.
 
 ## AI Skills
 

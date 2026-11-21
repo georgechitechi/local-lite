@@ -110,16 +110,37 @@ export interface LocalAuthEngineOptions {
    * Optional remote authentication handler to exchange local sessions for remote sync provider tokens.
    */
   remoteAuthHandler?: RemoteAuthHandler;
+  /**
+   * Built-in remote auth endpoint configuration (e.g. `{ url: 'https://api.example.com' }`).
+   * Auto-wires `remoteAuthHandler` to `POST <url>/auth/local` and `POST <url>/auth/local/refresh`.
+   */
+  remote?: {
+    url: string;
+    fetch?: typeof fetch;
+    headers?: Record<string, string>;
+  };
 }
 
 export interface RemoteAuthExchangeContext<TMetadata = any> {
   user: LocalUser<TMetadata>;
   session: SessionRecord<LocalUser<TMetadata>>;
+  mode?: 'signin' | 'signup' | 'refresh';
+  password?: string;
 }
 
 export type RemoteAuthHandler<TMetadata = any> = (
   context: RemoteAuthExchangeContext<TMetadata>,
 ) => Promise<{ token: string; [key: string]: any } | null>;
+
+export interface CreateResetTokenOptions {
+  format?: 'hex' | 'otp6';
+  expiresInMs?: number;
+  maxAttempts?: number;
+}
+
+export interface ResetPasswordWithTokenOptions {
+  identifier?: string;
+}
 
 export interface SignUpOptions<TMetadata = Record<string, any>> {
   id?: string;
@@ -308,6 +329,21 @@ export async function verifyPassword(
 }
 
 /**
+ * Performs a constant-time dummy password verification to mitigate
+ * timing-based account enumeration when an account does not exist.
+ */
+export async function verifyDummyPassword(
+  iterations: number = DEFAULT_PASSWORD_ITERATIONS,
+): Promise<void> {
+  await verifyPassword(
+    'dummy_password',
+    '0'.repeat(128),
+    '0'.repeat(32),
+    Math.min(iterations, 5_000),
+  );
+}
+
+/**
  * Generates an opaque random token and its corresponding SHA-256 hash.
  */
 export function generateCryptoToken(lengthBytes: number = 32): {
@@ -421,7 +457,46 @@ export class LocalAuthEngine {
     this.minPasswordLength =
       resolvedOptions.minPasswordLength ?? DEFAULT_MIN_PASSWORD_LENGTH;
     this.customPasswordValidator = resolvedOptions.validatePassword;
-    this.remoteAuthHandler = resolvedOptions.remoteAuthHandler;
+    this.remoteAuthHandler =
+      resolvedOptions.remoteAuthHandler ??
+      (resolvedOptions.remote?.url
+        ? async ({ user, session, mode, password }) => {
+            const baseUrl = resolvedOptions.remote!.url.replace(/\/+$/, '');
+            const fetchFn = resolvedOptions.remote!.fetch || globalThis.fetch;
+            if (!fetchFn) return null;
+            const customHeaders = resolvedOptions.remote!.headers ?? {};
+            const isRefresh = mode === 'refresh' || !password;
+            if (isRefresh && !session?.token) return null;
+
+            const endpoint = isRefresh
+              ? `${baseUrl}/auth/local/refresh`
+              : `${baseUrl}/auth/local`;
+            const headers: Record<string, string> = {
+              'Content-Type': 'application/json',
+              ...customHeaders,
+              ...(isRefresh
+                ? { Authorization: `Bearer ${session.token}` }
+                : {}),
+            };
+            const res = await fetchFn(endpoint, {
+              method: 'POST',
+              headers,
+              ...(isRefresh
+                ? {}
+                : {
+                    body: JSON.stringify({
+                      mode: mode === 'signup' ? 'signup' : 'signin',
+                      email: user.email,
+                      password,
+                      displayName: user.displayName ?? undefined,
+                    }),
+                  }),
+            });
+            if (!res.ok) return null;
+            const data = (await res.json()) as { token?: string };
+            return data?.token ? { token: data.token } : null;
+          }
+        : undefined);
 
     if (resolvedSession instanceof SessionManager) {
       this.sessionManager = resolvedSession;
@@ -448,6 +523,29 @@ export class LocalAuthEngine {
     return this.remoteAuthHandler;
   }
 
+  private async performRemoteAuthExchange<TMetadata>(
+    context: RemoteAuthExchangeContext<TMetadata>,
+  ): Promise<{ token: string; [key: string]: any } | null> {
+    if (!this.remoteAuthHandler) return null;
+    const result = await this.remoteAuthHandler(context);
+    if (result && result.token) {
+      await this.sessionManager.updateTokens({ token: result.token });
+      context.session.token = result.token;
+    }
+    return result;
+  }
+
+  private async tryRemoteAuthExchange<TMetadata>(
+    context: RemoteAuthExchangeContext<TMetadata>,
+  ): Promise<void> {
+    if (!this.remoteAuthHandler) return;
+    try {
+      await this.performRemoteAuthExchange(context);
+    } catch {
+      // Non-fatal if offline
+    }
+  }
+
   /**
    * Triggers token exchange with the registered remote sync provider for the active session.
    */
@@ -460,12 +558,11 @@ export class LocalAuthEngine {
     if (!session || !session.userId) return null;
     const user = await this.getUserById(session.userId);
     if (!user) return null;
-    const result = await this.remoteAuthHandler({ user, session });
-    if (result && result.token) {
-      await this.sessionManager.updateTokens({ token: result.token });
-      session.token = result.token;
-    }
-    return result;
+    return this.performRemoteAuthExchange({
+      user,
+      session,
+      mode: 'refresh',
+    });
   }
 
   /**
@@ -529,11 +626,29 @@ export class LocalAuthEngine {
         user_id TEXT NOT NULL,
         token_hash TEXT NOT NULL,
         type TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 1,
         expires_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
         used_at INTEGER
       );
     `);
+
+    // Backfill attempts/max_attempts columns on existing pre-3.x token tables
+    try {
+      await this.db.execute(
+        `ALTER TABLE ${this.sqlTokensTable} ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;`,
+      );
+    } catch {
+      // Column already exists
+    }
+    try {
+      await this.db.execute(
+        `ALTER TABLE ${this.sqlTokensTable} ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 1;`,
+      );
+    } catch {
+      // Column already exists
+    }
 
     await this.db.execute(`
       CREATE INDEX IF NOT EXISTS ${escapeIdentifier(`idx_${this.tokensTable}_hash`)} ON ${this.sqlTokensTable} (token_hash, type);
@@ -634,16 +749,13 @@ export class LocalAuthEngine {
         offlineDurationMs: options.offlineDurationMs,
         setActive: true,
       });
-      if (this.remoteAuthHandler && session) {
-        try {
-          const remoteRes = await this.remoteAuthHandler({ user, session });
-          if (remoteRes && remoteRes.token) {
-            await this.sessionManager.updateTokens({ token: remoteRes.token });
-            session.token = remoteRes.token;
-          }
-        } catch {
-          // Non-fatal if offline
-        }
+      if (session) {
+        await this.tryRemoteAuthExchange({
+          user,
+          session,
+          mode: 'signup',
+          password: options.password,
+        });
       }
     }
 
@@ -675,13 +787,7 @@ export class LocalAuthEngine {
     ) as StoredUserRow | null;
 
     if (!row) {
-      // Dummy verification to mitigate timing attacks against non-existent accounts
-      await verifyPassword(
-        'dummy_password',
-        '0'.repeat(128),
-        '0'.repeat(32),
-        Math.min(this.iterations, 5_000),
-      );
+      await verifyDummyPassword(this.iterations);
       throw new Error('Invalid email/username or password.');
     }
 
@@ -788,16 +894,13 @@ export class LocalAuthEngine {
         offlineDurationMs: options.offlineDurationMs,
         setActive: true,
       });
-      if (this.remoteAuthHandler && session) {
-        try {
-          const remoteRes = await this.remoteAuthHandler({ user, session });
-          if (remoteRes && remoteRes.token) {
-            await this.sessionManager.updateTokens({ token: remoteRes.token });
-            session.token = remoteRes.token;
-          }
-        } catch {
-          // Non-fatal if offline
-        }
+      if (session) {
+        await this.tryRemoteAuthExchange({
+          user,
+          session,
+          mode: 'signin',
+          password,
+        });
       }
     }
 
@@ -957,10 +1060,11 @@ export class LocalAuthEngine {
   }
 
   /**
-   * Generates a cryptographically secure, single-use password reset token with expiration.
+   * Generates a cryptographically secure, single-use password reset token or 6-digit OTP with expiration.
    */
   async createPasswordResetToken(
     emailOrUsername: string,
+    options: CreateResetTokenOptions = {},
   ): Promise<CreateResetTokenResult> {
     const identifier = (emailOrUsername || '').trim().toLowerCase();
     const rows = await this.db.execute(
@@ -973,26 +1077,58 @@ export class LocalAuthEngine {
     }
 
     const userId = String(rows[0].id);
-    const { token, hash } = generateCryptoToken(32);
+    const format = options.format ?? 'hex';
+    let token: string;
+    let hash: string;
+    if (format === 'otp6') {
+      // Rejection sampling avoids modulo bias across [0, 900000)
+      const limit = 4_294_800_000;
+      let num = limit;
+      while (num >= limit) {
+        const randomVal = getCryptoRandomBytes(4);
+        num =
+          ((randomVal[0] << 24) |
+            (randomVal[1] << 16) |
+            (randomVal[2] << 8) |
+            randomVal[3]) >>>
+          0;
+      }
+      token = String(100000 + (num % 900000));
+      hash = bytesToHex(sha256(utf8ToBytes(token)));
+    } else {
+      const generated = generateCryptoToken(32);
+      token = generated.token;
+      hash = generated.hash;
+    }
+
     const now = Date.now();
-    const expiresAt = now + this.resetTokenExpiryMs;
+    const expiresAt = now + (options.expiresInMs ?? this.resetTokenExpiryMs);
+    const maxAttempts = options.maxAttempts ?? (format === 'otp6' ? 5 : 1);
     const tokenId = generateUUID();
 
+    if (format === 'otp6') {
+      await this.db.execute(
+        `UPDATE ${this.sqlTokensTable} SET used_at = ? WHERE user_id = ? AND type = 'reset_password' AND used_at IS NULL;`,
+        [now, userId],
+      );
+    }
+
     await this.db.execute(
-      `INSERT INTO ${this.sqlTokensTable} (id, user_id, token_hash, type, expires_at, created_at, used_at)
-       VALUES (?, ?, ?, 'reset_password', ?, ?, NULL);`,
-      [tokenId, userId, hash, expiresAt, now],
+      `INSERT INTO ${this.sqlTokensTable} (id, user_id, token_hash, type, attempts, max_attempts, expires_at, created_at, used_at)
+       VALUES (?, ?, ?, 'reset_password', 0, ?, ?, ?, NULL);`,
+      [tokenId, userId, hash, maxAttempts, expiresAt, now],
     );
 
     return { token, expiresAt };
   }
 
   /**
-   * Resets a user's password using a valid cryptographic reset token.
+   * Resets a user's password using a valid cryptographic reset token or 6-digit OTP.
    */
   async resetPasswordWithToken(
     token: string,
     newPassword: string,
+    options: ResetPasswordWithTokenOptions = {},
   ): Promise<void> {
     if (!token || !token.trim()) {
       throw new Error('A valid reset token is required.');
@@ -1003,16 +1139,58 @@ export class LocalAuthEngine {
     const tokenHash = bytesToHex(sha256(utf8ToBytes(token.trim())));
     const now = Date.now();
 
-    const rows = await this.db.execute(
-      `SELECT * FROM ${this.sqlTokensTable} WHERE token_hash = ? AND type = 'reset_password' AND used_at IS NULL AND expires_at > ? LIMIT 1;`,
-      [tokenHash, now],
-    );
-
-    if (!rows || rows.length === 0) {
-      throw new Error('Password reset token is invalid or has expired.');
+    let tokenRow: any = null;
+    if (options.identifier) {
+      const identifier = options.identifier.trim().toLowerCase();
+      const userRows = await this.db.execute(
+        `SELECT id FROM ${this.sqlUsersTable} WHERE lower(email) = ? OR lower(username) = ? LIMIT 1;`,
+        [identifier, identifier],
+      );
+      if (!userRows || userRows.length === 0) {
+        throw new Error('Password reset token is invalid or has expired.');
+      }
+      const targetUserId = String(userRows[0].id);
+      const rows = await this.db.execute(
+        `SELECT * FROM ${this.sqlTokensTable} WHERE user_id = ? AND type = 'reset_password' AND used_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1;`,
+        [targetUserId, now],
+      );
+      if (!rows || rows.length === 0) {
+        throw new Error('Password reset token is invalid or has expired.');
+      }
+      const candidate = rows[0];
+      const maxAttempts = Number(candidate.max_attempts ?? 1);
+      const attempts = Number(candidate.attempts ?? 0);
+      if (attempts >= maxAttempts) {
+        await this.db.execute(
+          `UPDATE ${this.sqlTokensTable} SET used_at = ? WHERE id = ?;`,
+          [now, candidate.id],
+        );
+        throw new Error('Too many invalid reset attempts. Request a new code.');
+      }
+      if (!timingSafeEqual(tokenHash, String(candidate.token_hash))) {
+        const nextAttempts = attempts + 1;
+        await this.db.execute(
+          `UPDATE ${this.sqlTokensTable} SET attempts = ?, used_at = ? WHERE id = ?;`,
+          [
+            nextAttempts,
+            nextAttempts >= maxAttempts ? now : null,
+            candidate.id,
+          ],
+        );
+        throw new Error('Password reset token is invalid or has expired.');
+      }
+      tokenRow = candidate;
+    } else {
+      const rows = await this.db.execute(
+        `SELECT * FROM ${this.sqlTokensTable} WHERE token_hash = ? AND type = 'reset_password' AND used_at IS NULL AND expires_at > ? LIMIT 1;`,
+        [tokenHash, now],
+      );
+      if (!rows || rows.length === 0) {
+        throw new Error('Password reset token is invalid or has expired.');
+      }
+      tokenRow = rows[0];
     }
 
-    const tokenRow = rows[0];
     const userId = String(tokenRow.user_id);
     const creds = await hashPassword(newPassword, {
       saltBytes: this.saltBytes,

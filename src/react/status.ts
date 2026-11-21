@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { LocalFirstClient } from '../core/client.js';
-import { SyncMetrics, SyncStatusEvent } from '../core/types.js';
+import { OutboxRecord, SyncMetrics, SyncStatusEvent } from '../core/types.js';
 import { useCoalescedRunner } from './runner.js';
 
 export interface UseSyncStatusResult {
@@ -9,7 +9,7 @@ export interface UseSyncStatusResult {
   isPulling: boolean;
   isSyncing: boolean;
   pendingCount: number;
-  pendingRecords: any[];
+  pendingRecords: OutboxRecord[];
   lastSyncedAt: number | null;
   refresh: () => Promise<void>;
 }
@@ -30,7 +30,7 @@ export function useSyncStatus(
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const [pendingRecords, setPendingRecords] = useState<any[]>([]);
+  const [pendingRecords, setPendingRecords] = useState<OutboxRecord[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
@@ -83,18 +83,21 @@ export function useSyncStatus(
     );
 
     // Only refresh lastSyncedAt after a completed pull (lightweight meta query only)
-    const unsubPull = client.events.on('sync:pull', async (e: any) => {
-      if (e?.success) {
-        try {
-          const ts = await client.getLastSyncedAt().catch(() => null);
-          if (ts !== null && ts !== undefined) {
-            setLastSyncedAt(ts > 0 ? ts : null);
+    const unsubPull = client.events.on(
+      'sync:pull',
+      async (e?: { success?: boolean }) => {
+        if (e?.success) {
+          try {
+            const ts = await client.getLastSyncedAt().catch(() => null);
+            if (ts !== null && ts !== undefined) {
+              setLastSyncedAt(ts > 0 ? ts : null);
+            }
+          } catch {
+            /* ignored */
           }
-        } catch {
-          /* ignored */
         }
-      }
-    });
+      },
+    );
 
     return () => {
       unsubStatus();
@@ -150,7 +153,7 @@ export function useSyncMetrics(
       client.events.on('sync:status', () => scheduleRefresh()),
     ];
 
-    let timer: any;
+    let timer: ReturnType<typeof setInterval> | undefined;
     if (pollIntervalMs > 0) {
       timer = setInterval(scheduleRefresh, pollIntervalMs);
     }

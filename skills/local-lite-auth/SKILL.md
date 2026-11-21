@@ -206,7 +206,7 @@ export const unifiedAuth = new UnifiedAuthManager({
 
 // Sign in with any provider - user sessions and local tables link seamlessly
 const user = await unifiedAuth.signIn('google');
-console.log('Unified Canonical User ID:', user.userId);
+console.log('Unified Canonical User ID:', user.id);
 
 // Listen to unified state changes
 const unsubscribe = unifiedAuth.onAuthStateChange((user) => {

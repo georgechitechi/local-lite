@@ -1,8 +1,13 @@
-export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
+export type ApiMethod =
+  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'ALL';
 
 export * from './email.js';
 export * from './sync.js';
-export * from './dashboard.js';
+export * from './auth.js';
+export * from './sqlDialect.js';
+export * from './sqlSyncStorage.js';
+export * from './syncEvents.js';
+export * from './scheduler.js';
 
 export interface ApiRequestContext<TConfig = unknown> {
   request: Request;
@@ -51,6 +56,31 @@ function matchPath(
 ): Record<string, string> | null {
   const patternSegments = normalizePath(pattern).split('/').filter(Boolean);
   const pathSegments = normalizePath(pathname).split('/').filter(Boolean);
+  const hasWildcard =
+    patternSegments.length > 0 &&
+    patternSegments[patternSegments.length - 1] === '*';
+
+  if (hasWildcard) {
+    const prefixSegments = patternSegments.slice(0, -1);
+    if (pathSegments.length < prefixSegments.length) return null;
+    const params: Record<string, string> = {};
+    for (let index = 0; index < prefixSegments.length; index += 1) {
+      const expected = prefixSegments[index];
+      const actual = pathSegments[index];
+      if (expected.startsWith(':')) {
+        try {
+          params[expected.slice(1)] = decodeURIComponent(actual);
+        } catch {
+          return null;
+        }
+      } else if (expected !== actual) {
+        return null;
+      }
+    }
+    params['*'] = pathSegments.slice(prefixSegments.length).join('/');
+    return params;
+  }
+
   if (patternSegments.length !== pathSegments.length) return null;
 
   const params: Record<string, string> = {};
@@ -108,25 +138,20 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
     }),
   );
 
-  const run = async (
+  const runWithMiddleware = async (
     request: Request,
     pathPattern: string,
-    endpoint: ApiEndpoint<TConfig>,
+    params: Record<string, string>,
+    finalHandler: (
+      context: ApiRequestContext<TConfig>,
+    ) => Promise<Response> | Response,
   ): Promise<Response> => {
-    const method = request.method.toUpperCase() as ApiMethod;
-    const url = new URL(request.url);
-    const params = matchPath(pathPattern, url.pathname);
-    const handler = endpoint[method];
     const context: ApiRequestContext<TConfig> = {
       request,
       config: config.config,
       path: pathPattern,
-      params: params ?? {},
+      params,
     };
-
-    if (!params) return Response.json({ error: 'Not Found' }, { status: 404 });
-    if (!handler) return methodNotAllowed(Object.keys(endpoint) as ApiMethod[]);
-
     const stack = config.middleware ?? [];
     let index = -1;
     const dispatch = async (position: number): Promise<Response> => {
@@ -134,7 +159,7 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
         throw new Error('API middleware called next() more than once.');
       index = position;
       const middleware = stack[position];
-      if (!middleware) return await handler(context);
+      if (!middleware) return await finalHandler(context);
       return await middleware(context, () => dispatch(position + 1));
     };
 
@@ -148,6 +173,22 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
       }
       return Response.json({ error: 'Internal Server Error' }, { status: 500 });
     }
+  };
+
+  const run = async (
+    request: Request,
+    pathPattern: string,
+    endpoint: ApiEndpoint<TConfig>,
+  ): Promise<Response> => {
+    const method = request.method.toUpperCase() as ApiMethod;
+    const url = new URL(request.url);
+    const params = matchPath(pathPattern, url.pathname);
+    const handler = endpoint[method] ?? endpoint.ALL;
+
+    if (!params) return Response.json({ error: 'Not Found' }, { status: 404 });
+    if (!handler) return methodNotAllowed(Object.keys(endpoint) as ApiMethod[]);
+
+    return await runWithMiddleware(request, pathPattern, params, handler);
   };
 
   const handlers: GeneratedApiHandlers = {};
@@ -164,7 +205,10 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
     handler(path: string, method: ApiMethod) {
       const normalized = normalizePath(path);
       const definition = definitions.find((item) => item.path === normalized);
-      if (!definition || !definition.endpoint[method]) {
+      if (
+        !definition ||
+        !(definition.endpoint[method] ?? definition.endpoint.ALL)
+      ) {
         throw new Error(
           `No ${method} API handler is configured for '${normalized}'.`,
         );
@@ -177,20 +221,29 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
       const method = request.method.toUpperCase() as ApiMethod;
       let pathMatched = false;
       for (const definition of definitions) {
-        if (!matchPath(definition.path, url.pathname)) continue;
+        const params = matchPath(definition.path, url.pathname);
+        if (!params) continue;
         pathMatched = true;
-        if (!definition.endpoint[method]) continue;
-        return await run(request, definition.path, definition.endpoint);
+        const handler = definition.endpoint[method] ?? definition.endpoint.ALL;
+        if (!handler) continue;
+        return await runWithMiddleware(
+          request,
+          definition.path,
+          params,
+          handler,
+        );
       }
-      if (pathMatched) {
-        const allowed = definitions
-          .filter((definition) => matchPath(definition.path, url.pathname))
-          .flatMap(
-            (definition) => Object.keys(definition.endpoint) as ApiMethod[],
-          );
-        return methodNotAllowed([...new Set(allowed)]);
-      }
-      return Response.json({ error: 'Not Found' }, { status: 404 });
+      return await runWithMiddleware(request, url.pathname, {}, () => {
+        if (pathMatched) {
+          const allowed = definitions
+            .filter((definition) => matchPath(definition.path, url.pathname))
+            .flatMap(
+              (definition) => Object.keys(definition.endpoint) as ApiMethod[],
+            );
+          return methodNotAllowed([...new Set(allowed)]);
+        }
+        return Response.json({ error: 'Not Found' }, { status: 404 });
+      });
     },
   };
 }

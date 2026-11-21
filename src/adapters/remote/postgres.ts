@@ -6,14 +6,14 @@ import {
   SyncOperation,
 } from '../../core/types.js';
 
-export interface PostgresQueryResult<T = any> {
+export interface PostgresQueryResult<T = Record<string, unknown>> {
   rows: T[];
 }
 
 export interface PostgresExecutor {
-  query<T = any>(
+  query<T = Record<string, unknown>>(
     sql: string,
-    params?: any[],
+    params?: unknown[],
   ): Promise<PostgresQueryResult<T>>;
 }
 
@@ -44,8 +44,8 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
   private updatedAtColumn: string;
   private schema: string;
   private syncScope?:
-    | Record<string, any>
-    | (() => Record<string, any> | Promise<Record<string, any>>);
+    | Record<string, unknown>
+    | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
 
   constructor(options: PostgresRemoteAdapterOptions) {
     this.executor = options.executor;
@@ -124,7 +124,7 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
 
   async fetchChanges(
     sinceTimestamp: number,
-    scope?: Record<string, any>,
+    scope?: Record<string, unknown>,
     _options?: RemoteRequestOptions,
   ): Promise<DeltaChanges> {
     const resolvedScope =
@@ -139,7 +139,7 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
 
     for (const table of this.tables) {
       const tableRef = this.qualTable(table);
-      const params: any[] = [sinceTimestamp];
+      const params: unknown[] = [sinceTimestamp];
       const whereParts: string[] = [`${tsCol} > $1`];
 
       if (resolvedScope && typeof resolvedScope === 'object') {
@@ -157,7 +157,9 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
         const ts = Number(row?.[this.updatedAtColumn]) || Date.now();
         if (ts > maxTimestamp) maxTimestamp = ts;
         const isDeleted =
-          row?.deleted === true || row?.deleted === 1 || row?.deleted === 'true';
+          row?.deleted === true ||
+          row?.deleted === 1 ||
+          row?.deleted === 'true';
         changes.push({
           tableName: table,
           rowId: String(row?.[this.primaryKey] ?? ''),
@@ -174,8 +176,8 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
   subscribeToLiveChanges(
     _callback: (changes: DeltaChanges) => void,
     scope?:
-      | Record<string, any>
-      | (() => Record<string, any> | Promise<Record<string, any>>),
+      | Record<string, unknown>
+      | (() => Record<string, unknown> | Promise<Record<string, unknown>>),
   ): () => void {
     if (scope) {
       this.syncScope = scope;

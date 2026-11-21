@@ -1,10 +1,37 @@
 {
   "name": "local-lite",
-  "version": "2.0.7",
+  "version": "3.1.0",
   "description": "Never let a lost connection break a promise. Local-first sync that faithfully keeps data safe until you're back online.",
   "license": "MIT",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "author": "George Chitechi",
+  "keywords": [
+    "local-first",
+    "offline-first",
+    "sqlite",
+    "sync",
+    "outbox",
+    "react-native",
+    "expo",
+    "supabase",
+    "convex",
+    "firestore",
+    "crdt"
+  ],
+  "homepage": "https://georgechitechi.github.io/local-lite/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/georgechitechi/local-lite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/georgechitechi/local-lite/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
     "local-lite": "bin/local-lite.mjs"
   },
@@ -18,216 +45,187 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
-      "import": "./dist/react/index.js",
       "default": "./dist/react/index.js"
     },
     "./devtools": {
       "types": "./dist/devtools/index.d.ts",
-      "import": "./dist/devtools/index.js",
       "default": "./dist/devtools/index.js"
     },
     "./config": {
       "types": "./dist/config/index.d.ts",
-      "import": "./dist/config/index.js",
       "default": "./dist/config/index.js"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js",
       "default": "./dist/server/index.js"
     },
     "./schema": {
       "types": "./dist/schema/index.d.ts",
-      "import": "./dist/schema/index.js",
       "default": "./dist/schema/index.js"
     },
     "./schema/migrations": {
       "types": "./dist/schema/sqlMigrations.d.ts",
-      "import": "./dist/schema/sqlMigrations.js",
       "default": "./dist/schema/sqlMigrations.js"
     },
     "./supabase": {
       "types": "./dist/adapters/remote/supabase.d.ts",
-      "import": "./dist/adapters/remote/supabase.js",
       "default": "./dist/adapters/remote/supabase.js"
     },
     "./convex": {
       "types": "./dist/adapters/remote/convex.d.ts",
-      "import": "./dist/adapters/remote/convex.js",
       "default": "./dist/adapters/remote/convex.js"
     },
     "./firebase": {
       "types": "./dist/adapters/remote/firestore.d.ts",
-      "import": "./dist/adapters/remote/firestore.js",
       "default": "./dist/adapters/remote/firestore.js"
+    },
+    "./self-hosted": {
+      "types": "./dist/adapters/remote/self-hosted.d.ts",
+      "default": "./dist/adapters/remote/self-hosted.js"
     },
     "./auth": {
       "types": "./dist/auth/index.d.ts",
-      "import": "./dist/auth/index.js",
       "default": "./dist/auth/index.js"
     },
     "./auth/local": {
       "types": "./dist/auth/local/index.d.ts",
-      "import": "./dist/auth/local/index.js",
       "default": "./dist/auth/local/index.js"
     },
     "./backups": {
       "types": "./dist/backups/index.d.ts",
-      "import": "./dist/backups/index.js",
       "default": "./dist/backups/index.js"
     },
     "./portability": {
       "types": "./dist/utils/portability.d.ts",
-      "import": "./dist/utils/portability.js",
       "default": "./dist/utils/portability.js"
     },
     "./maintenance": {
       "types": "./dist/core/maintenance.d.ts",
-      "import": "./dist/core/maintenance.js",
       "default": "./dist/core/maintenance.js"
     },
     "./expo-sqlite": {
       "types": "./dist/adapters/local/expo-sqlite.d.ts",
-      "import": "./dist/adapters/local/expo-sqlite.js",
       "default": "./dist/adapters/local/expo-sqlite.js"
     },
     "./op-sqlite": {
       "types": "./dist/adapters/local/op-sqlite.d.ts",
-      "import": "./dist/adapters/local/op-sqlite.js",
       "default": "./dist/adapters/local/op-sqlite.js"
     },
     "./better-sqlite3": {
       "types": "./dist/adapters/local/better-sqlite3.d.ts",
-      "import": "./dist/adapters/local/better-sqlite3.js",
       "default": "./dist/adapters/local/better-sqlite3.js"
     },
     "./libsql": {
       "types": "./dist/adapters/local/libsql.d.ts",
-      "import": "./dist/adapters/local/libsql.js",
       "default": "./dist/adapters/local/libsql.js"
     },
     "./sql-js": {
       "types": "./dist/adapters/local/sql-js.d.ts",
-      "import": "./dist/adapters/local/sql-js.js",
       "default": "./dist/adapters/local/sql-js.js"
     },
     "./node-sqlite": {
       "types": "./dist/adapters/local/node-sqlite.d.ts",
-      "import": "./dist/adapters/local/node-sqlite.js",
       "default": "./dist/adapters/local/node-sqlite.js"
     },
     "./sqlite-wasm": {
       "types": "./dist/adapters/local/sqlite-wasm.d.ts",
-      "import": "./dist/adapters/local/sqlite-wasm.js",
       "default": "./dist/adapters/local/sqlite-wasm.js"
     },
     "./postgres": {
       "types": "./dist/adapters/remote/postgres.d.ts",
-      "import": "./dist/adapters/remote/postgres.js",
       "default": "./dist/adapters/remote/postgres.js"
     },
     "./core": {
       "types": "./dist/core/index.d.ts",
-      "import": "./dist/core/index.js",
       "default": "./dist/core/index.js"
     },
     "./actions": {
       "types": "./dist/actions/index.d.ts",
-      "import": "./dist/actions/index.js",
       "default": "./dist/actions/index.js"
     },
     "./keys": {
       "types": "./dist/keys/index.d.ts",
-      "import": "./dist/keys/index.js",
       "default": "./dist/keys/index.js"
     },
     "./kv-store": {
       "types": "./dist/kv-store/index.d.ts",
-      "import": "./dist/kv-store/index.js",
       "default": "./dist/kv-store/index.js"
     },
     "./search": {
       "types": "./dist/search/index.d.ts",
-      "import": "./dist/search/index.js",
       "default": "./dist/search/index.js"
     },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
-      "import": "./dist/storage/index.js",
       "default": "./dist/storage/index.js"
     },
     "./scheduler": {
       "types": "./dist/scheduler/index.d.ts",
-      "import": "./dist/scheduler/index.js",
       "default": "./dist/scheduler/index.js"
     },
     "./email": {
       "types": "./dist/email/index.d.ts",
-      "import": "./dist/email/index.js",
       "default": "./dist/email/index.js"
     },
     "./payments": {
       "types": "./dist/payments/index.d.ts",
-      "import": "./dist/payments/index.js",
       "default": "./dist/payments/index.js"
     },
     "./payments/server": {
       "types": "./dist/payments/server.d.ts",
-      "import": "./dist/payments/server.js",
       "default": "./dist/payments/server.js"
     },
     "./svelte": {
       "types": "./dist/svelte/index.d.ts",
-      "import": "./dist/svelte/index.js",
       "default": "./dist/svelte/index.js"
     },
     "./vue": {
       "types": "./dist/vue/index.d.ts",
-      "import": "./dist/vue/index.js",
       "default": "./dist/vue/index.js"
     },
     "./solid": {
       "types": "./dist/solid/index.d.ts",
-      "import": "./dist/solid/index.js",
       "default": "./dist/solid/index.js"
     },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.js",
       "default": "./dist/testing/index.js"
     },
     "./presence": {
       "types": "./dist/presence/index.d.ts",
-      "import": "./dist/presence/index.js",
       "default": "./dist/presence/index.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build.mjs",
     "docs": "node scripts/serve-docs.mjs",
     "example": "npm run --prefix example dev",
+    "lint": "npx node-code-cleaner check:all src",
+    "lint:fix": "npx node-code-cleaner audit src",
+    "lint:package": "publint",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:isolate": "vitest run --isolate",
     "test:watch": "vitest",
     "test:package": "node scripts/package-smoke.mjs",
-    "prepublishOnly": "npm run test && npm run build && npm run test:package"
+    "prepublishOnly": "npm run lint && npm run test && npm run build && npm run lint:package && npm run test:package"
   },
   "peerDependencies": {
-    "@libsql/client": "^0.6.0",
-    "@op-engineering/op-sqlite": "^0.1.0",
-    "@supabase/supabase-js": "^2.0.0",
-    "better-sqlite3": "^8.0.0",
-    "convex": ">=1.0.0",
+    "@libsql/client": ">=0.14.0",
+    "@op-engineering/op-sqlite": ">=10.0.0",
+    "@supabase/supabase-js": ">=2.45.0",
+    "better-sqlite3": ">=11.0.0",
+    "convex": ">=1.15.0",
     "expo-file-system": ">=58.0.0",
     "expo-sqlite": ">=58.0.0",
-    "firebase": ">=9.0.0",
+    "firebase": ">=11.0.0",
     "nodemailer": ">=6.9.0",
     "react": ">=18.0.0",
-    "sql.js": "^1.8.0"
+    "sql.js": ">=1.10.0"
   },
   "peerDependenciesMeta": {
     "nodemailer": {
@@ -269,11 +267,13 @@
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "@types/uuid": "^11.0.0",
-    "expo-sqlite": "^58.0.17",
-    "nodemailer": "^10.6.0",
+    "@vitest/coverage-v8": "^5.1.1",
+    "expo-sqlite": "^58.0.18",
+    "nodemailer": "^10.6.1",
+    "publint": "^0.3.25",
     "react": "^19.3.1",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",

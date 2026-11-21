@@ -43,7 +43,7 @@ Welcome to the official documentation for **`local-lite`**, a lightweight, vendo
    - Expo SQLite (`expo-sqlite`)
    - Bare React Native (`@op-engineering/op-sqlite`)
    - Node.js / Electron (`better-sqlite3`)
-   - Built-in Node 22+ (`node:sqlite`)
+   - Built-in Node 24+ (`node:sqlite`)
    - Edge / Turso (`@libsql/client`)
    - Web / Browser (`sql.js`)
 10. **[Remote Backend Adapters](./adapters-remote.md)**

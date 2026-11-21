@@ -16,10 +16,10 @@ export interface OAuthTokenStore<TTokens, TUser> {
   setUser(user: TUser | null): Promise<void>;
 }
 
-export function createInMemoryOAuthTokenStore<TTokens, TUser>(): OAuthTokenStore<
+export function createInMemoryOAuthTokenStore<
   TTokens,
-  TUser
-> {
+  TUser,
+>(): OAuthTokenStore<TTokens, TUser> {
   let storedTokens: TTokens | null = null;
   let storedUser: TUser | null = null;
   return {
@@ -77,7 +77,9 @@ export async function parseOAuthTokenResponse<
   try {
     return (await response.json()) as T;
   } catch {
-    throw new Error(`${providerLabel} OAuth request failed (${response.status}).`);
+    throw new Error(
+      `${providerLabel} OAuth request failed (${response.status}).`,
+    );
   }
 }
 

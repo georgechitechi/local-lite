@@ -173,8 +173,7 @@ export type WhereFilter =
         Record<string, FieldFilter> | ((row: Record<string, any>) => boolean)
       )[];
       $not?:
-        | Record<string, FieldFilter>
-        | ((row: Record<string, any>) => boolean);
+        Record<string, FieldFilter> | ((row: Record<string, any>) => boolean);
       [key: string]: any;
     };
 

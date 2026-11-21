@@ -1,17 +1,8 @@
 export type PaymentProviderId =
-  | 'daraja'
-  | 'stripe'
-  | 'paystack'
-  | 'flutterwave'
-  | 'manual'
-  | (string & {});
+  'daraja' | 'stripe' | 'paystack' | 'flutterwave' | 'manual' | (string & {});
 
 export type PaymentStatus =
-  | 'initializing'
-  | 'pending'
-  | 'completed'
-  | 'failed'
-  | 'unknown';
+  'initializing' | 'pending' | 'completed' | 'failed' | 'unknown';
 
 export interface PaymentContext {
   currency?: string;

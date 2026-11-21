@@ -56,27 +56,32 @@ export interface FirebaseStorageUploaderInstance extends RemoteStorageUploader {
 }
 
 /**
- * Creates a RemoteStorageUploader that syncs binary files to Firebase Cloud Storage.
- * Supports both Firebase v9+ modular SDK and v8/compat SDKs.
+ * Creates a RemoteStorageUploader that syncs binary files to Firebase Cloud Storage
+ * using the Firebase v11+ modular SDK (`firebase/storage`).
  */
 export function createFirebaseStorageUploader(
-  storageOrApp: any,
+  storage: any,
   options: FirebaseStorageUploaderOptions = {},
 ): FirebaseStorageUploaderInstance {
-  if (!storageOrApp) {
-    throw new Error(
-      'Firebase Storage instance, app, or modular client must be provided.',
-    );
+  if (!storage) {
+    throw new Error('FirebaseStorage instance must be provided.');
   }
 
-  // Determine storage instance
-  let storageInstance = storageOrApp;
-  if (typeof storageOrApp.storage === 'function') {
-    // FirebaseApp compat
-    storageInstance = storageOrApp.storage(options.bucket);
-  }
-
-  const mod = options.storageModule || {};
+  let cachedMod: FirebaseStorageModule | null = options.storageModule ?? null;
+  const getMod = async (): Promise<FirebaseStorageModule> => {
+    if (cachedMod) return cachedMod;
+    try {
+      const modName = 'firebase/storage';
+      cachedMod = (await import(
+        /* @vite-ignore */ modName
+      )) as FirebaseStorageModule;
+      return cachedMod;
+    } catch {
+      throw new Error(
+        'Modular firebase/storage SDK is required. Install firebase >=11 or pass options.storageModule.',
+      );
+    }
+  };
 
   const resolveRemotePath = (key: string, blob?: BlobRecord): string => {
     if (options.pathTransform) {
@@ -90,32 +95,23 @@ export function createFirebaseStorageUploader(
     return cleanKey;
   };
 
-  const getRef = (path: string) => {
-    // 1. Modular SDK ref(storage, path)
-    if (typeof mod.ref === 'function') {
-      return mod.ref(storageInstance, path);
-    }
-    // 2. Storage instance ref(path) method
-    if (typeof storageInstance.ref === 'function') {
-      return storageInstance.ref(path);
-    }
-    // 3. Storage instance from bucket
-    if (typeof storageInstance.bucket === 'function') {
-      const b = storageInstance.bucket(options.bucket);
-      return typeof b.file === 'function' ? b.file(path) : b;
-    }
-    throw new Error(
-      'Cannot resolve Firebase Storage reference. Pass storageModule ({ ref, uploadBytes, getDownloadURL }) or a FirebaseStorage instance.',
-    );
-  };
-
   return {
     async upload(
       blob: BlobRecord,
       data: Uint8Array,
     ): Promise<RemoteStorageUploadResult> {
+      const mod = await getMod();
+      if (
+        typeof mod.ref !== 'function' ||
+        typeof mod.uploadBytes !== 'function'
+      ) {
+        throw new Error(
+          'Modular firebase/storage functions (ref, uploadBytes) are required.',
+        );
+      }
+
       const remotePath = resolveRemotePath(blob.key, blob);
-      const fileRef = getRef(remotePath);
+      const fileRef = mod.ref(storage, remotePath);
 
       const metadata: Record<string, any> = {
         contentType: blob.mimeType || 'application/octet-stream',
@@ -131,84 +127,42 @@ export function createFirebaseStorageUploader(
         metadata.customMetadata = extra;
       }
 
-      // Method A: Modular SDK uploadBytes
-      if (typeof mod.uploadBytes === 'function') {
-        await mod.uploadBytes(fileRef, data, metadata);
-        let remoteUrl = remotePath;
-        if (typeof mod.getDownloadURL === 'function') {
-          remoteUrl = await mod.getDownloadURL(fileRef);
-        }
-        return { remoteUrl, metadata };
-      }
-
-      // Method B: Compat put() or upload()
-      if (typeof fileRef.put === 'function') {
-        const snapshot = await fileRef.put(data, metadata);
-        let remoteUrl: string;
-        if (typeof snapshot?.ref?.getDownloadURL === 'function') {
-          remoteUrl = await snapshot.ref.getDownloadURL();
-        } else if (typeof fileRef.getDownloadURL === 'function') {
-          remoteUrl = await fileRef.getDownloadURL();
-        } else {
-          remoteUrl = remotePath;
-        }
-        return { remoteUrl, metadata };
-      }
-
-      // Method C: GCS admin save()
-      if (typeof fileRef.save === 'function') {
-        await fileRef.save(Buffer.isBuffer(data) ? data : Buffer.from(data), {
-          contentType: metadata.contentType,
-          metadata: metadata.customMetadata,
-        });
-        let remoteUrl = remotePath;
-        if (typeof fileRef.getSignedUrl === 'function') {
-          const [url] = await fileRef.getSignedUrl({
-            action: 'read',
-            expires: Date.now() + 86400 * 1000,
-          });
-          remoteUrl = url;
-        }
-        return { remoteUrl, metadata };
-      }
-
-      throw new Error(
-        'Unsupported Firebase Storage client: missing uploadBytes, put, or save method.',
-      );
+      await mod.uploadBytes(fileRef, data, metadata);
+      const remoteUrl =
+        typeof mod.getDownloadURL === 'function'
+          ? await mod.getDownloadURL(fileRef)
+          : remotePath;
+      return { remoteUrl, metadata };
     },
 
     async getDownloadUrl(keyOrPath: string): Promise<string> {
+      const mod = await getMod();
+      if (
+        typeof mod.ref !== 'function' ||
+        typeof mod.getDownloadURL !== 'function'
+      ) {
+        throw new Error(
+          'Modular firebase/storage functions (ref, getDownloadURL) are required.',
+        );
+      }
       const remotePath = resolveRemotePath(keyOrPath);
-      const fileRef = getRef(remotePath);
-
-      if (typeof mod.getDownloadURL === 'function') {
-        return await mod.getDownloadURL(fileRef);
-      }
-      if (typeof fileRef.getDownloadURL === 'function') {
-        return await fileRef.getDownloadURL();
-      }
-      if (typeof fileRef.getSignedUrl === 'function') {
-        const [url] = await fileRef.getSignedUrl({
-          action: 'read',
-          expires: Date.now() + 86400 * 1000,
-        });
-        return url;
-      }
-      return remotePath;
+      const fileRef = mod.ref(storage, remotePath);
+      return await mod.getDownloadURL(fileRef);
     },
 
     async delete(keyOrPath: string): Promise<void> {
+      const mod = await getMod();
+      if (
+        typeof mod.ref !== 'function' ||
+        typeof mod.deleteObject !== 'function'
+      ) {
+        throw new Error(
+          'Modular firebase/storage functions (ref, deleteObject) are required.',
+        );
+      }
       const remotePath = resolveRemotePath(keyOrPath);
-      const fileRef = getRef(remotePath);
-
-      if (typeof mod.deleteObject === 'function') {
-        await mod.deleteObject(fileRef);
-        return;
-      }
-      if (typeof fileRef.delete === 'function') {
-        await fileRef.delete();
-        return;
-      }
+      const fileRef = mod.ref(storage, remotePath);
+      await mod.deleteObject(fileRef);
     },
   };
 }

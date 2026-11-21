@@ -1,5 +1,9 @@
 import { LocalFirstClient } from '../core/client.js';
 import { QueryOptions, SyncStatusEvent } from '../core/types.js';
+import {
+  subscribeLiveQuery,
+  subscribeSyncStatus,
+} from '../reactive/live-query.js';
 
 export interface SolidApi {
   createSignal<T>(value: T): [() => T, (next: T) => void];
@@ -10,7 +14,7 @@ export interface SolidApi {
  * SolidJS primitive for live local-lite queries.
  * Pass `{ createSignal, onCleanup }` from `'solid-js'`.
  */
-export function createLiveQuery<T = any>(
+export function createLiveQuery<T = Record<string, unknown>>(
   client: LocalFirstClient,
   tableName: string,
   options: QueryOptions | undefined,
@@ -25,38 +29,17 @@ export function createLiveQuery<T = any>(
   const [data, setData] = solid.createSignal<T[]>([]);
   const [loading, setLoading] = solid.createSignal<boolean>(true);
   const [error, setError] = solid.createSignal<Error | null>(null);
-  let active = true;
 
-  const refresh = async () => {
-    try {
-      const rows = await client
-        .from<T>(tableName)
-        .applyOptions(options)
-        .execute();
-      if (!active) return;
-      setData(rows);
-      setLoading(false);
-      setError(null);
-    } catch (err: any) {
-      if (!active) return;
-      setLoading(false);
-      setError(err instanceof Error ? err : new Error(String(err)));
-    }
-  };
-
-  void refresh();
-  const unsubTable = client.events.on(tableName, () => {
-    void refresh();
-  });
-  const unsubReset = client.events.on('reset', () => {
-    void refresh();
-  });
-
-  const dispose = () => {
-    active = false;
-    unsubTable();
-    unsubReset();
-  };
+  const { refresh, dispose } = subscribeLiveQuery<T>(
+    client,
+    tableName,
+    options,
+    (state) => {
+      setData(state.data);
+      setLoading(state.loading);
+      setError(state.error);
+    },
+  );
 
   solid.onCleanup?.(dispose);
 
@@ -76,20 +59,7 @@ export function createSyncStatus(
     isPulling: false,
     pendingCount: 0,
   });
-  void client
-    .getMetrics()
-    .then((m) =>
-      setStatus({
-        isOnline: m.isOnline,
-        isPushing: m.isPushing,
-        isPulling: m.isPulling,
-        pendingCount: m.outboxPendingCount,
-      }),
-    )
-    .catch(() => {});
-  const unsub = client.events.on('sync:status', (next: SyncStatusEvent) => {
-    setStatus(next);
-  });
-  solid.onCleanup?.(unsub);
-  return { status, dispose: unsub };
+  const dispose = subscribeSyncStatus(client, setStatus);
+  solid.onCleanup?.(dispose);
+  return { status, dispose };
 }

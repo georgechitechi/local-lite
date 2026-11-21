@@ -63,7 +63,7 @@ export interface ConvexConfigOptions {
 
 export interface FirebaseConfigOptions {
   /**
-   * Firestore database instance (from modular firebase/firestore, @react-native-firebase/firestore, or compat SDK).
+   * Firestore database instance (from modular `firebase/firestore` v11+ SDK).
    */
   firestore: any;
 
@@ -159,6 +159,11 @@ export interface SelfHostedServerConfigOptions {
    * Custom HTTP request headers.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Custom fetch implementation (defaults to globalThis.fetch).
+   */
+  fetch?: typeof fetch;
 
   /**
    * Polling interval in milliseconds for live change detection. Default: 5000.

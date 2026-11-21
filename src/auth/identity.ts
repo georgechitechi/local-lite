@@ -13,21 +13,15 @@ export type SupportedAuthProvider =
 export interface AuthUser {
   /** Canonical deterministic UUID across all providers with the same verified email */
   id: string;
-  /** Alias for id to ensure compatibility with session records and sync workers */
-  userId: string;
   email: string;
   emailVerified: boolean;
   name: string;
-  displayName: string;
   avatarUrl?: string | null;
-  picture?: string | null;
   provider: SupportedAuthProvider;
   providerAccountId: string;
   rawProfile?: Record<string, any>;
   createdAt?: number;
 }
-
-export type UnifiedAuthUser = AuthUser;
 
 export interface IdentityResolverOptions {
   namespace?: string;
@@ -110,13 +104,10 @@ export function createUnifiedAuthUser(
 
   return {
     id,
-    userId: id,
     email,
     emailVerified,
     name,
-    displayName: name,
     avatarUrl,
-    picture: avatarUrl,
     provider,
     providerAccountId,
     rawProfile: rawUser,

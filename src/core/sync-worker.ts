@@ -805,7 +805,10 @@ export class SyncWorker {
           break;
         }
         // Prevent infinite loop if a buggy adapter returns hasMore without advancing timestamp
-        if (deltas?.timestamp !== undefined && deltas.timestamp <= sinceTimestamp) {
+        if (
+          deltas?.timestamp !== undefined &&
+          deltas.timestamp <= sinceTimestamp
+        ) {
           break;
         }
       }

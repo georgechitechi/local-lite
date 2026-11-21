@@ -249,50 +249,6 @@ describe('Multi-Cloud Storage Providers (Supabase, Convex, Firebase)', () => {
       await uploader.delete('inspections/hallway.jpg');
       expect(storageBucket.has('uploads/inspections/hallway.jpg')).toBe(false);
     });
-
-    it('supports compat Firebase Storage instances (ref, put, getDownloadURL)', async () => {
-      const storageBucket = new Map<string, any>();
-
-      const mockStorageInstance = {
-        ref: vi.fn((path: string) => ({
-          path,
-          put: vi.fn(async (data: any, meta: any) => {
-            storageBucket.set(path, { data, meta });
-            return {
-              ref: {
-                getDownloadURL: async () =>
-                  `https://storage.googleapis.com/compat/${path}`,
-              },
-            };
-          }),
-          getDownloadURL: vi.fn(
-            async () => `https://storage.googleapis.com/compat/${path}`,
-          ),
-          delete: vi.fn(async () => {
-            storageBucket.delete(path);
-          }),
-        })),
-      };
-
-      const uploader = createFirebaseStorageUploader(mockStorageInstance);
-
-      const blobRecord: any = {
-        id: 'compat-1',
-        key: 'avatars/admin.png',
-        mimeType: 'image/png',
-      };
-      const result = await uploader.upload(
-        blobRecord,
-        new Uint8Array([5, 5, 5]),
-      );
-      expect(result.remoteUrl).toBe(
-        'https://storage.googleapis.com/compat/avatars/admin.png',
-      );
-      expect(storageBucket.has('avatars/admin.png')).toBe(true);
-
-      await uploader.delete('avatars/admin.png');
-      expect(storageBucket.has('avatars/admin.png')).toBe(false);
-    });
   });
 
   describe('createStorageUploader Unified Factory', () => {

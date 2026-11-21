@@ -14,8 +14,11 @@ const npmCli = process.env.npm_execpath ??
   path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
 
 function run(command, args, cwd) {
+  const env = { ...process.env };
+  delete env.npm_config_dry_run;
   const result = spawnSync(command, args, {
     cwd,
+    env,
     encoding: 'utf8',
   });
   if (result.error || result.status !== 0) {

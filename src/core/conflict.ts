@@ -141,7 +141,7 @@ export function createFieldMergeResolver(
     const remotePayload = context.remoteChange.payload ?? {};
     const localPayload = context.localOutboxRecord?.payload ?? {};
 
-    const merged: Record<string, any> = { ...baseRow, ...remotePayload };
+    const merged: Record<string, unknown> = { ...baseRow, ...remotePayload };
 
     const tableRules = fieldRules[context.tableName] ?? {};
     const wildcardRules = fieldRules['*'] ?? {};

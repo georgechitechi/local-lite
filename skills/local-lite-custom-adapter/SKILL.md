@@ -9,14 +9,14 @@ Implement `RemoteDBAdapter` (exported from `local-lite`, with `SyncOperation`, `
 
 ## Contract
 
-- `pushChanges(operations): Promise<boolean | PushResult>`
+- `pushChanges(operations): Promise<PushResult>`
   - Must be idempotent: the client retries after failures, so applying the same operation twice must be safe.
   - Return `false` (or a failing `PushResult`) or reject on failure so operations stay in the outbox. Never report success for operations that were not stored.
 - `fetchChanges(sinceTimestamp, scope?): Promise<DeltaChanges>`
   - Return a **complete** batch of everything changed after `sinceTimestamp`, through the timestamp you report. Reject on partial failure; never return a truncated page as complete, or the checkpoint will skip data.
   - Apply `scope` filtering server-side when provided.
 - `subscribeToLiveChanges(callback, scope?): () => void`
-  - **Must return a cleanup function** (a no-op if no listener was created). Returning `void` is a breaking change since 0.0.30.
+  - **Must return a cleanup function** (a no-op if no listener was created). Returning `void` is not supported.
   - Live events do not advance the durable pull checkpoint.
   - `scope` may be an object or a (possibly async) function. If setup is async, guard against cleanup running before setup finishes (generation counter or cancelled flag) so listeners do not leak.
 - `setSyncScope?(scope)`: optional; implement it if the backend filters by scope, and re-subscribe live listeners when scope changes.
@@ -27,16 +27,19 @@ Implement `RemoteDBAdapter` (exported from `local-lite`, with `SyncOperation`, `
 ## Skeleton
 
 ```typescript
-import type { RemoteDBAdapter, SyncOperation, DeltaChanges } from 'local-lite';
+import type { RemoteDBAdapter, SyncOperation, DeltaChanges, PushResult } from 'local-lite/core';
 
 export class MyAdapter implements RemoteDBAdapter {
-  async pushChanges(operations: SyncOperation[]): Promise<boolean> {
+  async pushChanges(operations: SyncOperation[]): Promise<PushResult> {
     const res = await fetch('/sync/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ operations }),
     });
-    return res.ok;
+    if (!res.ok) {
+      return { success: false, successfulIds: [], failedIds: operations.map((op) => op.id) };
+    }
+    return { success: true, successfulIds: operations.map((op) => op.id), failedIds: [] };
   }
 
   async fetchChanges(since: number, scope?: Record<string, any>): Promise<DeltaChanges> {

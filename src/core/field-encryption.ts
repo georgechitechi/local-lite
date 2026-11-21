@@ -82,7 +82,7 @@ export class FieldEncryptor {
     return this.cryptoKeyPromise;
   }
 
-  async encryptValue(value: any): Promise<string> {
+  async encryptValue(value: unknown): Promise<string | null | undefined> {
     if (value === null || value === undefined) return value;
     if (typeof value === 'string' && value.startsWith(ENC_PREFIX)) {
       return value;
@@ -91,9 +91,9 @@ export class FieldEncryptor {
     const iv = requireSecureRandomBytes(IV_LENGTH);
     const plainBytes = utf8ToBytes(JSON.stringify(value));
     const cipherBuf = await globalThis.crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv as any },
+      { name: 'AES-GCM', iv: iv as BufferSource },
       key,
-      plainBytes as any,
+      plainBytes as BufferSource,
     );
     const cipherBytes = new Uint8Array(cipherBuf);
     const combined = new Uint8Array(IV_LENGTH + cipherBytes.length);
@@ -102,7 +102,7 @@ export class FieldEncryptor {
     return ENC_PREFIX + toBase64(combined);
   }
 
-  async decryptValue(raw: any): Promise<any> {
+  async decryptValue(raw: unknown): Promise<unknown> {
     if (typeof raw !== 'string' || !raw.startsWith(ENC_PREFIX)) {
       return raw;
     }
@@ -111,21 +111,21 @@ export class FieldEncryptor {
     const iv = combined.slice(0, IV_LENGTH);
     const cipherBytes = combined.slice(IV_LENGTH);
     const plainBuf = await globalThis.crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as any },
+      { name: 'AES-GCM', iv: iv as BufferSource },
       key,
-      cipherBytes as any,
+      cipherBytes as BufferSource,
     );
     const json = new TextDecoder().decode(plainBuf);
     return JSON.parse(json);
   }
 
-  async encryptPayload<T extends Record<string, any>>(
+  async encryptPayload<T extends Record<string, unknown>>(
     tableName: string,
     payload: T,
   ): Promise<T> {
     const cols = this.encryptedColumns[tableName];
     if (!cols || cols.length === 0 || !payload) return payload;
-    const copy: Record<string, any> = { ...payload };
+    const copy: Record<string, unknown> = { ...payload };
     for (const col of cols) {
       if (col in copy && copy[col] !== null && copy[col] !== undefined) {
         copy[col] = await this.encryptValue(copy[col]);
@@ -134,13 +134,13 @@ export class FieldEncryptor {
     return copy as T;
   }
 
-  async decryptRow<T extends Record<string, any>>(
+  async decryptRow<T extends Record<string, unknown>>(
     tableName: string,
     row: T,
   ): Promise<T> {
     const cols = this.encryptedColumns[tableName];
     if (!cols || cols.length === 0 || !row) return row;
-    const copy: Record<string, any> = { ...row };
+    const copy: Record<string, unknown> = { ...row };
     for (const col of cols) {
       if (col in copy && typeof copy[col] === 'string') {
         copy[col] = await this.decryptValue(copy[col]);

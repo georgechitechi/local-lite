@@ -5,8 +5,9 @@ import { MemoryDemoRemoteAdapter } from '../adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../adapters/network/index.js';
 import type { SyncOperation } from '../core/types.js';
 
-export interface CreateTestClientOptions
-  extends Partial<Omit<LocalFirstClientConfig, 'local'>> {
+export interface CreateTestClientOptions extends Partial<
+  Omit<LocalFirstClientConfig, 'local'>
+> {
   tables?: string[];
   online?: boolean;
   remoteLatencyMs?: number;
