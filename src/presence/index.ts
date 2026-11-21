@@ -115,9 +115,7 @@ export class PresenceChannel<TState = Record<string, any>> {
     return Array.from(this.peers.values());
   }
 
-  onPeersChange(
-    callback: (peers: PresencePeer<TState>[]) => void,
-  ): () => void {
+  onPeersChange(callback: (peers: PresencePeer<TState>[]) => void): () => void {
     this.listeners.add(callback);
     return () => {
       this.listeners.delete(callback);

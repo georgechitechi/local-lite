@@ -471,10 +471,9 @@ export class TransactionalClient {
     for (let i = 0; i < unvisitedIds.length; i += 500) {
       const chunk = unvisitedIds.slice(i, i + 500);
       if (chunk.length === 1) {
-        await this.tx.execute(
-          `DELETE FROM ${safeTable} WHERE ${safePk} = ?`,
-          [chunk[0]],
-        );
+        await this.tx.execute(`DELETE FROM ${safeTable} WHERE ${safePk} = ?`, [
+          chunk[0],
+        ]);
       } else {
         const placeholders = chunk.map(() => '?').join(', ');
         await this.tx.execute(
@@ -519,7 +518,12 @@ export class TransactionalClient {
     for (const id of unvisitedIds) {
       this.queuedTableEvents.push({
         tableName,
-        event: { operation: 'DELETE', rowId: id, payload: null, source: 'local' },
+        event: {
+          operation: 'DELETE',
+          rowId: id,
+          payload: null,
+          source: 'local',
+        },
       });
     }
   }

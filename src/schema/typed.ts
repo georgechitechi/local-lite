@@ -50,7 +50,9 @@ export function defineTypedSchema<TSchema extends SchemaDefinition>(
 }
 
 export interface TypedQueryBuilder<TRow extends Record<string, any>> {
-  select<K extends keyof TRow & string>(...columns: K[]): TypedQueryBuilder<Pick<TRow, K>>;
+  select<K extends keyof TRow & string>(
+    ...columns: K[]
+  ): TypedQueryBuilder<Pick<TRow, K>>;
   where(
     filter: Partial<Record<keyof TRow & string, any>> | WhereFilter,
   ): TypedQueryBuilder<TRow>;
@@ -110,11 +112,7 @@ export function createTypedClient<TSchema extends SchemaDefinition>(
       id: string,
       options?: Pick<QueryOptions, 'includeDeleted'>,
     ) {
-      return client.findById<InferTableRow<TSchema[T]>>(
-        tableName,
-        id,
-        options,
-      );
+      return client.findById<InferTableRow<TSchema[T]>>(tableName, id, options);
     },
     insert<T extends keyof TSchema & string>(
       tableName: T,

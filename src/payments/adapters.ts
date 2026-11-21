@@ -33,7 +33,9 @@ async function hmacHex(
 ): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) {
-    throw new Error('Web Crypto subtle API is required for webhook verification.');
+    throw new Error(
+      'Web Crypto subtle API is required for webhook verification.',
+    );
   }
   const encoder = new TextEncoder();
   const key = await subtle.importKey(
@@ -81,7 +83,9 @@ export function createManualPaymentAdapter(
     supportedCurrencies: options.supportedCurrencies ?? '*',
     supportedCountries: '*',
     requiresOnline: false,
-    async initiate(input: PaymentInitiateInput): Promise<PaymentInitiateResult> {
+    async initiate(
+      input: PaymentInitiateInput,
+    ): Promise<PaymentInitiateResult> {
       return {
         success: true,
         status: 'completed',
@@ -128,14 +132,20 @@ export function createDarajaAdapter(
     supportedCurrencies: ['KES'],
     supportedCountries: ['KE'],
     requiresOnline: true,
-    async initiate(input: PaymentInitiateInput): Promise<PaymentInitiateResult> {
+    async initiate(
+      input: PaymentInitiateInput,
+    ): Promise<PaymentInitiateResult> {
       const phone = formatKenyanPhone(input.phone ?? '');
       if (!/^254\d{9}$/.test(phone)) {
-        throw new Error('Valid Kenyan phone number (254XXXXXXXXX) is required.');
+        throw new Error(
+          'Valid Kenyan phone number (254XXXXXXXXX) is required.',
+        );
       }
       const amount = Math.round(input.amount);
       if (!Number.isInteger(amount) || amount < 1 || amount > 250000) {
-        throw new Error('M-Pesa amount must be an integer between 1 and 250000.');
+        throw new Error(
+          'M-Pesa amount must be an integer between 1 and 250000.',
+        );
       }
       const callbackUrl = (input.callbackUrl ?? options.callbackUrl).trim();
       if (!callbackUrl.startsWith('https://')) {
@@ -314,7 +324,9 @@ export function createPaystackAdapter(
     ],
     supportedCountries: options.supportedCountries ?? '*',
     requiresOnline: true,
-    async initiate(input: PaymentInitiateInput): Promise<PaymentInitiateResult> {
+    async initiate(
+      input: PaymentInitiateInput,
+    ): Promise<PaymentInitiateResult> {
       if (!input.email) {
         throw new Error('Customer email is required for Paystack payments.');
       }
@@ -352,7 +364,10 @@ export function createPaystackAdapter(
         raw: data,
       };
     },
-    async verifyWebhook(request: Request, context?: { rawBody?: string }): Promise<PaymentWebhookResult> {
+    async verifyWebhook(
+      request: Request,
+      context?: { rawBody?: string },
+    ): Promise<PaymentWebhookResult> {
       const signature = request.headers.get('x-paystack-signature') || '';
       const rawBody = context?.rawBody ?? (await request.text());
       if (!signature || !rawBody) {
@@ -381,7 +396,9 @@ export function createPaystackAdapter(
           receiptNumber: String(data.id || data.reference || ''),
           amount:
             typeof data.amount === 'number' ? data.amount / 100 : undefined,
-          currency: data.currency ? String(data.currency).toUpperCase() : undefined,
+          currency: data.currency
+            ? String(data.currency).toUpperCase()
+            : undefined,
           status: 'completed',
           rawPayload: event,
         };
@@ -429,7 +446,9 @@ export function createStripeCheckoutAdapter(
     supportedCurrencies: options.supportedCurrencies ?? '*',
     supportedCountries: options.supportedCountries ?? '*',
     requiresOnline: true,
-    async initiate(input: PaymentInitiateInput): Promise<PaymentInitiateResult> {
+    async initiate(
+      input: PaymentInitiateInput,
+    ): Promise<PaymentInitiateResult> {
       if (!input.returnUrl) {
         throw new Error('returnUrl is required for Stripe Checkout sessions.');
       }
@@ -450,14 +469,17 @@ export function createStripeCheckoutAdapter(
         params.set('customer_email', input.email);
       }
 
-      const res = await fetchImpl('https://api.stripe.com/v1/checkout/sessions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${options.secretKey}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+      const res = await fetchImpl(
+        'https://api.stripe.com/v1/checkout/sessions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${options.secretKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
         },
-        body: params.toString(),
-      });
+      );
       const data: any = await res.json();
       if (!res.ok || !data?.id || !data?.url) {
         throw new Error(
@@ -474,7 +496,10 @@ export function createStripeCheckoutAdapter(
         raw: data,
       };
     },
-    async verifyWebhook(request: Request, context?: { rawBody?: string }): Promise<PaymentWebhookResult> {
+    async verifyWebhook(
+      request: Request,
+      context?: { rawBody?: string },
+    ): Promise<PaymentWebhookResult> {
       if (!options.webhookSecret) {
         return {
           verified: false,
@@ -499,7 +524,9 @@ export function createStripeCheckoutAdapter(
           error: 'Missing Stripe signature or payload.',
         };
       }
-      const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+      const ageSeconds = Math.abs(
+        Math.floor(Date.now() / 1000) - Number(timestamp),
+      );
       if (!Number.isFinite(ageSeconds) || ageSeconds > 300) {
         return {
           verified: false,

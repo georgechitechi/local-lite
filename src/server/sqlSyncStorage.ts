@@ -90,10 +90,9 @@ export class SqlServerSyncStorage implements ServerSyncStorage {
         }
       }
 
-      await tx.execute(
-        `UPDATE ${qClock} SET checkpoint = ? WHERE id = 1`,
-        [checkpoint],
-      );
+      await tx.execute(`UPDATE ${qClock} SET checkpoint = ? WHERE id = 1`, [
+        checkpoint,
+      ]);
       return checkpoint;
     });
 

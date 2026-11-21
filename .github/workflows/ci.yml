@@ -9,11 +9,17 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [22, 24]
+        exclude:
+          - os: windows-latest
+            node-version: 24
+          - os: macos-latest
+            node-version: 24
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -22,5 +28,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npm run lint
       - run: npm test
+      - run: npm run test:isolate
+      - run: npm run lint:package
       - run: npm run test:package

@@ -72,7 +72,9 @@ export function createFirebaseStorageUploader(
     if (cachedMod) return cachedMod;
     try {
       const modName = 'firebase/storage';
-      cachedMod = (await import(/* @vite-ignore */ modName)) as FirebaseStorageModule;
+      cachedMod = (await import(
+        /* @vite-ignore */ modName
+      )) as FirebaseStorageModule;
       return cachedMod;
     } catch {
       throw new Error(
@@ -99,7 +101,10 @@ export function createFirebaseStorageUploader(
       data: Uint8Array,
     ): Promise<RemoteStorageUploadResult> {
       const mod = await getMod();
-      if (typeof mod.ref !== 'function' || typeof mod.uploadBytes !== 'function') {
+      if (
+        typeof mod.ref !== 'function' ||
+        typeof mod.uploadBytes !== 'function'
+      ) {
         throw new Error(
           'Modular firebase/storage functions (ref, uploadBytes) are required.',
         );
@@ -132,7 +137,10 @@ export function createFirebaseStorageUploader(
 
     async getDownloadUrl(keyOrPath: string): Promise<string> {
       const mod = await getMod();
-      if (typeof mod.ref !== 'function' || typeof mod.getDownloadURL !== 'function') {
+      if (
+        typeof mod.ref !== 'function' ||
+        typeof mod.getDownloadURL !== 'function'
+      ) {
         throw new Error(
           'Modular firebase/storage functions (ref, getDownloadURL) are required.',
         );
@@ -144,7 +152,10 @@ export function createFirebaseStorageUploader(
 
     async delete(keyOrPath: string): Promise<void> {
       const mod = await getMod();
-      if (typeof mod.ref !== 'function' || typeof mod.deleteObject !== 'function') {
+      if (
+        typeof mod.ref !== 'function' ||
+        typeof mod.deleteObject !== 'function'
+      ) {
         throw new Error(
           'Modular firebase/storage functions (ref, deleteObject) are required.',
         );

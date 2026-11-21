@@ -603,10 +603,7 @@ export async function runSQLiteBenchmark(
           .orderBy('score', 'DESC')
           .limit(25)
           .execute();
-        await client
-          .from('_sync_bench_temp')
-          .where('score', '$gte', 0)
-          .count();
+        await client.from('_sync_bench_temp').where('score', '$gte', 0).count();
       }
       const tQbDuration = elapsed(tQbStart);
       const qbOps = qbIterations * 2;
@@ -651,7 +648,10 @@ export async function runSQLiteBenchmark(
     // 11d. client.storage Blob Save / Get / Delete (SHA-256)
     if (client?.storage) {
       const blobCount = 10;
-      onProgress?.(`Benchmarking client.storage (${blobCount} blobs)...`, 0.985);
+      onProgress?.(
+        `Benchmarking client.storage (${blobCount} blobs)...`,
+        0.985,
+      );
       const tBlobStart = now();
       for (let i = 0; i < blobCount; i++) {
         const key = `_sync_bench_blob_${i}.txt`;
@@ -705,7 +705,10 @@ export async function runSQLiteBenchmark(
     // 11f. client.actions Outbox Enqueue & Cancel
     if (client?.actions) {
       const actionCount = 20;
-      onProgress?.(`Benchmarking client.actions outbox (${actionCount})...`, 0.992);
+      onProgress?.(
+        `Benchmarking client.actions outbox (${actionCount})...`,
+        0.992,
+      );
       const tActStart = now();
       for (let i = 0; i < actionCount; i++) {
         const rec = await client.actions.enqueue({
@@ -831,7 +834,10 @@ export async function runSQLiteBenchmark(
     // 11i. Large 10KB Unicode/JSON Payload Stress
     if (client?.insert && client?.findById && client?.delete) {
       const largeCount = 15;
-      onProgress?.('Stress-testing 10KB+ nested Unicode JSON payloads...', 0.9945);
+      onProgress?.(
+        'Stress-testing 10KB+ nested Unicode JSON payloads...',
+        0.9945,
+      );
       const bigBlob = JSON.stringify({
         emoji: '⚡🔐🧪🌍🚀'.repeat(40),
         nested: Array.from({ length: 40 }, (_, k) => ({
@@ -871,7 +877,10 @@ export async function runSQLiteBenchmark(
 
     // 11j. FTS5 Full-Text Search & BM25 Ranking
     if (client?.search) {
-      onProgress?.('Benchmarking FTS5 full-text indexing & BM25 search...', 0.9948);
+      onProgress?.(
+        'Benchmarking FTS5 full-text indexing & BM25 search...',
+        0.9948,
+      );
       const tFtsStart = now();
       try {
         await client.search.createIndex({
@@ -889,7 +898,8 @@ export async function runSQLiteBenchmark(
         list.push({
           name: 'FTS5 Full-Text Index & BM25 Search',
           category: 'Local-Lite Client',
-          description: 'FTS5 index creation, full rebuild & 20 ranked prefix queries',
+          description:
+            'FTS5 index creation, full rebuild & 20 ranked prefix queries',
           operations: 22,
           durationMs: tFtsDuration,
           opsPerSec: Math.round((22 / tFtsDuration) * 1000),
@@ -947,14 +957,18 @@ export async function runSQLiteBenchmark(
 
     onProgress?.('Benchmark complete!', 1);
   } finally {
-    await db.execute('DROP TABLE IF EXISTS "_sync_bench_orders"').catch(() => {});
+    await db
+      .execute('DROP TABLE IF EXISTS "_sync_bench_orders"')
+      .catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_tags"').catch(() => {});
     await db.execute('DROP TABLE IF EXISTS "_sync_bench_temp"').catch(() => {});
     await db
       .execute('DROP TABLE IF EXISTS "_sync_bench_outbox"')
       .catch(() => {});
     await db
-      .execute('DELETE FROM "sync_outbox" WHERE "table_name" LIKE ?', ['_sync%'])
+      .execute('DELETE FROM "sync_outbox" WHERE "table_name" LIKE ?', [
+        '_sync%',
+      ])
       .catch(() => {});
   }
 

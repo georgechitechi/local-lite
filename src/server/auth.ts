@@ -239,7 +239,9 @@ export class SQLiteServerAuthStorage implements ServerAuthStorage {
     );
   }
 
-  async findLatestActiveOtp(email: string): Promise<ServerAuthOtpRecord | null> {
+  async findLatestActiveOtp(
+    email: string,
+  ): Promise<ServerAuthOtpRecord | null> {
     await this.initialize();
     const rows = await this.db.execute(
       `SELECT * FROM _local_auth_reset_otps WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1;`,
@@ -445,9 +447,7 @@ export function createAuthEndpoint(options: CreateAuthEndpointOptions) {
       },
     });
 
-  return async function handleAuthRequest(
-    request: Request,
-  ): Promise<Response> {
+  return async function handleAuthRequest(request: Request): Promise<Response> {
     if (request.method.toUpperCase() === 'OPTIONS') {
       return new Response(null, { status: 204 });
     }

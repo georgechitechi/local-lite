@@ -124,7 +124,9 @@ export class AuditManager {
     }
     const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
     const limitSql =
-      typeof options?.limit === 'number' ? `LIMIT ${Math.max(1, options.limit)}` : '';
+      typeof options?.limit === 'number'
+        ? `LIMIT ${Math.max(1, options.limit)}`
+        : '';
     const rows = await this.db.execute(
       `SELECT * FROM _audit_log ${whereSql} ORDER BY created_at DESC, rowid DESC ${limitSql}`,
       params,

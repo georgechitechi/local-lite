@@ -180,14 +180,17 @@ export interface PaymentServerHandlerOptions {
 export function createPaymentServerHandler(
   options: PaymentServerHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  const { registry, store, callbackBaseUrl, onCompleted, onReconcile } = options;
+  const { registry, store, callbackBaseUrl, onCompleted, onReconcile } =
+    options;
 
   async function handleInitiate(request: Request): Promise<Response> {
     const body: any = await request.json();
     const actionId = body?.actionId;
     const provider = body?.provider || 'daraja';
     const amount = Number(body?.amount);
-    const currency = String(body?.currency || '').trim().toUpperCase();
+    const currency = String(body?.currency || '')
+      .trim()
+      .toUpperCase();
 
     if (
       typeof actionId !== 'string' ||
@@ -198,7 +201,9 @@ export function createPaymentServerHandler(
       !currency
     ) {
       return Response.json(
-        { error: 'Valid actionId, provider, currency, and amount are required.' },
+        {
+          error: 'Valid actionId, provider, currency, and amount are required.',
+        },
         { status: 400 },
       );
     }
@@ -360,7 +365,8 @@ export function createPaymentServerHandler(
     if (webhook.status === 'completed') {
       if (
         typeof webhook.amount === 'number' &&
-        Math.round(webhook.amount * 100) !== Math.round(reservation.amount * 100)
+        Math.round(webhook.amount * 100) !==
+          Math.round(reservation.amount * 100)
       ) {
         return Response.json(
           { error: 'Callback amount mismatch.' },

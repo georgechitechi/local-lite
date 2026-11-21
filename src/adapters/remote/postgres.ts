@@ -11,10 +11,7 @@ export interface PostgresQueryResult<T = any> {
 }
 
 export interface PostgresExecutor {
-  query<T = any>(
-    sql: string,
-    params?: any[],
-  ): Promise<PostgresQueryResult<T>>;
+  query<T = any>(sql: string, params?: any[]): Promise<PostgresQueryResult<T>>;
 }
 
 export interface PostgresRemoteAdapterOptions {
@@ -157,7 +154,9 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
         const ts = Number(row?.[this.updatedAtColumn]) || Date.now();
         if (ts > maxTimestamp) maxTimestamp = ts;
         const isDeleted =
-          row?.deleted === true || row?.deleted === 1 || row?.deleted === 'true';
+          row?.deleted === true ||
+          row?.deleted === 1 ||
+          row?.deleted === 'true';
         changes.push({
           tableName: table,
           rowId: String(row?.[this.primaryKey] ?? ''),

@@ -435,7 +435,7 @@ export class FirestoreRemoteAdapter implements RemoteDBAdapter {
     for (const unsub of this.unsubscribers) {
       try {
         unsub();
-      } catch { }
+      } catch {}
     }
     this.unsubscribers = [];
   }

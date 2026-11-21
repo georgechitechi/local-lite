@@ -37,7 +37,9 @@ export class SqliteWasmAdapter implements LocalDBAdapter {
     return Array.isArray(rows) ? rows : [];
   }
 
-  async transaction<T>(action: (tx: LocalTransaction) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    action: (tx: LocalTransaction) => Promise<T>,
+  ): Promise<T> {
     let release!: () => void;
     const prev = this.txQueue;
     this.txQueue = new Promise<void>((resolve) => {

@@ -474,7 +474,9 @@ export class LocalAuthEngine {
             const headers: Record<string, string> = {
               'Content-Type': 'application/json',
               ...customHeaders,
-              ...(isRefresh ? { Authorization: `Bearer ${session.token}` } : {}),
+              ...(isRefresh
+                ? { Authorization: `Bearer ${session.token}` }
+                : {}),
             };
             const res = await fetchFn(endpoint, {
               method: 'POST',
@@ -1169,7 +1171,11 @@ export class LocalAuthEngine {
         const nextAttempts = attempts + 1;
         await this.db.execute(
           `UPDATE ${this.sqlTokensTable} SET attempts = ?, used_at = ? WHERE id = ?;`,
-          [nextAttempts, nextAttempts >= maxAttempts ? now : null, candidate.id],
+          [
+            nextAttempts,
+            nextAttempts >= maxAttempts ? now : null,
+            candidate.id,
+          ],
         );
         throw new Error('Password reset token is invalid or has expired.');
       }

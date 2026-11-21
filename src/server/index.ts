@@ -1,11 +1,5 @@
 export type ApiMethod =
-  | 'GET'
-  | 'POST'
-  | 'PUT'
-  | 'PATCH'
-  | 'DELETE'
-  | 'OPTIONS'
-  | 'ALL';
+  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'ALL';
 
 export * from './email.js';
 export * from './sync.js';
@@ -149,7 +143,9 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
     request: Request,
     pathPattern: string,
     params: Record<string, string>,
-    finalHandler: (context: ApiRequestContext<TConfig>) => Promise<Response> | Response,
+    finalHandler: (
+      context: ApiRequestContext<TConfig>,
+    ) => Promise<Response> | Response,
   ): Promise<Response> => {
     const context: ApiRequestContext<TConfig> = {
       request,
@@ -231,7 +227,12 @@ export function createServer<TConfig>(config: ServerConfig<TConfig>) {
         pathMatched = true;
         const handler = definition.endpoint[method] ?? definition.endpoint.ALL;
         if (!handler) continue;
-        return await runWithMiddleware(request, definition.path, params, handler);
+        return await runWithMiddleware(
+          request,
+          definition.path,
+          params,
+          handler,
+        );
       }
       return await runWithMiddleware(request, url.pathname, {}, () => {
         if (pathMatched) {

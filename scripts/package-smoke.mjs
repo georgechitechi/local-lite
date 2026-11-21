@@ -63,6 +63,15 @@ try {
     }
   `;
   run(process.execPath, ['--input-type=module', '-e', importScript], consumerRoot);
+
+  const requireScript = `
+    const entrypoints = ${JSON.stringify(entrypoints)};
+    for (const entrypoint of entrypoints) {
+      require(entrypoint);
+      console.log('Required', entrypoint);
+    }
+  `;
+  run(process.execPath, ['--input-type=commonjs', '-e', requireScript], consumerRoot);
   const cliPath = path.join(consumerRoot, 'node_modules', packageJson.name, 'bin', 'local-lite.mjs');
   run(process.execPath, [cliPath, 'install-skills', '--target', 'claude'], consumerRoot);
   const installed = await readFile(

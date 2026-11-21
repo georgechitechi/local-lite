@@ -181,8 +181,7 @@ export class UnifiedAuthManager {
    */
   async getUser(): Promise<AuthUser | null> {
     if (this.sessionManager) {
-      const session =
-        await this.sessionManager.getActiveSession<AuthUser>();
+      const session = await this.sessionManager.getActiveSession<AuthUser>();
       if (session?.user) return session.user;
     }
 

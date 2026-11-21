@@ -119,7 +119,12 @@ export function mapFieldTypeToSql(
 
   if (dialect === 'sqlite') {
     if (colName === 'id') {
-      return { sqlType: 'TEXT', nullable: false, defaultSql: null, primaryKey: true };
+      return {
+        sqlType: 'TEXT',
+        nullable: false,
+        defaultSql: null,
+        primaryKey: true,
+      };
     }
     if (colName === 'deleted') {
       return { sqlType: 'INTEGER', nullable: false, defaultSql: '0' };
@@ -153,7 +158,12 @@ export function mapFieldTypeToSql(
 
   if (dialect === 'postgres') {
     if (colName === 'id') {
-      return { sqlType: 'VARCHAR(128)', nullable: false, defaultSql: null, primaryKey: true };
+      return {
+        sqlType: 'VARCHAR(128)',
+        nullable: false,
+        defaultSql: null,
+        primaryKey: true,
+      };
     }
     if (colName === 'deleted') {
       return { sqlType: 'BOOLEAN', nullable: false, defaultSql: 'FALSE' };
@@ -181,7 +191,12 @@ export function mapFieldTypeToSql(
   }
 
   if (colName === 'id') {
-    return { sqlType: 'VARCHAR(128)', nullable: false, defaultSql: null, primaryKey: true };
+    return {
+      sqlType: 'VARCHAR(128)',
+      nullable: false,
+      defaultSql: null,
+      primaryKey: true,
+    };
   }
   if (colName === 'deleted') {
     return { sqlType: 'TINYINT(1)', nullable: false, defaultSql: '0' };
@@ -212,13 +227,21 @@ export function mapFieldTypeToSql(
   }
 
   let sqlType = 'VARCHAR(255)';
-  if (colName.endsWith('_id') || colName === 'user_id' || colName === 'business_id') {
+  if (
+    colName.endsWith('_id') ||
+    colName === 'user_id' ||
+    colName === 'business_id'
+  ) {
     sqlType = 'VARCHAR(128)';
   } else if (longText.has(colName)) {
     sqlType = 'TEXT';
   } else if (colName.endsWith('_url') || colName === 'address') {
     sqlType = 'VARCHAR(512)';
-  } else if (colName === 'date' || colName.endsWith('_date') || colName.endsWith('_at')) {
+  } else if (
+    colName === 'date' ||
+    colName.endsWith('_date') ||
+    colName.endsWith('_at')
+  ) {
     sqlType = 'VARCHAR(64)';
   }
 
@@ -248,7 +271,9 @@ export function buildSqlTargetSchema(
 
   const tables: Record<string, SqlTableDef> = {};
   const orderedNames = [
-    ...tableOrder.filter((name) => Object.prototype.hasOwnProperty.call(dictionary, name)),
+    ...tableOrder.filter((name) =>
+      Object.prototype.hasOwnProperty.call(dictionary, name),
+    ),
     ...Object.keys(dictionary).filter((name) => !tableOrder.includes(name)),
   ];
 
@@ -321,7 +346,11 @@ export function buildSqlTargetSchema(
   return { version: 1, tables };
 }
 
-function formatColumnDef(colName: string, col: SqlColumnDef, dialect: SqlDialect): string {
+function formatColumnDef(
+  colName: string,
+  col: SqlColumnDef,
+  dialect: SqlDialect,
+): string {
   const parts = [quoteIdent(colName, dialect), col.sqlType];
   if (col.primaryKey) {
     parts.push('NOT NULL', 'PRIMARY KEY');
@@ -364,10 +393,17 @@ export function generateSqlDiff(
       } else {
         const body = colLines.join(',\n');
         const idxStmts = (nextTable.indexes || []).map((idx) => {
-          const cols = idx.columns.map((c) => quoteIdent(c, dialect)).join(', ');
+          const cols = idx.columns
+            .map((c) => quoteIdent(c, dialect))
+            .join(', ');
           return `CREATE INDEX IF NOT EXISTS ${quoteIdent(idx.name, dialect)} ON ${qTable} (${cols});`;
         });
-        up.push([`CREATE TABLE IF NOT EXISTS ${qTable} (\n${body}\n);`, ...idxStmts].join('\n'));
+        up.push(
+          [
+            `CREATE TABLE IF NOT EXISTS ${qTable} (\n${body}\n);`,
+            ...idxStmts,
+          ].join('\n'),
+        );
       }
       down.unshift(`DROP TABLE IF EXISTS ${qTable};`);
       continue;
@@ -442,7 +478,11 @@ function extractUpSql(rawSql: string): string {
       active = 'up';
       continue;
     }
-    if (marker === '-- +down' || marker === '-- +up-optional' || marker === '-- +down-optional') {
+    if (
+      marker === '-- +down' ||
+      marker === '-- +up-optional' ||
+      marker === '-- +down-optional'
+    ) {
       active = 'other';
       continue;
     }
@@ -513,11 +553,20 @@ function parseSqlType(rest: string): string {
 function parseColumnList(rawCols: string): string[] {
   return rawCols
     .split(',')
-    .map((c) => c.trim().replace(/^[`"]|[`"]$/g, '').split(/\s+/)[0])
+    .map(
+      (c) =>
+        c
+          .trim()
+          .replace(/^[`"]|[`"]$/g, '')
+          .split(/\s+/)[0],
+    )
     .filter(Boolean);
 }
 
-function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): void {
+function applySqlStatement(
+  tables: Record<string, SqlTableDef>,
+  stmt: string,
+): void {
   const createTableMatch = stmt.match(
     /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?\s*\(([\s\S]*)\)\s*(?:ENGINE=|DEFAULT|CHARSET|COLLATE|;|$)/i,
   );
@@ -532,10 +581,17 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
         /^(?:UNIQUE\s+)?(?:INDEX|KEY)\s+[`"]?(\w+)[`"]?\s*\(([^)]+)\)/i,
       );
       if (idxMatch) {
-        indexes.push({ name: idxMatch[1], columns: parseColumnList(idxMatch[2]) });
+        indexes.push({
+          name: idxMatch[1],
+          columns: parseColumnList(idxMatch[2]),
+        });
         continue;
       }
-      if (/^(?:PRIMARY\s+KEY|CONSTRAINT|FOREIGN\s+KEY|FULLTEXT|SPATIAL|CHECK)\b/i.test(item)) {
+      if (
+        /^(?:PRIMARY\s+KEY|CONSTRAINT|FOREIGN\s+KEY|FULLTEXT|SPATIAL|CHECK)\b/i.test(
+          item,
+        )
+      ) {
         continue;
       }
       const colMatch = item.match(/^[`"]?(\w+)[`"]?\s+([\s\S]+)$/);
@@ -552,7 +608,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
     return;
   }
 
-  const dropTableMatch = stmt.match(/^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"]?(\w+)[`"]?/i);
+  const dropTableMatch = stmt.match(
+    /^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"]?(\w+)[`"]?/i,
+  );
   if (dropTableMatch) {
     delete tables[dropTableMatch[1]];
     return;
@@ -564,7 +622,10 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
   if (createIdxMatch) {
     const [, idxName, tableName, rawCols] = createIdxMatch;
     if (tables[tableName]) {
-      tables[tableName].indexes.push({ name: idxName, columns: parseColumnList(rawCols) });
+      tables[tableName].indexes.push({
+        name: idxName,
+        columns: parseColumnList(rawCols),
+      });
     }
     return;
   }
@@ -575,7 +636,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
   if (dropIdxMatch) {
     const [, idxName, tableName] = dropIdxMatch;
     if (tableName && tables[tableName]) {
-      tables[tableName].indexes = tables[tableName].indexes.filter((i) => i.name !== idxName);
+      tables[tableName].indexes = tables[tableName].indexes.filter(
+        (i) => i.name !== idxName,
+      );
     } else if (!tableName) {
       for (const tbl of Object.values(tables)) {
         tbl.indexes = tbl.indexes.filter((i) => i.name !== idxName);
@@ -584,7 +647,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
     return;
   }
 
-  const alterMatch = stmt.match(/^ALTER\s+TABLE\s+[`"]?(\w+)[`"]?\s+([\s\S]+)$/i);
+  const alterMatch = stmt.match(
+    /^ALTER\s+TABLE\s+[`"]?(\w+)[`"]?\s+([\s\S]+)$/i,
+  );
   if (alterMatch) {
     const tableName = alterMatch[1];
     const table = tables[tableName];
@@ -594,7 +659,10 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
       const addCol = clause.match(
         /^ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?\s+([\s\S]+)$/i,
       );
-      if (addCol && !/^(?:UNIQUE|INDEX|KEY|CONSTRAINT|PRIMARY|FOREIGN)\b/i.test(addCol[1])) {
+      if (
+        addCol &&
+        !/^(?:UNIQUE|INDEX|KEY|CONSTRAINT|PRIMARY|FOREIGN)\b/i.test(addCol[1])
+      ) {
         table.columns[addCol[1]] = {
           sqlType: parseSqlType(addCol[2]),
           nullable: !/\bNOT\s+NULL\b/i.test(addCol[2]),
@@ -609,7 +677,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
         delete table.columns[dropCol[1]];
         continue;
       }
-      const modCol = clause.match(/^MODIFY\s+(?:COLUMN\s+)?[`"]?(\w+)[`"]?\s+([\s\S]+)$/i);
+      const modCol = clause.match(
+        /^MODIFY\s+(?:COLUMN\s+)?[`"]?(\w+)[`"]?\s+([\s\S]+)$/i,
+      );
       if (modCol) {
         table.columns[modCol[1]] = {
           sqlType: parseSqlType(modCol[2]),
@@ -618,7 +688,9 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
         };
         continue;
       }
-      const changeCol = clause.match(/^CHANGE\s+(?:COLUMN\s+)?[`"]?(\w+)[`"]?\s+[`"]?(\w+)[`"]?\s+([\s\S]+)$/i);
+      const changeCol = clause.match(
+        /^CHANGE\s+(?:COLUMN\s+)?[`"]?(\w+)[`"]?\s+[`"]?(\w+)[`"]?\s+([\s\S]+)$/i,
+      );
       if (changeCol) {
         delete table.columns[changeCol[1]];
         table.columns[changeCol[2]] = {
@@ -628,9 +700,14 @@ function applySqlStatement(tables: Record<string, SqlTableDef>, stmt: string): v
         };
         continue;
       }
-      const addIdx = clause.match(/^ADD\s+(?:UNIQUE\s+)?(?:INDEX|KEY)\s+[`"]?(\w+)[`"]?\s*\(([^)]+)\)/i);
+      const addIdx = clause.match(
+        /^ADD\s+(?:UNIQUE\s+)?(?:INDEX|KEY)\s+[`"]?(\w+)[`"]?\s*\(([^)]+)\)/i,
+      );
       if (addIdx) {
-        table.indexes.push({ name: addIdx[1], columns: parseColumnList(addIdx[2]) });
+        table.indexes.push({
+          name: addIdx[1],
+          columns: parseColumnList(addIdx[2]),
+        });
         continue;
       }
       const dropIdx = clause.match(/^DROP\s+(?:INDEX|KEY)\s+[`"]?(\w+)[`"]?$/i);
@@ -694,15 +771,25 @@ export function generateSqlMigration(
   options: GenerateSqlMigrationOptions,
 ): GenerateSqlMigrationResult {
   const dialect = options.dialect ?? 'mysql';
-  const nextSchema = buildSqlTargetSchema(options.dictionary, options.tableOrder, {
-    dialect,
-    longTextColumns: options.longTextColumns,
-    bigintColumns: options.bigintColumns,
-  });
+  const nextSchema = buildSqlTargetSchema(
+    options.dictionary,
+    options.tableOrder,
+    {
+      dialect,
+      longTextColumns: options.longTextColumns,
+      bigintColumns: options.bigintColumns,
+    },
+  );
   const prevSchema = loadSqlSchemaFromMigrations(options.migrationsDir);
-  const { up, down, warnings } = generateSqlDiff(prevSchema, nextSchema, dialect);
+  const { up, down, warnings } = generateSqlDiff(
+    prevSchema,
+    nextSchema,
+    dialect,
+  );
   const sql =
-    up.length > 0 ? `-- +up\n${up.join('\n\n')}\n\n-- +down\n${down.join('\n')}\n` : '';
+    up.length > 0
+      ? `-- +up\n${up.join('\n\n')}\n\n-- +down\n${down.join('\n')}\n`
+      : '';
 
   const result: GenerateSqlMigrationResult = {
     up,
@@ -721,14 +808,24 @@ export function generateSqlMigration(
     const safeName = (options.name || 'auto_schema')
       .replace(/[^a-z0-9_]+/gi, '_')
       .toLowerCase();
-    const outPath = path.join(options.migrationsDir, `${formatTimestamp()}_${safeName}.sql`);
+    const outPath = path.join(
+      options.migrationsDir,
+      `${formatTimestamp()}_${safeName}.sql`,
+    );
     fs.writeFileSync(outPath, sql, 'utf8');
     result.migrationPath = outPath;
   }
 
-  if (options.serverSchemaPath && (up.length > 0 || !fs.existsSync(options.serverSchemaPath))) {
+  if (
+    options.serverSchemaPath &&
+    (up.length > 0 || !fs.existsSync(options.serverSchemaPath))
+  ) {
     fs.mkdirSync(path.dirname(options.serverSchemaPath), { recursive: true });
-    fs.writeFileSync(options.serverSchemaPath, formatSyncedSchemaTs(nextSchema), 'utf8');
+    fs.writeFileSync(
+      options.serverSchemaPath,
+      formatSyncedSchemaTs(nextSchema),
+      'utf8',
+    );
     result.serverSchemaPath = options.serverSchemaPath;
   }
 

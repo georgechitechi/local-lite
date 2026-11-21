@@ -3,10 +3,7 @@ export type SqlDialect = 'mysql' | 'postgres';
 export interface SqlExecutor {
   dialect: SqlDialect;
   query<T = any>(sql: string, params?: any[]): Promise<T[]>;
-  execute(
-    sql: string,
-    params?: any[],
-  ): Promise<{ affectedRows: number }>;
+  execute(sql: string, params?: any[]): Promise<{ affectedRows: number }>;
   withTransaction<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T>;
 }
 
@@ -98,10 +95,7 @@ export function adaptSqlForPostgres(rawSql: string): string[] {
   sql = sql.replace(/\s+DEFAULT\s+CHARSET\s*=\s*[\w-]+/gi, '');
   sql = sql.replace(/\s+COLLATE\s*=?\s*[\w-]+/gi, '');
   sql = sql.replace(/`([^`]+)`/g, '"$1"');
-  sql = sql.replace(
-    /\bTINYINT\s*\(\s*1\s*\)/gi,
-    'SMALLINT',
-  );
+  sql = sql.replace(/\bTINYINT\s*\(\s*1\s*\)/gi, 'SMALLINT');
   sql = sql.replace(/\bLONGTEXT\b/gi, 'TEXT');
   sql = sql.replace(/\bMEDIUMTEXT\b/gi, 'TEXT');
   sql = sql.replace(/\bDOUBLE\b/gi, 'DOUBLE PRECISION');
@@ -155,10 +149,7 @@ export function adaptSqlForPostgres(rawSql: string): string[] {
   return [sql, ...extractedIndexes];
 }
 
-export function createSqlExecutor(
-  pool: any,
-  dialect: SqlDialect,
-): SqlExecutor {
+export function createSqlExecutor(pool: any, dialect: SqlDialect): SqlExecutor {
   const execOn = (conn: any): SqlExecutor => ({
     dialect,
     async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {

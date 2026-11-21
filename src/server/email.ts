@@ -1,5 +1,9 @@
 import type { ApiEndpoint, ApiRequestContext } from './index.js';
-import type { ActionHandlerContext, ActionRecord, EmailPayload } from '../actions/types.js';
+import type {
+  ActionHandlerContext,
+  ActionRecord,
+  EmailPayload,
+} from '../actions/types.js';
 import {
   type ConcreteEmailHandler,
   type EmailHandlerOptions,
@@ -8,10 +12,12 @@ import {
   prepareMailOptions,
 } from '../email/index.js';
 
-export type NodemailerTransportInput = {
-  sendMail?: (options: EmailMailOptions) => Promise<any>;
-  [key: string]: any;
-} | string;
+export type NodemailerTransportInput =
+  | {
+      sendMail?: (options: EmailMailOptions) => Promise<any>;
+      [key: string]: any;
+    }
+  | string;
 
 export async function loadNodemailer(): Promise<any> {
   try {
@@ -28,7 +34,11 @@ export async function resolveTransporter(
   input: NodemailerTransportInput,
   defaults?: Partial<EmailMailOptions>,
 ): Promise<any> {
-  if (input && typeof input !== 'string' && typeof input.sendMail === 'function') {
+  if (
+    input &&
+    typeof input !== 'string' &&
+    typeof input.sendMail === 'function'
+  ) {
     return input;
   }
   const nodemailer = await loadNodemailer();
@@ -62,7 +72,11 @@ export function createNodemailerHandler(
     _context: ActionHandlerContext,
   ): Promise<EmailSendResult> => {
     const transporter = await getTransporter();
-    const mailOptions = await prepareMailOptions(payload, handlerOptions, record);
+    const mailOptions = await prepareMailOptions(
+      payload,
+      handlerOptions,
+      record,
+    );
     const info = await transporter.sendMail(mailOptions);
     await handlerOptions.afterSend?.(info, payload, record);
     return {

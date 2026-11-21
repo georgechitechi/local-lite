@@ -23,7 +23,12 @@ export function liveQuery<T = any>(
   return {
     subscribe(run: (value: LiveQueryState<T>) => void): () => void {
       run({ data: [], loading: true, error: null });
-      const { dispose } = subscribeLiveQuery<T>(client, tableName, options, run);
+      const { dispose } = subscribeLiveQuery<T>(
+        client,
+        tableName,
+        options,
+        run,
+      );
       return dispose;
     },
   };
