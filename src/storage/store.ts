@@ -1,5 +1,5 @@
 import { DBExecutable } from '../core/schema-manager.js';
-import { BlobRecord, BlobUploadStatus } from './types.js';
+import { BlobRecord, BlobUploadStatus, ListBlobsOptions } from './types.js';
 
 export const DEFAULT_BLOBS_TABLE = '_local_blobs';
 
@@ -17,6 +17,7 @@ export function mapBlobRow(r: any): BlobRecord {
   return {
     id: r.id,
     key: r.key,
+    bucket: r.bucket || 'public',
     name: r.name,
     mimeType: r.mime_type,
     size: Number(r.size || 0),
@@ -39,6 +40,7 @@ export class BlobStore {
       `CREATE TABLE IF NOT EXISTS ${tableName} (
         id TEXT PRIMARY KEY,
         key TEXT UNIQUE NOT NULL,
+        bucket TEXT NOT NULL DEFAULT 'public',
         name TEXT NOT NULL,
         mime_type TEXT NOT NULL,
         size INTEGER NOT NULL,
@@ -52,11 +54,22 @@ export class BlobStore {
       );`,
     );
 
+    try {
+      await db.execute(
+        `ALTER TABLE ${tableName} ADD COLUMN bucket TEXT NOT NULL DEFAULT 'public';`,
+      );
+    } catch {
+      // Column already exists on upgraded tables.
+    }
+
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_${tableName}_status ON ${tableName} (status);`,
     );
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_${tableName}_key ON ${tableName} (key);`,
+    );
+    await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_bucket ON ${tableName} (bucket);`,
     );
   }
 
@@ -67,9 +80,10 @@ export class BlobStore {
   ): Promise<void> {
     const metaStr = record.metadata ? JSON.stringify(record.metadata) : null;
     await db.execute(
-      `INSERT INTO ${tableName} (id, key, name, mime_type, size, local_path, remote_url, status, sha256, metadata, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO ${tableName} (id, key, bucket, name, mime_type, size, local_path, remote_url, status, sha256, metadata, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET
+         bucket = excluded.bucket,
          name = excluded.name,
          mime_type = excluded.mime_type,
          size = excluded.size,
@@ -82,6 +96,7 @@ export class BlobStore {
       [
         record.id,
         record.key,
+        record.bucket || 'public',
         record.name,
         record.mimeType,
         record.size,
@@ -125,20 +140,47 @@ export class BlobStore {
   static async list(
     db: DBExecutable,
     tableName: string = DEFAULT_BLOBS_TABLE,
-    status?: BlobUploadStatus,
+    filter?: BlobUploadStatus | ListBlobsOptions,
   ): Promise<BlobRecord[]> {
-    let rows: any[];
-    if (status) {
-      rows = await db.execute(
-        `SELECT * FROM ${tableName} WHERE status = ? ORDER BY created_at DESC;`,
-        [status],
+    const opts: ListBlobsOptions =
+      typeof filter === 'string' ? { status: filter } : filter || {};
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if (opts.status) {
+      conditions.push('status = ?');
+      params.push(opts.status);
+    }
+    if (opts.bucket) {
+      conditions.push('bucket = ?');
+      params.push(opts.bucket);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')} ` : '';
+    const rows = await db.execute(
+      `SELECT * FROM ${tableName} ${where}ORDER BY created_at DESC;`,
+      params,
+    );
+    return (rows || []).map(mapBlobRow);
+  }
+
+  static async updateBucket(
+    db: DBExecutable,
+    tableName: string = DEFAULT_BLOBS_TABLE,
+    key: string,
+    bucket: string,
+    remoteUrl?: string | null,
+  ): Promise<void> {
+    const now = Date.now();
+    if (remoteUrl !== undefined) {
+      await db.execute(
+        `UPDATE ${tableName} SET bucket = ?, remote_url = ?, updated_at = ? WHERE key = ?;`,
+        [bucket, remoteUrl, now, key],
       );
     } else {
-      rows = await db.execute(
-        `SELECT * FROM ${tableName} ORDER BY created_at DESC;`,
+      await db.execute(
+        `UPDATE ${tableName} SET bucket = ?, updated_at = ? WHERE key = ?;`,
+        [bucket, now, key],
       );
     }
-    return (rows || []).map(mapBlobRow);
   }
 
   static async updateStatus(

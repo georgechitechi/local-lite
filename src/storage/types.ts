@@ -1,8 +1,20 @@
 export type BlobUploadStatus = 'PENDING' | 'UPLOADING' | 'UPLOADED' | 'FAILED';
 
+export type StorageBucketVisibility = 'public' | 'private';
+
+export interface StorageBucketRecord {
+  id: string;
+  name: string;
+  visibility: StorageBucketVisibility;
+  createdAt: number;
+  fileCount?: number;
+  totalBytes?: number;
+}
+
 export interface BlobRecord {
   id: string;
   key: string;
+  bucket?: string;
   name: string;
   mimeType: string;
   size: number;
@@ -16,6 +28,7 @@ export interface BlobRecord {
 }
 
 export interface SaveBlobOptions {
+  bucket?: string;
   name?: string;
   mimeType?: string;
   metadata?: Record<string, any>;
@@ -24,6 +37,11 @@ export interface SaveBlobOptions {
    * Default: true
    */
   autoUpload?: boolean;
+}
+
+export interface ListBlobsOptions {
+  status?: BlobUploadStatus;
+  bucket?: string;
 }
 
 export interface FileDriver {
@@ -40,6 +58,7 @@ export interface FileDriver {
 export interface RemoteStorageUploadResult {
   remoteUrl: string;
   storageId?: string;
+  bucket?: string;
   metadata?: Record<string, any>;
 }
 
@@ -49,10 +68,29 @@ export interface RemoteStorageUploader {
     data: Uint8Array,
   ): Promise<RemoteStorageUploadResult>;
   getDownloadUrl?(keyOrPath: string): Promise<string> | string;
+  getSignedUrl?(
+    keyOrPath: string,
+    options?: { bucket?: string; expiresInSeconds?: number },
+  ): Promise<{ url: string; expiresAt: number }>;
   delete?(keyOrPath: string): Promise<void>;
+  move?(
+    keyOrPath: string,
+    toBucket: string,
+    fromBucket?: string,
+  ): Promise<RemoteStorageUploadResult>;
+  listBuckets?(): Promise<StorageBucketRecord[]>;
+  createBucket?(
+    name: string,
+    visibility?: StorageBucketVisibility,
+  ): Promise<StorageBucketRecord>;
+  deleteBucket?(name: string): Promise<void>;
 }
 
-export type StorageProviderType = 'supabase' | 'convex' | 'firebase';
+export type StorageProviderType =
+  | 'supabase'
+  | 'convex'
+  | 'firebase'
+  | 'self-hosted';
 
 export interface BlobStorageManagerOptions {
   driver?: FileDriver;

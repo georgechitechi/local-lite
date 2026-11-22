@@ -11,15 +11,20 @@ import {
   createFirebaseStorageUploader,
   FirebaseStorageUploaderOptions,
 } from './firebase.js';
+import {
+  createSelfHostedStorageUploader,
+  SelfHostedStorageUploaderOptions,
+} from './selfHosted.js';
 
 export type UnifiedStorageOptions =
   | ({ provider: 'supabase' } & SupabaseStorageUploaderOptions)
   | ({ provider: 'convex' } & ConvexStorageUploaderOptions)
-  | ({ provider: 'firebase' } & FirebaseStorageUploaderOptions);
+  | ({ provider: 'firebase' } & FirebaseStorageUploaderOptions)
+  | ({ provider: 'self-hosted' } & SelfHostedStorageUploaderOptions);
 
 /**
  * Universal factory function to create a remote storage uploader for any supported provider:
- * 'supabase', 'convex', or 'firebase'.
+ * 'supabase', 'convex', 'firebase', or 'self-hosted'.
  */
 export function createStorageUploader(
   provider: StorageProviderType,
@@ -42,9 +47,13 @@ export function createStorageUploader(
         client,
         options as FirebaseStorageUploaderOptions,
       );
+    case 'self-hosted':
+      return createSelfHostedStorageUploader(
+        (options?.baseUrl ? options : client) as SelfHostedStorageUploaderOptions,
+      );
     default:
       throw new Error(
-        `Unsupported storage provider "${provider}". Supported providers: "supabase", "convex", "firebase".`,
+        `Unsupported storage provider "${provider}". Supported providers: "supabase", "convex", "firebase", "self-hosted".`,
       );
   }
 }

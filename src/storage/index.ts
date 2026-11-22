@@ -6,4 +6,5 @@ export * from './expo.js';
 export * from './supabase.js';
 export * from './convex.js';
 export * from './firebase.js';
+export * from './selfHosted.js';
 export * from './factory.js';

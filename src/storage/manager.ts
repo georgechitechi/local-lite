@@ -7,8 +7,11 @@ import {
   BlobStorageManagerOptions,
   BlobUploadStatus,
   FileDriver,
+  ListBlobsOptions,
   RemoteStorageUploader,
   SaveBlobOptions,
+  StorageBucketRecord,
+  StorageBucketVisibility,
 } from './types.js';
 import { BlobStore, DEFAULT_BLOBS_TABLE } from './store.js';
 import { MemoryFileDriver } from './driver.js';
@@ -19,6 +22,7 @@ export class BlobStorageManager {
   private network?: { isOnline(): boolean | Promise<boolean> };
   private tableName: string;
   private deleteRemoteOnDelete: boolean;
+  private defaultBucket: string;
 
   constructor(
     private db: DBExecutable,
@@ -29,6 +33,7 @@ export class BlobStorageManager {
     this.network = options.network;
     this.tableName = options.tableName ?? DEFAULT_BLOBS_TABLE;
     this.deleteRemoteOnDelete = options.deleteRemoteOnDelete ?? false;
+    this.defaultBucket = options.bucket?.trim() || 'public';
   }
 
   async initialize(): Promise<void> {
@@ -64,6 +69,7 @@ export class BlobStorageManager {
     const record: BlobRecord = {
       id,
       key,
+      bucket: options.bucket?.trim() || existing?.bucket || this.defaultBucket,
       name: options.name || key.split('/').pop() || key,
       mimeType: options.mimeType || 'application/octet-stream',
       size: bytes.byteLength,
@@ -139,10 +145,80 @@ export class BlobStorageManager {
   }
 
   /**
-   * Lists blob metadata records, optionally filtered by upload status.
+   * Lists blob metadata records, optionally filtered by upload status and/or bucket.
    */
-  async list(status?: BlobUploadStatus): Promise<BlobRecord[]> {
-    return await BlobStore.list(this.db, this.tableName, status);
+  async list(
+    filter?: BlobUploadStatus | ListBlobsOptions,
+  ): Promise<BlobRecord[]> {
+    return await BlobStore.list(this.db, this.tableName, filter);
+  }
+
+  /**
+   * Moves a stored blob to another bucket locally and remotely (when supported by the uploader).
+   */
+  async move(key: string, toBucket: string): Promise<BlobRecord | null> {
+    const existing = await BlobStore.getByKey(this.db, this.tableName, key);
+    if (!existing) return null;
+    const targetBucket = toBucket.trim() || this.defaultBucket;
+    let nextRemoteUrl = existing.remoteUrl;
+    if (this.uploader && typeof this.uploader.move === 'function') {
+      const res = await this.uploader.move(key, targetBucket, existing.bucket);
+      nextRemoteUrl = res.remoteUrl;
+    }
+    await BlobStore.updateBucket(
+      this.db,
+      this.tableName,
+      key,
+      targetBucket,
+      nextRemoteUrl,
+    );
+    return await BlobStore.getByKey(this.db, this.tableName, key);
+  }
+
+  /**
+   * Requests a time-limited signed read URL for private bucket assets when supported by the uploader.
+   */
+  async getSignedUrl(
+    key: string,
+    options?: { bucket?: string; expiresInSeconds?: number },
+  ): Promise<{ url: string; expiresAt: number } | null> {
+    const record = await BlobStore.getByKey(this.db, this.tableName, key);
+    const bucket = options?.bucket || record?.bucket || this.defaultBucket;
+    if (this.uploader && typeof this.uploader.getSignedUrl === 'function') {
+      return await this.uploader.getSignedUrl(key, {
+        bucket,
+        expiresInSeconds: options?.expiresInSeconds,
+      });
+    }
+    const url = await this.getDownloadUrl(key);
+    return url ? { url, expiresAt: 0 } : null;
+  }
+
+  /** Lists remote storage buckets when supported by the configured uploader. */
+  async listBuckets(): Promise<StorageBucketRecord[]> {
+    if (this.uploader && typeof this.uploader.listBuckets === 'function') {
+      return await this.uploader.listBuckets();
+    }
+    return [];
+  }
+
+  /** Creates a remote storage bucket when supported by the configured uploader. */
+  async createBucket(
+    name: string,
+    visibility: StorageBucketVisibility = 'public',
+  ): Promise<StorageBucketRecord> {
+    if (!this.uploader || typeof this.uploader.createBucket !== 'function') {
+      throw new Error('Configured storage uploader does not support createBucket.');
+    }
+    return await this.uploader.createBucket(name, visibility);
+  }
+
+  /** Deletes an empty remote storage bucket when supported by the configured uploader. */
+  async deleteBucket(name: string): Promise<void> {
+    if (!this.uploader || typeof this.uploader.deleteBucket !== 'function') {
+      throw new Error('Configured storage uploader does not support deleteBucket.');
+    }
+    await this.uploader.deleteBucket(name);
   }
 
   /**
@@ -225,6 +301,7 @@ export class BlobStorageManager {
     const record: BlobRecord = {
       id,
       key,
+      bucket: options.bucket?.trim() || existing?.bucket || this.defaultBucket,
       name: options.name || key.split('/').pop() || key,
       mimeType: options.mimeType || 'application/octet-stream',
       size,
@@ -312,6 +389,7 @@ export class BlobStorageManager {
     const record: BlobRecord = {
       id,
       key,
+      bucket: options.bucket?.trim() || existing?.bucket || this.defaultBucket,
       name: options.name || key.split('/').pop() || key,
       mimeType: options.mimeType || 'application/octet-stream',
       size,

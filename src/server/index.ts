@@ -8,6 +8,7 @@ export * from './sqlDialect.js';
 export * from './sqlSyncStorage.js';
 export * from './syncEvents.js';
 export * from './scheduler.js';
+export * from './storage.js';
 
 export interface ApiRequestContext<TConfig = unknown> {
   request: Request;
