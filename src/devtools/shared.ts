@@ -1,18 +1,32 @@
-let RN: any;
-try {
-  RN = require('react-native');
-} catch {
-  // Web / DOM environment
+let cachedRN: any;
+let rnResolved = false;
+
+export function getRN(): any {
+  if (!rnResolved) {
+    rnResolved = true;
+    try {
+      cachedRN = require('react-native');
+    } catch {
+      // Web / DOM environment
+    }
+  }
+  return cachedRN;
 }
 
-let RNSafeArea: any;
-try {
-  RNSafeArea = require('react-native-safe-area-context');
-} catch {
-  // Web / DOM environment or not installed
-}
+let cachedRNSafeArea: any;
+let rnSafeAreaResolved = false;
 
-export { RN, RNSafeArea };
+export function getRNSafeArea(): any {
+  if (!rnSafeAreaResolved) {
+    rnSafeAreaResolved = true;
+    try {
+      cachedRNSafeArea = require('react-native-safe-area-context');
+    } catch {
+      // Web / DOM environment or not installed
+    }
+  }
+  return cachedRNSafeArea;
+}
 
 export const devtoolsBaseRNStyles = {
   fullScreenSafe: {

@@ -3,7 +3,7 @@ import { LocalFirstClient } from '../core/client.js';
 import { useSyncStatus } from '../react/status.js';
 import { BenchmarkModal } from './BenchmarkModal.js';
 import { resolveSyncTheme, type SyncThemeColors } from '../react/theme.js';
-import { RN, RNSafeArea, devtoolsBaseRNStyles } from './shared.js';
+import { getRN, getRNSafeArea, devtoolsBaseRNStyles } from './shared.js';
 
 export interface SyncInspectorProps {
   client: LocalFirstClient | null | undefined;
@@ -61,6 +61,7 @@ export function SyncInspector({
   const [metrics, setMetrics] = useState<any>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
+  const RN = getRN();
   const systemColorScheme = RN?.useColorScheme ? RN.useColorScheme() : null;
   const currentTheme = useMemo(
     () => resolveSyncTheme(theme, systemColorScheme),
@@ -306,6 +307,8 @@ export function SyncInspector({
       Platform,
       StatusBar,
     } = RN;
+    const RNSafeArea = getRNSafeArea();
+    const rnStyles = getRNStyles();
     const SafeComp = RNSafeArea?.SafeAreaView || RN.SafeAreaView || View;
     const isAndroid = Platform?.OS === 'android';
     const statusBarHeight = isAndroid ? StatusBar?.currentHeight || 24 : 0;
@@ -1250,190 +1253,196 @@ export function SyncInspector({
   );
 }
 
-const rnStyles =
-  RN && RN.StyleSheet
-    ? RN.StyleSheet.create({
-        ...devtoolsBaseRNStyles,
-        statusBadge: {
-          paddingHorizontal: 8,
-          paddingVertical: 3,
-          borderRadius: 12,
-          borderWidth: 1,
-          marginRight: 10,
-        },
-        statusBadgeText: {
-          fontSize: 11,
-          fontWeight: '700',
-        },
-        closeCircle: {
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        closeCircleText: {
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        scrollBody: {
-          flex: 1,
-        },
-        scrollContent: {
-          padding: 16,
-          paddingBottom: 24,
-        },
-        actionMsgBox: {
-          backgroundColor: '#1E3A8A',
-          borderWidth: 1,
-          borderColor: '#3B82F6',
-          padding: 10,
-          borderRadius: 8,
-          marginBottom: 14,
-        },
-        actionMsgText: {
-          color: '#93C5FD',
-          fontSize: 13,
-          fontWeight: '600',
-          textAlign: 'center',
-        },
-        statGrid: {
-          flexDirection: 'row',
-          width: '100%',
-          gap: 10,
-          marginBottom: 14,
-        },
-        statCard: {
-          flex: 1,
-          minWidth: '45%',
-          borderWidth: 1,
-          borderRadius: 12,
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-        },
-        statNum: {
-          fontSize: 24,
-          fontWeight: '800',
-        },
-        statLabel: {
-          fontSize: 12,
-          fontWeight: '600',
-          marginTop: 4,
-        },
-        statSub: {
-          fontSize: 11,
-          marginTop: 2,
-        },
-        infoCard: {
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 14,
-        },
-        infoCardTitle: {
-          fontSize: 11,
-          fontWeight: '700',
-          letterSpacing: 0.8,
-          marginBottom: 10,
-        },
-        infoRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingVertical: 9,
-          borderBottomWidth: 1,
-        },
-        infoKey: {
-          fontSize: 13,
-        },
-        infoVal: {
-          fontSize: 13,
-          fontWeight: '600',
-        },
-        btnRow: {
-          flexDirection: 'row',
-          width: '100%',
-          gap: 8,
-        },
-        actionBtn: {
-          flex: 1,
-          paddingVertical: 10,
-          paddingHorizontal: 12,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        actionBtnText: {
-          fontSize: 13,
-          fontWeight: '600',
-        },
-        dotSmall: {
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-        },
-        bottomBar: {
-          paddingHorizontal: 18,
-          paddingVertical: 12,
-          borderTopWidth: 1,
-        },
-        doneBtn: {
-          paddingVertical: 12,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        doneBtnText: {
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        pill: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 8,
-          paddingHorizontal: 14,
-          borderRadius: 20,
-          borderWidth: 1.5,
-          elevation: 6,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
-        },
-        inlinePill: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 5,
-          paddingHorizontal: 10,
-          borderRadius: 16,
-          borderWidth: 1.5,
-        },
-        pillText: {
-          fontWeight: '600',
-          fontSize: 13,
-          marginLeft: 8,
-        },
-        inlinePillText: {
-          fontWeight: '600',
-          fontSize: 12,
-          marginLeft: 6,
-        },
-        dot: {
-          width: 10,
-          height: 10,
-          borderRadius: 5,
-        },
-        badge: {
-          backgroundColor: '#EF4444',
-          paddingHorizontal: 6,
-          paddingVertical: 1,
-          borderRadius: 10,
-          marginLeft: 8,
-        },
-        badgeText: {
-          color: '#FFF',
-          fontSize: 11,
-          fontWeight: '700',
-        },
-      })
-    : {};
+let cachedRNStyles: any;
+function getRNStyles(): any {
+  if (cachedRNStyles) return cachedRNStyles;
+  const RN = getRN();
+  cachedRNStyles =
+    RN && RN.StyleSheet
+      ? RN.StyleSheet.create({
+          ...devtoolsBaseRNStyles,
+          statusBadge: {
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 12,
+            borderWidth: 1,
+            marginRight: 10,
+          },
+          statusBadgeText: {
+            fontSize: 11,
+            fontWeight: '700',
+          },
+          closeCircle: {
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          closeCircleText: {
+            fontSize: 14,
+            fontWeight: '700',
+          },
+          scrollBody: {
+            flex: 1,
+          },
+          scrollContent: {
+            padding: 16,
+            paddingBottom: 24,
+          },
+          actionMsgBox: {
+            backgroundColor: '#1E3A8A',
+            borderWidth: 1,
+            borderColor: '#3B82F6',
+            padding: 10,
+            borderRadius: 8,
+            marginBottom: 14,
+          },
+          actionMsgText: {
+            color: '#93C5FD',
+            fontSize: 13,
+            fontWeight: '600',
+            textAlign: 'center',
+          },
+          statGrid: {
+            flexDirection: 'row',
+            width: '100%',
+            gap: 10,
+            marginBottom: 14,
+          },
+          statCard: {
+            flex: 1,
+            minWidth: '45%',
+            borderWidth: 1,
+            borderRadius: 12,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+          },
+          statNum: {
+            fontSize: 24,
+            fontWeight: '800',
+          },
+          statLabel: {
+            fontSize: 12,
+            fontWeight: '600',
+            marginTop: 4,
+          },
+          statSub: {
+            fontSize: 11,
+            marginTop: 2,
+          },
+          infoCard: {
+            borderWidth: 1,
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 14,
+          },
+          infoCardTitle: {
+            fontSize: 11,
+            fontWeight: '700',
+            letterSpacing: 0.8,
+            marginBottom: 10,
+          },
+          infoRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: 9,
+            borderBottomWidth: 1,
+          },
+          infoKey: {
+            fontSize: 13,
+          },
+          infoVal: {
+            fontSize: 13,
+            fontWeight: '600',
+          },
+          btnRow: {
+            flexDirection: 'row',
+            width: '100%',
+            gap: 8,
+          },
+          actionBtn: {
+            flex: 1,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          actionBtnText: {
+            fontSize: 13,
+            fontWeight: '600',
+          },
+          dotSmall: {
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+          },
+          bottomBar: {
+            paddingHorizontal: 18,
+            paddingVertical: 12,
+            borderTopWidth: 1,
+          },
+          doneBtn: {
+            paddingVertical: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          doneBtnText: {
+            fontSize: 14,
+            fontWeight: '700',
+          },
+          pill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 8,
+            paddingHorizontal: 14,
+            borderRadius: 20,
+            borderWidth: 1.5,
+            elevation: 6,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.15,
+            shadowRadius: 4,
+          },
+          inlinePill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 5,
+            paddingHorizontal: 10,
+            borderRadius: 16,
+            borderWidth: 1.5,
+          },
+          pillText: {
+            fontWeight: '600',
+            fontSize: 13,
+            marginLeft: 8,
+          },
+          inlinePillText: {
+            fontWeight: '600',
+            fontSize: 12,
+            marginLeft: 6,
+          },
+          dot: {
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+          },
+          badge: {
+            backgroundColor: '#EF4444',
+            paddingHorizontal: 6,
+            paddingVertical: 1,
+            borderRadius: 10,
+            marginLeft: 8,
+          },
+          badgeText: {
+            color: '#FFF',
+            fontSize: 11,
+            fontWeight: '700',
+          },
+        })
+      : {};
+  return cachedRNStyles;
+}

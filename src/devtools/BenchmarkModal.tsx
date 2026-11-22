@@ -8,7 +8,7 @@ import {
   verifySignedToken,
 } from '../keys/index.js';
 import { escapeIdentifier } from '../utils/sql.js';
-import { RN, RNSafeArea, devtoolsBaseRNStyles } from './shared.js';
+import { getRN, getRNSafeArea, devtoolsBaseRNStyles } from './shared.js';
 
 const now = (): number =>
   typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -991,6 +991,7 @@ export function BenchmarkModal({
   const [results, setResults] = useState<BuiltinBenchmarkResult[]>([]);
   const [copied, setCopied] = useState(false);
 
+  const RN = getRN();
   const systemColorScheme = RN?.useColorScheme ? RN.useColorScheme() : null;
   const currentTheme = React.useMemo(
     () => resolveSyncTheme(theme, systemColorScheme),
@@ -1065,6 +1066,8 @@ export function BenchmarkModal({
       Platform,
       StatusBar,
     } = RN;
+    const RNSafeArea = getRNSafeArea();
+    const styles = getStyles();
     const SafeComp = RNSafeArea?.SafeAreaView || RN.SafeAreaView || View;
     const isAndroid = Platform?.OS === 'android';
     const statusBarHeight = isAndroid ? StatusBar?.currentHeight || 24 : 0;
@@ -1615,176 +1618,182 @@ export function BenchmarkModal({
   );
 }
 
-const styles =
-  RN && RN.StyleSheet
-    ? RN.StyleSheet.create({
-        fullScreenSafe: {
-          ...devtoolsBaseRNStyles.fullScreenSafe,
-          backgroundColor: '#111827',
-        },
-        topBar: {
-          ...devtoolsBaseRNStyles.topBar,
-          backgroundColor: '#1F2937',
-          borderBottomColor: '#374151',
-        },
-        topBarTitle: {
-          ...devtoolsBaseRNStyles.topBarTitle,
-          color: '#F9FAFB',
-        },
-        topBarSub: {
-          ...devtoolsBaseRNStyles.topBarSub,
-          color: '#9CA3AF',
-        },
-        closeCircle: {
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: '#374151',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        closeCircleText: {
-          color: '#F9FAFB',
-          fontSize: 15,
-          fontWeight: '600',
-        },
-        progressSection: {
-          paddingHorizontal: 18,
-          paddingVertical: 10,
-          backgroundColor: '#1F2937',
-          borderBottomWidth: 1,
-          borderBottomColor: '#374151',
-          gap: 6,
-        },
-        stepText: {
-          color: '#A78BFA',
-          fontSize: 12,
-          fontWeight: '600',
-          flex: 1,
-        },
-        progressTrack: {
-          width: '100%',
-          height: 6,
-          backgroundColor: '#374151',
-          borderRadius: 3,
-          overflow: 'hidden',
-        },
-        progressFill: {
-          height: '100%',
-          backgroundColor: '#8B5CF6',
-        },
-        scrollList: {
-          flex: 1,
-          backgroundColor: '#111827',
-        },
-        scrollContent: {
-          padding: 16,
-          gap: 10,
-        },
-        emptyCard: {
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingVertical: 48,
-          paddingHorizontal: 24,
-        },
-        emptyIcon: {
-          fontSize: 44,
-          marginBottom: 12,
-        },
-        emptyTitle: {
-          color: '#F9FAFB',
-          fontSize: 17,
-          fontWeight: '700',
-          marginBottom: 8,
-        },
-        emptyText: {
-          color: '#9CA3AF',
-          fontSize: 13,
-          textAlign: 'center',
-          lineHeight: 18,
-          marginBottom: 24,
-        },
-        primaryActionBtn: {
-          paddingHorizontal: 24,
-          paddingVertical: 12,
-          backgroundColor: '#8B5CF6',
-          borderRadius: 10,
-        },
-        primaryActionBtnText: {
-          color: '#FFF',
-          fontSize: 14,
-          fontWeight: '700',
-        },
-        card: {
-          backgroundColor: '#1F2937',
-          borderRadius: 12,
-          padding: 14,
-          borderWidth: 1,
-          borderColor: '#374151',
-        },
-        cardHeader: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 4,
-        },
-        cardTitle: {
-          color: '#F9FAFB',
-          fontSize: 14,
-          fontWeight: '700',
-          flex: 1,
-          marginRight: 8,
-        },
-        badge: {
-          paddingHorizontal: 8,
-          paddingVertical: 3,
-          borderRadius: 12,
-        },
-        badgeText: {
-          fontSize: 11,
-          fontWeight: '700',
-        },
-        cardDesc: {
-          color: '#9CA3AF',
-          fontSize: 12,
-          marginBottom: 10,
-        },
-        cardMetrics: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          borderTopWidth: 1,
-          borderTopColor: '#374151',
-          paddingTop: 8,
-        },
-        metricLabel: {
-          color: '#6B7280',
-          fontSize: 10,
-        },
-        metricVal: {
-          color: '#F9FAFB',
-          fontSize: 13,
-          fontWeight: '700',
-          marginTop: 2,
-        },
-        bottomBar: {
-          flexDirection: 'row',
-          gap: 10,
-          padding: 16,
-          backgroundColor: '#1F2937',
-          borderTopWidth: 1,
-          borderTopColor: '#374151',
-        },
-        footerBtn: {
-          flex: 1,
-          paddingVertical: 12,
-          borderRadius: 10,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        footerBtnText: {
-          color: '#FFF',
-          fontSize: 14,
-          fontWeight: '700',
-        },
-      })
-    : {};
+let cachedStyles: any;
+function getStyles(): any {
+  if (cachedStyles) return cachedStyles;
+  const RN = getRN();
+  cachedStyles =
+    RN && RN.StyleSheet
+      ? RN.StyleSheet.create({
+          fullScreenSafe: {
+            ...devtoolsBaseRNStyles.fullScreenSafe,
+            backgroundColor: '#111827',
+          },
+          topBar: {
+            ...devtoolsBaseRNStyles.topBar,
+            backgroundColor: '#1F2937',
+            borderBottomColor: '#374151',
+          },
+          topBarTitle: {
+            ...devtoolsBaseRNStyles.topBarTitle,
+            color: '#F9FAFB',
+          },
+          topBarSub: {
+            ...devtoolsBaseRNStyles.topBarSub,
+            color: '#9CA3AF',
+          },
+          closeCircle: {
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: '#374151',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          closeCircleText: {
+            color: '#F9FAFB',
+            fontSize: 15,
+            fontWeight: '600',
+          },
+          progressSection: {
+            paddingHorizontal: 18,
+            paddingVertical: 10,
+            backgroundColor: '#1F2937',
+            borderBottomWidth: 1,
+            borderBottomColor: '#374151',
+            gap: 6,
+          },
+          stepText: {
+            color: '#A78BFA',
+            fontSize: 12,
+            fontWeight: '600',
+            flex: 1,
+          },
+          progressTrack: {
+            width: '100%',
+            height: 6,
+            backgroundColor: '#374151',
+            borderRadius: 3,
+            overflow: 'hidden',
+          },
+          progressFill: {
+            height: '100%',
+            backgroundColor: '#8B5CF6',
+          },
+          scrollList: {
+            flex: 1,
+            backgroundColor: '#111827',
+          },
+          scrollContent: {
+            padding: 16,
+            gap: 10,
+          },
+          emptyCard: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 48,
+            paddingHorizontal: 24,
+          },
+          emptyIcon: {
+            fontSize: 44,
+            marginBottom: 12,
+          },
+          emptyTitle: {
+            color: '#F9FAFB',
+            fontSize: 17,
+            fontWeight: '700',
+            marginBottom: 8,
+          },
+          emptyText: {
+            color: '#9CA3AF',
+            fontSize: 13,
+            textAlign: 'center',
+            lineHeight: 18,
+            marginBottom: 24,
+          },
+          primaryActionBtn: {
+            paddingHorizontal: 24,
+            paddingVertical: 12,
+            backgroundColor: '#8B5CF6',
+            borderRadius: 10,
+          },
+          primaryActionBtnText: {
+            color: '#FFF',
+            fontSize: 14,
+            fontWeight: '700',
+          },
+          card: {
+            backgroundColor: '#1F2937',
+            borderRadius: 12,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: '#374151',
+          },
+          cardHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 4,
+          },
+          cardTitle: {
+            color: '#F9FAFB',
+            fontSize: 14,
+            fontWeight: '700',
+            flex: 1,
+            marginRight: 8,
+          },
+          badge: {
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 12,
+          },
+          badgeText: {
+            fontSize: 11,
+            fontWeight: '700',
+          },
+          cardDesc: {
+            color: '#9CA3AF',
+            fontSize: 12,
+            marginBottom: 10,
+          },
+          cardMetrics: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            borderTopWidth: 1,
+            borderTopColor: '#374151',
+            paddingTop: 8,
+          },
+          metricLabel: {
+            color: '#6B7280',
+            fontSize: 10,
+          },
+          metricVal: {
+            color: '#F9FAFB',
+            fontSize: 13,
+            fontWeight: '700',
+            marginTop: 2,
+          },
+          bottomBar: {
+            flexDirection: 'row',
+            gap: 10,
+            padding: 16,
+            backgroundColor: '#1F2937',
+            borderTopWidth: 1,
+            borderTopColor: '#374151',
+          },
+          footerBtn: {
+            flex: 1,
+            paddingVertical: 12,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          footerBtnText: {
+            color: '#FFF',
+            fontSize: 14,
+            fontWeight: '700',
+          },
+        })
+      : {};
+  return cachedStyles;
+}

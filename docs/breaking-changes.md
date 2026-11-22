@@ -1,6 +1,6 @@
 # Breaking Changes and AI Code-Review Guide
 
-This guide records breaking changes introduced in `local-lite` (`3.2.0`, `3.1.0`, `3.0.0`, and `2.0.0`) and gives
+This guide records breaking changes introduced in `local-lite` (`3.3.0`, `3.2.0`, `3.1.0`, `3.0.0`, and `2.0.0`) and gives
 an actionable checklist for reviewing an application or repository update.
 Use it when upgrading to this version or when asking an AI assistant to check
 whether dependent code needs changes.

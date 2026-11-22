@@ -2,6 +2,15 @@
 
 All notable changes to `local-lite` are documented in this file.
 
+## [3.3.0] - 2026-11-22
+
+### Breaking Changes
+- **Trimmed Root Barrel (`local-lite`):** Removed `export * from './config/index.js'` from [src/index.ts](./src/index.ts) so importing the root `local-lite` entry no longer pulls in config resolvers, all adapter classes, or `local-lite/email`.
+  - Import `createSyncClient`, `defineSyncConfig`, `resolveLocalAdapter`, `resolveRemoteAdapter`, `LocalLiteConfig`, and related config option types from `'local-lite/config'` instead.
+
+### Changed
+- **DevTools Tree Shaking (`local-lite/devtools`):** Replaced top-level `require('react-native')`, `require('react-native-safe-area-context')`, and `StyleSheet.create()` calls in `src/devtools/shared.ts`, `BenchmarkModal.tsx`, and `SyncInspector.tsx` with lazy getters so importing `local-lite/devtools` has no top-level React Native side effects.
+
 ## [3.2.2] - 2026-11-22
 
 ### Fixed
