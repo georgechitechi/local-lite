@@ -45,7 +45,10 @@ vi.mock('react', () => ({
 import { MemoryDemoRemoteAdapter } from '../src/adapters/remote/demo.js';
 import { DefaultNetworkStatusProvider } from '../src/adapters/network/index.js';
 import { LocalFirstClient } from '../src/core/client.js';
-import {
+import { MockDB } from './helpers/mock-db.js';
+
+vi.resetModules();
+const {
   clearLiveQueryCache,
   resolveSyncTheme,
   useAppleAuth,
@@ -66,8 +69,7 @@ import {
   useSession,
   useSyncMetrics,
   useSyncStatus,
-} from '../src/react/index.js';
-import { MockDB } from './helpers/mock-db.js';
+} = await import('../src/react/index.js');
 
 function resetHooks() {
   for (const cleanup of hookState.cleanups.splice(0)) {
