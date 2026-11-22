@@ -5,6 +5,11 @@ import {
   RemoteRequestOptions,
 } from './index.js';
 import { DeltaChanges, PushResult, SyncOperation } from '../../core/types.js';
+import {
+  selfHostedStorage,
+  type SelfHostedStorageOptions,
+  type SelfHostedStorageUploader,
+} from '../../storage/selfHosted.js';
 
 export interface SelfHostedRemoteAdapterOptions {
   /**
@@ -476,5 +481,25 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
         `Self-hosted setAutomationEnabled failed (${response.status}): ${errText}`,
       );
     }
+  }
+
+  /**
+   * Creates a `SelfHostedStorageUploader` bound to this adapter's URL, token, and fetch.
+   * Automatically invoked by `LocalFirstClient` when `storage: { autoRemote: true }`.
+   */
+  createStorageUploader(
+    options: Partial<SelfHostedStorageOptions> & { bucket?: string } = {},
+  ): SelfHostedStorageUploader {
+    return selfHostedStorage({
+      baseUrl: options.baseUrl ?? (() => this.url),
+      getToken: options.getToken ?? (() => this.token),
+      fetch: options.fetch ?? this.fetchFn,
+      defaultBucket: options.defaultBucket ?? options.bucket ?? 'public',
+      uploadPath: options.uploadPath,
+      filesPath: options.filesPath,
+      signPath: options.signPath,
+      bucketsPath: options.bucketsPath,
+      movePath: options.movePath,
+    });
   }
 }

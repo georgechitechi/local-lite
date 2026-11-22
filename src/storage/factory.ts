@@ -12,15 +12,15 @@ import {
   FirebaseStorageUploaderOptions,
 } from './firebase.js';
 import {
-  createSelfHostedStorageUploader,
-  SelfHostedStorageUploaderOptions,
+  selfHostedStorage,
+  SelfHostedStorageOptions,
 } from './selfHosted.js';
 
 export type UnifiedStorageOptions =
   | ({ provider: 'supabase' } & SupabaseStorageUploaderOptions)
   | ({ provider: 'convex' } & ConvexStorageUploaderOptions)
   | ({ provider: 'firebase' } & FirebaseStorageUploaderOptions)
-  | ({ provider: 'self-hosted' } & SelfHostedStorageUploaderOptions);
+  | ({ provider: 'self-hosted' } & SelfHostedStorageOptions);
 
 /**
  * Universal factory function to create a remote storage uploader for any supported provider:
@@ -48,10 +48,8 @@ export function createStorageUploader(
         options as FirebaseStorageUploaderOptions,
       );
     case 'self-hosted':
-      return createSelfHostedStorageUploader(
-        (options?.baseUrl
-          ? options
-          : client) as SelfHostedStorageUploaderOptions,
+      return selfHostedStorage(
+        (options?.baseUrl ? options : client) as SelfHostedStorageOptions,
       );
     default:
       throw new Error(

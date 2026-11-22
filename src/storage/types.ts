@@ -101,7 +101,7 @@ export interface BlobStorageManagerOptions {
   deleteRemoteOnDelete?: boolean;
   /**
    * If true, automatically attempts to infer the storage uploader from the client's
-   * remote database adapter (Supabase, Convex, or Firebase) if bucket/mutation options are provided.
+   * remote database adapter (Supabase, Convex, Firebase, or Self-Hosted).
    */
   autoRemote?: boolean;
   /** Optional bucket name for Supabase or Firebase Storage */

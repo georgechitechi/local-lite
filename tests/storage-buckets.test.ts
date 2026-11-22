@@ -4,8 +4,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   BlobStorageManager,
-  createSelfHostedStorageUploader,
   MemoryFileDriver,
+  selfHostedStorage,
   type StorageBucketRecord,
 } from '../src/storage/index.js';
 import {
@@ -13,6 +13,7 @@ import {
   type StorageMetadataAdapter,
   type StoredFileMeta,
 } from '../src/server/storage.js';
+import { SelfHostedRemoteAdapter } from '../src/adapters/remote/self-hosted.js';
 
 function createInMemoryMetadata(): StorageMetadataAdapter {
   const buckets = new Map<string, StorageBucketRecord>([
@@ -168,8 +169,7 @@ describe('local-lite multi-bucket storage & createStorageEndpoint', () => {
           : null,
     });
 
-    const uploader = createSelfHostedStorageUploader({
-      baseUrl: 'https://api.example.com',
+    const uploader = selfHostedStorage('https://api.example.com', {
       getToken: () => 'ok',
       fetch: (input, init) =>
         handler(new Request(String(input), init as RequestInit)),
@@ -223,6 +223,47 @@ describe('local-lite multi-bucket storage & createStorageEndpoint', () => {
     const remainingBuckets = await storage.listBuckets();
     expect(remainingBuckets.some((b) => b.name === 'property-photos')).toBe(
       false,
+    );
+  });
+
+  it('auto-wires SelfHostedStorageUploader from SelfHostedRemoteAdapter.createStorageUploader', async () => {
+    const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'll-autoremote-'));
+    dirs.push(uploadDir);
+
+    const handler = createStorageEndpoint({
+      uploadDir,
+      signingSecret: 'test-secret-key-32-characters-long',
+      metadata: createInMemoryMetadata(),
+      authenticate: async (req) =>
+        req.headers.get('authorization') === 'Bearer auto-tok'
+          ? { userId: 'u2' }
+          : null,
+    });
+
+    const remote = new SelfHostedRemoteAdapter({
+      url: 'https://api.example.com',
+      token: 'auto-tok',
+      fetch: (input, init) =>
+        handler(new Request(String(input), init as RequestInit)),
+    });
+
+    const uploader = remote.createStorageUploader({ bucket: 'public-assets' });
+    const storage = new BlobStorageManager(createMockBlobDb() as any, {
+      driver: new MemoryFileDriver(),
+      uploader,
+      bucket: 'public-assets',
+    });
+    await storage.initialize();
+
+    const saved = await storage.save(
+      'logos/b1.png',
+      new Uint8Array([137, 80, 78, 71]),
+      { name: 'b1.png', mimeType: 'image/png' },
+    );
+    expect(saved.status).toBe('UPLOADED');
+    expect(saved.bucket).toBe('public-assets');
+    expect(saved.remoteUrl).toBe(
+      'https://api.example.com/storage/files/public-assets/logos/b1.png',
     );
   });
 });

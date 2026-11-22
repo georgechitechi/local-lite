@@ -7,7 +7,7 @@ import type {
   StorageBucketVisibility,
 } from './types.js';
 
-export interface SelfHostedStorageUploaderOptions {
+export interface SelfHostedStorageOptions {
   /** Base URL of the self-hosted server (or getter returning it dynamically). */
   baseUrl: string | (() => string);
   /** Optional auth token resolver sent as `Authorization: Bearer <token>`. */
@@ -40,7 +40,7 @@ export class SelfHostedStorageUploader implements RemoteStorageUploader {
   private readonly movePath: string;
   private readonly fetchFn: typeof fetch;
 
-  constructor(private readonly options: SelfHostedStorageUploaderOptions) {
+  constructor(private readonly options: SelfHostedStorageOptions) {
     this.defaultBucket = options.defaultBucket?.trim() || 'public';
     this.uploadPath = options.uploadPath || '/storage/upload';
     this.filesPath = (options.filesPath || '/storage/files').replace(
@@ -290,8 +290,16 @@ export class SelfHostedStorageUploader implements RemoteStorageUploader {
   }
 }
 
-export function createSelfHostedStorageUploader(
-  options: SelfHostedStorageUploaderOptions,
+export type SelfHostedStorageUploaderOptions = SelfHostedStorageOptions;
+
+export function selfHostedStorage(
+  urlOrOptions: string | (() => string) | SelfHostedStorageOptions,
+  options?: Omit<SelfHostedStorageOptions, 'baseUrl'>,
 ): SelfHostedStorageUploader {
-  return new SelfHostedStorageUploader(options);
+  if (typeof urlOrOptions === 'string' || typeof urlOrOptions === 'function') {
+    return new SelfHostedStorageUploader({ ...options, baseUrl: urlOrOptions });
+  }
+  return new SelfHostedStorageUploader(urlOrOptions);
 }
+
+export const createSelfHostedStorageUploader = selfHostedStorage;
