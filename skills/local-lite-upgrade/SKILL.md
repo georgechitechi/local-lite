@@ -7,7 +7,18 @@ description: Review a codebase that uses the local-lite npm package for code tha
 
 Checklist and automated review instructions for upgrading apps to the latest version of `local-lite`.
 
-## 0. Upgrade Checklist (3.1.0 Changes)
+## 0. Upgrade Checklist (3.2.0 Changes)
+
+* **Universal Scope Defaults (`scope_id` / `scopeId`)**:
+  - `SqlServerSyncStorage` defaults `scopeField` to `'scope_id'` and `createSyncEventsHandler` defaults `scopeQueryParam` to `'scopeId'`.
+  - **Action**: Pass `scopeField` / `scopeQueryParam` explicitly if your app uses `'business_id'` / `'businessId'`.
+* **Schema & Migration Options (`includeScopeSyncIndexes`, `scopeColumn`)**:
+  - Removed `includeBusinessSyncIndexes`; `parseSchemaIndexes()`, `generateSchemaIndexes()`, `buildSqlTargetSchema()`, and `generateSqlMigration()` now use `includeScopeSyncIndexes` and `scopeColumn` (default `'scope_id'`).
+* **Universal Payments & Self-Hosted RPCs**:
+  - Removed `createDarajaAdapter`, `formatKenyanPhone`, `businessId`/`tenantId`/`contractId`/`merchantRequestId`, and hardcoded rental-app routes in `SelfHostedRemoteAdapter.call()`.
+  - **Action**: Use `createPaymentAdapter()` with `metadata` for custom/regional gateways.
+
+## 0.1 Upgrade Checklist (3.1.0 Changes)
 
 * **ESM-Only & Node 24+**:
   - `local-lite` now ships native ESM (`"type": "module"`) and requires `"node": ">=24.0.0"`.
@@ -19,7 +30,7 @@ Checklist and automated review instructions for upgrading apps to the latest ver
   - `useLiveQuery`, `liveQuery`, `createLiveQuery`, `useSearch`, `useSession`, `useKVStore`, `PostgresQueryResult`, `PostgresExecutor`, `FieldEncryptor`, and `AuditEntry` no longer default to `any`.
   - **Action**: Pass explicit generics (e.g. `useLiveQuery<Todo>(...)`) or narrow `unknown` return values.
 
-## 0.1 Upgrade Checklist (3.0.0 Breaking Changes)
+## 0.2 Upgrade Checklist (3.0.0 Breaking Changes)
 
 * **Trimmed Root & Config Barrels**:
   - `'local-lite'` now exports only `core`, `config`, `schema`, and `utils` (`uuid`, `sql`, `portability`).

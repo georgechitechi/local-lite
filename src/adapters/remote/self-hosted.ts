@@ -340,26 +340,14 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
     args: Record<string, any> = {},
   ): Promise<T> {
     const actionEndpoints: Record<string, string> = {
-      'payments/stk': '/payments/stk',
-      'contracts/renewal': '/contracts/renewal',
-      'contracts/termination': '/contracts/termination',
-      'tenant-self-service': '/tenant-self-service',
       email: '/email',
       'backups/create': '/backups/create',
       'backups/list': '/backups',
       'crons/toggle': '/crons/toggle',
       'crons/daily': '/crons/daily',
-      'business-access/invite': '/business-access/invite',
-      'business-access/accept': '/business-access/accept',
-      'business-access/reject': '/business-access/reject',
-      'business-access/update': '/business-access/update',
-      'business-access/revoke': '/business-access/revoke',
     };
     const normalized = functionName
       .replace(/^functions\//, '')
-      .replace('contracts:sendRenewalReminder', 'contracts/renewal')
-      .replace('contracts:sendTerminationNotice', 'contracts/termination')
-      .replace('tenantSelfService:createSelfServiceLink', 'tenant-self-service')
       .replace('email:send', 'email')
       .replace('convexBackups:listMyBackups', 'backups/list')
       .replace('convexBackups:createBackup', 'backups/create')
@@ -466,15 +454,7 @@ export class SelfHostedRemoteAdapter implements RemoteDBAdapter {
       headers: this.getRequestHeaders(),
     });
     if (!response.ok) {
-      return [
-        {
-          id: 'daily_contract_reminders',
-          name: 'Daily Contract Reminders',
-          description:
-            'Automated contract expiration notifications and renewal checks',
-          enabled: true,
-        },
-      ];
+      return [];
     }
     const data = await response.json();
     return (data.automations || []) as RemoteAutomationJob[];

@@ -79,7 +79,7 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
 
     const ac = new AbortController();
     const res = await handler(
-      new Request('http://localhost/sync/events?businessId=b1', {
+      new Request('http://localhost/sync/events?scopeId=b1', {
         method: 'GET',
         headers: { Authorization: 'Bearer ok' },
         signal: ac.signal,
@@ -211,7 +211,7 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
           tableName: 'tenants',
           rowId: 't1',
           operation: 'INSERT',
-          payload: { business_id: 'b1', name: 'Alice' },
+          payload: { scope_id: 'b1', name: 'Alice' },
           timestamp: 100,
         },
       ],

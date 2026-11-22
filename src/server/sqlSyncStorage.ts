@@ -24,7 +24,7 @@ export class SqlServerSyncStorage implements ServerSyncStorage {
     this.executor = executor;
     this.changesTable = options.changesTable ?? '_server_changes';
     this.clockTable = options.clockTable ?? '_server_sync_clock';
-    this.scopeField = options.scopeField ?? 'business_id';
+    this.scopeField = options.scopeField ?? 'scope_id';
     this.broker = options.broker;
   }
 
@@ -65,10 +65,7 @@ export class SqlServerSyncStorage implements ServerSyncStorage {
         if (!op.tableName || !op.rowId) continue;
         checkpoint += 1;
         const payload = op.payload || {};
-        const scopeId = String(
-          payload[this.scopeField] ||
-            (op.tableName === 'businesses' ? op.rowId : ''),
-        );
+        const scopeId = String(payload[this.scopeField] || '');
         const userId = String(payload.user_id || '');
         const operation: SyncOp = op.operation || 'UPDATE';
 

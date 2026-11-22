@@ -2,6 +2,14 @@
 
 All notable changes to `local-lite` are documented in this file.
 
+## [3.2.0] - 2026-11-22
+
+### Changed
+- **100% Universal Core & Server:**
+  - Changed `SqlServerSyncStorage` default `scopeField` from `'business_id'` to `'scope_id'` and `createSyncEventsHandler` default `scopeQueryParam` from `'businessId'` to `'scopeId'`.
+  - Parameterized `scopeColumn` (default `'scope_id'`) in `src/schema/generator.ts` and `src/schema/sqlMigrations.ts`, and replaced `includeBusinessSyncIndexes` with `includeScopeSyncIndexes`.
+  - Removed hardcoded app-specific RPC routes (`business-access/*`, `contracts/*`, `tenant-self-service`, `payments/stk`) from `SelfHostedRemoteAdapter.call()`.
+
 ## [3.1.1] - 2026-11-22
 
 ### Changed

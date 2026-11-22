@@ -63,7 +63,7 @@ export type Database = {
 describe('Schema Index Generator', () => {
   it('parses foreign keys and generates correct index statements', () => {
     const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, {
-      includeBusinessSyncIndexes: false,
+      includeScopeSyncIndexes: false,
     });
 
     expect(indexes).toHaveLength(3);
@@ -89,22 +89,23 @@ describe('Schema Index Generator', () => {
     );
   });
 
-  it('detects tables with business_id and deleted to create composite sync indexes', () => {
+  it('detects tables with scopeColumn and deleted to create composite sync indexes', () => {
     const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, {
-      includeBusinessSyncIndexes: true,
+      includeScopeSyncIndexes: true,
+      scopeColumn: 'business_id',
     });
 
-    const bizIndexes = indexes.filter(
+    const scopeIndexes = indexes.filter(
       (i) => i.columns.includes('business_id') && i.columns.includes('deleted'),
     );
-    expect(bizIndexes.length).toBeGreaterThanOrEqual(2);
-    expect(bizIndexes.some((i) => i.table === 'properties')).toBe(true);
-    expect(bizIndexes.some((i) => i.table === 'contracts')).toBe(true);
+    expect(scopeIndexes.length).toBeGreaterThanOrEqual(2);
+    expect(scopeIndexes.some((i) => i.table === 'properties')).toBe(true);
+    expect(scopeIndexes.some((i) => i.table === 'contracts')).toBe(true);
   });
 
   it('formats executable TypeScript code containing ensureSchemaIndexes', () => {
     const indexes = parseSchemaIndexes(SAMPLE_DATABASE_TYPES, {
-      includeBusinessSyncIndexes: false,
+      includeScopeSyncIndexes: false,
     });
     const code = formatSchemaIndexesCode(indexes);
 
@@ -116,7 +117,7 @@ describe('Schema Index Generator', () => {
   it('generates indexes from string content via generateSchemaIndexes', async () => {
     const result = await generateSchemaIndexes({
       typesContent: SAMPLE_DATABASE_TYPES,
-      includeBusinessSyncIndexes: true,
+      includeScopeSyncIndexes: true,
     });
 
     expect(result.indexes.length).toBeGreaterThan(0);
