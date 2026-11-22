@@ -239,4 +239,32 @@ describe('SupabaseRemoteAdapter', () => {
 
     if (typeof unsub === 'function') unsub();
   });
+
+  it('rejects instead of retrying unscoped when a scoped column fails with 42703', async () => {
+    const eqSpy = vi.fn();
+    const limitSpy = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: '42703', message: 'column "scope_id" does not exist' },
+    });
+    const queryBuilder: Record<string, unknown> = {};
+    queryBuilder.select = vi.fn().mockReturnValue(queryBuilder);
+    queryBuilder.eq = eqSpy.mockReturnValue(queryBuilder);
+    queryBuilder.gt = vi.fn().mockReturnValue(queryBuilder);
+    queryBuilder.order = vi.fn().mockReturnValue(queryBuilder);
+    queryBuilder.limit = limitSpy;
+
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue(queryBuilder),
+    };
+
+    const adapter = new SupabaseRemoteAdapter(mockSupabase as any, {
+      tables: ['todos'],
+    });
+
+    await expect(
+      adapter.fetchChanges(0, { scope_id: 'org_1' }),
+    ).rejects.toMatchObject({ code: '42703' });
+    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledWith('scope_id', 'org_1');
+  });
 });

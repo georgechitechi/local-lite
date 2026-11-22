@@ -200,7 +200,16 @@ export function createPaystackAdapter(
           error: 'Invalid Paystack webhook signature.',
         };
       }
-      const event: any = JSON.parse(rawBody);
+      let event: any;
+      try {
+        event = JSON.parse(rawBody);
+      } catch {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Invalid Paystack webhook JSON payload.',
+        };
+      }
       const data = event?.data || {};
       const eventName = String(event?.event || '');
       if (eventName === 'charge.success') {
@@ -362,7 +371,16 @@ export function createStripeCheckoutAdapter(
         };
       }
 
-      const event: any = JSON.parse(rawBody);
+      let event: any;
+      try {
+        event = JSON.parse(rawBody);
+      } catch {
+        return {
+          verified: false,
+          status: 'failed',
+          error: 'Invalid Paystack webhook JSON payload.',
+        };
+      }
       const session = event?.data?.object || {};
       const eventType = String(event?.type || '');
       if (
