@@ -1,5 +1,4 @@
 * **Getting Started**
-  * [🏠 Home](README.md)
   * [🚀 Getting Started](getting-started.md)
   * [🏛️ Architecture & Concepts](architecture.md)
   * [⚙️ Configuration](configuration.md)
