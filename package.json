@@ -103,6 +103,10 @@
       "types": "./dist/utils/portability.d.ts",
       "default": "./dist/utils/portability.js"
     },
+    "./uuid": {
+      "types": "./dist/utils/uuid.d.ts",
+      "default": "./dist/utils/uuid.js"
+    },
     "./maintenance": {
       "types": "./dist/core/maintenance.d.ts",
       "default": "./dist/core/maintenance.js"

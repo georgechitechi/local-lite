@@ -24,3 +24,4 @@ export type {
   RemoteDBAdapter,
 } from '../adapters/remote/index.js';
 export * from '../utils/logger.js';
+export * from '../utils/uuid.js';
