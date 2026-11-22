@@ -11,10 +11,7 @@ import {
   createFirebaseStorageUploader,
   FirebaseStorageUploaderOptions,
 } from './firebase.js';
-import {
-  selfHostedStorage,
-  SelfHostedStorageOptions,
-} from './selfHosted.js';
+import { selfHostedStorage, SelfHostedStorageOptions } from './selfHosted.js';
 
 export type UnifiedStorageOptions =
   | ({ provider: 'supabase' } & SupabaseStorageUploaderOptions)
