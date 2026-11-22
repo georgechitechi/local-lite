@@ -11,7 +11,8 @@ export interface SelfHostedStorageUploaderOptions {
   /** Base URL of the self-hosted server (or getter returning it dynamically). */
   baseUrl: string | (() => string);
   /** Optional auth token resolver sent as `Authorization: Bearer <token>`. */
-  getToken?: () => Promise<string | null | undefined> | string | null | undefined;
+  getToken?: () =>
+    Promise<string | null | undefined> | string | null | undefined;
   /** Optional custom fetch implementation. */
   fetch?: typeof fetch;
   /** Default bucket name when `blob.bucket` is not specified. Default: `'public'`. */
@@ -42,7 +43,10 @@ export class SelfHostedStorageUploader implements RemoteStorageUploader {
   constructor(private readonly options: SelfHostedStorageUploaderOptions) {
     this.defaultBucket = options.defaultBucket?.trim() || 'public';
     this.uploadPath = options.uploadPath || '/storage/upload';
-    this.filesPath = (options.filesPath || '/storage/files').replace(/\/+$/, '');
+    this.filesPath = (options.filesPath || '/storage/files').replace(
+      /\/+$/,
+      '',
+    );
     this.signPath = options.signPath || '/storage/sign';
     this.bucketsPath = options.bucketsPath || '/storage/buckets';
     this.movePath = options.movePath || '/storage/move';
@@ -54,7 +58,9 @@ export class SelfHostedStorageUploader implements RemoteStorageUploader {
       typeof this.options.baseUrl === 'function'
         ? this.options.baseUrl()
         : this.options.baseUrl;
-    const base = String(raw || '').trim().replace(/\/+$/, '');
+    const base = String(raw || '')
+      .trim()
+      .replace(/\/+$/, '');
     if (!base) {
       throw new Error('Self-hosted storage baseUrl is not configured.');
     }
@@ -65,9 +71,7 @@ export class SelfHostedStorageUploader implements RemoteStorageUploader {
     extra: Record<string, string> = {},
   ): Promise<Record<string, string>> {
     const headers: Record<string, string> = { ...extra };
-    const token = this.options.getToken
-      ? await this.options.getToken()
-      : null;
+    const token = this.options.getToken ? await this.options.getToken() : null;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

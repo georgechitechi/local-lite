@@ -87,10 +87,7 @@ export interface RemoteStorageUploader {
 }
 
 export type StorageProviderType =
-  | 'supabase'
-  | 'convex'
-  | 'firebase'
-  | 'self-hosted';
+  'supabase' | 'convex' | 'firebase' | 'self-hosted';
 
 export interface BlobStorageManagerOptions {
   driver?: FileDriver;

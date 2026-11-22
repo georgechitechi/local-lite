@@ -154,7 +154,9 @@ export function createStorageEndpoint(
   const allowedMimeToExt = options.allowedMimeToExt ?? DEFAULT_MIME_TO_EXT;
   const allowedExts = new Set(Object.values(allowedMimeToExt));
 
-  async function resolveOrCreateBucket(raw: unknown): Promise<StorageBucketRecord> {
+  async function resolveOrCreateBucket(
+    raw: unknown,
+  ): Promise<StorageBucketRecord> {
     const name = normalizeBucket(raw) || 'public';
     const existing = await options.metadata.getBucket(name);
     if (existing) return existing;
@@ -206,7 +208,9 @@ export function createStorageEndpoint(
       const auth = await options.authenticate(request);
       if (!auth?.userId) return jsonErr('Unauthorized', 401);
 
-      const contentType = (request.headers.get('content-type') || '').toLowerCase();
+      const contentType = (
+        request.headers.get('content-type') || ''
+      ).toLowerCase();
       let buffer: Buffer;
       let fileName = '';
       let mime = '';
@@ -214,12 +218,17 @@ export function createStorageEndpoint(
       let rawBucket: unknown;
 
       if (contentType.includes('application/json')) {
-        const body = (await request.json().catch(() => ({}))) as Record<string, any>;
-        const b64 = typeof body.dataBase64 === 'string' ? body.dataBase64.trim() : '';
+        const body = (await request.json().catch(() => ({}))) as Record<
+          string,
+          any
+        >;
+        const b64 =
+          typeof body.dataBase64 === 'string' ? body.dataBase64.trim() : '';
         if (!b64) return jsonErr('File data is required.', 400);
         buffer = Buffer.from(b64, 'base64');
         fileName = typeof body.name === 'string' ? body.name.trim() : '';
-        mime = typeof body.mimeType === 'string' ? body.mimeType.toLowerCase() : '';
+        mime =
+          typeof body.mimeType === 'string' ? body.mimeType.toLowerCase() : '';
         rawKey = String(body.key || '').trim();
         rawBucket = body.bucket;
       } else {
@@ -236,7 +245,10 @@ export function createStorageEndpoint(
       }
 
       if (buffer.length <= 0 || buffer.length > maxUploadBytes) {
-        return jsonErr(`File size exceeds limit (${maxUploadBytes} bytes).`, 400);
+        return jsonErr(
+          `File size exceeds limit (${maxUploadBytes} bytes).`,
+          400,
+        );
       }
 
       const extFromMime = allowedMimeToExt[mime];
@@ -258,7 +270,10 @@ export function createStorageEndpoint(
         ? sanitizeKey(trimmedKey, ext)
         : `${auth.userId.replace(/[^a-zA-Z0-9_-]/g, '_')}/${crypto.randomUUID()}${ext}`;
 
-      const targetPath = safeResolve(uploadDir, `${bucketRec.name}/${storageKey}`);
+      const targetPath = safeResolve(
+        uploadDir,
+        `${bucketRec.name}/${storageKey}`,
+      );
       if (!targetPath) return jsonErr('Invalid storage key.', 400);
 
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -291,7 +306,10 @@ export function createStorageEndpoint(
     if (subPath === '/sign' && method === 'POST') {
       const auth = await options.authenticate(request);
       if (!auth?.userId) return jsonErr('Unauthorized', 401);
-      const body = (await request.json().catch(() => ({}))) as Record<string, any>;
+      const body = (await request.json().catch(() => ({}))) as Record<
+        string,
+        any
+      >;
       const key = typeof body.key === 'string' ? body.key.trim() : '';
       if (!key || !safeResolve(uploadDir, key)) {
         return jsonErr('Valid storage key is required.', 400);
@@ -308,9 +326,16 @@ export function createStorageEndpoint(
       ) {
         return jsonErr('Forbidden', 403);
       }
-      const ttlSec = Math.min(Math.max(Number(body.expiresInSeconds || 300), 30), 3600);
+      const ttlSec = Math.min(
+        Math.max(Number(body.expiresInSeconds || 300), 30),
+        3600,
+      );
       const expiresAt = Date.now() + ttlSec * 1000;
-      const token = signToken(options.signingSecret, { kind: 'read', key, exp: expiresAt });
+      const token = signToken(options.signingSecret, {
+        kind: 'read',
+        key,
+        exp: expiresAt,
+      });
       return Response.json(
         {
           url: `${basePath}/files/${encodeURIComponent(key).replace(/%2F/g, '/')}?token=${encodeURIComponent(token)}`,
@@ -324,7 +349,10 @@ export function createStorageEndpoint(
     if (subPath === '/move' && method === 'POST') {
       const auth = await options.authenticate(request);
       if (!auth?.userId) return jsonErr('Unauthorized', 401);
-      const body = (await request.json().catch(() => ({}))) as Record<string, any>;
+      const body = (await request.json().catch(() => ({}))) as Record<
+        string,
+        any
+      >;
       const key = typeof body.key === 'string' ? body.key.trim() : '';
       const toBucket = normalizeBucket(body.toBucket);
       if (!key || !toBucket) {
@@ -364,7 +392,10 @@ export function createStorageEndpoint(
         return Response.json({ buckets }, { headers: JSON_HEADERS });
       }
       if (method === 'POST') {
-        const body = (await request.json().catch(() => ({}))) as Record<string, any>;
+        const body = (await request.json().catch(() => ({}))) as Record<
+          string,
+          any
+        >;
         const name = normalizeBucket(body.name);
         if (!name) return jsonErr('Invalid bucket name.', 400);
         const existing = await options.metadata.getBucket(name);
@@ -381,7 +412,10 @@ export function createStorageEndpoint(
         };
         await options.metadata.createBucket(bucket);
         fs.mkdirSync(path.join(uploadDir, name), { recursive: true });
-        return Response.json({ ok: true, bucket }, { status: 201, headers: JSON_HEADERS });
+        return Response.json(
+          { ok: true, bucket },
+          { status: 201, headers: JSON_HEADERS },
+        );
       }
       if (method === 'DELETE') {
         const name = normalizeBucket(url.searchParams.get('name'));
@@ -393,8 +427,12 @@ export function createStorageEndpoint(
         if (count > 0) return jsonErr(`Bucket "${name}" is not empty.`, 409);
         await options.metadata.deleteBucket(name);
         const dir = path.join(uploadDir, name);
-        if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-        return Response.json({ deleted: true, bucket: name }, { headers: JSON_HEADERS });
+        if (fs.existsSync(dir))
+          fs.rmSync(dir, { recursive: true, force: true });
+        return Response.json(
+          { deleted: true, bucket: name },
+          { headers: JSON_HEADERS },
+        );
       }
       return jsonErr('Method Not Allowed', 405);
     }
@@ -408,7 +446,12 @@ export function createStorageEndpoint(
         const auth = await options.authenticate(request);
         if (!auth?.userId) return jsonErr('Unauthorized', 401);
         const file = await findFile(relKey);
-        if (file && file.userId && file.userId !== auth.userId && !auth.isAdmin) {
+        if (
+          file &&
+          file.userId &&
+          file.userId !== auth.userId &&
+          !auth.isAdmin
+        ) {
           return jsonErr('Forbidden', 403);
         }
         const disk = file
@@ -439,7 +482,9 @@ export function createStorageEndpoint(
 
         if (isPrivate) {
           const token = url.searchParams.get('token')?.trim() || '';
-          const parsed = token ? verifyToken(options.signingSecret, token) : null;
+          const parsed = token
+            ? verifyToken(options.signingSecret, token)
+            : null;
           const ok =
             parsed?.kind === 'read' &&
             (parsed.key === relKey ||

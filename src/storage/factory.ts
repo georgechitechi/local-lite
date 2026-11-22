@@ -49,7 +49,9 @@ export function createStorageUploader(
       );
     case 'self-hosted':
       return createSelfHostedStorageUploader(
-        (options?.baseUrl ? options : client) as SelfHostedStorageUploaderOptions,
+        (options?.baseUrl
+          ? options
+          : client) as SelfHostedStorageUploaderOptions,
       );
     default:
       throw new Error(

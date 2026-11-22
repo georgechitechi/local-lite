@@ -208,7 +208,9 @@ export class BlobStorageManager {
     visibility: StorageBucketVisibility = 'public',
   ): Promise<StorageBucketRecord> {
     if (!this.uploader || typeof this.uploader.createBucket !== 'function') {
-      throw new Error('Configured storage uploader does not support createBucket.');
+      throw new Error(
+        'Configured storage uploader does not support createBucket.',
+      );
     }
     return await this.uploader.createBucket(name, visibility);
   }
@@ -216,7 +218,9 @@ export class BlobStorageManager {
   /** Deletes an empty remote storage bucket when supported by the configured uploader. */
   async deleteBucket(name: string): Promise<void> {
     if (!this.uploader || typeof this.uploader.deleteBucket !== 'function') {
-      throw new Error('Configured storage uploader does not support deleteBucket.');
+      throw new Error(
+        'Configured storage uploader does not support deleteBucket.',
+      );
     }
     await this.uploader.deleteBucket(name);
   }
