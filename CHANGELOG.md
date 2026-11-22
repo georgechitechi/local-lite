@@ -2,6 +2,26 @@
 
 All notable changes to `local-lite` are documented in this file.
 
+## [3.2.2] - 2026-11-22
+
+### Fixed
+- **React Hook Test Isolation (`tests/react-hooks-coverage.test.ts`):** Reset Vitest's module cache (`vi.resetModules()`) and dynamically import `src/react/index.js` after `vi.mock('react', ...)` so hook tests do not fail with `Cannot read properties of null (reading 'useState')` under `isolate: false`.
+
+### Changed
+- **CI & Docs:**
+  - Re-enabled `macos-latest` in `.github/workflows/ci.yml` (`ubuntu-latest`, `windows-latest`, `macos-latest` on Node 24).
+  - Removed obsolete release workflow entries from `docs/_sidebar.md`.
+
+## [3.2.1] - 2026-11-22
+
+### Fixed
+- **Scoped Sync Safety (`SupabaseRemoteAdapter`):** Removed the unscoped fallback retry on PostgreSQL `42703` (undefined scope column) in `fetchChanges()` so missing scope columns fail explicitly rather than returning unscoped rows.
+- **Malformed JSON Resilience:** Guarded `JSON.parse` in `OutboxStore` (`src/core/outbox-store.ts`) and in `createPaystackAdapter` / `createStripeCheckoutAdapter` webhook handlers (`src/payments/adapters.ts`).
+- **GitHub Auth Email Handling (`GitHubAuthClient`):** Stopped synthesizing `@users.noreply.github.com` addresses or marking missing emails as `emailVerified: true` when GitHub returns no email.
+- **Scheduler Reliability:**
+  - `parseScheduleToIntervalMs` (`src/scheduler/cron.ts`) now throws on invalid schedule expressions instead of silently defaulting to 1 hour.
+  - `createServerCronRunner` (`src/server/scheduler.ts`) now skips overlapping ticks while a previous `onTick` is still running.
+
 ## [3.2.0] - 2026-11-22
 
 ### Changed
