@@ -53,8 +53,7 @@ export function parseScheduleToIntervalMs(schedule: ScheduleType): number {
     return 24 * 60 * 60 * 1000;
   }
 
-  // Default fallback: 1 hour
-  return 60 * 60 * 1000;
+  throw new Error(`Invalid schedule expression: "${schedule}".`);
 }
 
 /**
