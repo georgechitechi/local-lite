@@ -39,7 +39,7 @@ export interface SyncEventsEndpointOptions {
 export function createSyncEventsHandler(
   options: SyncEventsEndpointOptions,
 ): (request: Request) => Promise<Response> {
-  const scopeParam = options.scopeQueryParam ?? 'businessId';
+  const scopeParam = options.scopeQueryParam ?? 'scopeId';
   const heartbeatMs = options.heartbeatMs ?? 25_000;
 
   return async (request: Request): Promise<Response> => {

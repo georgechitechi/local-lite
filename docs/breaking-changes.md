@@ -1,6 +1,6 @@
 # Breaking Changes and AI Code-Review Guide
 
-This guide records breaking changes introduced in `local-lite` (`3.1.0`, `3.0.0`, and `2.0.0`) and gives
+This guide records breaking changes introduced in `local-lite` (`3.2.0`, `3.1.0`, `3.0.0`, and `2.0.0`) and gives
 an actionable checklist for reviewing an application or repository update.
 Use it when upgrading to this version or when asking an AI assistant to check
 whether dependent code needs changes.
@@ -21,6 +21,24 @@ This guide ships with the package at
 `node_modules/local-lite/skills/local-lite-upgrade/SKILL.md` (setup and custom
 adapter skills live beside it); copy the folders
 into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
+
+## Changes in 3.2.0
+
+### 1. Universal scope defaults (`scope_id` / `scopeId`)
+
+- `SqlServerSyncStorage` now defaults `scopeField` to `'scope_id'` (previously `'business_id'`).
+- `createSyncEventsHandler` now defaults `scopeQueryParam` to `'scopeId'` (previously `'businessId'`).
+- Pass `{ scopeField: 'business_id' }` or `{ scopeQueryParam: 'businessId' }` explicitly if your existing database or clients use `business_id`.
+
+### 2. Schema generator & SQL migrations (`scopeColumn` / `includeScopeSyncIndexes`)
+
+- Removed `includeBusinessSyncIndexes` from `GenerateSchemaIndexesOptions` and `parseSchemaIndexes()`; use `includeScopeSyncIndexes` and `scopeColumn` (default `'scope_id'`).
+- `buildSqlTargetSchema()` and `generateSqlMigration()` now accept `scopeColumn` (default `'scope_id'`) for the composite `(scopeColumn, 'updated_at')` index.
+
+### 3. Generic `SelfHostedRemoteAdapter.call()` & universal `local-lite/payments`
+
+- Removed hardcoded rental-app RPC routes (`business-access/*`, `contracts/*`, `tenant-self-service`, `payments/stk`) from `SelfHostedRemoteAdapter.call()`; pass explicit paths or `namespace:action` names instead.
+- Removed `createDarajaAdapter`, `formatKenyanPhone`, `businessId`, `tenantId`, `contractId`, and `merchantRequestId` from `local-lite/payments` and `local-lite/payments/server`. Use `createPaymentAdapter()` and `metadata` instead (see [Universal Payments](./payments.md)).
 
 ## Changes in 3.1.0
 

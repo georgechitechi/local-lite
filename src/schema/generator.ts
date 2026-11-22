@@ -22,10 +22,15 @@ export interface GenerateSchemaIndexesOptions {
    */
   outputPath?: string;
   /**
-   * Whether to also generate composite sync indexes for tables with business_id and deleted.
+   * Whether to also generate composite sync indexes for tables with `scopeColumn` and `deleted`.
    * Default: true
    */
-  includeBusinessSyncIndexes?: boolean;
+  includeScopeSyncIndexes?: boolean;
+  /**
+   * Partition/scope column used for composite sync indexes.
+   * Default: 'scope_id'
+   */
+  scopeColumn?: string;
 }
 
 export interface GenerateSchemaIndexesResult {
@@ -76,10 +81,14 @@ async function getNodeModules(): Promise<{ fs: NodeFS; path: NodePath }> {
  */
 export function parseSchemaIndexes(
   content: string,
-  options: { includeBusinessSyncIndexes?: boolean } = {},
+  options: {
+    includeScopeSyncIndexes?: boolean;
+    scopeColumn?: string;
+  } = {},
 ): SchemaIndexDefinition[] {
   const lines = content.split(/\r?\n/);
-  const includeBusiness = options.includeBusinessSyncIndexes ?? true;
+  const includeScope = options.includeScopeSyncIndexes ?? true;
+  const scopeColumn = options.scopeColumn ?? 'scope_id';
 
   let currentTable: string | null = null;
   let inRow = false;
@@ -170,27 +179,27 @@ export function parseSchemaIndexes(
     }
   }
 
-  // Optionally append composite business sync indexes
-  if (includeBusiness) {
+  // Optionally append composite scope sync indexes
+  if (includeScope && scopeColumn) {
     for (const [table, cols] of tableColumns.entries()) {
-      if (cols.has('business_id') && cols.has('deleted')) {
-        const idxName = `idx_${table}_biz_del`;
+      if (cols.has(scopeColumn) && cols.has('deleted')) {
+        const idxName = `idx_${table}_scope_del`;
         if (
           !relationships.some(
             (r) =>
               r.table === table &&
               r.columns.length === 2 &&
-              r.columns.includes('business_id') &&
+              r.columns.includes(scopeColumn) &&
               r.columns.includes('deleted'),
           )
         ) {
           relationships.push({
             table,
-            columns: ['business_id', 'deleted'],
+            columns: [scopeColumn, 'deleted'],
             isOneToOne: false,
-            sql: `CREATE INDEX IF NOT EXISTS "${idxName}" ON "${table}" ("business_id", "deleted");`,
+            sql: `CREATE INDEX IF NOT EXISTS "${idxName}" ON "${table}" ("${scopeColumn}", "deleted");`,
             comment:
-              'Composite business partition index for zero-latency local queries',
+              'Composite scope partition index for zero-latency local queries',
           });
         }
       }
@@ -270,7 +279,8 @@ export async function generateSchemaIndexes(
   }
 
   const indexes = parseSchemaIndexes(content, {
-    includeBusinessSyncIndexes: options.includeBusinessSyncIndexes,
+    includeScopeSyncIndexes: options.includeScopeSyncIndexes,
+    scopeColumn: options.scopeColumn,
   });
   const code = formatSchemaIndexesCode(indexes);
 

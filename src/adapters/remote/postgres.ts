@@ -5,6 +5,7 @@ import {
   PushResult,
   SyncOperation,
 } from '../../core/types.js';
+import { escapeIdentifier } from '../../utils/sql.js';
 
 export interface PostgresQueryResult<T = Record<string, unknown>> {
   rows: T[];
@@ -30,10 +31,6 @@ export interface PostgresRemoteAdapterOptions {
   schema?: string;
 }
 
-function quotePgIdent(ident: string): string {
-  return `"${ident.replace(/"/g, '""')}"`;
-}
-
 /**
  * Turnkey PostgreSQL RemoteDBAdapter for Node/Serverless backends (pg, Vercel Postgres, Drizzle).
  */
@@ -56,7 +53,7 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
   }
 
   private qualTable(table: string): string {
-    return `${quotePgIdent(this.schema)}.${quotePgIdent(table)}`;
+    return `${escapeIdentifier(this.schema)}.${escapeIdentifier(table)}`;
   }
 
   setSyncScope(
@@ -76,8 +73,8 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
 
     for (const op of operations) {
       const tableRef = this.qualTable(op.tableName);
-      const pkCol = quotePgIdent(this.primaryKey);
-      const tsCol = quotePgIdent(this.updatedAtColumn);
+      const pkCol = escapeIdentifier(this.primaryKey);
+      const tsCol = escapeIdentifier(this.updatedAtColumn);
 
       try {
         if (op.operation === 'DELETE') {
@@ -95,12 +92,14 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
           }
 
           const cols = Object.keys(payload);
-          const colIdents = cols.map(quotePgIdent).join(', ');
+          const colIdents = cols.map(escapeIdentifier).join(', ');
           const placeholders = cols.map((_, idx) => `$${idx + 1}`).join(', ');
           const values = cols.map((c) => payload[c]);
           const updateSet = cols
             .filter((c) => c !== this.primaryKey)
-            .map((c) => `${quotePgIdent(c)} = EXCLUDED.${quotePgIdent(c)}`)
+            .map(
+              (c) => `${escapeIdentifier(c)} = EXCLUDED.${escapeIdentifier(c)}`,
+            )
             .join(', ');
 
           const sql = updateSet
@@ -135,7 +134,7 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
 
     const changes: DeltaChange[] = [];
     let maxTimestamp = sinceTimestamp;
-    const tsCol = quotePgIdent(this.updatedAtColumn);
+    const tsCol = escapeIdentifier(this.updatedAtColumn);
 
     for (const table of this.tables) {
       const tableRef = this.qualTable(table);
@@ -146,7 +145,7 @@ export class PostgresRemoteAdapter implements RemoteDBAdapter {
         for (const [k, v] of Object.entries(resolvedScope)) {
           if (v !== undefined) {
             params.push(v);
-            whereParts.push(`${quotePgIdent(k)} = $${params.length}`);
+            whereParts.push(`${escapeIdentifier(k)} = $${params.length}`);
           }
         }
       }

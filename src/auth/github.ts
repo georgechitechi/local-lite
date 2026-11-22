@@ -325,11 +325,13 @@ export class GitHubAuthClient {
     }
 
     const rawId = String(raw.id ?? raw.sub ?? 'github_user');
-    const normalizedEmail = email
-      ? email.trim().toLowerCase()
-      : `${raw.login}@users.noreply.github.com`;
+    const normalizedEmail = email ? email.trim().toLowerCase() : null;
     const id = resolveUnifiedUserId(
-      { id: rawId, email: normalizedEmail, emailVerified: true },
+      {
+        id: rawId,
+        email: normalizedEmail,
+        emailVerified: Boolean(normalizedEmail),
+      },
       'github',
     );
     const name = raw.name || raw.login || 'GitHub User';

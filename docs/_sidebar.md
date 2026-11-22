@@ -1,5 +1,4 @@
 * **Getting Started**
-  * [🏠 Home](README.md)
   * [🚀 Getting Started](getting-started.md)
   * [🏛️ Architecture & Concepts](architecture.md)
   * [⚙️ Configuration](configuration.md)
@@ -13,6 +12,7 @@
   * [📁 Offline Media & Blob Storage](storage.md)
   * [⏰ Offline Job Scheduler & Cron](scheduler.md)
   * [📨 Action Outbox & Email Queue](actions-email.md)
+  * [💳 Universal Payments](payments.md)
 
 * **Adapters & Sync**
   * [💾 Local SQLite Adapters](adapters-local.md)

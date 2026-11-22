@@ -1,15 +1,12 @@
 import { DBExecutable } from '../core/schema-manager.js';
 import { EventEmitter } from '../reactive/event-emitter.js';
+import { escapeIdentifier } from '../utils/sql.js';
 import { generateUUID } from '../utils/uuid.js';
 
 export const DEFAULT_SESSIONS_TABLE = '_local_sessions';
 export const DEFAULT_OFFLINE_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-function quoteIdentifier(identifier: string): string {
-  return `"${identifier.replace(/"/g, '""')}"`;
-}
-
-export interface SessionRecord<TUser = any> {
+export interface SessionRecord<TUser = Record<string, unknown>> {
   id: string;
   userId: string;
   user: TUser;
@@ -101,9 +98,9 @@ export class SessionManager {
     options: SessionManagerOptions = {},
   ) {
     this.tableName = options.tableName ?? DEFAULT_SESSIONS_TABLE;
-    this.sqlTableName = quoteIdentifier(this.tableName);
-    this.sqlUserIndexName = quoteIdentifier(`idx_${this.tableName}_user`);
-    this.sqlActiveIndexName = quoteIdentifier(`idx_${this.tableName}_active`);
+    this.sqlTableName = escapeIdentifier(this.tableName);
+    this.sqlUserIndexName = escapeIdentifier(`idx_${this.tableName}_user`);
+    this.sqlActiveIndexName = escapeIdentifier(`idx_${this.tableName}_active`);
     this.defaultOfflineDurationMs =
       options.defaultOfflineDurationMs ?? DEFAULT_OFFLINE_DURATION_MS;
     this.network = options.network;

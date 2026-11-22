@@ -79,7 +79,7 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
 
     const ac = new AbortController();
     const res = await handler(
-      new Request('http://localhost/sync/events?businessId=b1', {
+      new Request('http://localhost/sync/events?scopeId=b1', {
         method: 'GET',
         headers: { Authorization: 'Bearer ok' },
         signal: ac.signal,
@@ -179,16 +179,16 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
     const inserted: any[] = [];
     const executor: SqlExecutor = {
       dialect: 'mysql',
-      async query(sql: string) {
-        if (sql.includes('_server_sync_clock')) return [{ checkpoint: 50 }];
-        if (sql.includes('COALESCE(MAX')) return [{ checkpoint: 50 }];
+      async query<T = unknown>(sql: string): Promise<T[]> {
+        if (sql.includes('_server_sync_clock')) return [{ checkpoint: 50 }] as T[];
+        if (sql.includes('COALESCE(MAX')) return [{ checkpoint: 50 }] as T[];
         return inserted.map((row) => ({
           table_name: row[0],
           row_id: row[1],
           payload: row[4],
           operation: row[5],
           ts: row[6],
-        }));
+        })) as T[];
       },
       async execute(sql: string, params: any[] = []) {
         if (sql.includes('INSERT INTO')) inserted.push(params);
@@ -211,7 +211,7 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
           tableName: 'tenants',
           rowId: 't1',
           operation: 'INSERT',
-          payload: { business_id: 'b1', name: 'Alice' },
+          payload: { scope_id: 'b1', name: 'Alice' },
           timestamp: 100,
         },
       ],
@@ -251,19 +251,17 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
         if (sql.startsWith('INSERT INTO')) {
           rows.set(params[0], {
             action_id: params[0],
-            business_id: params[1],
-            user_id: params[2],
-            tenant_id: params[3],
-            contract_id: params[4],
-            provider: params[5],
-            currency: params[6],
-            phone: params[7],
-            amount: params[8],
-            callback_hash: params[9],
-            status: params[10],
+            user_id: params[1],
+            provider: params[2],
+            currency: params[3],
+            phone: params[4],
+            email: params[5],
+            amount: params[6],
+            callback_hash: params[7],
+            status: params[8],
           });
         } else if (sql.includes('SET status = ?, checkout_id = ?')) {
-          const r = rows.get(params[4]);
+          const r = rows.get(params[3]);
           if (r) {
             r.status = params[0];
             r.checkout_id = params[1];
@@ -285,12 +283,9 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
     const store = createSqlPaymentStore(executor);
     await store.reserve({
       actionId: 'a1',
-      provider: 'daraja',
+      provider: 'stripe',
       amount: 500,
-      currency: 'KES',
-      businessId: 'b1',
-      tenantId: 't1',
-      contractId: 'c1',
+      currency: 'USD',
       userId: 'u1',
       callbackHash: 'h1',
       status: 'initializing',

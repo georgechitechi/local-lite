@@ -627,39 +627,7 @@ export class SupabaseRemoteAdapter implements RemoteDBAdapter {
           query = query.limit(this.fetchLimit);
         }
 
-        let { data, error } = await query;
-
-        // If PostgreSQL returns 42703 (undefined column) because a scoped column does not exist on this table,
-        // gracefully fallback to querying without the scope filter so synchronization doesn't halt.
-        if (
-          error &&
-          (error.code === '42703' ||
-            String(error.message || '').includes('does not exist')) &&
-          isTableScoped
-        ) {
-          this.logger.debug(
-            `[local-lite] Column in scope does not exist on table "${table}". Retrying without scope filter.`,
-          );
-          let fallbackQuery = client.from(table).select('*');
-          if (currentSinceIso) {
-            fallbackQuery = fallbackQuery.gt(
-              this.updatedAtColumn,
-              currentSinceIso,
-            );
-          }
-          if (typeof fallbackQuery.order === 'function') {
-            fallbackQuery = fallbackQuery.order(this.updatedAtColumn, {
-              ascending: true,
-            });
-          }
-          if (typeof fallbackQuery.limit === 'function') {
-            fallbackQuery = fallbackQuery.limit(this.fetchLimit);
-          }
-          const fallbackResult = await fallbackQuery;
-          data = fallbackResult.data;
-          error = fallbackResult.error;
-        }
-
+        const { data, error } = await query;
         if (error) {
           throw error;
         }

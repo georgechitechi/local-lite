@@ -62,6 +62,12 @@ remain configurable; the existing default conflict strategy is last-write-wins.
 For an application-level upgrade checklist or AI-assisted code review (including `v3.0.0` breaking changes), see the
 [Breaking Changes and AI Code-Review Guide](./docs/breaking-changes.md).
 
+### What's new in 3.2.0
+
+- **100% Universal & Region-Agnostic:** Removed remaining domain/regional bindings (`createDarajaAdapter`, `businessId`/`tenantId`/`contractId`/`merchantRequestId` payment columns, hardcoded `SelfHostedRemoteAdapter` app RPC routes, and `includeBusinessSyncIndexes`).
+- **Configurable Scoping:** `SqlServerSyncStorage` defaults `scopeField` to `'scope_id'`, `createSyncEventsHandler` defaults `scopeQueryParam` to `'scopeId'`, and schema/migration generators accept `scopeColumn` (default `'scope_id'`).
+- **Generic Payments:** Added `createPaymentAdapter(options)` for offline or custom online/regional payment providers (see [Universal Payments](./docs/payments.md)).
+
 ### What's new in 3.1.0
 
 - **ESM-only & Node 24+:** Native ESM (`"type": "module"`, `"sideEffects": false`) targeting `node >= 24.0.0` for cleaner tree-shaking and a smaller install footprint.

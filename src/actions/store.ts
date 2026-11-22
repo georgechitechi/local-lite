@@ -26,7 +26,7 @@ export function mapActionRow(r: any): ActionRecord {
     expiresAt: r.expires_at != null ? Number(r.expires_at) : null,
     executedAt: r.executed_at != null ? Number(r.executed_at) : null,
     retryCount: Number(r.retry_count || 0),
-    maxRetries: Number(r.max_retries || 3),
+    maxRetries: Number(r.max_retries ?? 3),
     lastError: r.last_error ?? null,
     result: r.result
       ? typeof r.result === 'string'

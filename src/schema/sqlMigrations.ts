@@ -49,6 +49,7 @@ export interface GenerateSqlMigrationOptions {
   serverSchemaPath?: string;
   longTextColumns?: Iterable<string>;
   bigintColumns?: Iterable<string>;
+  scopeColumn?: string;
 }
 
 export interface GenerateSqlMigrationResult {
@@ -227,11 +228,7 @@ export function mapFieldTypeToSql(
   }
 
   let sqlType = 'VARCHAR(255)';
-  if (
-    colName.endsWith('_id') ||
-    colName === 'user_id' ||
-    colName === 'business_id'
-  ) {
+  if (colName.endsWith('_id')) {
     sqlType = 'VARCHAR(128)';
   } else if (longText.has(colName)) {
     sqlType = 'TEXT';
@@ -259,9 +256,11 @@ export function buildSqlTargetSchema(
     dialect?: SqlDialect;
     longTextColumns?: Iterable<string>;
     bigintColumns?: Iterable<string>;
+    scopeColumn?: string;
   },
 ): SqlSchemaState {
   const dialect = options?.dialect ?? 'mysql';
+  const scopeColumn = options?.scopeColumn ?? 'scope_id';
   const longTextColumns = options?.longTextColumns
     ? new Set(options.longTextColumns)
     : DEFAULT_LONG_TEXT_COLUMNS;
@@ -315,10 +314,10 @@ export function buildSqlTargetSchema(
       dialect === 'mysql' ? `idx_${suffix}` : `idx_${tableName}_${suffix}`;
 
     const indexes: SqlIndexDef[] = [];
-    if (columns.business_id) {
+    if (scopeColumn && columns[scopeColumn]) {
       indexes.push({
-        name: idxName('business_updated'),
-        columns: ['business_id', 'updated_at'],
+        name: idxName('scope_updated'),
+        columns: [scopeColumn, 'updated_at'],
       });
     }
     indexes.push({
@@ -329,7 +328,7 @@ export function buildSqlTargetSchema(
     for (const colName of Object.keys(columns)) {
       if (
         colName.endsWith('_id') &&
-        colName !== 'business_id' &&
+        colName !== scopeColumn &&
         colName !== 'user_id' &&
         colName !== 'entity_id'
       ) {
@@ -778,6 +777,7 @@ export function generateSqlMigration(
       dialect,
       longTextColumns: options.longTextColumns,
       bigintColumns: options.bigintColumns,
+      scopeColumn: options.scopeColumn,
     },
   );
   const prevSchema = loadSqlSchemaFromMigrations(options.migrationsDir);

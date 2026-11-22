@@ -51,8 +51,6 @@ export function createMemoryPaymentStore(): PaymentReservationStore {
         ...existing,
         status: 'pending',
         providerRef: update.providerRef ?? existing.providerRef,
-        merchantRequestId:
-          update.merchantRequestId ?? existing.merchantRequestId,
         customerMessage: update.customerMessage ?? existing.customerMessage,
       });
     },
@@ -79,18 +77,16 @@ export function createSqlPaymentStore(
     if (!row) return null;
     return {
       actionId: String(row.action_id),
-      provider: (row.provider || 'daraja') as any,
+      provider: (row.provider ||
+        'manual') as PaymentReservationRecord['provider'],
       amount: Number(row.amount),
-      currency: String(row.currency || 'KES'),
-      businessId: String(row.business_id),
-      tenantId: String(row.tenant_id),
-      contractId: String(row.contract_id),
-      userId: String(row.user_id),
+      currency: String(row.currency || ''),
+      userId: row.user_id ? String(row.user_id) : undefined,
       phone: row.phone ? String(row.phone) : undefined,
+      email: row.email ? String(row.email) : undefined,
       callbackHash: String(row.callback_hash),
       status: row.status,
       providerRef: row.checkout_id ? String(row.checkout_id) : undefined,
-      merchantRequestId: row.merchant_id ? String(row.merchant_id) : undefined,
       customerMessage: row.customer_message
         ? String(row.customer_message)
         : undefined,
@@ -122,16 +118,14 @@ export function createSqlPaymentStore(
     },
     async reserve(record) {
       await executor.execute(
-        `INSERT INTO ${tableName} (action_id, business_id, user_id, tenant_id, contract_id, provider, currency, phone, amount, callback_hash, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO ${tableName} (action_id, user_id, provider, currency, phone, email, amount, callback_hash, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           record.actionId,
-          record.businessId,
-          record.userId,
-          record.tenantId,
-          record.contractId,
+          record.userId || '',
           record.provider,
           record.currency,
           record.phone || '',
+          record.email || '',
           record.amount,
           record.callbackHash,
           record.status,
@@ -140,11 +134,10 @@ export function createSqlPaymentStore(
     },
     async markPending(actionId, update) {
       await executor.execute(
-        `UPDATE ${tableName} SET status = ?, checkout_id = ?, merchant_id = ?, customer_message = ? WHERE action_id = ?`,
+        `UPDATE ${tableName} SET status = ?, checkout_id = ?, customer_message = ? WHERE action_id = ?`,
         [
           'pending',
           update.providerRef || actionId,
-          update.merchantRequestId || null,
           update.customerMessage || '',
           actionId,
         ],
@@ -186,7 +179,7 @@ export function createPaymentServerHandler(
   async function handleInitiate(request: Request): Promise<Response> {
     const body: any = await request.json();
     const actionId = body?.actionId;
-    const provider = body?.provider || 'daraja';
+    const provider = body?.provider || 'manual';
     const amount = Number(body?.amount);
     const currency = String(body?.currency || '')
       .trim()
@@ -239,7 +232,6 @@ export function createPaymentServerHandler(
         status: existing.status,
         provider: existing.provider,
         providerRef: existing.providerRef,
-        merchantRequestId: existing.merchantRequestId,
         customerMessage: existing.customerMessage,
       });
     }
@@ -259,10 +251,7 @@ export function createPaymentServerHandler(
       provider,
       currency,
       amount,
-      businessId: body?.businessId,
       userId: body?.userId,
-      tenantId: body?.tenantId,
-      contractId: body?.contractId,
       phone: body?.phone,
       email: body?.email,
       callbackHash: sha256Hex(callbackToken),
@@ -276,9 +265,6 @@ export function createPaymentServerHandler(
         provider,
         amount,
         currency,
-        businessId: body?.businessId,
-        tenantId: body?.tenantId,
-        contractId: body?.contractId,
         userId: body?.userId,
         phone: body?.phone,
         email: body?.email,
@@ -293,7 +279,6 @@ export function createPaymentServerHandler(
       } else {
         await store.markPending(actionId, {
           providerRef: result.providerRef,
-          merchantRequestId: result.merchantRequestId,
           customerMessage: result.customerMessage,
         });
       }
@@ -328,7 +313,7 @@ export function createPaymentServerHandler(
     }
 
     const providerId =
-      url.searchParams.get('provider') || reservation?.provider || 'daraja';
+      url.searchParams.get('provider') || reservation?.provider || '';
     const adapter = registry.getProvider(providerId);
     if (!adapter?.verifyWebhook) {
       return Response.json(

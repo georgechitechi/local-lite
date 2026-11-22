@@ -26,5 +26,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run test:isolate
+      - if: matrix.os == 'ubuntu-latest'
+        run: npm run test:coverage
       - run: npm run lint:package
       - run: npm run test:package

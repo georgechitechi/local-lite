@@ -25,16 +25,24 @@ function chunkArray<T>(items: T[], size: number = SQLITE_IN_CHUNK_SIZE): T[][] {
  * Maps a raw sync_outbox row into an OutboxRecord.
  */
 function mapOutboxRow(r: any): OutboxRecord {
+  let payload: Record<string, any> | null = null;
+  if (r.payload) {
+    if (typeof r.payload === 'string') {
+      try {
+        payload = JSON.parse(r.payload);
+      } catch {
+        payload = null;
+      }
+    } else {
+      payload = r.payload;
+    }
+  }
   return {
     id: r.id,
     tableName: r.table_name,
     rowId: r.row_id,
     operation: r.operation,
-    payload: r.payload
-      ? typeof r.payload === 'string'
-        ? JSON.parse(r.payload)
-        : r.payload
-      : null,
+    payload,
     timestamp: Number(r.timestamp),
     status: r.status,
     retryCount: Number(r.retry_count || 0),
