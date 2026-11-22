@@ -1,7 +1,5 @@
 export type CronJobResult =
-  | { summary?: string; [key: string]: any }
-  | string
-  | void;
+  { summary?: string; [key: string]: any } | string | void;
 
 export interface CronJobContext {
   now: number;
@@ -99,10 +97,7 @@ export interface CronStoreAdapter {
   /** Atomically acquires a lease on `jobKey` until `now + lockTimeoutMs`. */
   claim(jobKey: string, now: number, lockTimeoutMs: number): Promise<boolean>;
   /** Records a completed run, releases the lease, and appends to run history. */
-  recordRun(
-    jobKey: string,
-    run: CronRunRecord,
-  ): Promise<void>;
+  recordRun(jobKey: string, run: CronRunRecord): Promise<void>;
   getHistory(jobKey?: string, limit?: number): Promise<CronRunRecord[]>;
 }
 

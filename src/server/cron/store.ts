@@ -342,9 +342,7 @@ export function createMemoryCronStore(maxHistoryPerJob = 50): CronStoreAdapter {
     },
     async getHistory(jobKey, limit = 25) {
       const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 200);
-      const filtered = jobKey
-        ? runs.filter((r) => r.jobKey === jobKey)
-        : runs;
+      const filtered = jobKey ? runs.filter((r) => r.jobKey === jobKey) : runs;
       return filtered.slice(0, safeLimit);
     },
   };

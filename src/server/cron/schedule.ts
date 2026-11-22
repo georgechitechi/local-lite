@@ -175,7 +175,11 @@ export function nextCronExpressionTime(
   const limit = cursor + 366 * 24 * 60 * 60_000;
   while (cursor <= limit) {
     const parts = getZonedParts(cursor, timeZone);
-    if (!parsed.months.has(parts.month) || !parsed.daysOfMonth.has(parts.day) || !parsed.daysOfWeek.has(parts.dayOfWeek)) {
+    if (
+      !parsed.months.has(parts.month) ||
+      !parsed.daysOfMonth.has(parts.day) ||
+      !parsed.daysOfWeek.has(parts.dayOfWeek)
+    ) {
       // Jump forward by remaining minutes in the day (or 1 hour if near DST)
       cursor += (24 - parts.hour) * 60 * 60_000 - parts.minute * 60_000;
       continue;
@@ -214,7 +218,11 @@ export function computeNextCronRunAt(
   if (job.runHour !== null && job.runHour !== undefined) {
     const targetHour = Math.min(Math.max(Math.trunc(job.runHour), 0), 23);
     const earliest = lastRunAt ? Math.max(now, lastRunAt + intervalMs) : now;
-    return nextCronExpressionTime(`0 ${targetHour} * * *`, earliest, job.timezone);
+    return nextCronExpressionTime(
+      `0 ${targetHour} * * *`,
+      earliest,
+      job.timezone,
+    );
   }
 
   return lastRunAt ? lastRunAt + intervalMs : now;
