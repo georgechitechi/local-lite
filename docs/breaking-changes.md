@@ -22,6 +22,13 @@ This guide ships with the package at
 adapter skills live beside it); copy the folders
 into `.github/skills/` (Copilot) or `.claude/skills/` (Claude Code).
 
+## Changes in 3.3.0
+
+### 1. Removed `config` re-export from root `local-lite` entry
+
+- `src/index.ts` no longer re-exports `./config/index.js`, so importing from `'local-lite'` does not pull in config resolvers, adapter classes, or `local-lite/email`.
+- Import `createSyncClient`, `defineSyncConfig`, `resolveLocalAdapter`, `resolveRemoteAdapter`, `LocalLiteConfig`, `SupabaseConfigOptions`, `ConvexConfigOptions`, and `LocalAuthEngineOptions` from `'local-lite/config'` instead.
+
 ## Changes in 3.2.0
 
 ### 1. Universal scope defaults (`scope_id` / `scopeId`)

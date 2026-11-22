@@ -7,7 +7,13 @@ description: Review a codebase that uses the local-lite npm package for code tha
 
 Checklist and automated review instructions for upgrading apps to the latest version of `local-lite`.
 
-## 0. Upgrade Checklist (3.2.0 Changes)
+## 0. Upgrade Checklist (3.3.0 Changes)
+
+* **Removed `config` Re-Export from Root `'local-lite'`**:
+  - `'local-lite'` no longer re-exports `createSyncClient`, `defineSyncConfig`, `resolveLocalAdapter`, `resolveRemoteAdapter`, `LocalLiteConfig`, or config option types.
+  - **Action**: Change imports of those symbols from `'local-lite'` to `'local-lite/config'`.
+
+## 0.1 Upgrade Checklist (3.2.0 Changes)
 
 * **Universal Scope Defaults (`scope_id` / `scopeId`)**:
   - `SqlServerSyncStorage` defaults `scopeField` to `'scope_id'` and `createSyncEventsHandler` defaults `scopeQueryParam` to `'scopeId'`.
