@@ -47,12 +47,13 @@ export function bytesToBase64(bytes: Uint8Array): string {
       bytes.byteLength,
     ).toString('base64');
   }
-  let binary = '';
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const CHUNK_SIZE = 0x8000;
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.byteLength));
+    chunks.push(String.fromCharCode.apply(null, slice as unknown as number[]));
   }
-  return btoa(binary);
+  return btoa(chunks.join(''));
 }
 
 export function base64ToBytes(base64: string): Uint8Array {
