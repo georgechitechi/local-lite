@@ -27,15 +27,23 @@ export interface ServerCronRunnerOptions {
 
 export function createServerCronRunner(options: ServerCronRunnerOptions) {
   let timer: ReturnType<typeof setInterval> | null = null;
+  let ticking = false;
   const intervalMs = Math.max(options.intervalMs ?? 15 * 60 * 1000, 1000);
 
   return {
     start(): void {
       if (options.enabled === false || timer) return;
       timer = setInterval(() => {
-        void options.onTick().catch((err) => {
-          options.onError?.(err);
-        });
+        if (ticking) return;
+        ticking = true;
+        void options
+          .onTick()
+          .catch((err) => {
+            options.onError?.(err);
+          })
+          .finally(() => {
+            ticking = false;
+          });
       }, intervalMs);
       timer.unref?.();
     },
