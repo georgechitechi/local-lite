@@ -120,9 +120,7 @@ export function createCronScheduler(
         jobKey: def.key,
         label: def.label,
         description: def.description ?? '',
-        cron: def.cron ?? null,
-        intervalHours: Math.max(Math.trunc(def.intervalHours ?? 24), 1),
-        runHour: def.runHour ?? null,
+        cron: def.cron,
         timezone: def.timezone ?? options.defaultTimezone ?? null,
         enabled: def.enabled !== false,
         builtIn: def.builtIn !== false,
@@ -394,22 +392,7 @@ export function createCronEndpoint(
         label: typeof body.label === 'string' ? body.label : undefined,
         description:
           typeof body.description === 'string' ? body.description : undefined,
-        cron:
-          body.cron === null
-            ? null
-            : typeof body.cron === 'string'
-              ? body.cron
-              : undefined,
-        intervalHours:
-          body.intervalHours !== undefined
-            ? Number(body.intervalHours)
-            : undefined,
-        runHour:
-          body.runHour === null
-            ? null
-            : body.runHour !== undefined
-              ? Number(body.runHour)
-              : undefined,
+        cron: typeof body.cron === 'string' ? body.cron : undefined,
         timezone:
           body.timezone === null
             ? null

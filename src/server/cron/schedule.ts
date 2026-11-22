@@ -200,32 +200,13 @@ export function nextCronExpressionTime(
  * Computes the next scheduled run timestamp for a cron job.
  */
 export function computeNextCronRunAt(
-  job: Pick<
-    CronJobRecord,
-    'enabled' | 'cron' | 'intervalHours' | 'runHour' | 'timezone' | 'lastRunAt'
-  >,
+  job: Pick<CronJobRecord, 'enabled' | 'cron' | 'timezone' | 'lastRunAt'>,
   now = Date.now(),
 ): number | null {
   if (!job.enabled) return null;
   const lastRunAt = job.lastRunAt ? Number(job.lastRunAt) : 0;
-
-  if (job.cron) {
-    const base = lastRunAt ? Math.max(now, lastRunAt + 60_000) : now;
-    return nextCronExpressionTime(job.cron, base, job.timezone);
-  }
-
-  const intervalMs = Math.max(Number(job.intervalHours || 24), 1) * 3_600_000;
-  if (job.runHour !== null && job.runHour !== undefined) {
-    const targetHour = Math.min(Math.max(Math.trunc(job.runHour), 0), 23);
-    const earliest = lastRunAt ? Math.max(now, lastRunAt + intervalMs) : now;
-    return nextCronExpressionTime(
-      `0 ${targetHour} * * *`,
-      earliest,
-      job.timezone,
-    );
-  }
-
-  return lastRunAt ? lastRunAt + intervalMs : now;
+  const base = lastRunAt ? Math.max(now, lastRunAt + 60_000) : now;
+  return nextCronExpressionTime(job.cron, base, job.timezone);
 }
 
 /**
@@ -234,39 +215,21 @@ export function computeNextCronRunAt(
 export function isCronJobDue(
   job: Pick<
     CronJobRecord,
-    | 'enabled'
-    | 'cron'
-    | 'intervalHours'
-    | 'runHour'
-    | 'timezone'
-    | 'lastRunAt'
-    | 'lockedUntil'
+    'enabled' | 'cron' | 'timezone' | 'lastRunAt' | 'lockedUntil'
   >,
   now = Date.now(),
 ): boolean {
   if (!job.enabled) return false;
   if (job.lockedUntil && job.lockedUntil > now) return false;
   const lastRunAt = job.lastRunAt ? Number(job.lastRunAt) : 0;
-
-  if (job.cron) {
-    if (!lastRunAt) {
-      const parsed = parseCronExpression(job.cron);
-      return matchesCron(parsed, getZonedParts(now, job.timezone));
-    }
-    const nextDue = nextCronExpressionTime(
-      job.cron,
-      lastRunAt + 60_000,
-      job.timezone,
-    );
-    return nextDue <= now;
+  if (!lastRunAt) {
+    const parsed = parseCronExpression(job.cron);
+    return matchesCron(parsed, getZonedParts(now, job.timezone));
   }
-
-  const intervalMs = Math.max(Number(job.intervalHours || 24), 1) * 3_600_000;
-  if (job.runHour !== null && job.runHour !== undefined) {
-    const parts = getZonedParts(now, job.timezone);
-    if (parts.hour !== Math.min(Math.max(Math.trunc(job.runHour), 0), 23)) {
-      return false;
-    }
-  }
-  return !lastRunAt || now - lastRunAt >= intervalMs;
+  const nextDue = nextCronExpressionTime(
+    job.cron,
+    lastRunAt + 60_000,
+    job.timezone,
+  );
+  return nextDue <= now;
 }

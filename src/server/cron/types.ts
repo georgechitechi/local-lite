@@ -13,11 +13,7 @@ export interface CronJobDefinition {
   label: string;
   description?: string;
   /** Standard 5-field cron expression (e.g. `'0 3 * * *'`, `'0,15,30,45 * * * *'`) or shortcut (`'hourly'`, `'daily'`, `'weekly'`). */
-  cron?: string | null;
-  /** Fallback interval in hours when `cron` is not set. Default: 24. */
-  intervalHours?: number;
-  /** Optional hour of day (0-23) when `cron` is not set. */
-  runHour?: number | null;
+  cron: string;
   /** IANA timezone (e.g. `'Africa/Nairobi'`, `'UTC'`). Defaults to server local timezone. */
   timezone?: string | null;
   /** Per-attempt execution timeout in ms. Default: 60_000 (1 min). */
@@ -37,9 +33,7 @@ export interface CronJobRecord {
   jobKey: string;
   label: string;
   description: string;
-  cron: string | null;
-  intervalHours: number;
-  runHour: number | null;
+  cron: string;
   timezone: string | null;
   enabled: boolean;
   builtIn: boolean;
@@ -68,9 +62,7 @@ export interface CronRunRecord {
 export interface CronJobPatch {
   label?: string;
   description?: string;
-  cron?: string | null;
-  intervalHours?: number;
-  runHour?: number | null;
+  cron?: string;
   timezone?: string | null;
   enabled?: boolean;
 }

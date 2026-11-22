@@ -34,12 +34,7 @@ export function createSqlCronStore(
     jobKey: String(r.job_key),
     label: String(r.label || r.job_key),
     description: String(r.description || ''),
-    cron: r.cron_expr ? String(r.cron_expr) : null,
-    intervalHours: Math.max(Number(r.interval_hours || 24), 1),
-    runHour:
-      r.run_hour === null || r.run_hour === undefined
-        ? null
-        : Number(r.run_hour),
+    cron: String(r.cron_expr),
     timezone: r.timezone ? String(r.timezone) : null,
     enabled: Boolean(Number(r.enabled ?? 1)),
     builtIn: Boolean(Number(r.built_in ?? 0)),
@@ -73,9 +68,7 @@ export function createSqlCronStore(
           job_key VARCHAR(128) PRIMARY KEY,
           label VARCHAR(255) NOT NULL,
           description TEXT,
-          cron_expr VARCHAR(128) NULL,
-          interval_hours INT NOT NULL DEFAULT 24,
-          run_hour INT NULL,
+          cron_expr VARCHAR(128) NOT NULL,
           timezone VARCHAR(64) NULL,
           enabled TINYINT NOT NULL DEFAULT 1,
           built_in TINYINT NOT NULL DEFAULT 0,
@@ -124,15 +117,13 @@ export function createSqlCronStore(
       if (existing.length > 0) return;
       await executor.execute(
         `INSERT INTO ${tbl}
-          (job_key, label, description, cron_expr, interval_hours, run_hour, timezone, enabled, built_in, last_run_at, locked_until, consecutive_failures, last_status, last_summary, last_duration_ms, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (job_key, label, description, cron_expr, timezone, enabled, built_in, last_run_at, locked_until, consecutive_failures, last_status, last_summary, last_duration_ms, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           job.jobKey,
           job.label,
           job.description,
           job.cron,
-          job.intervalHours,
-          job.runHour,
           job.timezone,
           job.enabled ? 1 : 0,
           job.builtIn ? 1 : 0,
@@ -160,18 +151,6 @@ export function createSqlCronStore(
       if (patch.cron !== undefined) {
         sets.push('cron_expr = ?');
         params.push(patch.cron);
-      }
-      if (patch.intervalHours !== undefined) {
-        sets.push('interval_hours = ?');
-        params.push(Math.max(Math.trunc(patch.intervalHours), 1));
-      }
-      if (patch.runHour !== undefined) {
-        sets.push('run_hour = ?');
-        params.push(
-          patch.runHour === null
-            ? null
-            : Math.min(Math.max(Math.trunc(patch.runHour), 0), 23),
-        );
       }
       if (patch.timezone !== undefined) {
         sets.push('timezone = ?');
@@ -292,10 +271,6 @@ export function createMemoryCronStore(maxHistoryPerJob = 50): CronStoreAdapter {
           ? { description: patch.description }
           : {}),
         ...(patch.cron !== undefined ? { cron: patch.cron } : {}),
-        ...(patch.intervalHours !== undefined
-          ? { intervalHours: Math.max(Math.trunc(patch.intervalHours), 1) }
-          : {}),
-        ...(patch.runHour !== undefined ? { runHour: patch.runHour } : {}),
         ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
         updatedAt: Date.now(),

@@ -48,7 +48,7 @@ describe('createCronScheduler & createCronEndpoint', () => {
     scheduler.register({
       key: 'flaky_job',
       label: 'Flaky Job',
-      intervalHours: 1,
+      cron: 'hourly',
       maxRetries: 2,
       retryDelayMs: 10,
       handler: ({ attempt }) => {
@@ -75,7 +75,7 @@ describe('createCronScheduler & createCronEndpoint', () => {
     scheduler.register({
       key: 'slow_job',
       label: 'Slow Job',
-      intervalHours: 1,
+      cron: 'hourly',
       timeoutMs: 25,
       handler: () => new Promise((resolve) => setTimeout(resolve, 200)),
     });
@@ -94,7 +94,8 @@ describe('createCronScheduler & createCronEndpoint', () => {
     scheduler.register({
       key: 'lease_job',
       label: 'Lease Job',
-      intervalHours: 1,
+      cron: '0 * * * *',
+      timezone: 'UTC',
       lockTimeoutMs: 5_000,
       handler: () => {
         runs++;
@@ -116,14 +117,12 @@ describe('createCronScheduler & createCronEndpoint', () => {
     expect(runs).toBe(1);
   });
 
-  it('computes nextRunAt accurately for runHour jobs', () => {
+  it('computes nextRunAt accurately for cron jobs', () => {
     const at2pm = Date.UTC(2026, 10, 22, 14, 0, 0);
     const next3am = computeNextCronRunAt(
       {
         enabled: true,
-        cron: null,
-        intervalHours: 24,
-        runHour: 3,
+        cron: '0 3 * * *',
         timezone: 'UTC',
         lastRunAt: null,
       },
