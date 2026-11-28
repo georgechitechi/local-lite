@@ -1,4 +1,7 @@
-import type { LocalDBAdapter, LocalTransaction } from '../adapters/local/index.js';
+import type {
+  LocalDBAdapter,
+  LocalTransaction,
+} from '../adapters/local/index.js';
 import { generateUUID } from '../utils/uuid.js';
 
 function quoteIdent(name: string): string {
@@ -38,11 +41,17 @@ export interface CommandRejectionInfo {
 export interface CommandOutboxOptions {
   db: LocalDBAdapter;
   url: string;
-  getToken?: () => string | null | undefined | Promise<string | null | undefined>;
+  getToken?: () =>
+    string | null | undefined | Promise<string | null | undefined>;
   fetch?: typeof fetch;
   tableName?: string;
   onRejection?: (info: CommandRejectionInfo) => void;
-  onCommitted?: (info: { commandId: string; cmd: string; result: unknown; checkpoint?: number }) => void;
+  onCommitted?: (info: {
+    commandId: string;
+    cmd: string;
+    result: unknown;
+    checkpoint?: number;
+  }) => void;
 }
 
 async function applyPatch(
@@ -53,7 +62,10 @@ async function applyPatch(
   if (p.op === 'insert') {
     const id = String(p.row.id ?? generateUUID());
     const row: Record<string, any> = { ...p.row, id };
-    const existing = await tx.execute(`SELECT * FROM ${qTable} WHERE id = ? LIMIT 1`, [id]);
+    const existing = await tx.execute(
+      `SELECT * FROM ${qTable} WHERE id = ? LIMIT 1`,
+      [id],
+    );
     const cols = Object.keys(row);
     const placeholders = cols.map(() => '?').join(', ');
     await tx.execute(
@@ -65,17 +77,20 @@ async function applyPatch(
       : { op: 'delete', table: p.table, id, row: null };
   }
 
-  const existing = await tx.execute(`SELECT * FROM ${qTable} WHERE id = ? LIMIT 1`, [p.id]);
+  const existing = await tx.execute(
+    `SELECT * FROM ${qTable} WHERE id = ? LIMIT 1`,
+    [p.id],
+  );
   const prev = existing[0] ?? null;
 
   if (p.op === 'patch') {
     const cols = Object.keys(p.patch);
     if (cols.length > 0 && prev) {
       const sets = cols.map((c) => `${quoteIdent(c)} = ?`).join(', ');
-      await tx.execute(
-        `UPDATE ${qTable} SET ${sets} WHERE id = ?`,
-        [...cols.map((c) => p.patch[c]), p.id],
-      );
+      await tx.execute(`UPDATE ${qTable} SET ${sets} WHERE id = ?`, [
+        ...cols.map((c) => p.patch[c]),
+        p.id,
+      ]);
     }
     return prev
       ? { op: 'restore', table: p.table, id: p.id, row: prev }
@@ -89,7 +104,10 @@ async function applyPatch(
     : { op: 'delete', table: p.table, id: p.id, row: null };
 }
 
-async function applyInverse(tx: LocalTransaction, inv: InverseOp): Promise<void> {
+async function applyInverse(
+  tx: LocalTransaction,
+  inv: InverseOp,
+): Promise<void> {
   const qTable = quoteIdent(inv.table);
   if (inv.op === 'delete') {
     await tx.execute(`DELETE FROM ${qTable} WHERE id = ?`, [inv.id]);
