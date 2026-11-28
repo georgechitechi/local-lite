@@ -1,9 +1,14 @@
 import { EventEmitter } from 'node:events';
 
+export type SyncChangeOperation = 'insert' | 'patch' | 'remove';
+
 export interface SyncChangeEvent {
   scopeId: string;
   tableName: string;
   checkpoint: number;
+  rowId?: string;
+  op?: SyncChangeOperation;
+  changedCols?: string[];
 }
 
 export interface SyncEventBroker {

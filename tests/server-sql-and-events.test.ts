@@ -220,7 +220,14 @@ describe('local-lite server SQL dialect, SSE events & scheduler', () => {
     expect(pushRes.applied).toBe(1);
     expect(pushRes.cursor).toBe(101);
     expect(events).toEqual([
-      { scopeId: 'b1', tableName: 'tenants', checkpoint: 101 },
+      {
+        scopeId: 'b1',
+        tableName: 'tenants',
+        checkpoint: 101,
+        rowId: 't1',
+        op: 'insert',
+        changedCols: ['scope_id', 'name'],
+      },
     ]);
 
     const deltas = await storage.getDeltas(['tenants'], 50, 100);

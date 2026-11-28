@@ -1,7 +1,7 @@
 import type { DeltaChanges, SyncOperation, SyncOp } from '../core/types.js';
 import { quoteIdent, type SqlExecutor } from './sqlDialect.js';
 import type { ServerSyncStorage } from './sync.js';
-import type { SyncEventBroker } from './syncEvents.js';
+import type { SyncChangeEvent, SyncEventBroker } from './syncEvents.js';
 
 export interface SqlServerSyncStorageOptions {
   changesTable?: string;
@@ -42,11 +42,7 @@ export class SqlServerSyncStorage implements ServerSyncStorage {
     const qClock = quoteIdent(this.clockTable, this.executor.dialect);
     const qTs = quoteIdent('timestamp', this.executor.dialect);
     const successfulIds: string[] = [];
-    const emitted: Array<{
-      scopeId: string;
-      tableName: string;
-      checkpoint: number;
-    }> = [];
+    const emitted: SyncChangeEvent[] = [];
 
     const lastCursor = await this.executor.withTransaction(async (tx) => {
       const clockRows = await tx.query<{ checkpoint: number }>(
@@ -83,7 +79,20 @@ export class SqlServerSyncStorage implements ServerSyncStorage {
         );
         successfulIds.push(op.id || op.rowId);
         if (scopeId) {
-          emitted.push({ scopeId, tableName: op.tableName, checkpoint });
+          const mappedOp =
+            operation === 'INSERT'
+              ? 'insert'
+              : operation === 'DELETE'
+                ? 'remove'
+                : 'patch';
+          emitted.push({
+            scopeId,
+            tableName: op.tableName,
+            checkpoint,
+            rowId: String(op.rowId),
+            op: mappedOp,
+            changedCols: Object.keys(payload),
+          });
         }
       }
 
