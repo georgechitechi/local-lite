@@ -5,6 +5,7 @@ export * from './query.js';
 export * from './sync-worker.js';
 export * from './conflict.js';
 export * from './outbox-store.js';
+export * from './command-outbox.js';
 export * from './meta-store.js';
 export * from './table-manager.js';
 export * from './schema-manager.js';
